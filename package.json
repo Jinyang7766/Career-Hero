@@ -1,0 +1,16 @@
+{
+  "name": "career-hero",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "scripts": {
+    "build": "cd ai-resume-builder && npm install && npm run build",
+    "dev": "cd ai-resume-builder && npm run dev"
+  },
+  "workspaces": [
+    "ai-resume-builder"
+  ]
+}
