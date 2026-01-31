@@ -4,9 +4,9 @@ export const API_CONFIG = {
   development: {
     baseURL: 'http://localhost:5000'
   },
-  // 生产环境 - 替换为你的后端部署地址
+  // 生产环境 - 从环境变量读取
   production: {
-    baseURL: 'https://your-backend-url.onrender.com' // 后续会替换为实际地址
+    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://your-backend-url.onrender.com'
   }
 };
 

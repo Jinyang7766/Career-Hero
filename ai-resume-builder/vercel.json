@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "rootDirectory": "ai-resume-builder",
+  "installCommand": "npm install",
+  "buildCommand": "npm run build",
   "name": "career-hero-frontend",
   "builds": [
     {
@@ -15,8 +18,5 @@
       "src": "/(.*)",
       "dest": "/index.html"
     }
-  ],
-  "env": {
-    "VITE_GEMINI_API_KEY": "@gemini-api-key"
-  }
+  ]
 }
