@@ -1,16 +1,7 @@
 {
   "version": 2,
-  "buildCommand": "cd ai-resume-builder && npm install && npm run build",
-  "outputDirectory": "ai-resume-builder/dist",
-  "installCommand": "cd ai-resume-builder && npm install",
   "framework": "vite",
-  "engines": {
-    "node": ">=18.0.0"
-  },
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "/ai-resume-builder/index.html"
-    }
-  ]
+  "rootDirectory": "ai-resume-builder",
+  "buildCommand": "npm install && npm run build",
+  "outputDirectory": "dist"
 }
