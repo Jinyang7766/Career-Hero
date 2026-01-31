@@ -1,6 +1,0 @@
-{
-  "version": 2,
-  "framework": "vite",
-  "buildCommand": "cd ai-resume-builder && npm install && npm run build",
-  "outputDirectory": "ai-resume-builder/dist"
-}
