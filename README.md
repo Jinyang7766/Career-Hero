@@ -186,20 +186,58 @@ backend/
 
 ## 🚀 部署指南
 
-### 前端部署
+### 🌟 推荐方案：Vercel + Render
+
+#### 前端部署到Vercel
+1. **访问 [Vercel](https://vercel.com)** 并登录GitHub账号
+2. **导入项目**：选择 `Career-Hero` 仓库
+3. **配置根目录**：设置为 `ai-resume-builder`
+4. **环境变量**：
+   ```
+   VITE_GEMINI_API_KEY=your_gemini_api_key
+   VITE_API_BASE_URL=https://your-backend-url.onrender.com
+   ```
+5. **点击Deploy** - 自动部署完成！
+
+#### 后端部署到Render
+1. **访问 [Render](https://render.com)** 并注册账号
+2. **创建Web Service**：选择 "New Web Service"
+3. **连接GitHub**：选择 `Career-Hero` 仓库
+4. **配置设置**：
+   - **Root Directory**: `backend`
+   - **Runtime**: Python 3
+   - **Build Command**: `pip install -r requirements.txt`
+   - **Start Command**: `gunicorn app:app`
+5. **环境变量**：
+   ```
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_KEY=your_supabase_key
+   JWT_SECRET=your_jwt_secret
+   ```
+6. **创建Web Service** - 自动部署！
+
+### 📋 部署后配置
+
+1. **更新API地址**：在Vercel中设置正确的后端URL
+2. **测试连接**：确保前后端通信正常
+3. **配置域名**：可以设置自定义域名
+
+### 🛠️ 本地部署
+
+#### 前端构建
 ```bash
 cd ai-resume-builder
 npm run build
 ```
-将 `dist` 文件夹部署到静态文件服务器（如Vercel、Netlify等）
 
-### 后端部署
+#### 后端本地运行
 ```bash
-pip install gunicorn
+cd backend
+pip install -r requirements.txt
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
 
-### Docker部署
+### 🐳 Docker部署
 ```dockerfile
 # Dockerfile示例
 FROM node:18-alpine as frontend
