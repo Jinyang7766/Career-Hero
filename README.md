@@ -1,6 +1,17 @@
-# Career Hero - AI Resume Builder
+# Career Hero - AI Resume Builder 🚀
 
-一个基于React和Flask的AI简历构建器，使用Supabase作为后端数据库。
+一个基于React和Flask的智能简历构建器，集成AI分析、专业模板和猎头策略建议。
+
+## ✨ 核心功能
+
+- 🤖 **AI智能分析** - 基于Google Gemini的简历优化建议
+- 🎯 **猎头策略** - 专业的求职指导和面试技巧
+- 📝 **智能编辑** - 实时验证和完成度追踪
+- 🎨 **多模板支持** - 专业简历模板库
+- 📱 **响应式设计** - 完美适配移动端
+- 🔐 **用户系统** - 完整的认证和数据管理
+- 📊 **PDF导出** - 一键生成专业PDF简历
+- 💾 **云端存储** - 基于Supabase的数据同步
 
 ## 项目结构
 
@@ -21,155 +32,236 @@ Career-Hero/
 └── README.md                 # 项目说明
 ```
 
-## 功能特性
+## 🛠️ 技术栈
 
-- 🔐 用户认证（注册、登录、密码重置）
-- 📝 简历创建、编辑、删除
-- 🤖 AI简历分析和建议
-- 📊 简历完整性评分
-- 🎨 多种简历模板
-- 📱 响应式设计
-- 💾 Supabase云数据库存储
+### 前端技术
+- **React 19.2.4** - 现代化UI框架
+- **TypeScript** - 类型安全的JavaScript
+- **Vite** - 快速构建工具
+- **Tailwind CSS** - 实用优先的CSS框架
+- **Google Gemini AI** - 智能分析引擎
+- **html2pdf.js** - PDF生成库
 
-## 技术栈
+### 后端技术
+- **Flask 2.3.3** - 轻量级Web框架
+- **Supabase** - 现代化数据库服务
+- **JWT认证** - 安全的用户认证
+- **Flask-CORS** - 跨域资源共享
 
-### 前端
-- React 19.2.4
-- TypeScript
-- Vite
-- Tailwind CSS
+### 数据库
+- **Supabase PostgreSQL** - 云端数据库
+- **RLS安全策略** - 行级安全保护
 
-### 后端
-- Flask 2.3.3
-- Supabase
-- JWT认证
-- Flask-CORS
+## 🚀 快速开始
 
-## 快速开始
+### 前置要求
+- Node.js 18+ 
+- Python 3.8+
+- Git
 
-### 1. 设置Supabase
+### 1. 克隆项目
+```bash
+git clone https://github.com/yourusername/Career-Hero.git
+cd Career-Hero
+```
 
-1. 在[Supabase](https://supabase.com)创建新项目
-2. 在SQL编辑器中执行`database/schema.sql`中的SQL语句
+### 2. 设置Supabase数据库
+
+1. 访问 [Supabase](https://supabase.com) 创建新项目
+2. 在SQL编辑器中执行 `database/schema.sql` 
 3. 获取项目的URL和API密钥
 
-### 2. 配置后端
-
+### 3. 配置后端
 ```bash
 cd backend
 cp .env.example .env
 ```
 
-编辑`.env`文件，填入你的Supabase配置：
-
+编辑 `.env` 文件：
 ```env
 SUPABASE_URL=your-supabase-url
 SUPABASE_KEY=your-supabase-key
 JWT_SECRET=your-jwt-secret-key
 ```
 
-安装依赖并启动后端：
-
+启动后端服务：
 ```bash
 pip install -r requirements.txt
 python app.py
 ```
 
-后端将在 `http://localhost:5000` 启动
-
-### 3. 启动前端
-
+### 4. 配置前端
 ```bash
 cd ai-resume-builder
+cp .env.example .env
+```
+
+编辑 `.env` 文件（可选，用于AI功能）：
+```env
+VITE_GEMINI_API_KEY=your-gemini-api-key
+```
+
+启动前端服务：
+```bash
 npm install
 npm run dev
 ```
 
-前端将在 `http://localhost:5173` 启动
+### 5. 访问应用
+- 前端：http://localhost:5173
+- 后端API：http://localhost:5000
 
-## API端点
+## 📋 API文档
 
-### 认证
+### 认证端点
 - `POST /api/auth/register` - 用户注册
-- `POST /api/auth/login` - 用户登录
+- `POST /api/auth/login` - 用户登录  
 - `POST /api/auth/forgot-password` - 忘记密码
 
 ### 简历管理
-- `GET /api/resumes` - 获取所有简历
+- `GET /api/resumes` - 获取用户所有简历
 - `POST /api/resumes` - 创建新简历
 - `GET /api/resumes/{id}` - 获取特定简历
 - `PUT /api/resumes/{id}` - 更新简历
 - `DELETE /api/resumes/{id}` - 删除简历
 
 ### AI分析
-- `POST /api/ai/analyze` - AI简历分析
+- `POST /api/ai/analyze` - AI简历分析（集成Gemini）
 
 ### 用户管理
 - `GET /api/user/profile` - 获取用户资料
 - `PUT /api/user/profile` - 更新用户资料
 
-### 模板
-- `GET /api/templates` - 获取简历模板
+## 🏗️ 项目架构
 
-## 数据库架构
+### 前端架构
+```
+ai-resume-builder/
+├── components/
+│   ├── screens/           # 页面组件
+│   │   ├── Dashboard.tsx  # 仪表板
+│   │   ├── Editor.tsx     # 简历编辑器
+│   │   ├── AiAnalysis.tsx # AI分析
+│   │   └── ...
+│   ├── templates/         # 模板组件
+│   └── BottomNav.tsx      # 底部导航
+├── types.ts              # 类型定义
+├── App.tsx               # 主应用
+└── main.tsx              # 入口文件
+```
 
-### users表
-- `id` - 用户ID (UUID)
-- `email` - 邮箱地址
-- `password` - 加密密码
-- `name` - 用户姓名
-- `created_at` - 创建时间
-- `updated_at` - 更新时间
+### 后端架构
+```
+backend/
+├── app.py                # Flask应用主文件
+├── api_service.py        # API服务封装
+├── requirements.txt      # Python依赖
+└── .env.example          # 环境变量示例
+```
 
-### resumes表
-- `id` - 简历ID (UUID)
-- `user_id` - 用户ID (外键)
-- `title` - 简历标题
-- `resume_data` - 简历数据 (JSONB)
-- `score` - 简历评分
-- `has_dot` - 是否有新更新标记
-- `created_at` - 创建时间
-- `updated_at` - 更新时间
+### 数据库设计
+- **users表** - 用户信息和认证
+- **resumes表** - 简历数据和元信息
+- **RLS策略** - 行级安全保护
 
-## 开发说明
+## 🎯 核心特性详解
 
-### 前端状态管理
-前端使用React的useState和useEffect进行状态管理，主要状态包括：
-- `isAuthenticated` - 认证状态
-- `currentView` - 当前视图
-- `resumeData` - 当前编辑的简历数据
-- `allResumes` - 所有简历列表
+### AI智能分析
+- **简历评分** - 基于行业标准的完整性评分
+- **内容优化** - 针对性的改进建议
+- **关键词匹配** - ATS系统优化
+- **猎头策略** - 专业的求职指导
 
-### 后端认证
-使用JWT进行用户认证，所有需要认证的端点都使用`@token_required`装饰器保护。
+### 模板系统
+- **多种风格** - 现代、经典、创意等模板
+- **实时预览** - 即时查看效果
+- **PDF导出** - 高质量输出
+- **自定义样式** - 个性化调整
 
-### 数据安全
-- 密码使用Werkzeug进行哈希加密
-- JWT token用于API认证
-- Supabase RLS (Row Level Security) 保护数据访问
+### 用户体验
+- **响应式设计** - 完美适配各种设备
+- **实时验证** - 表单即时反馈
+- **进度追踪** - 可视化完成度
+- **数据同步** - 云端自动保存
 
-## 部署
+## 🚀 部署指南
 
 ### 前端部署
 ```bash
 cd ai-resume-builder
 npm run build
 ```
-
-将`dist`文件夹部署到静态文件服务器。
+将 `dist` 文件夹部署到静态文件服务器（如Vercel、Netlify等）
 
 ### 后端部署
-建议使用生产级WSGI服务器如Gunicorn：
-
 ```bash
 pip install gunicorn
 gunicorn -w 4 -b 0.0.0.0:5000 app:app
 ```
 
-## 贡献
+### Docker部署
+```dockerfile
+# Dockerfile示例
+FROM node:18-alpine as frontend
+WORKDIR /app
+COPY ai-resume-builder/package*.json ./
+RUN npm ci
+COPY ai-resume-builder/ .
+RUN npm run build
 
-欢迎提交Issue和Pull Request！
+FROM python:3.9-slim as backend
+WORKDIR /app
+COPY backend/requirements.txt ./
+RUN pip install -r requirements.txt
+COPY backend/ .
+EXPOSE 5000
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
+```
 
-## 许可证
+## 🤝 贡献指南
 
-MIT License
+我们欢迎所有形式的贡献！
+
+### 开发流程
+1. Fork 本仓库
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+### 代码规范
+- 前端使用 TypeScript 和 ESLint
+- 后端遵循 PEP 8 规范
+- 提交信息使用约定式提交格式
+
+## 📝 更新日志
+
+### v1.0.0 (2024-01-31)
+- ✨ 初始版本发布
+- 🤖 集成 Google Gemini AI 分析
+- 📝 完整的简历编辑功能
+- 🎨 多模板支持
+- 📱 响应式设计
+- 🔐 用户认证系统
+
+## 📄 许可证
+
+本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情
+
+## 🙏 致谢
+
+- [React](https://reactjs.org/) - UI框架
+- [Flask](https://flask.palletsprojects.com/) - 后端框架
+- [Supabase](https://supabase.com/) - 数据库服务
+- [Google Gemini](https://ai.google.dev/) - AI分析引擎
+- [Tailwind CSS](https://tailwindcss.com/) - CSS框架
+
+## 📞 联系我们
+
+- 项目主页：[GitHub Repository](https://github.com/yourusername/Career-Hero)
+- 问题反馈：[Issues](https://github.com/yourusername/Career-Hero/issues)
+- 功能建议：[Discussions](https://github.com/yourusername/Career-Hero/discussions)
+
+---
+
+⭐ 如果这个项目对你有帮助，请给我们一个 Star！
