@@ -5,3 +5,5 @@ PyJWT==2.8.0
 Werkzeug==2.3.7
 python-dotenv==1.0.0
 gunicorn==21.2.0
+WeasyPrint==61.2
+google-generativeai==0.8.3

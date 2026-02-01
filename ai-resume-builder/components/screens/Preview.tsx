@@ -1,190 +1,74 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
+import { supabase } from '../../src/supabase-client';
 
 const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) => {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [html2pdfLoaded, setHtml2pdfLoaded] = useState(false);
-
-  // 动态加载html2pdf库
-  useEffect(() => {
-    const loadHtml2pdf = async () => {
-      try {
-        if (typeof window !== 'undefined' && !(window as any).html2pdf) {
-          // 动态加载html2pdf库
-          const script = document.createElement('script');
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-          script.integrity = 'sha512-GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg==';
-          script.crossOrigin = 'anonymous';
-          script.referrerPolicy = 'no-referrer';
-          
-          script.onload = () => {
-            console.log('html2pdf库加载成功');
-            setHtml2pdfLoaded(true);
-          };
-          
-          script.onerror = () => {
-            console.error('html2pdf库加载失败');
-            setHtml2pdfLoaded(false);
-          };
-          
-          document.head.appendChild(script);
-        } else if ((window as any).html2pdf) {
-          setHtml2pdfLoaded(true);
-        }
-      } catch (error) {
-        console.error('加载html2pdf库时出错:', error);
-        setHtml2pdfLoaded(false);
-      }
-    };
-
-    loadHtml2pdf();
-  }, []);
 
   const handleExportPDF = async () => {
-    if (!html2pdfLoaded || isGenerating) return;
-    const originalElement = document.getElementById('resume-content');
-    if (!originalElement) {
-      console.error('❌ 未找到resume-content元素');
-      return;
-    }
-
-    console.log('=== PDF导出调试信息 ===');
-    console.log('原始元素:', originalElement);
-    console.log('原始元素内容:', originalElement.innerHTML.length > 0 ? '有内容' : '空白');
-    console.log('原始元素尺寸:', {
-      offsetWidth: originalElement.offsetWidth,
-      offsetHeight: originalElement.offsetHeight,
-      scrollWidth: originalElement.scrollWidth,
-      scrollHeight: originalElement.scrollHeight
-    });
+    if (isGenerating || !resumeData) return;
 
     setIsGenerating(true);
     
-    // 1. 创建沙盒容器：彻底脱离当前窄屏视口
-    const sandbox = document.createElement('div');
-    sandbox.style.position = 'fixed';
-    sandbox.style.left = '-5000px'; // 移动到视口外
-    sandbox.style.top = '0';
-    sandbox.style.width = '794px'; // 强制 A4 宽度
-    sandbox.style.height = 'auto'; // 让高度自适应
-    sandbox.style.pointerEvents = 'none';
-    sandbox.style.opacity = '0';
-    sandbox.style.backgroundColor = '#ffffff';
-    sandbox.style.display = 'block';
-    sandbox.style.overflow = 'visible';
-    sandbox.style.zIndex = '9999'; // 确保在顶层
-    document.body.appendChild(sandbox);
-
     try {
-        // 2. 深度克隆内容并进行"PDF 专属优化"
-        const clone = originalElement.cloneNode(true) as HTMLElement;
-        console.log('克隆元素:', clone);
-        console.log('克隆元素内容:', clone.innerHTML.length > 0 ? '有内容' : '空白');
-        
-        // 强制移除所有可能干扰 PDF 的类名
-        clone.classList.remove('rounded-3xl', 'shadow-2xl', 'overflow-hidden');
-        
-        // 覆盖样式：强制 A4 布局
-        clone.style.width = '794px';
-        clone.style.padding = '40px';
-        clone.style.backgroundColor = '#ffffff';
-        clone.style.color = '#000000';
-        clone.style.transform = 'none';
-        clone.style.display = 'block';
-        clone.style.overflow = 'visible';
-        clone.style.minHeight = '1123px'; // A4高度最小值
+      // 获取当前用户的 token
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error('用户未登录');
+      }
 
-        // 🟢 解决"细长条"的核心：递归修复 Flex 布局
-        // 将所有在手机上堆叠的 flex-col 强行恢复为横向，并确保宽度占满
-        const flexElements = clone.querySelectorAll('.flex');
-        flexElements.forEach((el) => {
-            const style = (el as HTMLElement).style;
-            // 只有当不是专门为了纵向设计的元素时，才强制横向
-            if (!el.classList.contains('flex-col') || el.classList.contains('md:flex-row')) {
-                style.display = 'flex';
-                style.flexDirection = 'row';
-                style.flexWrap = 'nowrap';
-                style.alignItems = 'flex-start';
-                style.justifyContent = 'space-between';
-            }
-        });
+      // 调用后端 PDF 导出接口
+      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/export-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          resumeData: resumeData
+        })
+      });
 
-        // 等待图片加载完成
-        const images = clone.querySelectorAll('img');
-        if (images.length > 0) {
-          console.log('等待图片加载:', images.length, '张图片');
-          await Promise.all(Array.from(images).map(img => {
-            return new Promise((resolve) => {
-              if (img.complete) {
-                resolve(null);
-              } else {
-                img.onload = resolve;
-                img.onerror = resolve;
-              }
-            });
-          }));
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'PDF 生成失败');
+      }
+
+      // 获取 PDF 文件流并下载
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      
+      // 从响应头获取文件名，如果没有则使用默认名称
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = '简历.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
         }
-
-        sandbox.appendChild(clone);
-
-        // 等待DOM更新
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        console.log('沙盒尺寸:', {
-          offsetWidth: sandbox.offsetWidth,
-          offsetHeight: sandbox.offsetHeight,
-          scrollWidth: sandbox.scrollWidth,
-          scrollHeight: sandbox.scrollHeight
-        });
-
-        console.log('克隆元素尺寸:', {
-          offsetWidth: clone.offsetWidth,
-          offsetHeight: clone.offsetHeight,
-          scrollWidth: clone.scrollWidth,
-          scrollHeight: clone.scrollHeight
-        });
-
-        // 确保沙盒有可计算的高度，避免部分浏览器导出空白
-        const exportHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1123);
-        console.log('导出高度:', exportHeight);
-
-        const opt = {
-            margin: 0,
-            filename: `简历优化_${resumeData?.personalInfo?.name || '未命名'}.pdf`,
-            image: { type: 'jpeg', quality: 1.0 },
-            html2canvas: { 
-                scale: 2, // 提高清晰度
-                useCORS: true,
-                width: 794,
-                windowWidth: 794,
-                scrollY: 0,
-                backgroundColor: '#ffffff',
-                height: exportHeight,
-                logging: true, // 启用日志
-                allowTaint: true
-            },
-            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        console.log('PDF配置:', opt);
-
-        const html2pdf = (window as any).html2pdf;
-        console.log('html2pdf库:', html2pdf);
-        
-        await html2pdf().set(opt).from(sandbox).save();
-        console.log('✅ PDF导出成功');
-
+      } else {
+        // 使用用户姓名生成文件名
+        const name = resumeData?.personalInfo?.name || '简历';
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        filename = `${name}_简历_${date}.pdf`;
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('✅ PDF 导出成功');
+      
     } catch (error) {
-        console.error('❌ PDF 终极导出失败:', error);
-        console.error('错误详情:', error.message);
-        console.error('错误堆栈:', error.stack);
-        alert('PDF导出失败，请稍后重试');
+      console.error('❌ PDF 导出失败:', error);
+      alert(`PDF 导出失败: ${error.message}`);
     } finally {
-        // 3. 清理现场
-        if (sandbox.parentNode) {
-          sandbox.parentNode.removeChild(sandbox);
-        }
-        setIsGenerating(false);
+      setIsGenerating(false);
     }
   };
 
@@ -369,18 +253,13 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         <div className="w-[85%] flex flex-col gap-4">
             <button 
                 onClick={handleExportPDF}
-                disabled={isGenerating || !html2pdfLoaded}
+                disabled={isGenerating}
                 className="w-full flex items-center justify-center gap-2 h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white rounded-xl shadow-[0_0_20px_rgba(19,127,236,0.15)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
             >
                 {isGenerating ? (
                     <>
                         <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                         <span className="text-base font-bold tracking-wide">生成中...</span>
-                    </>
-                ) : !html2pdfLoaded ? (
-                    <>
-                        <span className="material-symbols-outlined text-[24px]">hourglass_empty</span>
-                        <span className="text-base font-bold tracking-wide">加载PDF库...</span>
                     </>
                 ) : (
                     <>
@@ -389,11 +268,6 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                     </>
                 )}
             </button>
-            {!html2pdfLoaded && (
-                <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-                    正在加载PDF生成库，请稍候...
-                </p>
-            )}
         </div>
       </main>
     </div>

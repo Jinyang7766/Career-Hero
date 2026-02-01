@@ -1,0 +1,21 @@
+services:
+  # Web Service
+  - type: web
+    name: career-hero-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+    healthCheck:
+      path: /api/templates
+      timeout: 30
+      interval: 30

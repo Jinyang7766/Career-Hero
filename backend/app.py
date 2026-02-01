@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 load_dotenv()  # 这行加载.env文件
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from supabase import create_client, Client
 import os
@@ -10,6 +10,10 @@ from functools import wraps
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
+import weasyprint
+from weasyprint import HTML, CSS
+import google.generativeai as genai
+from io import BytesIO
 
 app = Flask(__name__)
 CORS(app)
@@ -18,6 +22,14 @@ CORS(app)
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'your-supabase-key')
 JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
+
+# Google Gemini AI configuration
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
+if GEMINI_API_KEY != 'your-gemini-api-key':
+    genai.configure(api_key=GEMINI_API_KEY)
+    model = genai.GenerativeModel('gemini-3-flash-preview')
+else:
+    model = None
 
 # Initialize Supabase with error handling
 try:
@@ -413,6 +425,365 @@ def get_templates():
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@app.route('/api/export-pdf', methods=['POST'])
+@token_required
+def export_pdf(current_user_id):
+    try:
+        data = request.get_json()
+        resume_data = data.get('resumeData')
+        
+        if not resume_data:
+            return jsonify({'error': 'Resume data is required'}), 400
+        
+        # Generate HTML for PDF
+        html_content = generate_resume_html(resume_data)
+        
+        # Create CSS for A4 styling
+        css_content = """
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .resume-header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .resume-header h1 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: bold;
+        }
+        
+        .resume-header .contact {
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+        }
+        
+        .section h2 {
+            font-size: 16px;
+            font-weight: bold;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 5px;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .work-experience, .education, .projects {
+            margin-bottom: 15px;
+        }
+        
+        .work-experience h3, .education h3, .projects h3 {
+            font-size: 14px;
+            font-weight: bold;
+            margin: 0 0 5px 0;
+        }
+        
+        .work-experience .date, .education .date, .projects .date {
+            font-size: 12px;
+            color: #666;
+            font-style: italic;
+            margin-bottom: 5px;
+        }
+        
+        .work-experience .description, .education .description, .projects .description {
+            font-size: 12px;
+            margin: 0;
+            line-height: 1.4;
+        }
+        
+        .skills {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .skill-item {
+            background-color: #f5f5f5;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+        }
+        
+        ul {
+            margin: 5px 0;
+            padding-left: 20px;
+        }
+        
+        li {
+            margin-bottom: 3px;
+            font-size: 12px;
+        }
+        """
+        
+        # Generate PDF
+        html_doc = HTML(string=html_content)
+        css_doc = CSS(string=css_content)
+        
+        pdf_buffer = BytesIO()
+        html_doc.write_pdf(pdf_buffer, stylesheets=[css_doc])
+        pdf_buffer.seek(0)
+        
+        # Generate filename
+        name = resume_data.get('personalInfo', {}).get('name', 'resume')
+        filename = f"{name}_简历_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+        
+        return send_file(
+            pdf_buffer,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='application/pdf'
+        )
+        
+    except Exception as e:
+        print(f"PDF generation error: {str(e)}")
+        return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
+
+def generate_resume_html(resume_data):
+    """Generate HTML content for resume based on resume data"""
+    
+    # Personal Info
+    personal_info = resume_data.get('personalInfo', {})
+    name = personal_info.get('name', '')
+    title = personal_info.get('title', '')
+    email = personal_info.get('email', '')
+    phone = personal_info.get('phone', '')
+    location = personal_info.get('location', '')
+    
+    header_html = f"""
+    <div class="resume-header">
+        <h1>{name}</h1>
+        <div class="contact">
+            {title}<br>
+            {email} | {phone} | {location}
+        </div>
+    </div>
+    """
+    
+    # Work Experience
+    work_exps = resume_data.get('workExps', [])
+    work_html = '<div class="section"><h2>工作经验</h2>'
+    for exp in work_exps:
+        company = exp.get('company', '')
+        position = exp.get('position', '')
+        start_date = exp.get('startDate', '')
+        end_date = exp.get('endDate', '')
+        description = exp.get('description', '')
+        
+        work_html += f"""
+        <div class="work-experience">
+            <h3>{position} - {company}</h3>
+            <div class="date">{start_date} - {end_date}</div>
+            <div class="description">{description}</div>
+        </div>
+        """
+    work_html += '</div>'
+    
+    # Education
+    educations = resume_data.get('educations', [])
+    edu_html = '<div class="section"><h2>教育背景</h2>'
+    for edu in educations:
+        school = edu.get('school', '')
+        degree = edu.get('degree', '')
+        major = edu.get('major', '')
+        start_date = edu.get('startDate', '')
+        end_date = edu.get('endDate', '')
+        
+        edu_html += f"""
+        <div class="education">
+            <h3>{school}</h3>
+            <div class="date">{degree} {major} | {start_date} - {end_date}</div>
+        </div>
+        """
+    edu_html += '</div>'
+    
+    # Projects
+    projects = resume_data.get('projects', [])
+    proj_html = '<div class="section"><h2>项目经验</h2>'
+    for proj in projects:
+        title = proj.get('title', '')
+        description = proj.get('description', '')
+        date = proj.get('date', '')
+        
+        proj_html += f"""
+        <div class="projects">
+            <h3>{title}</h3>
+            <div class="date">{date}</div>
+            <div class="description">{description}</div>
+        </div>
+        """
+    proj_html += '</div>'
+    
+    # Skills
+    skills = resume_data.get('skills', [])
+    skills_html = '<div class="section"><h2>技能专长</h2><div class="skills">'
+    for skill in skills:
+        skills_html += f'<span class="skill-item">{skill}</span>'
+    skills_html += '</div></div>'
+    
+    # Combine all sections
+    full_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <title>{name} - 简历</title>
+    </head>
+    <body>
+        {header_html}
+        {work_html if work_exps else ''}
+        {edu_html if educations else ''}
+        {proj_html if projects else ''}
+        {skills_html if skills else ''}
+    </body>
+    </html>
+    """
+    
+    return full_html
+
+@app.route('/api/ai/analyze', methods=['POST'])
+@token_required
+def analyze_resume(current_user_id):
+    try:
+        data = request.get_json()
+        resume_data = data.get('resumeData')
+        job_description = data.get('jobDescription', '')
+        
+        if not resume_data:
+            return jsonify({'error': 'Resume data is required'}), 400
+        
+        # Use Gemini AI if available, otherwise fall back to mock analysis
+        if model and job_description:
+            try:
+                # Prepare prompt for Gemini
+                prompt = f"""
+                请分析以下简历与职位描述的匹配度，并提供详细的优化建议：
+
+                简历信息：
+                {format_resume_for_ai(resume_data)}
+
+                职位描述：
+                {job_description}
+
+                请提供以下信息：
+                1. 匹配度评分（0-100）
+                2. 优势分析
+                3. 不足之处
+                4. 具体优化建议
+                5. 缺失的关键词
+
+                请以JSON格式返回结果：
+                {{
+                    "score": 85,
+                    "strengths": ["优势1", "优势2"],
+                    "weaknesses": ["不足1", "不足2"],
+                    "suggestions": ["建议1", "建议2"],
+                    "missingKeywords": ["关键词1", "关键词2"]
+                }}
+                """
+                
+                response = model.generate_content(prompt)
+                ai_result = parse_ai_response(response.text)
+                
+                return jsonify({
+                    'score': ai_result.get('score', 70),
+                    'suggestions': ai_result.get('suggestions', []),
+                    'strengths': ai_result.get('strengths', []),
+                    'weaknesses': ai_result.get('weaknesses', []),
+                    'missingKeywords': ai_result.get('missingKeywords', [])
+                }), 200
+                
+            except Exception as ai_error:
+                print(f"AI analysis failed: {ai_error}")
+                # Fall back to mock analysis
+        
+        # Mock AI analysis - fallback
+        score = calculate_resume_score(resume_data)
+        suggestions = generate_suggestions(resume_data, score)
+        
+        return jsonify({
+            'score': score,
+            'suggestions': suggestions
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def format_resume_for_ai(resume_data):
+    """Format resume data for AI analysis"""
+    formatted = []
+    
+    # Personal info
+    personal = resume_data.get('personalInfo', {})
+    if personal:
+        formatted.append(f"姓名: {personal.get('name', '')}")
+        formatted.append(f"职位: {personal.get('title', '')}")
+        formatted.append(f"邮箱: {personal.get('email', '')}")
+        formatted.append(f"电话: {personal.get('phone', '')}")
+    
+    # Work experience
+    work_exps = resume_data.get('workExps', [])
+    if work_exps:
+        formatted.append("\n工作经验:")
+        for exp in work_exps:
+            formatted.append(f"- {exp.get('position', '')} at {exp.get('company', '')}")
+            formatted.append(f"  {exp.get('startDate', '')} - {exp.get('endDate', '')}")
+            formatted.append(f"  {exp.get('description', '')}")
+    
+    # Education
+    educations = resume_data.get('educations', [])
+    if educations:
+        formatted.append("\n教育背景:")
+        for edu in educations:
+            formatted.append(f"- {edu.get('degree', '')} {edu.get('major', '')}")
+            formatted.append(f"  {edu.get('school', '')}")
+            formatted.append(f"  {edu.get('startDate', '')} - {edu.get('endDate', '')}")
+    
+    # Skills
+    skills = resume_data.get('skills', [])
+    if skills:
+        formatted.append(f"\n技能: {', '.join(skills)}")
+    
+    return '\n'.join(formatted)
+
+def parse_ai_response(response_text):
+    """Parse AI response to extract structured data"""
+    try:
+        import json
+        # Try to extract JSON from response
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+        if start != -1 and end != 0:
+            json_str = response_text[start:end]
+            return json.loads(json_str)
+    except:
+        pass
+    
+    # Fallback to default values
+    return {
+        'score': 75,
+        'strengths': ['简历结构清晰'],
+        'weaknesses': ['需要更多细节'],
+        'suggestions': ['补充具体成就'],
+        'missingKeywords': []
+    }
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
