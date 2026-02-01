@@ -211,7 +211,14 @@ const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, re
 
       {/* My Resumes Section */}
       <div className="flex items-center justify-between px-4 pb-3">
-        <h3 className="text-lg font-bold leading-tight">我的简历</h3>
+        <h3 className="text-lg font-bold leading-tight">
+          我的简历
+          {allResumes && allResumes.length > 0 && (
+            <span className="ml-2 text-sm font-normal text-gray-500 dark:text-gray-400">
+              ({allResumes.length})
+            </span>
+          )}
+        </h3>
         <button 
           onClick={() => setCurrentView(View.ALL_RESUMES)}
           className="text-sm font-medium text-primary hover:text-primary/80"
