@@ -86,7 +86,105 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   };
 
-  const startAnalysis = () => {
+  const generateRealAnalysis = async () => {
+    if (!resumeData) return null;
+    
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+    if (!apiKey) {
+      console.log('No API key found, using mock analysis');
+      return null;
+    }
+
+    try {
+      console.log('Generating real AI analysis...');
+      const ai = new GoogleGenerativeAI(apiKey);
+      const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+      
+      const resumeDetails = `
+Resume Details:
+- Name: ${resumeData.personalInfo.name || 'N/A'}
+- Title: ${resumeData.personalInfo.title || 'N/A'}
+- Email: ${resumeData.personalInfo.email || 'N/A'}
+- Phone: ${resumeData.personalInfo.phone || 'N/A'}
+- Gender: ${resumeData.gender || 'N/A'}
+- Work Experience: ${resumeData.workExps.length} positions
+  ${resumeData.workExps.map((exp, i) => `  ${i+1}. ${exp.title} at ${exp.subtitle} (${exp.date}): ${exp.description || 'No description'}`).join('\n')}
+- Education: ${resumeData.educations.length} degrees
+  ${resumeData.educations.map((edu, i) => `  ${i+1}. ${edu.title} at ${edu.subtitle} (${edu.date})`).join('\n')}
+- Projects: ${resumeData.projects.length} projects
+  ${resumeData.projects.map((proj, i) => `  ${i+1}. ${proj.title} (${proj.date}): ${proj.description || 'No description'}`).join('\n')}
+- Skills: ${resumeData.skills.join(', ') || 'None'}
+`;
+
+      const jdDetails = jdText.length > 0 ? `
+Job Description:
+${jdText}
+` : '';
+
+      const analysisPrompt = `你是一名专业的HR分析师和简历优化专家。请对以下简历进行深度分析，并生成结构化的分析报告。
+
+${resumeDetails}
+${jdDetails}
+
+请严格按照以下JSON格式返回分析结果，不要包含任何其他文字：
+{
+  "summary": "简历整体评估的简短总结（50-100字）",
+  "strengths": ["优势点1", "优势点2", "优势点3"],
+  "weaknesses": ["不足点1", "不足点2", "不足点3"],
+  "missingKeywords": ["缺失关键词1", "缺失关键词2", "缺失关键词3"],
+  "scoreBreakdown": {
+    "experience": 0-100的分数,
+    "skills": 0-100的分数,
+    "format": 0-100的分数
+  },
+  "suggestions": [
+    {
+      "type": "optimization"或"missing"或"grammar",
+      "title": "建议标题",
+      "reason": "建议原因",
+      "targetSection": "personalInfo"或"workExps"或"skills",
+      "targetId": 数字（仅workExps需要）,
+      "targetField": "字段名（仅personalInfo和workExps需要）",
+      "suggestedValue": "建议值",
+      "originalValue": "原始值"
+    }
+  ]
+}
+
+评分标准：
+- experience: 工作经验匹配度（考虑年限、相关性、职位层级）
+- skills: 技能匹配度（考虑JD要求、技能覆盖率、技能相关性）
+- format: 简历格式和结构（考虑排版、完整性、专业性）
+
+请确保返回的是有效的JSON格式。`;
+
+      const response = await model.generateContent({
+        contents: [{ role: 'user', parts: [{ text: analysisPrompt }] }]
+      });
+      
+      const aiText = response.response.text() || "";
+      console.log('AI Analysis response received');
+      
+      // 尝试解析JSON
+      let analysisResult;
+      try {
+        // 清理可能的markdown代码块
+        const cleanText = aiText.replace(/```json\n?|\n?```/g, '').trim();
+        analysisResult = JSON.parse(cleanText);
+      } catch (parseError) {
+        console.error('Failed to parse AI response as JSON:', parseError);
+        console.log('Raw AI response:', aiText);
+        return null;
+      }
+      
+      return analysisResult;
+    } catch (error) {
+      console.error('AI Analysis Error:', error);
+      return null;
+    }
+  };
+
+  const startAnalysis = async () => {
     // Snapshot original data for comparison later
     if (resumeData) {
         setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
@@ -94,7 +192,65 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
     setCurrentStep('analyzing');
     
-    // Simulate Analysis Delay & Logic
+    try {
+      // 尝试使用真实AI分析
+      const aiAnalysisResult = await generateRealAnalysis();
+      
+      if (aiAnalysisResult) {
+        console.log('Using real AI analysis result');
+        
+        // 转换AI分析结果为我们的数据结构
+        const newSuggestions: Suggestion[] = (aiAnalysisResult.suggestions || []).map((suggestion: any, index: number) => ({
+          id: `ai-suggestion-${index}`,
+          type: suggestion.type || 'optimization',
+          title: suggestion.title || '优化建议',
+          reason: suggestion.reason || '根据AI分析结果',
+          targetSection: suggestion.targetSection || 'skills',
+          targetId: suggestion.targetId,
+          targetField: suggestion.targetField,
+          suggestedValue: suggestion.suggestedValue,
+          originalValue: suggestion.originalValue,
+          status: 'pending' as const
+        }));
+        
+        const newReport: AnalysisReport = {
+          summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
+          strengths: aiAnalysisResult.strengths || ['结构清晰'],
+          weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
+          missingKeywords: aiAnalysisResult.missingKeywords || [],
+          scoreBreakdown: aiAnalysisResult.scoreBreakdown || {
+            experience: 75,
+            skills: 80,
+            format: 90
+          }
+        };
+        
+        // 计算总分
+        const totalScore = Math.round(
+          (newReport.scoreBreakdown.experience + newReport.scoreBreakdown.skills + newReport.scoreBreakdown.format) / 3
+        );
+        
+        setScore(totalScore);
+        setSuggestions(newSuggestions);
+        setReport(newReport);
+        
+        // 初始化聊天
+        setChatMessages([{ 
+          id: 'init-1',
+          role: 'model', 
+          text: `🎯 **AI分析完成！**\n\n${newReport.summary}\n\n我为您生成了 ${newSuggestions.length} 条优化建议，整体评分 ${totalScore}/100 分。要开始逐一优化吗？` 
+        }]);
+        
+        setCurrentStep('report');
+        return;
+      }
+    } catch (error) {
+      console.error('Real AI analysis failed, falling back to mock:', error);
+    }
+    
+    // 回退到模拟分析
+    console.log('Using mock analysis as fallback');
+    
     setTimeout(() => {
       if (!resumeData) return;
 
