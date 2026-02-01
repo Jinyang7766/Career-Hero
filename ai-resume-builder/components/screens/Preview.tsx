@@ -41,6 +41,8 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
   }, []);
 
   const handleExportPDF = async () => {
+    if (!html2pdfLoaded || isGenerating) return;
+    
     const element = document.getElementById('resume-content');
     if (!element) {
       console.error('未找到简历内容元素');
@@ -49,149 +51,60 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     }
 
     setIsGenerating(true);
-
+    
+    // 🔴 关键步骤 1: 记录原始宽度，并强行设置为 A4 宽度
+    const originalWidth = element.style.width;
+    const originalMinWidth = element.style.minWidth;
+    const originalMaxWidth = element.style.maxWidth;
+    const originalOverflow = element.style.overflow;
+    
+    element.style.width = '794px'; // A4标准像素宽度
+    element.style.minWidth = '794px';
+    element.style.maxWidth = '794px';
+    element.style.overflow = 'visible';
+    
+    console.log('临时设置A4宽度: 794px');
+    
+    // 等待DOM更新
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     try {
-      console.log('开始生成PDF...');
+      const opt = {
+        margin: 10,
+        filename: `优化简历_${resumeData?.personalInfo?.name || ''}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          // 🔴 关键步骤 2: 告诉插件以这个宽度进行渲染
+          windowWidth: 794,
+          height: element.scrollHeight,
+          width: element.scrollWidth
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
 
-      // 检查html2pdf是否可用
-      if (typeof window !== 'undefined' && (window as any).html2pdf && html2pdfLoaded) {
-        console.log('使用html2pdf生成PDF');
-        
-        const opt = {
-          margin: 0, // 移除默认边距，由CSS控制
-          filename: `${resumeData?.personalInfo?.name || '简历'}_Resume.pdf`,
-          image: { type: 'jpeg', quality: 1 }, // 提高图片质量
-          html2canvas: { 
-            scale: 2, 
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            logging: false,
-            // 🔴 关键：强制导出时的窗口宽度为 A4 标准像素 (约 794px)
-            windowWidth: 800,
-            height: element.scrollHeight,
-            width: element.scrollWidth,
-            // 添加字体渲染优化
-            letterRendering: true,
-            removeContainer: false
-          },
-          jsPDF: { 
-            unit: 'mm', 
-            format: 'a4', 
-            orientation: 'portrait',
-            compress: true
-          },
-          pagebreak: { 
-            mode: 'avoid-all', // 防止内容在页面边缘被切断
-            before: '.page-break-before',
-            after: '.page-break-after',
-            avoid: '.no-break'
-          }
-        };
+      console.log('PDF配置:', opt);
+      console.log('目标元素:', element);
 
-        console.log('PDF配置:', opt);
-        console.log('目标元素:', element);
-
-        // 🔴 关键：在导出前，临时给 element 增加一个 A4 宽度的样式，导出完移除
-        const originalWidth = element.style.width;
-        const originalMinWidth = element.style.minWidth;
-        const originalMaxWidth = element.style.maxWidth;
-        
-        // 强制设置为A4标准宽度
-        element.style.width = '794px'; // A4标准像素宽度
-        element.style.minWidth = '794px';
-        element.style.maxWidth = '794px';
-        
-        // 强制重新渲染
-        element.style.overflow = 'visible';
-        
-        console.log('临时设置A4宽度: 794px');
-
-        // 等待DOM更新
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // 生成PDF
-        await (window as any).html2pdf()
-          .from(element)
-          .set(opt)
-          .save()
-          .then(() => {
-            console.log('PDF生成成功');
-          })
-          .catch((error: any) => {
-            console.error('PDF生成失败:', error);
-            alert('PDF生成失败，请重试或使用浏览器打印功能');
-          })
-          .finally(() => {
-            // 🔴 关键：导出完成后恢复原始样式
-            element.style.width = originalWidth;
-            element.style.minWidth = originalMinWidth;
-            element.style.maxWidth = originalMaxWidth;
-            element.style.overflow = '';
-            console.log('恢复原始样式');
-            setIsGenerating(false);
-          });
-
-      } else {
-        console.log('html2pdf不可用，使用浏览器打印功能');
-        // Fallback: 使用浏览器打印功能
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          const printContent = element.innerHTML;
-          const printStyles = `
-            <style>
-              body { 
-                margin: 0; 
-                padding: 20px; 
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
-                width: 794px; /* A4标准宽度 */
-                background: #ffffff !important;
-              }
-              .no-print { display: none !important; }
-              @media print {
-                body { 
-                  margin: 0; 
-                  padding: 10px; 
-                  width: 794px !important;
-                }
-                @page { 
-                  margin: 10mm;
-                  size: A4 portrait;
-                }
-              }
-            </style>
-          `;
-          
-          printWindow.document.write(`
-            <!DOCTYPE html>
-            <html>
-              <head>
-                <title>${resumeData?.personalInfo?.name || '简历'}_Resume</title>
-                ${printStyles}
-              </head>
-              <body>
-                ${printContent}
-              </body>
-            </html>
-          `);
-          
-          printWindow.document.close();
-          printWindow.focus();
-          
-          setTimeout(() => {
-            printWindow.print();
-            printWindow.close();
-            setIsGenerating(false);
-          }, 500);
-        } else {
-          setIsGenerating(false);
-          alert('无法打开打印窗口，请检查浏览器设置');
-        }
-      }
+      const html2pdf = (window as any).html2pdf;
+      await html2pdf().set(opt).from(element).save();
+      
+      console.log('PDF生成成功');
     } catch (error) {
-      console.error('PDF导出过程中出错:', error);
+      console.error('PDF导出失败:', error);
+      alert('PDF导出失败，请重试或使用浏览器打印功能');
+    } finally {
+      // 🔴 关键步骤 3: 恢复原始样式
+      element.style.width = originalWidth;
+      element.style.minWidth = originalMinWidth;
+      element.style.maxWidth = originalMaxWidth;
+      element.style.overflow = originalOverflow;
       setIsGenerating(false);
-      alert('PDF导出失败，请重试');
+      console.log('恢复原始样式');
     }
   };
 
@@ -216,20 +129,16 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
       <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">
         <div className="relative w-[85%] flex flex-col items-center group/doc-wrapper">
             <div className="relative w-full aspect-[1/1.414] bg-white rounded-sm shadow-2xl transition-transform duration-300 ease-out origin-center group/doc">
-                {/* Visual Resume Representation for PDF Generation */}
+                {/* 🔴 关键：移除PDF中的黑边和阴影 - 简化简历容器样式 */}
                 <div 
                     id="resume-content" 
-                    className="w-full h-full rounded-sm overflow-hidden flex flex-col p-[6%]" 
+                    className="bg-white p-8 w-full text-slate-900" // 🔴 确保背景纯白，文字足够深
                     style={{ 
-                        backgroundColor: '#ffffff', // 显式白色背景
-                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"', // 标准中文系统字体序列
-                        color: '#1a1a1a', // 确保文字颜色
-                        fontSize: '12px', // 基础字体大小
-                        lineHeight: '1.4', // 行高
-                        // 🔴 关键：确保字体在PDF中正确渲染
-                        textRendering: 'optimizeLegibility',
-                        WebkitFontSmoothing: 'antialiased',
-                        MozOsxFontSmoothing: 'grayscale'
+                        fontFamily: "'PingFang SC', 'Microsoft YaHei', sans-serif",
+                        // 避免在 PDF 里出现多余的圆角和阴影
+                        borderRadius: '0',
+                        boxShadow: 'none',
+                        overflow: 'visible'
                     }}
                 >
                     <style dangerouslySetInnerHTML={{
@@ -240,30 +149,18 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                                     min-width: 794px !important;
                                     max-width: 794px !important;
                                     margin: 0 !important;
-                                    padding: 15mm !important;
-                                    box-shadow: none !important;
-                                    border-radius: 0 !important;
-                                    background-color: #ffffff !important;
-                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
-                                    color: #1a1a1a !important;
+                                    padding: 32px !important; /* p-8 = 32px */
+                                    box-shadow: none !important; /* 移除阴影 */
+                                    border-radius: 0 !important; /* 移除圆角 */
+                                    background-color: #ffffff !important; /* 纯白背景 */
+                                    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+                                    color: #0f172a !important; /* text-slate-900 */
                                     overflow: visible !important;
-                                    font-size: 12px !important;
-                                    line-height: 1.4 !important;
-                                    text-rendering: optimizeLegibility !important;
-                                    -webkit-font-smoothing: antialiased !important;
-                                    -moz-osx-font-smoothing: grayscale !important;
+                                    font-size: 14px !important;
+                                    line-height: 1.5 !important;
                                 }
                                 .no-print {
                                     display: none !important;
-                                }
-                                .page-break-before {
-                                    page-break-before: always !important;
-                                }
-                                .page-break-after {
-                                    page-break-after: always !important;
-                                }
-                                .no-break {
-                                    page-break-inside: avoid !important;
                                 }
                                 @page {
                                     margin: 10mm;
@@ -273,7 +170,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                                     margin: 0;
                                     padding: 0;
                                     background: #ffffff !important;
-                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+                                    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
                                 }
                                 * {
                                     -webkit-print-color-adjust: exact !important;
@@ -281,47 +178,32 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                                 }
                                 /* 🔴 关键：确保中文字体在PDF中正确显示 */
                                 h1, h2, h3, h4, h5, h6 {
-                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+                                    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
                                     font-weight: bold !important;
+                                    color: #0f172a !important;
                                 }
                                 p, span, div {
-                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+                                    font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif !important;
+                                    color: #0f172a !important;
                                 }
-                            }
-                            
-                            /* 确保内容不被截断 */
-                            .mb-5, .mb-6 {
-                                break-inside: avoid;
-                                page-break-inside: avoid;
-                            }
-                            
-                            /* 标题不与内容分离 */
-                            h3, h4, h5, h6 {
-                                break-after: avoid;
-                                page-break-after: avoid;
-                            }
-                            
-                            /* 列表项不被截断 */
-                            li, .flex {
-                                break-inside: avoid;
-                                page-break-inside: avoid;
-                            }
-                            
-                            /* 🔴 关键：字体加载优化 */
-                            @font-face {
-                                font-family: 'PingFang SC';
-                                src: local('PingFang SC'), local('PingFang SC Regular');
-                                font-display: swap;
-                            }
-                            @font-face {
-                                font-family: 'Microsoft YaHei';
-                                src: local('Microsoft YaHei'), local('Microsoft YaHei Regular');
-                                font-display: swap;
-                            }
-                            @font-face {
-                                font-family: 'Hiragino Sans GB';
-                                src: local('Hiragino Sans GB'), local('Hiragino Sans GB W3');
-                                font-display: swap;
+                                
+                                /* 确保内容不被截断 */
+                                .mb-5, .mb-6 {
+                                    break-inside: avoid;
+                                    page-break-inside: avoid;
+                                }
+                                
+                                /* 标题不与内容分离 */
+                                h3, h4, h5, h6 {
+                                    break-after: avoid;
+                                    page-break-after: avoid;
+                                }
+                                
+                                /* 列表项不被截断 */
+                                li, .flex {
+                                    break-inside: avoid;
+                                    page-break-inside: avoid;
+                                }
                             }
                         `
                     }} />
