@@ -296,14 +296,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.REACT_APP_GEMINI_API_KEY;
       console.log('API Key available:', !!apiKey);
+      console.log('API Key length:', apiKey?.length || 0);
+      console.log('Environment variables:', {
+        VITE_GEMINI_API_KEY: !!import.meta.env.VITE_GEMINI_API_KEY,
+        REACT_APP_GEMINI_API_KEY: !!import.meta.env.REACT_APP_GEMINI_API_KEY,
+        MODE: import.meta.env.MODE
+      });
+      
       let aiText = "";
 
       if (apiKey) {
         console.log('Initializing Google GenAI...');
         const ai = new GoogleGenAI({ apiKey });
         
+        // Validate API key format
+        if (!apiKey.startsWith('AIza')) {
+          console.error('Invalid API key format. Gemini API keys should start with "AIza"');
+          throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
+        }
+        
         // Test API connection
-        console.log('Testing API connection with model: gemini-1.5-flash');
+        console.log('Testing API connection with model: gemini-2.5-flash');
         
         const resumeDetails = `
 Resume Details:
@@ -346,12 +359,40 @@ When analyzing the resume, focus on:
 Always be encouraging, specific, and provide concrete examples. Format your response in a clear, readable way with appropriate use of emojis and formatting.`;
 
         console.log('Sending request to Gemini API...');
-        const response = await ai.models.generateContent({
-             model: 'gemini-2.5-flash',
-             contents: [{ role: 'user', parts: [{ text: prompt }] }]
-        });
-        aiText = response.text || "";
-        console.log('Gemini API response received');
+        try {
+          const response = await ai.models.generateContent({
+               model: 'gemini-2.5-flash',
+               contents: [{ role: 'user', parts: [{ text: prompt }] }]
+          });
+          aiText = response.text || "";
+          console.log('Gemini API response received');
+        } catch (apiError) {
+          console.error('Gemini API Error:', apiError);
+          console.error('Error details:', {
+            message: apiError.message,
+            status: apiError.status,
+            statusText: apiError.statusText,
+            stack: apiError.stack
+          });
+          
+          // If 2.5-flash fails, try 1.5-flash as fallback
+          if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model')) {
+            console.log('Trying fallback model: gemini-1.5-flash');
+            try {
+              const response = await ai.models.generateContent({
+                   model: 'gemini-1.5-flash',
+                   contents: [{ role: 'user', parts: [{ text: prompt }] }]
+              });
+              aiText = response.text || "";
+              console.log('Gemini API response received with fallback model');
+            } catch (fallbackError) {
+              console.error('Fallback model also failed:', fallbackError);
+              throw fallbackError;
+            }
+          } else {
+            throw apiError;
+          }
+        }
       } else {
         console.log('No API key found, using mock responses');
         await new Promise(r => setTimeout(r, 1000));
