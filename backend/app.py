@@ -283,28 +283,6 @@ def delete_resume(current_user_id, resume_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/ai/analyze', methods=['POST'])
-@token_required
-def analyze_resume(current_user_id):
-    try:
-        data = request.get_json()
-        resume_data = data.get('resumeData')
-        
-        if not resume_data:
-            return jsonify({'error': 'Resume data is required'}), 400
-        
-        # Mock AI analysis - in real app, integrate with AI service
-        score = calculate_resume_score(resume_data)
-        suggestions = generate_suggestions(resume_data, score)
-        
-        return jsonify({
-            'score': score,
-            'suggestions': suggestions
-        }), 200
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 def calculate_resume_score(resume_data):
     score = 0
     
