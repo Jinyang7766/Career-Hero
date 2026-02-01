@@ -409,23 +409,7 @@ ${resumeDetails}
               console.log('Gemini API response received with fallback model');
             } catch (fallbackError) {
               console.error('Fallback model also failed:', fallbackError);
-              // Try gemini-2.5-flash as final fallback
-              if (fallbackError.message?.includes('not found')) {
-                console.log('Trying final fallback model: gemini-2.5-flash');
-                try {
-                  const response = await ai.models.generateContent({
-                       model: 'gemini-2.5-flash',
-                       contents: [{ role: 'user', parts: [{ text: prompt }] }]
-                  });
-                  aiText = response.text || "";
-                  console.log('Gemini API response received with final fallback model');
-                } catch (finalError) {
-                  console.error('Final fallback model also failed:', finalError);
-                  throw finalError;
-                }
-              } else {
-                throw fallbackError;
-              }
+              throw fallbackError;
             }
           } else {
             throw apiError;
@@ -449,119 +433,45 @@ ${resumeDetails}
                 setIsSending(false);
                 return;
             } else {
-                aiText = `🎯 **专业建议：基于您的简历分析**
+                aiText = `👋 很高兴帮您优化简历！
 
-**当前市场趋势：**
-• 📈 ${resumeData?.personalInfo.title || '您所在领域'}市场需求持续增长
-• 🤖 AI技能和数字化能力成为招聘重点
-• 🌐 远程工作机会大幅增加
+建议：
 
-**求职策略建议：**
-• 📝 针对每个申请定制简历，避免"一刀切"
-• 🎯 重点突出与JD匹配的关键词
-• 📊 量化工作成果，用数据说话
-• 🔄 保持LinkedIn等职业平台活跃度
+1. � 量化成就，如"提升效率30%"
+2. 🎯 优化关键词匹配职位
 
-**面试准备：**
-• 🎭 准备STAR法则回答行为问题
-• 💼 研究目标公司和面试官背景
-• 📚 练习常见技术和行为面试题
-• 🤝 准备3-5个有深度的提问
-
-**薪资谈判：**
-• 💰 了解行业薪资水平和地区差异
-• 📈 基于市场数据提出合理期望
-• ⏰ 把握最佳谈判时机（收到offer后）
-
-您还有其他想了解的求职策略吗？`;
+需要具体建议吗？`;
             }
         } else if (textToSend.includes('完成')) {
             setCurrentStep('comparison');
             return;
         } else if (textToSend.includes('猎头') || textToSend.includes('招聘') || textToSend.includes('求职')) {
-            aiText = `🎯 **猎头策略深度分析**
+            aiText = `🎯 很高兴为您提供求职建议！
 
-**如何吸引猎头注意：**
-• 📱 LinkedIn优化：完善个人资料，添加专业技能标签
-• 🏆 成功案例：在简历中突出关键成就和数据
-• 🌟 个人品牌：在行业平台建立专业形象
-• 🤝 人脉网络：积极参与行业活动和交流
+建议：
 
-**猎头合作技巧：**
-• 📧 主动联系：向目标领域的猎头介绍自己
-• 💬 清晰沟通：明确职业目标和期望薪资范围
-• 🔄 及时跟进：保持联系但不过度频繁
-• 🎖 诚信为本：如实介绍经验和能力
+1. 📱 优化LinkedIn，突出关键技能
+2. 🏆 在简历中量化工作成果
 
-**行业关键词优化：**
-• 💻 技术岗：${resumeData?.skills.slice(0, 5).join(', ') || '相关技术栈'}
-• 📊 管理岗：领导力、项目管理、团队协作
-• 🎨 创意岗：设计思维、创新能力、作品集
-
-**当前就业市场洞察：**
-• 📈 Q1-Q3是招聘旺季，把握时机
-• 🏢 远程岗位竞争激烈，突出优势
-• 🎓 持续学习成为职场必备技能
-
-需要我为您制定更具体的求职计划吗？`;
+需要详细指导吗？`;
         } else if (textToSend.includes('面试') || textToSend.includes('技巧')) {
-            aiText = `🎭 **面试成功策略全攻略**
+            aiText = `🎭 面试成功的关键是准备！
 
-**面试前准备：**
-• 📚 深入研究：公司文化、产品服务、最新动态
-• 🎯 角色匹配：分析JD要求与自身经验对应点
-• 📝 案例准备：准备3-5个成功项目案例
-• 🤔 预测问题：基于JD预测可能的问题
+建议：
 
-**行为面试技巧：**
-• ⭐ STAR法则：Situation, Task, Action, Result
-• 📊 数据说话：用具体数字展示成果
-• 🎯 结果导向：强调带来的价值和影响
-• 🔄 反思学习：展示成长和改进能力
+1. ⭐ 用STAR法则回答行为问题
+2. � 深入研究公司和职位
 
-**技术面试要点：**
-• 💻 基础扎实：核心概念和原理理解
-• 🔧 实践经验：项目中的技术应用
-• 🚀 问题解决：展示分析和解决问题的思路
-• 📚 持续学习：新技术和工具的学习能力
-
-**面试后跟进：**
-• 📧 感谢邮件：24小时内发送感谢信
-• 📝 总结反思：记录面试问题和改进点
-• 🔄 持续优化：针对反馈提升自己
-• 🤝 保持联系：建立长期职业关系
-
-需要我帮您准备特定岗位的面试题库吗？`;
+需要面试题库吗？`;
         } else {
-            aiText = `💡 **专业建议：作为您的AI职业顾问**
+            aiText = `💡 很高兴成为您的职业顾问！
 
-我可以为您提供以下专业服务：
+我可以帮您：
 
-📋 **简历优化**
-• ATS系统优化建议
-• 行业关键词匹配
-• 成就量化技巧
-• 格式和布局优化
+1. 📋 优化简历和求职策略
+2. 🎭 准备面试和薪资谈判
 
-🎯 **求职策略**
-• 目标公司研究
-        • 投递时机把握
-        • 薪资谈判技巧
-        • 职业发展规划
-
-🎭 **面试准备**
-        • 常见问题预测
-        • 行为面试技巧
-        • 技术面试准备
-        • 模拟面试练习
-
-📊 **市场分析**
-        • 行业趋势解读
-        • 薪资水平参考
-        • 技能需求分析
-        • 地区机会对比
-
-请告诉我您最关心的方面，我会为您提供针对性的专业建议！`;
+请告诉我您的需求！`;
         }
       }
 
@@ -884,7 +794,7 @@ ${resumeDetails}
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-40">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -970,44 +880,47 @@ ${resumeDetails}
             <div ref={messagesEndRef} />
         </div>
 
-        {/* Prompt Starters */}
-        {!isSending && chatMessages.length < 3 && (
-            <div className="px-4 py-2 bg-slate-50 dark:bg-[#0b1219] overflow-x-auto no-scrollbar">
-                <div className="flex gap-2">
-                    <button onClick={() => handleSendMessage('请开始帮我优化简历')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
-                        ✨ 开始优化
-                    </button>
-                    <button onClick={() => handleSendMessage('这个 JD 看重什么能力？')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
-                        📄 JD 解读
+        {/* Input Area - Fixed at bottom */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
+            {/* Prompt Starters - Inside input container */}
+            {!isSending && chatMessages.length < 3 && (
+                <div className="absolute -top-12 left-0 right-0 px-4 py-2 bg-slate-50 dark:bg-[#0b1219] overflow-x-auto no-scrollbar">
+                    <div className="flex gap-2 max-w-md mx-auto">
+                        <button onClick={() => handleSendMessage('请开始帮我优化简历')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
+                            ✨ 开始优化
+                        </button>
+                        <button onClick={() => handleSendMessage('这个 JD 看重什么能力？')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
+                            📄 JD 解读
+                        </button>
+                    </div>
+                </div>
+            )}
+            
+            {/* Input controls */}
+            <div className="p-4">
+                <div className="flex gap-2 items-end max-w-md mx-auto">
+                    <textarea 
+                        value={inputMessage}
+                        onChange={(e) => setInputMessage(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault(); 
+                                if (!isSending) handleSendMessage();
+                            }
+                        }}
+                        placeholder="输入您的问题..."
+                        className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none max-h-32"
+                        rows={1}
+                        style={{ minHeight: '48px' }}
+                    />
+                    <button 
+                        onClick={() => handleSendMessage()}
+                        disabled={!inputMessage.trim() || isSending}
+                        className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-0.5"
+                    >
+                        <span className="normal-case material-symbols-outlined">send</span>
                     </button>
                 </div>
-            </div>
-        )}
-
-        {/* Input Area - Fixed above bottom navigation */}
-        <div className="fixed bottom-16 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
-            <div className="flex gap-2 items-end max-w-md mx-auto">
-                <textarea 
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault(); 
-                            if (!isSending) handleSendMessage();
-                        }
-                    }}
-                    placeholder="输入您的问题..."
-                    className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none max-h-32"
-                    rows={1}
-                    style={{ minHeight: '48px' }}
-                />
-                <button 
-                    onClick={() => handleSendMessage()}
-                    disabled={!inputMessage.trim() || isSending}
-                    className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-0.5"
-                >
-                    <span className="normal-case material-symbols-outlined">send</span>
-                </button>
             </div>
         </div>
       </div>
