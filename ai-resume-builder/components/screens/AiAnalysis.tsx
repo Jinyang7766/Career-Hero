@@ -44,6 +44,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [currentStep, setCurrentStep] = useState<Step>('resume_select');
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   
+  // Visual Viewport State
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  
   // Data State
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
   const [jdText, setJdText] = useState('');
@@ -274,19 +277,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   const hasJdInput = () => jdText.length > 0 || jdImage !== null;
 
-  // --- Chat Logic ---
+  // --- Visual Viewport Logic ---
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.visualViewport) {
+        // 动态获取视觉视口高度，键盘弹出时该值会变小
+        setViewportHeight(window.visualViewport.height);
+      }
+    };
+    window.visualViewport?.addEventListener('resize', handleResize);
+    return () => window.visualViewport?.removeEventListener('resize', handleResize);
+  }, []);
 
+  // --- Chat Logic ---
   const scrollToBottom = () => {
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, 100);
+    // 使用 requestAnimationFrame 确保在浏览器渲染完成后执行
+    requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ 
+        behavior: "smooth", 
+        block: "end" 
+      });
+    });
   };
 
   useEffect(() => {
     if (currentStep === 'chat') {
       scrollToBottom();
     }
-  }, [chatMessages, currentStep]);
+  }, [chatMessages, currentStep, isSending, viewportHeight]);
 
   // 额外的滚动逻辑，确保新消息时立即滚动
   useEffect(() => {
@@ -832,7 +850,14 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[110] px-4 py-2 pb-8 bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5" style={{ paddingBottom: 'env(safe-area-inset-bottom, 32px)' }}>
+      <div 
+        className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5"
+        style={{ 
+          top: `${viewportHeight}px`, 
+          transform: 'translateY(-100%)', // 确保底部对齐视觉视口顶部
+          paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' 
+        }}
+      >
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
