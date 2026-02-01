@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import ResumeImportDialog from '../ResumeImportDialog';
 
 const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, setResumeData, completeness = 0, createResume, loadUserResumes }) => {
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
   
   
@@ -15,6 +17,51 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
   }
 
   // --- Handlers ---
+
+  const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
+    console.log('导入简历数据:', importedData);
+    
+    // 合并导入的数据到当前简历
+    setResumeData(prev => {
+      const mergedData = { ...prev };
+      
+      // 合并个人信息（保留已有数据的优先级）
+      if (importedData.personalInfo) {
+        mergedData.personalInfo = {
+          name: importedData.personalInfo.name || prev.personalInfo.name,
+          title: importedData.personalInfo.title || prev.personalInfo.title,
+          email: importedData.personalInfo.email || prev.personalInfo.email,
+          phone: importedData.personalInfo.phone || prev.personalInfo.phone
+        };
+      }
+      
+      // 合并工作经历（添加到现有列表）
+      if (importedData.workExps && importedData.workExps.length > 0) {
+        mergedData.workExps = [...prev.workExps, ...importedData.workExps];
+      }
+      
+      // 合并教育经历（添加到现有列表）
+      if (importedData.educations && importedData.educations.length > 0) {
+        mergedData.educations = [...prev.educations, ...importedData.educations];
+      }
+      
+      // 合并项目经历（添加到现有列表）
+      if (importedData.projects && importedData.projects.length > 0) {
+        mergedData.projects = [...prev.projects, ...importedData.projects];
+      }
+      
+      // 合并技能（去重）
+      if (importedData.skills && importedData.skills.length > 0) {
+        const existingSkills = new Set(prev.skills);
+        const newSkills = importedData.skills.filter(skill => !existingSkills.has(skill));
+        mergedData.skills = [...prev.skills, ...newSkills];
+      }
+      
+      return mergedData;
+    });
+    
+    console.log('简历导入完成');
+  };
 
   const handleInfoChange = (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => {
     if (field === 'gender') {
@@ -176,6 +223,12 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
             <p className="text-xs text-slate-500 dark:text-text-secondary">正在编辑...</p>
           </div>
           <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setIsImportDialogOpen(true)}
+              className="flex items-center justify-center p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-white" title="智能导入"
+            >
+              <span className="material-symbols-outlined text-[24px]">auto_fix_high</span>
+            </button>
             <button 
               onClick={() => setCurrentView(View.PREVIEW)}
               className="flex items-center justify-center p-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-white" title="预览"
@@ -546,6 +599,13 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
           )}
         </button>
       </div>
+
+      {/* Resume Import Dialog */}
+      <ResumeImportDialog
+        isOpen={isImportDialogOpen}
+        onClose={() => setIsImportDialogOpen(false)}
+        onImport={handleResumeImport}
+      />
     </div>
   );
 };
