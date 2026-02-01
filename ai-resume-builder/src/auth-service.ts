@@ -26,7 +26,7 @@ export class AuthService {
           data: {
             name: name || '',
           },
-          emailRedirectTo: `${redirectUrl}/auth/callback`
+          emailRedirectTo: redirectUrl
         }
       });
 
