@@ -352,33 +352,14 @@ Resume Details:
 - Pending Suggestions: ${suggestions.filter(s => s.status === 'pending').map(s => s.title).join(', ')}
 `;
 
-        const prompt = `你是一位专业的简历顾问。请遵循以下原则：
-
-📝 **风格要求**：克制、专业、极简
-📏 **长度限制**：最多150字，分点说明
-🎯 **内容重点**：提供可执行的具体建议
-📋 **格式要求**：使用Markdown格式，适当使用emoji
-
-**回复结构**：
-- 简短开场（1句话）
-- 2个关键点（使用数字列表）
-- 每点不超过30字
-- 结尾鼓励（1句话）
-
-**避免**：
-- 长篇大论
-- 过多解释
-- 重复内容
-- 复杂术语
-
----
-
-**用户问题**：${textToSend}
-
-**简历信息**：
-${resumeDetails}
-
-请基于以上信息提供简短专业的建议。`;
+        // 1. 定义极其严格的 Prompt
+const prompt = `你是一名专业简历顾问。
+原则：字数严格控制在100字内。严禁废话。
+格式：Markdown。
+结构：
+1. 简短结论
+2. 两个具体优化点 (Emoji开头)
+3. 一个引导性提问`;
 
         console.log('Sending request to Gemini API...');
         try {
@@ -794,7 +775,7 @@ ${resumeDetails}
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -842,87 +823,92 @@ ${resumeDetails}
                                      </div>
                                  </div>
 
-                                 {msg.suggestion.status === 'pending' && (
-                                     <div className="flex gap-3">
-                                         <button 
-                                            onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!.id)}
-                                            className="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 transition-colors"
-                                         >
-                                             保持原样
-                                         </button>
-                                         <button 
-                                            onClick={() => handleAcceptSuggestionInChat(msg.suggestion!)}
-                                            className="flex-1 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-600 transition-colors shadow-sm"
-                                         >
-                                             立即修改
-                                         </button>
-                                     </div>
-                                 )}
-                             </div>
-                        </div>
-                    )}
-                </div>
-            ))}
-            {isSending && (
-                <div className="flex justify-start">
-                    <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
-                        <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
-                    </div>
-                    <div className="bg-white dark:bg-[#1c2936] rounded-2xl rounded-bl-none px-4 py-3 border border-slate-200 dark:border-white/5 shadow-sm">
-                        <div className="flex gap-1.5">
-                            <span className="size-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                            <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
-                            <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-                        </div>
-                    </div>
-                </div>
-            )}
-            <div ref={messagesEndRef} />
-        </div>
+                                 <div className="flex gap-2">
+                                   <button 
+                                       onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!)}
+                                       className="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 transition-colors"
+                                   >
+                                       保持原样
+                                   </button>
+                                   <button 
+                                          onClick={() => handleAcceptSuggestionInChat(msg.suggestion!)}
+                                          className="flex-1 py-2 rounded-lg bg-primary text-white text-xs font-bold hover:bg-blue-600 transition-colors shadow-sm"
+                                       >
+                                           立即修改
+                                       </button>
+                                   </div>
+                              </div>
+                      </div>
+                  )}
+              </div>
+          ))}
+          {isSending && (
+              <div className="flex justify-start">
+                  <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
+                      <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+                  </div>
+                  <div className="bg-white dark:bg-[#1c2936] rounded-2xl rounded-bl-none px-4 py-3 border border-slate-200 dark:border-white/5 shadow-sm">
+                      <div className="flex gap-1.5">
+                          <span className="size-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                          <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
+                          <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
+                      </div>
+                  </div>
+              </div>
+          )}
+          <div ref={messagesEndRef} />
+      </div>
 
-        {/* Input Area - Fixed at bottom */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
-            {/* Prompt Starters - Inside input container */}
-            {!isSending && chatMessages.length < 3 && (
-                <div className="absolute -top-12 left-0 right-0 px-4 py-2 bg-slate-50 dark:bg-[#0b1219] overflow-x-auto no-scrollbar">
-                    <div className="flex gap-2 max-w-md mx-auto">
-                        <button onClick={() => handleSendMessage('请开始帮我优化简历')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
-                            ✨ 开始优化
-                        </button>
-                        <button onClick={() => handleSendMessage('这个 JD 看重什么能力？')} className="whitespace-nowrap px-3 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-medium text-primary hover:bg-primary/5 transition-colors">
-                            📄 JD 解读
-                        </button>
-                    </div>
-                </div>
-            )}
-            
-            {/* Input controls */}
-            <div className="p-4">
-                <div className="flex gap-2 items-end max-w-md mx-auto">
-                    <textarea 
-                        value={inputMessage}
-                        onChange={(e) => setInputMessage(e.target.value)}
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault(); 
-                                if (!isSending) handleSendMessage();
-                            }
-                        }}
-                        placeholder="输入您的问题..."
-                        className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none max-h-32"
-                        rows={1}
-                        style={{ minHeight: '48px' }}
-                    />
-                    <button 
-                        onClick={() => handleSendMessage()}
-                        disabled={!inputMessage.trim() || isSending}
-                        className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-0.5"
-                    >
-                        <span className="normal-case material-symbols-outlined">send</span>
-                    </button>
-                </div>
-            </div>
-        </div>
+      {/* Input Area - Fixed at bottom */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-safe">
+          
+          {/* Prompt Starters - Inside input container */}
+          {!isSending && chatMessages.length < 3 && (
+              <div className="absolute top-0 left-0 right-0 -translate-y-full pointer-events-none">
+                  <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar pointer-events-auto bg-gradient-to-t from-slate-50/90 to-transparent dark:from-[#0b1219]/90">
+                      <button 
+                          onClick={() => handleSendMessage('请开始帮我优化简历')} 
+                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
+                      >
+                          ✨ 开始优化
+                      </button>
+                      <button 
+                          onClick={() => handleSendMessage('这个 JD 看重什么能力？')} 
+                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
+                      >
+                          📄 JD 解读
+                      </button>
+                  </div>
+              </div>
+          )}
+
+          {/* Input controls */}
+          <div className="p-4 bg-white dark:bg-[#1c2936]">
+              <div className="flex gap-2 items-end max-w-md mx-auto">
+                  <textarea 
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault(); 
+                              if (!isSending) handleSendMessage();
+                          }
+                      }}
+                      placeholder="输入您的问题..."
+                      className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
+                      rows={1}
+                      style={{ minHeight: '48px', maxHeight: '120px' }}
+                  />
+                  <button 
+                      onClick={() => handleSendMessage()}
+                      disabled={!inputMessage.trim() || isSending}
+                      className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-all shadow-md shrink-0 mb-0.5"
+                  >
+                      <span className="material-symbols-outlined text-[20px]">send</span>
+                  </button>
+              </div>
+          </div>
+      </div>
       </div>
     );
   }
