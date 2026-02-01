@@ -463,7 +463,7 @@ def export_pdf():
             css_doc = CSS(string=simple_css)
             
             pdf_buffer = BytesIO()
-            html_doc.write_pdf(pdf_buffer, stylesheets=[css_doc])
+            html_doc.write_pdf(target=pdf_buffer, stylesheets=[css_doc])
             pdf_buffer.seek(0)
             
             logger.info("Simple test PDF generated successfully")
@@ -586,7 +586,7 @@ def export_pdf():
         css_doc = CSS(string=css_content)
         
         pdf_buffer = BytesIO()
-        html_doc.write_pdf(pdf_buffer, stylesheets=[css_doc])
+        html_doc.write_pdf(target=pdf_buffer, stylesheets=[css_doc])
         pdf_buffer.seek(0)
         
         logger.info("PDF generated successfully")
