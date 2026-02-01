@@ -65,7 +65,7 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
 if GEMINI_API_KEY != 'your-gemini-api-key':
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-3-flash')
+    model = genai.GenerativeModel('gemini-3-flash-preview')
 else:
     model = None
 
@@ -755,7 +755,7 @@ def parse_resume():
         
         # 配置 Gemini AI
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-3-flash')
+        model = genai.GenerativeModel('gemini-3-flash-preview')
         
         # 构建解析提示词
         prompt = f"""
