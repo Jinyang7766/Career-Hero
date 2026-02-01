@@ -403,12 +403,12 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
               console.log('Gemini API response received with fallback model');
             } catch (fallbackError) {
               console.error('Fallback model also failed:', fallbackError);
-              // Try text-bison-001 as final fallback
+              // Try gemini-2.5-flash as final fallback
               if (fallbackError.message?.includes('not found')) {
-                console.log('Trying final fallback model: text-bison-001');
+                console.log('Trying final fallback model: gemini-2.5-flash');
                 try {
                   const response = await ai.models.generateContent({
-                       model: 'text-bison-001',
+                       model: 'gemini-2.5-flash',
                        contents: [{ role: 'user', parts: [{ text: prompt }] }]
                   });
                   aiText = response.text || "";
