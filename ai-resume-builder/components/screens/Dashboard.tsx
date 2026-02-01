@@ -242,7 +242,7 @@ const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, re
               <div className="flex items-center gap-2 mt-auto">
                 <span className="material-symbols-outlined text-gray-400 text-[14px]">schedule</span>
                 <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">{resume.date}</span>
-                {resume.score && (
+                {resume.score && resume.score > 0 && (
                    <>
                     <span className="mx-1 h-1 w-1 rounded-full bg-gray-300 dark:bg-gray-600"></span>
                     <span className="text-xs text-green-500 font-medium">{resume.score}% 匹配度</span>
