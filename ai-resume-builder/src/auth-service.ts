@@ -11,6 +11,7 @@ export class AuthService {
   static async signup(email: string, password: string, name?: string) {
     try {
       console.log('开始注册流程...', { email, name: name || '' });
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
       
       // 获取当前环境的重定向URL
       const redirectUrl = import.meta.env.PROD 
@@ -37,21 +38,84 @@ export class AuthService {
         throw error;
       }
 
-      return { 
-        success: true, 
-        user: data.user,
-        message: '注册成功！请检查邮箱验证链接。'
-      };
+      // 检查用户是否已经存在
+      if (data.user && !data.user.email_confirmed_at) {
+        console.log('用户已创建，等待邮箱验证');
+        return { 
+          success: true, 
+          user: data.user,
+          message: '注册成功！请检查邮箱验证链接。如果未收到邮件，请检查垃圾邮件文件夹。'
+        };
+      } else if (data.user && data.user.email_confirmed_at) {
+        console.log('邮箱已验证，直接登录');
+        return { 
+          success: true, 
+          user: data.user,
+          message: '登录成功！'
+        };
+      } else {
+        console.log('注册状态未知');
+        return { 
+          success: true, 
+          user: null,
+          message: '注册请求已提交，请检查邮箱。'
+        };
+      }
     } catch (error: any) {
       console.error('完整错误对象:', error);
       console.error('错误信息:', error.message);
       console.error('错误状态:', error.status);
       console.error('错误代码:', error.code);
       
+      // 特殊错误处理
+      if (error.message?.includes('User already registered')) {
+        return { 
+          success: false, 
+          error: '该邮箱已经被注册，请直接登录或使用其他邮箱。'
+        };
+      }
+      
       return { 
         success: false, 
         error: error.message || '注册失败',
         details: error
+      };
+    }
+  }
+
+  // 测试邮件配置
+  static async testEmailConfig() {
+    try {
+      console.log('测试邮件配置...');
+      console.log('Supabase URL:', import.meta.env.VITE_SUPABASE_URL);
+      
+      // 尝试发送测试邮件（使用一个临时邮箱）
+      const testEmail = 'test@example.com';
+      const { data, error } = await supabase.auth.signUp({
+        email: testEmail,
+        password: 'testpassword123',
+        options: {
+          data: {
+            name: 'Test User',
+          },
+          emailRedirectTo: import.meta.env.PROD 
+            ? 'https://career-hero-frontend.vercel.app' 
+            : 'http://localhost:5173'
+        }
+      });
+
+      console.log('测试邮件发送结果:', { data, error });
+      
+      return { 
+        success: !error, 
+        error: error?.message,
+        data 
+      };
+    } catch (error: any) {
+      console.error('测试邮件配置失败:', error);
+      return { 
+        success: false, 
+        error: error.message 
       };
     }
   }

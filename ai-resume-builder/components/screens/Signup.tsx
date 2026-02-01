@@ -6,6 +6,18 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  const handleTestEmail = async () => {
+    console.log('测试邮件配置...');
+    const result = await AuthService.testEmailConfig();
+    console.log('邮件配置测试结果:', result);
+    
+    if (result.success) {
+      alert('邮件配置正常！请检查是否收到测试邮件。');
+    } else {
+      alert(`邮件配置有问题: ${result.error}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -143,6 +155,16 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
                 className="flex w-full justify-center rounded-xl bg-primary px-3 py-3.5 text-sm font-bold leading-6 text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isLoading ? '创建账户中...' : '注册账号'}
+              </button>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={handleTestEmail}
+                className="flex w-full justify-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
+              >
+                测试邮件配置
               </button>
             </div>
           </form>
