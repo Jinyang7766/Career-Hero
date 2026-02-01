@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import { API_BASE_URL } from '../../src/api-config';
+import { AuthService } from '../../src/auth-service';
 
 const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,32 +16,18 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
     const password = formData.get('password') as string;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email,
-          password,
-        }),
-      });
+      const result = await AuthService.login(email, password);
 
-      const data = await response.json();
-
-      if (response.ok) {
-        // Store token in localStorage
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
-        
-        // Login successful
-        if (onLogin) onLogin(data.user);
+      if (result.success) {
+        localStorage.setItem('authToken', result.session?.access_token || '');
+        localStorage.setItem('currentUser', JSON.stringify(result.user));
+        onLogin(result.user);
+        setCurrentView(View.DASHBOARD);
       } else {
-        // Login failed
-        setError(data.error || 'Login failed');
+        setError(result.error || '登录失败');
       }
     } catch (err) {
-      setError('Network error. Please try again.');
+      setError('网络错误，请稍后重试');
     } finally {
       setIsLoading(false);
     }
