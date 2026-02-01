@@ -712,7 +712,7 @@ Resume Details:
   // 5. Chat Page (Full Screen with Interactive Cards)
   if (currentStep === 'chat') {
     return (
-      <div className="fixed inset-0 z-50 bg-background-light dark:bg-[#101922] flex flex-col animate-in slide-in-from-right duration-300">
+      <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-in slide-in-from-right duration-300">
         {/* Chat Header */}
         <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
             <div className="flex items-center gap-3">
@@ -824,7 +824,7 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-safe">
+      <div className="fixed bottom-0 left-0 right-0 z-[110] bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-safe">
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
