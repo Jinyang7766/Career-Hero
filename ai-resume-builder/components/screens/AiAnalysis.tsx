@@ -294,6 +294,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setInputMessage('');
     setIsSending(true);
 
+    let aiText = "";
+
     try {
       // 优先尝试使用Serverless API
       console.log('Trying Serverless API first...');
@@ -314,25 +316,47 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       
       // 安全检查：确保API Key存在且有效
       if (!apiKey) {
-        console.error('Gemini API Key not found. Please set VITE_GEMINI_API_KEY in your environment variables.');
-        throw new Error('API密钥未配置，请设置VITE_GEMINI_API_KEY环境变量');
-      }
-      
-      console.log('API Key configured:', !!apiKey);
-      
-      // 验证API密钥格式
-      if (!apiKey.startsWith('AIza')) {
-        console.error('Invalid API key format. Gemini API keys should start with "AIza"');
-        throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
-      }
-      
-      let aiText = "";
+        console.log('No API key found, using mock responses');
+        await new Promise(r => setTimeout(r, 1000));
+        
+        // Mock Interaction logic with professional recruitment strategies
+        if (textToSend.includes('开始') || textToSend.includes('优化')) {
+            const firstPending = suggestions.find(s => s.status === 'pending');
+            if (firstPending) {
+                // Instead of text, we return a message attached with a suggestion object
+                setChatMessages(prev => [...prev, {
+                    id: `ai-sug-${firstPending.id}`,
+                    role: 'model',
+                    text: '好的，我们先解决这个问题：',
+                    suggestion: firstPending
+                }]);
+                setIsSending(false);
+                return;
+            }
+            aiText = `✨ **优化建议**
+1. 📊 **量化数据**：将"负责销售"改为"月均销售额提升20%"。
+2. 🔑 **关键词**：补充JD中的核心技能词。
 
-      console.log('Initializing Google GenAI...');
-      const ai = new GoogleGenAI({ apiKey });
-      
-      // Test API connection
-      console.log('Testing API connection with model: gemini-2.5-flash');
+要为您生成改写示例吗？`;
+        } else {
+            aiText = `💡 **专业建议**
+1. 🎯 **聚焦重点**：删除与目标职位无关的兼职经历。
+2. 📝 **排版优化**：技能部分建议使用列表展示。
+
+您想看修改后的预览吗？`;
+        }
+      } else {
+        // API Key exists, proceed with API calls
+        console.log('API Key configured:', !!apiKey);
+        
+        // 验证API密钥格式
+        if (!apiKey.startsWith('AIza')) {
+          console.error('Invalid API key format. Gemini API keys should start with "AIza"');
+          throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
+        }
+        
+        console.log('Initializing Google GenAI...');
+        const ai = new GoogleGenAI({ apiKey });
         
         const resumeDetails = `
 Resume Details:
@@ -353,7 +377,7 @@ Resume Details:
 `;
 
         // 1. 定义极其严格的 Prompt
-const prompt = `你是一名专业简历顾问。
+        const prompt = `你是一名专业简历顾问。
 原则：字数严格控制在100字内。严禁废话。
 格式：Markdown。
 结构：
@@ -364,8 +388,8 @@ const prompt = `你是一名专业简历顾问。
         console.log('Sending request to Gemini API...');
         try {
           const response = await ai.models.generateContent({
-               model: 'gemini-2.5-flash',
-               contents: [{ role: 'user', parts: [{ text: prompt }] }]
+               model: 'gemini-1.5-flash',
+               contents: [{ role: 'user', parts: [{ text: prompt + `\n\n用户输入: ${textToSend}\n简历概要: ${resumeDetails}` }] }]
           });
           aiText = response.text || "";
           console.log('Gemini API response received');
@@ -378,7 +402,7 @@ const prompt = `你是一名专业简历顾问。
             stack: apiError.stack
           });
           
-          // If 2.5-flash fails, try 1.5-flash as fallback
+          // If API fails, try fallback model
           if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model') || apiError.message?.includes('not found')) {
             console.log('Trying fallback model: gemini-1.5-flash');
             try {
@@ -396,9 +420,7 @@ const prompt = `你是一名专业简历顾问。
             throw apiError;
           }
         }
-      } else {
-        console.log('No API key found, using mock responses');
-        await new Promise(r => setTimeout(r, 1000));
+      }
         
         // Mock Interaction logic with professional recruitment strategies
         if (textToSend.includes('开始') || textToSend.includes('优化')) {
