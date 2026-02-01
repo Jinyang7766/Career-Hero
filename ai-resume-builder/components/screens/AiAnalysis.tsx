@@ -277,7 +277,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   // --- Chat Logic ---
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }, 100);
   };
 
   useEffect(() => {
@@ -285,6 +287,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       scrollToBottom();
     }
   }, [chatMessages, currentStep]);
+
+  // 额外的滚动逻辑，确保新消息时立即滚动
+  useEffect(() => {
+    if (currentStep === 'chat' && chatMessages.length > 0) {
+      scrollToBottom();
+    }
+  }, [chatMessages.length]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
@@ -738,7 +747,7 @@ Resume Details:
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -823,7 +832,7 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[110] px-4 py-3 pb-safe bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5">
+      <div className="fixed bottom-0 left-0 right-0 z-[110] px-4 py-2 pb-8 bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5" style={{ paddingBottom: 'env(safe-area-inset-bottom, 32px)' }}>
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
@@ -857,14 +866,14 @@ Resume Details:
                           }
                       }}
                       placeholder="输入您的问题..."
-                      className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
+                      className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
                       rows={1}
                       style={{ minHeight: '48px', maxHeight: '120px' }}
                   />
                   <button 
                       onClick={() => handleSendMessage()}
                       disabled={!inputMessage.trim() || isSending}
-                      className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-all shadow-md shrink-0 mb-0.5"
+                      className="size-11 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-all shadow-md shrink-0"
                   >
                       <span className="material-symbols-outlined text-[20px]">send</span>
                   </button>
