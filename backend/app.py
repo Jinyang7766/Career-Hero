@@ -453,46 +453,6 @@ def export_pdf():
         
         logger.info(f"Starting PDF generation with xhtml2pdf")
         
-        # 首先尝试简单的测试 PDF
-        try:
-            simple_html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <title>Test PDF</title>
-                <style>
-                    body { font-family: Arial, sans-serif; padding: 20px; }
-                    h1 { color: #333; }
-                </style>
-            </head>
-            <body>
-                <h1>Hello World - PDF Test</h1>
-                <p>This is a test PDF to verify xhtml2pdf is working.</p>
-            </body>
-            </html>
-            """
-            
-            result = io.BytesIO()
-            pisa_status = pisa.CreatePDF(simple_html, dest=result)
-            
-            if pisa_status.err:
-                logger.error(f"Simple PDF test failed with xhtml2pdf errors")
-            else:
-                logger.info("Simple test PDF generated successfully")
-                result.seek(0)
-                
-                return send_file(
-                    result,
-                    as_attachment=True,
-                    download_name="test.pdf",
-                    mimetype='application/pdf'
-                )
-            
-        except Exception as test_error:
-            logger.error(f"Simple PDF test failed: {str(test_error)}")
-            logger.error(f"Test error traceback: {traceback.format_exc()}")
-        
         # Generate HTML for PDF
         html_content = generate_resume_html(resume_data)
         logger.info(f"Generated HTML content length: {len(html_content)}")
@@ -607,7 +567,7 @@ def generate_resume_html(resume_data):
         skills_html += f'<span class="skill-item">{skill or "技能"}</span>'
     skills_html += '</div></div>'
     
-    # Combine all sections with CSS for xhtml2pdf
+    # Combine all sections with CSS for xhtml2pdf (包含中文支持和A4优化)
     full_html = f"""
     <!DOCTYPE html>
     <html>
@@ -617,98 +577,126 @@ def generate_resume_html(resume_data):
         <style>
             @page {{
                 size: A4;
-                margin: 2cm;
+                margin: 1.5cm;
+            }}
+            
+            /* 中文字体支持 - 使用系统自带字体 */
+            @font-face {{
+                font-family: 'DejaVu Sans';
+                src: local('DejaVu Sans');
             }}
             
             body {{
-                font-family: Arial, sans-serif;
-                font-size: 12px;
-                line-height: 1.4;
+                font-family: 'DejaVu Sans', Arial, sans-serif;
+                font-size: 11px;
+                line-height: 1.3;
                 color: #333;
                 margin: 0;
-                padding: 0;
+                padding: 10px;
             }}
             
             .resume-header {{
                 text-align: center;
                 border-bottom: 2px solid #333;
-                padding-bottom: 20px;
-                margin-bottom: 30px;
+                padding-bottom: 15px;
+                margin-bottom: 20px;
             }}
             
             .resume-header h1 {{
                 margin: 0;
-                font-size: 24px;
+                font-size: 20px;
                 font-weight: bold;
+                line-height: 1.2;
             }}
             
             .resume-header .contact {{
-                margin: 10px 0;
-                font-size: 14px;
+                margin: 8px 0;
+                font-size: 12px;
+                line-height: 1.4;
             }}
             
             .section {{
-                margin-bottom: 25px;
+                margin-bottom: 20px;
+                page-break-inside: avoid;
             }}
             
             .section h2 {{
-                font-size: 16px;
+                font-size: 14px;
                 font-weight: bold;
                 border-bottom: 1px solid #ccc;
-                padding-bottom: 5px;
-                margin-bottom: 15px;
+                padding-bottom: 3px;
+                margin-bottom: 10px;
                 color: #333;
             }}
             
             .work-experience, .education, .projects {{
-                margin-bottom: 15px;
+                margin-bottom: 12px;
+                page-break-inside: avoid;
             }}
             
             .work-experience h3, .education h3, .projects h3 {{
-                font-size: 14px;
+                font-size: 12px;
                 font-weight: bold;
-                margin: 0 0 5px 0;
+                margin: 0 0 3px 0;
+                line-height: 1.2;
             }}
             
             .work-experience .date, .education .date, .projects .date {{
-                font-size: 12px;
+                font-size: 10px;
                 color: #666;
                 font-style: italic;
-                margin-bottom: 5px;
+                margin-bottom: 3px;
             }}
             
             .work-experience .description, .education .description, .projects .description {{
-                font-size: 12px;
+                font-size: 10px;
                 margin: 0;
-                line-height: 1.4;
+                line-height: 1.3;
+                text-align: justify;
             }}
             
             .skills {{
                 display: flex;
                 flex-wrap: wrap;
-                gap: 10px;
+                gap: 6px;
+                margin-top: 5px;
             }}
             
             .skill-item {{
                 background-color: #f5f5f5;
-                padding: 3px 8px;
-                border-radius: 3px;
-                font-size: 11px;
+                padding: 2px 6px;
+                border-radius: 2px;
+                font-size: 9px;
+                border: 1px solid #ddd;
             }}
             
             ul {{
-                margin: 5px 0;
-                padding-left: 20px;
+                margin: 3px 0;
+                padding-left: 15px;
             }}
             
             li {{
-                margin-bottom: 3px;
-                font-size: 12px;
+                margin-bottom: 2px;
+                font-size: 10px;
+                line-height: 1.3;
+            }}
+            
+            /* 确保中文内容正确显示 */
+            .chinese-text {{
+                font-family: 'DejaVu Sans', Arial, sans-serif;
+                line-height: 1.4;
             }}
         </style>
     </head>
     <body>
-        {header_html}
+        <div class="resume-header">
+            <h1 class="chinese-text">{name}</h1>
+            <div class="contact chinese-text">
+                {title}<br>
+                {email} | {phone} | {location}
+            </div>
+        </div>
+        
         {work_html if work_exps else ''}
         {edu_html if educations else ''}
         {proj_html if projects else ''}
