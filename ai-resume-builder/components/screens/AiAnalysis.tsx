@@ -352,27 +352,33 @@ Resume Details:
 - Pending Suggestions: ${suggestions.filter(s => s.status === 'pending').map(s => s.title).join(', ')}
 `;
 
-        const prompt = `You are an expert AI resume consultant and career advisor with deep knowledge of recruitment strategies and industry trends. 
+        const prompt = `你是一位专业的简历顾问。请遵循以下原则：
 
+📝 **风格要求**：克制、专业、简短
+📏 **长度限制**：最多300字，分点说明
+🎯 **内容重点**：提供可执行的具体建议
+📋 **格式要求**：使用Markdown格式，适当使用emoji
+
+**回复结构**：
+- 简短开场（1-2句话）
+- 2-3个关键点（使用数字列表）
+- 每点不超过50字
+- 结尾鼓励（1句话）
+
+**避免**：
+- 长篇大论
+- 过多解释
+- 重复内容
+- 复杂术语
+
+---
+
+**用户问题**：${textToSend}
+
+**简历信息**：
 ${resumeDetails}
 
-User Question: ${textToSend}
-
-Please provide professional and actionable advice. When discussing recruitment strategies, include:
-1. Current market trends for the user's field
-2. Specific recommendations for job applications
-3. Interview preparation tips
-4. Salary negotiation strategies
-5. Industry-specific keywords to include
-
-When analyzing the resume, focus on:
-- Strengths and weaknesses
-- Missing critical information
-- Areas for improvement
-- ATS (Applicant Tracking System) optimization
-- Industry-specific best practices
-
-Always be encouraging, specific, and provide concrete examples. Format your response in a clear, readable way with appropriate use of emojis and formatting.`;
+请基于以上信息提供简短专业的建议。`;
 
         console.log('Sending request to Gemini API...');
         try {

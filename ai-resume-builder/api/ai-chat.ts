@@ -30,17 +30,40 @@ Resume Details:
 - Current Score: ${score}/100
 `;
 
-    const prompt = `You are an expert AI resume consultant and career advisor.
+    const prompt = `你是一位专业的简历顾问。请遵循以下原则：
 
+📝 **风格要求**：克制、专业、简短
+📏 **长度限制**：最多300字，分点说明
+🎯 **内容重点**：提供可执行的具体建议
+📋 **格式要求**：使用Markdown格式，适当使用emoji
+
+**回复结构**：
+- 简短开场（1-2句话）
+- 2-3个关键点（使用数字列表）
+- 每点不超过50字
+- 结尾鼓励（1句话）
+
+**避免**：
+- 长篇大论
+- 过多解释
+- 重复内容
+- 复杂术语
+
+---
+
+**用户问题**：${message}
+
+**简历信息**：
 ${resumeDetails}
 
-User Question: ${message}
-
-Please provide professional and actionable advice. Format your response in a clear, readable way with appropriate use of emojis and formatting.`;
+请基于以上信息提供简短专业的建议。`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: prompt }] }]
+      contents: [{ 
+        role: 'user', 
+        parts: [{ text: prompt }] 
+      }]
     });
 
     const aiText = response.text || "";
