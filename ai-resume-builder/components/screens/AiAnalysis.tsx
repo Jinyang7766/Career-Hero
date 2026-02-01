@@ -310,29 +310,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       // Fallback to direct Gemini API
       console.log('Using direct Gemini API as fallback...');
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.REACT_APP_GEMINI_API_KEY;
-      console.log('API Key available:', !!apiKey);
-      console.log('API Key length:', apiKey?.length || 0);
-      console.log('Environment variables:', {
-        VITE_GEMINI_API_KEY: !!import.meta.env.VITE_GEMINI_API_KEY,
-        REACT_APP_GEMINI_API_KEY: !!import.meta.env.REACT_APP_GEMINI_API_KEY,
-        MODE: import.meta.env.MODE
-      });
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+      
+      // 安全检查：确保API Key存在且有效
+      if (!apiKey) {
+        console.error('Gemini API Key not found. Please set VITE_GEMINI_API_KEY in your environment variables.');
+        throw new Error('API密钥未配置，请设置VITE_GEMINI_API_KEY环境变量');
+      }
+      
+      console.log('API Key configured:', !!apiKey);
+      
+      // 验证API密钥格式
+      if (!apiKey.startsWith('AIza')) {
+        console.error('Invalid API key format. Gemini API keys should start with "AIza"');
+        throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
+      }
       
       let aiText = "";
 
-      if (apiKey) {
-        console.log('Initializing Google GenAI...');
-        const ai = new GoogleGenAI({ apiKey });
-        
-        // Validate API key format
-        if (!apiKey.startsWith('AIza')) {
-          console.error('Invalid API key format. Gemini API keys should start with "AIza"');
-          throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
-        }
-        
-        // Test API connection
-        console.log('Testing API connection with model: gemini-2.5-flash');
+      console.log('Initializing Google GenAI...');
+      const ai = new GoogleGenAI({ apiKey });
+      
+      // Test API connection
+      console.log('Testing API connection with model: gemini-2.5-flash');
         
         const resumeDetails = `
 Resume Details:
