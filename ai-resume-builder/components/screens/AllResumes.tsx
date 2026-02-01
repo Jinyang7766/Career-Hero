@@ -71,36 +71,83 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     try {
       setIsLoadingResume(true);
       
+      console.log('=== 简历加载调试信息 ===');
       console.log('Loading resume:', resumeId);
+      console.log('Current user:', user.id);
       
       // Get all user resumes and find the specific one
       const result = await DatabaseService.getUserResumes(user.id);
       
+      console.log('Database result:', result);
+      
       if (result.success) {
+        console.log('All resumes found:', result.data);
+        console.log('Total resumes count:', result.data.length);
+        
         const resume = result.data.find(r => r.id === resumeId);
         
+        console.log('Target resume found:', resume);
+        console.log('Resume ID match check:', {
+          lookingFor: resumeId,
+          foundIds: result.data.map(r => r.id),
+          matches: result.data.filter(r => r.id === resumeId)
+        });
+        
         if (resume) {
-          console.log('Resume loaded successfully:', resume);
+          console.log('Resume data structure:', {
+            id: resume.id,
+            title: resume.title,
+            resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
+            resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
+          });
+          
+          // 检查resume_data是否为空
+          if (!resume.resume_data) {
+            console.error('❌ 简历数据为空: resume_data is null/undefined');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          // 检查resume_data是否为空对象
+          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+            console.error('❌ 简历数据为空对象: resume_data is empty object');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          console.log('✅ Resume loaded successfully:', resume);
           
           // Set the resume data with ID for editing
           if (setResumeData) {
-            setResumeData({
+            const finalResumeData = {
               id: resume.id,
               ...resume.resume_data
+            };
+            
+            console.log('Setting resume data:', {
+              id: finalResumeData.id,
+              hasPersonalInfo: !!finalResumeData.personalInfo,
+              hasWorkExps: Array.isArray(finalResumeData.workExps) && finalResumeData.workExps.length > 0,
+              hasEducations: Array.isArray(finalResumeData.educations) && finalResumeData.educations.length > 0,
+              hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
+              dataKeys: Object.keys(finalResumeData)
             });
+            
+            setResumeData(finalResumeData);
           }
           
           setCurrentView(View.EDITOR);
         } else {
-          console.error('Resume not found');
-          alert('简历不存在');
+          console.error('❌ Resume not found');
+          console.error('Available resume IDs:', result.data.map(r => r.id));
+          alert(`简历不存在 (ID: ${resumeId})`);
         }
       } else {
-        console.error('加载简历失败:', result.error);
+        console.error('❌ 加载简历失败:', result.error);
         alert(`加载简历失败: ${result.error?.message || '请重试'}`);
       }
     } catch (error) {
-      console.error('加载简历时出错:', error);
+      console.error('❌ 加载简历时出错:', error);
       alert('加载简历失败，请检查网络连接');
     } finally {
       setIsLoadingResume(false);
