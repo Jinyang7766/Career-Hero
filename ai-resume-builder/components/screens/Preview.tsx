@@ -47,38 +47,61 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
 
     setIsGenerating(true);
     try {
-        // 1. 创建一个隐藏的克隆容器，强制设为 A4 宽度
+        // 1. 创建一个独立的影子包装器
+        const wrapper = document.createElement('div');
+        wrapper.style.position = 'absolute';
+        wrapper.style.left = '-9999px';
+        wrapper.style.top = '0';
+        wrapper.style.width = '794px'; // 严格锁定 A4 宽度 (px)
+        wrapper.style.backgroundColor = '#ffffff';
+
+        // 2. 克隆内容并注入
         const clone = originalElement.cloneNode(true) as HTMLElement;
-        clone.style.width = '794px'; // 锁定 A4 宽度
-        clone.style.position = 'absolute';
-        clone.style.left = '-9999px';
-        clone.style.top = '0';
-        // 强制移除圆角和阴影，确保 PDF 边缘整洁
-        clone.style.borderRadius = '0';
+        
+        // 🔴 强制抹除所有可能导致缩进或窄屏适配的 Tailwind 类名
+        clone.style.width = '794px';
+        clone.style.maxWidth = '794px';
+        clone.style.minWidth = '794px';
+        clone.style.transform = 'none';
+        clone.style.margin = '0';
+        clone.style.padding = '40px'; // 模拟 A4 内边距
         clone.style.boxShadow = 'none';
-        document.body.appendChild(clone);
+        clone.style.borderRadius = '0';
+        
+        // 3. 处理克隆节点中的所有 Flex 布局，防止其在窄屏模式下堆叠
+        const allFlexElements = clone.querySelectorAll('.flex');
+        allFlexElements.forEach((el) => {
+          (el as HTMLElement).style.display = 'flex';
+          (el as HTMLElement).style.flexDirection = 'row'; // 强行拉回横向布局
+        });
+
+        wrapper.appendChild(clone);
+        document.body.appendChild(wrapper);
 
         const opt = {
             margin: 0,
-            filename: `优化简历_${resumeData?.personalInfo?.name || ''}.pdf`,
-            image: { type: 'jpeg', quality: 1 },
+            filename: `简历优化_${resumeData?.personalInfo?.name || '未命名'}.pdf`,
+            image: { type: 'jpeg', quality: 1.0 },
             html2canvas: { 
                 scale: 2, 
-                useCORS: true,
-                width: 794, // 强制截取宽度
-                windowWidth: 794 
+                useCORS: true, 
+                width: 794,
+                windowWidth: 794,
+                scrollY: 0,
+                scrollX: 0
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
         const html2pdf = (window as any).html2pdf;
-        await html2pdf().set(opt).from(clone).save();
+        // 使用新的 wrapper 进行导出
+        await html2pdf().set(opt).from(wrapper).save();
         
-        // 2. 导出后移除克隆节点
-        document.body.removeChild(clone);
+        // 4. 清理
+        document.body.removeChild(wrapper);
     } catch (error) {
-        console.error('PDF导出失败:', error);
-        alert('PDF导出失败，请重试');
+        console.error('PDF导出极致失败:', error);
+        alert('导出失败，请尝试在电脑端操作或检查网络');
     } finally {
         setIsGenerating(false);
     }
