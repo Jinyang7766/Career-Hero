@@ -741,6 +741,100 @@ def generate_resume_html(resume_data):
     
     return full_html
 
+@app.route('/api/ai/parse-resume', methods=['POST'])
+def parse_resume():
+    """使用 AI 解析简历文本"""
+    try:
+        data = request.get_json()
+        resume_text = data.get('resumeText', '')
+        
+        if not resume_text.strip():
+            return jsonify({'error': '简历文本不能为空'}), 400
+        
+        logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
+        
+        # 配置 Gemini AI
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-pro')
+        
+        # 构建解析提示词
+        prompt = f"""
+        请解析以下简历文本，提取出结构化的简历信息。请严格按照以下 JSON 格式返回结果：
+
+        {{
+            "personalInfo": {{
+                "name": "姓名",
+                "title": "职位标题",
+                "email": "邮箱地址",
+                "phone": "电话号码",
+                "location": "所在地"
+            }},
+            "workExps": [
+                {{
+                    "company": "公司名称",
+                    "position": "职位",
+                    "startDate": "开始时间",
+                    "endDate": "结束时间",
+                    "description": "工作描述"
+                }}
+            ],
+            "educations": [
+                {{
+                    "school": "学校名称",
+                    "degree": "学位",
+                    "major": "专业",
+                    "startDate": "开始时间",
+                    "endDate": "结束时间"
+                }}
+            ],
+            "projects": [
+                {{
+                    "title": "项目名称",
+                    "description": "项目描述",
+                    "date": "项目时间"
+                }}
+            ],
+            "skills": ["技能1", "技能2", "技能3"]
+        }}
+
+        注意事项：
+        1. 如果某个字段无法提取，请使用空字符串 ""
+        2. 工作经历、教育背景、项目经验可能是多个，请全部提取
+        3. 技能请拆分成单独的技能项
+        4. 请只返回 JSON 格式，不要添加其他说明文字
+
+        简历文本：
+        {resume_text}
+        """
+        
+        response = model.generate_content(prompt)
+        ai_result = parse_ai_response(response.text)
+        
+        if not ai_result:
+            return jsonify({'error': 'AI 解析失败'}), 500
+        
+        # 数据清理和验证
+        parsed_data = {
+            'personalInfo': ai_result.get('personalInfo', {}) or {},
+            'workExps': ai_result.get('workExps', []) or [],
+            'educations': ai_result.get('educations', []) or [],
+            'projects': ai_result.get('projects', []) or [],
+            'skills': ai_result.get('skills', []) or [],
+            'gender': ''
+        }
+        
+        logger.info("Resume parsed successfully with AI")
+        
+        return jsonify({
+            'success': True,
+            'data': parsed_data
+        })
+        
+    except Exception as e:
+        logger.error(f"Resume parsing error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': f'简历解析失败: {str(e)}'}), 500
+
 @app.route('/api/ai/analyze', methods=['POST'])
 @token_required
 def analyze_resume(current_user_id):

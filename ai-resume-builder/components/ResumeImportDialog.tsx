@@ -24,27 +24,36 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
     setError('');
 
     try {
-      console.log('处理文本简历...');
-      // 简单的文本处理，直接导入为空的简历模板
-      const resumeData: Omit<ResumeData, 'id'> = {
-        personalInfo: {
-          name: '',
-          title: '',
-          email: '',
-          phone: ''
-        },
-        workExps: [],
-        educations: [],
-        projects: [],
-        skills: [],
-        gender: ''
-      };
+      console.log('开始智能解析简历...');
       
-      onImport(resumeData);
-      handleClose();
-    } catch (err) {
-      console.error('文本简历处理失败:', err);
-      setError(err.message || '简历处理失败，请检查格式');
+      // 调用 AI 解析接口
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/parse-resume`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resumeText: textResume
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '简历解析失败');
+      }
+
+      const result = await response.json();
+      
+      if (result.success && result.data) {
+        console.log('简历解析成功:', result.data);
+        onImport(result.data);
+        handleClose();
+      } else {
+        throw new Error('解析结果为空');
+      }
+    } catch (err: any) {
+      console.error('简历解析失败:', err);
+      setError(err.message || '简历解析失败，请检查文本格式或稍后重试');
     } finally {
       setIsProcessing(false);
     }
