@@ -62,7 +62,7 @@ export interface ScreenProps {
   completeness?: number;
   allResumes?: ResumeSummary[];
   setAllResumes?: (resumes: ResumeSummary[] | ((prev: ResumeSummary[]) => ResumeSummary[])) => void;
-  createResume?: () => void;
+  createResume?: (title: string) => Promise<any>;
   loadUserResumes?: () => Promise<void>;
   currentUser?: any;
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, ResumeData, ResumeSummary } from './types';
-import { API_BASE_URL } from './src/api-config';
+import { DatabaseService } from './src/database-service';
+import { supabase } from './src/supabase-client';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/screens/Dashboard';
 import Templates from './components/screens/Templates';
@@ -32,36 +33,54 @@ function App() {
 
   // Check authentication status on mount
   useEffect(() => {
-    const token = localStorage.getItem('authToken');
-    const user = localStorage.getItem('user');
+    const checkAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          console.log('User authenticated:', session.user);
+          setCurrentUser(session.user);
+          setIsAuthenticated(true);
+          setCurrentView(View.DASHBOARD);
+        } else {
+          console.log('No active session');
+          setCurrentView(View.LOGIN);
+        }
+      } catch (error) {
+        console.error('Error checking auth status:', error);
+        setCurrentView(View.LOGIN);
+      }
+    };
     
-    if (token && user) {
-      const userData = JSON.parse(user);
-      setCurrentUser(userData);
-      setIsAuthenticated(true);
-      setCurrentView(View.DASHBOARD);
-    }
+    checkAuth();
   }, []);
 
-  // Load user resumes from backend
+  // Load user resumes from Supabase
   const loadUserResumes = async () => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE_URL}/api/resumes`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const resumes: ResumeSummary[] = data.resumes.map((resume: any) => ({
+      console.log('Loading user resumes...');
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('User not authenticated:', userError);
+        return;
+      }
+      
+      console.log('Loading resumes for user:', user.id);
+      
+      const result = await DatabaseService.getUserResumes(user.id);
+      
+      if (result.success) {
+        console.log('Resumes loaded successfully:', result.data);
+        
+        const resumes: ResumeSummary[] = result.data.map((resume: any) => ({
           id: resume.id,
           title: resume.title,
-          date: new Date(resume.date).toLocaleDateString('zh-CN'),
+          date: new Date(resume.created_at).toLocaleDateString('zh-CN'),
           score: resume.score,
-          hasDot: resume.hasDot,
+          hasDot: resume.has_dot,
           thumbnail: (
             <>
               <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
@@ -70,7 +89,11 @@ function App() {
             </>
           )
         }));
+        
+        console.log('Processed resumes:', resumes);
         setAllResumes(resumes);
+      } else {
+        console.error('Failed to load resumes:', result.error);
       }
     } catch (error) {
       console.error('Failed to load resumes:', error);
@@ -80,26 +103,28 @@ function App() {
   // Create new resume
   const createResume = async (title: string) => {
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch(`${API_BASE_URL}/api/resumes`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: title,
-          resume_data: resumeData,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
+      console.log('Creating new resume with title:', title);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('User not authenticated:', userError);
+        throw new Error('请先登录');
+      }
+      
+      console.log('Creating resume for user:', user.id);
+      
+      const result = await DatabaseService.createResume(user.id, title, resumeData);
+      
+      if (result.success) {
+        console.log('Resume created successfully:', result.data);
         // Reload resumes to get the latest list
         await loadUserResumes();
-        return data.resume;
+        return result.data;
       } else {
-        throw new Error('Failed to create resume');
+        console.error('Failed to create resume:', result.error);
+        throw new Error(result.error?.message || '创建简历失败');
       }
     } catch (error) {
       console.error('Failed to create resume:', error);
