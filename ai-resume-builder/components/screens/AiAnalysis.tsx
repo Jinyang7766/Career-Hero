@@ -89,93 +89,42 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const generateRealAnalysis = async () => {
     if (!resumeData) return null;
     
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-      console.log('No API key found, using mock analysis');
-      return null;
-    }
-
     try {
-      console.log('Generating real AI analysis...');
-      const ai = new GoogleGenerativeAI(apiKey);
-      const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+      console.log('Generating real AI analysis via backend API...');
       
-      const resumeDetails = `
-Resume Details:
-- Name: ${resumeData.personalInfo.name || 'N/A'}
-- Title: ${resumeData.personalInfo.title || 'N/A'}
-- Email: ${resumeData.personalInfo.email || 'N/A'}
-- Phone: ${resumeData.personalInfo.phone || 'N/A'}
-- Gender: ${resumeData.gender || 'N/A'}
-- Work Experience: ${resumeData.workExps.length} positions
-  ${resumeData.workExps.map((exp, i) => `  ${i+1}. ${exp.title} at ${exp.subtitle} (${exp.date}): ${exp.description || 'No description'}`).join('\n')}
-- Education: ${resumeData.educations.length} degrees
-  ${resumeData.educations.map((edu, i) => `  ${i+1}. ${edu.title} at ${edu.subtitle} (${edu.date})`).join('\n')}
-- Projects: ${resumeData.projects.length} projects
-  ${resumeData.projects.map((proj, i) => `  ${i+1}. ${proj.title} (${proj.date}): ${proj.description || 'No description'}`).join('\n')}
-- Skills: ${resumeData.skills.join(', ') || 'None'}
-`;
-
-      const jdDetails = jdText.length > 0 ? `
-Job Description:
-${jdText}
-` : '';
-
-      const analysisPrompt = `你是一名专业的HR分析师和简历优化专家。请对以下简历进行深度分析，并生成结构化的分析报告。
-
-${resumeDetails}
-${jdDetails}
-
-请严格按照以下JSON格式返回分析结果，不要包含任何其他文字：
-{
-  "summary": "简历整体评估的简短总结（50-100字）",
-  "strengths": ["优势点1", "优势点2", "优势点3"],
-  "weaknesses": ["不足点1", "不足点2", "不足点3"],
-  "missingKeywords": ["缺失关键词1", "缺失关键词2", "缺失关键词3"],
-  "scoreBreakdown": {
-    "experience": 0-100的分数,
-    "skills": 0-100的分数,
-    "format": 0-100的分数
-  },
-  "suggestions": [
-    {
-      "type": "optimization"或"missing"或"grammar",
-      "title": "建议标题",
-      "reason": "建议原因",
-      "targetSection": "personalInfo"或"workExps"或"skills",
-      "targetId": 数字（仅workExps需要）,
-      "targetField": "字段名（仅personalInfo和workExps需要）",
-      "suggestedValue": "建议值",
-      "originalValue": "原始值"
-    }
-  ]
-}
-
-评分标准：
-- experience: 工作经验匹配度（考虑年限、相关性、职位层级）
-- skills: 技能匹配度（考虑JD要求、技能覆盖率、技能相关性）
-- format: 简历格式和结构（考虑排版、完整性、专业性）
-
-请确保返回的是有效的JSON格式。`;
-
-      const response = await model.generateContent({
-        contents: [{ role: 'user', parts: [{ text: analysisPrompt }] }]
+      // 调用后端 AI 分析接口
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resumeData: resumeData,
+          jobDescription: jdText
+        })
       });
-      
-      const aiText = response.response.text() || "";
-      console.log('AI Analysis response received');
-      
-      // 尝试解析JSON
-      let analysisResult;
-      try {
-        // 清理可能的markdown代码块
-        const cleanText = aiText.replace(/```json\n?|\n?```/g, '').trim();
-        analysisResult = JSON.parse(cleanText);
-      } catch (parseError) {
-        console.error('Failed to parse AI response as JSON:', parseError);
-        console.log('Raw AI response:', aiText);
-        return null;
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'AI分析请求失败');
       }
+
+      const result = await response.json();
+      console.log('Backend AI analysis result:', result);
+      
+      // 转换后端返回的数据格式为前端需要的格式
+      const analysisResult = {
+        summary: result.summary || 'AI分析完成',
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        missingKeywords: [], // 后端暂不支持，保持为空
+        scoreBreakdown: {
+          experience: Math.round(result.score * 0.4), // 假设经验占40%
+          skills: Math.round(result.score * 0.4),     // 技能占40%
+          format: Math.round(result.score * 0.2)      // 格式占20%
+        },
+        suggestions: [] // 后端暂不支持建议，保持为空
+      };
       
       return analysisResult;
     } catch (error) {
