@@ -14,8 +14,17 @@ import weasyprint
 from weasyprint import HTML, CSS
 import google.generativeai as genai
 from io import BytesIO
+import logging
+import traceback
 
 app = Flask(__name__)
+
+# 配置日志
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 # 强化 CORS 配置
 CORS(app, 
@@ -444,8 +453,39 @@ def export_pdf(current_user_id):
         if not resume_data:
             return jsonify({'error': 'Resume data is required'}), 400
         
+        logger.info(f"Starting PDF generation for user {current_user_id}")
+        
+        # 首先尝试简单的测试 PDF
+        try:
+            simple_html = "<h1>Hello World - PDF Test</h1><p>This is a test PDF to verify WeasyPrint is working.</p>"
+            simple_css = "body { font-family: Arial; padding: 20px; }"
+            
+            html_doc = HTML(string=simple_html)
+            css_doc = CSS(string=simple_css)
+            
+            pdf_buffer = BytesIO()
+            html_doc.write_pdf(pdf_buffer, stylesheets=[css_doc])
+            pdf_buffer.seek(0)
+            
+            logger.info("Simple test PDF generated successfully")
+            
+            return send_file(
+                pdf_buffer,
+                as_attachment=True,
+                download_name="test.pdf",
+                mimetype='application/pdf'
+            )
+            
+        except Exception as test_error:
+            logger.error(f"Simple PDF test failed: {str(test_error)}")
+            logger.error(f"Test error traceback: {traceback.format_exc()}")
+            
+            # 如果简单测试失败，继续尝试完整简历
+            logger.info("Attempting full resume PDF generation...")
+        
         # Generate HTML for PDF
         html_content = generate_resume_html(resume_data)
+        logger.info(f"Generated HTML content length: {len(html_content)}")
         
         # Create CSS for A4 styling
         css_content = """
@@ -541,6 +581,7 @@ def export_pdf(current_user_id):
         }
         """
         
+        logger.info("Creating WeasyPrint document...")
         # Generate PDF
         html_doc = HTML(string=html_content)
         css_doc = CSS(string=css_content)
@@ -548,6 +589,8 @@ def export_pdf(current_user_id):
         pdf_buffer = BytesIO()
         html_doc.write_pdf(pdf_buffer, stylesheets=[css_doc])
         pdf_buffer.seek(0)
+        
+        logger.info("PDF generated successfully")
         
         # Generate filename
         name = resume_data.get('personalInfo', {}).get('name', 'resume')
@@ -561,19 +604,21 @@ def export_pdf(current_user_id):
         )
         
     except Exception as e:
-        print(f"PDF generation error: {str(e)}")
+        logger.error(f"PDF generation error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        logger.error(f"Resume data received: {data}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
 
 def generate_resume_html(resume_data):
     """Generate HTML content for resume based on resume data"""
     
-    # Personal Info
-    personal_info = resume_data.get('personalInfo', {})
-    name = personal_info.get('name', '')
-    title = personal_info.get('title', '')
-    email = personal_info.get('email', '')
-    phone = personal_info.get('phone', '')
-    location = personal_info.get('location', '')
+    # Personal Info - 使用数据防御
+    personal_info = resume_data.get('personalInfo', {}) or {}
+    name = personal_info.get('name', '') or '姓名'
+    title = personal_info.get('title', '') or '职位'
+    email = personal_info.get('email', '') or '邮箱'
+    phone = personal_info.get('phone', '') or '电话'
+    location = personal_info.get('location', '') or '地点'
     
     header_html = f"""
     <div class="resume-header">
@@ -585,15 +630,15 @@ def generate_resume_html(resume_data):
     </div>
     """
     
-    # Work Experience
-    work_exps = resume_data.get('workExps', [])
+    # Work Experience - 使用数据防御
+    work_exps = resume_data.get('workExps', []) or []
     work_html = '<div class="section"><h2>工作经验</h2>'
-    for exp in work_exps:
-        company = exp.get('company', '')
-        position = exp.get('position', '')
-        start_date = exp.get('startDate', '')
-        end_date = exp.get('endDate', '')
-        description = exp.get('description', '')
+    for exp in work_exps or []:
+        company = exp.get('company', '') or '公司名称'
+        position = exp.get('position', '') or '职位'
+        start_date = exp.get('startDate', '') or '开始时间'
+        end_date = exp.get('endDate', '') or '结束时间'
+        description = exp.get('description', '') or '工作描述'
         
         work_html += f"""
         <div class="work-experience">
@@ -604,15 +649,15 @@ def generate_resume_html(resume_data):
         """
     work_html += '</div>'
     
-    # Education
-    educations = resume_data.get('educations', [])
+    # Education - 使用数据防御
+    educations = resume_data.get('educations', []) or []
     edu_html = '<div class="section"><h2>教育背景</h2>'
-    for edu in educations:
-        school = edu.get('school', '')
-        degree = edu.get('degree', '')
-        major = edu.get('major', '')
-        start_date = edu.get('startDate', '')
-        end_date = edu.get('endDate', '')
+    for edu in educations or []:
+        school = edu.get('school', '') or '学校名称'
+        degree = edu.get('degree', '') or '学位'
+        major = edu.get('major', '') or '专业'
+        start_date = edu.get('startDate', '') or '开始时间'
+        end_date = edu.get('endDate', '') or '结束时间'
         
         edu_html += f"""
         <div class="education">
@@ -622,13 +667,13 @@ def generate_resume_html(resume_data):
         """
     edu_html += '</div>'
     
-    # Projects
-    projects = resume_data.get('projects', [])
+    # Projects - 使用数据防御
+    projects = resume_data.get('projects', []) or []
     proj_html = '<div class="section"><h2>项目经验</h2>'
-    for proj in projects:
-        title = proj.get('title', '')
-        description = proj.get('description', '')
-        date = proj.get('date', '')
+    for proj in projects or []:
+        title = proj.get('title', '') or '项目名称'
+        description = proj.get('description', '') or '项目描述'
+        date = proj.get('date', '') or '项目时间'
         
         proj_html += f"""
         <div class="projects">
@@ -639,11 +684,11 @@ def generate_resume_html(resume_data):
         """
     proj_html += '</div>'
     
-    # Skills
-    skills = resume_data.get('skills', [])
+    # Skills - 使用数据防御
+    skills = resume_data.get('skills', []) or []
     skills_html = '<div class="section"><h2>技能专长</h2><div class="skills">'
-    for skill in skills:
-        skills_html += f'<span class="skill-item">{skill}</span>'
+    for skill in skills or []:
+        skills_html += f'<span class="skill-item">{skill or "技能"}</span>'
     skills_html += '</div></div>'
     
     # Combine all sections

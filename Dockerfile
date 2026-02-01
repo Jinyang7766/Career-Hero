@@ -26,7 +26,9 @@ RUN apt-get update && apt-get install -y \
     fonts-liberation \
     fonts-dejavu-core \
     fonts-noto-cjk \
+    fontconfig \
     curl \
+    && fc-cache -fv \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制 requirements.txt
