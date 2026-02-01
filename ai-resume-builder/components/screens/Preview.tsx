@@ -42,69 +42,45 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
 
   const handleExportPDF = async () => {
     if (!html2pdfLoaded || isGenerating) return;
-    
-    const element = document.getElementById('resume-content');
-    if (!element) {
-      console.error('未找到简历内容元素');
-      alert('未找到简历内容，请刷新页面后重试');
-      return;
-    }
+    const originalElement = document.getElementById('resume-content');
+    if (!originalElement) return;
 
     setIsGenerating(true);
-    
-    // 🔴 关键步骤 1: 记录原始宽度，并强行设置为 A4 宽度
-    const originalWidth = element.style.width;
-    const originalMinWidth = element.style.minWidth;
-    const originalMaxWidth = element.style.maxWidth;
-    const originalOverflow = element.style.overflow;
-    
-    element.style.width = '794px'; // A4标准像素宽度
-    element.style.minWidth = '794px';
-    element.style.maxWidth = '794px';
-    element.style.overflow = 'visible';
-    
-    console.log('临时设置A4宽度: 794px');
-    
-    // 等待DOM更新
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
     try {
-      const opt = {
-        margin: 10,
-        filename: `优化简历_${resumeData?.personalInfo?.name || ''}.pdf`,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { 
-          scale: 2, 
-          useCORS: true,
-          allowTaint: true,
-          backgroundColor: '#ffffff',
-          logging: false,
-          // 🔴 关键步骤 2: 告诉插件以这个宽度进行渲染
-          windowWidth: 794,
-          height: element.scrollHeight,
-          width: element.scrollWidth
-        },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
-      };
+        // 1. 创建一个隐藏的克隆容器，强制设为 A4 宽度
+        const clone = originalElement.cloneNode(true) as HTMLElement;
+        clone.style.width = '794px'; // 锁定 A4 宽度
+        clone.style.position = 'absolute';
+        clone.style.left = '-9999px';
+        clone.style.top = '0';
+        // 强制移除圆角和阴影，确保 PDF 边缘整洁
+        clone.style.borderRadius = '0';
+        clone.style.boxShadow = 'none';
+        document.body.appendChild(clone);
 
-      console.log('PDF配置:', opt);
-      console.log('目标元素:', element);
+        const opt = {
+            margin: 0,
+            filename: `优化简历_${resumeData?.personalInfo?.name || ''}.pdf`,
+            image: { type: 'jpeg', quality: 1 },
+            html2canvas: { 
+                scale: 2, 
+                useCORS: true,
+                width: 794, // 强制截取宽度
+                windowWidth: 794 
+            },
+            jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
 
-      const html2pdf = (window as any).html2pdf;
-      await html2pdf().set(opt).from(element).save();
-      
-      console.log('PDF生成成功');
+        const html2pdf = (window as any).html2pdf;
+        await html2pdf().set(opt).from(clone).save();
+        
+        // 2. 导出后移除克隆节点
+        document.body.removeChild(clone);
     } catch (error) {
-      console.error('PDF导出失败:', error);
-      alert('PDF导出失败，请重试或使用浏览器打印功能');
+        console.error('PDF导出失败:', error);
+        alert('PDF导出失败，请重试');
     } finally {
-      // 🔴 关键步骤 3: 恢复原始样式
-      element.style.width = originalWidth;
-      element.style.minWidth = originalMinWidth;
-      element.style.maxWidth = originalMaxWidth;
-      element.style.overflow = originalOverflow;
-      setIsGenerating(false);
-      console.log('恢复原始样式');
+        setIsGenerating(false);
     }
   };
 
