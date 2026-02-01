@@ -46,6 +46,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   
   // Visual Viewport State
   const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
   
   // Data State
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
@@ -279,32 +280,38 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // --- Visual Viewport Logic ---
   useEffect(() => {
-    const handleResize = () => {
+    const handleVisualViewportChange = () => {
       if (window.visualViewport) {
-        // 动态获取视觉视口高度，键盘弹出时该值会变小
+        // 计算键盘弹起带来的底部偏移
+        const offset = window.innerHeight - window.visualViewport.height;
+        setKeyboardOffset(offset);
         setViewportHeight(window.visualViewport.height);
       }
     };
-    window.visualViewport?.addEventListener('resize', handleResize);
-    return () => window.visualViewport?.removeEventListener('resize', handleResize);
+    window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
+    window.visualViewport?.addEventListener('scroll', handleVisualViewportChange);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', handleVisualViewportChange);
+      window.visualViewport?.removeEventListener('scroll', handleVisualViewportChange);
+    };
   }, []);
 
   // --- Chat Logic ---
   const scrollToBottom = () => {
-    // 使用 requestAnimationFrame 确保在浏览器渲染完成后执行
-    requestAnimationFrame(() => {
-      messagesEndRef.current?.scrollIntoView({ 
-        behavior: "smooth", 
+    // 当消息更新或键盘高度变化时，强制置底
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ 
+        behavior: keyboardOffset > 0 ? "auto" : "smooth", // 键盘弹出时立即跳转，不平滑滚动
         block: "end" 
       });
-    });
+    }
   };
 
   useEffect(() => {
     if (currentStep === 'chat') {
       scrollToBottom();
     }
-  }, [chatMessages, currentStep, isSending, viewportHeight]);
+  }, [chatMessages, isSending, keyboardOffset]);
 
   // 额外的滚动逻辑，确保新消息时立即滚动
   useEffect(() => {
@@ -851,11 +858,11 @@ Resume Details:
 
       {/* Input Area - Fixed at bottom */}
       <div 
-        className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5"
+        className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
         style={{ 
-          top: `${viewportHeight}px`, 
-          transform: 'translateY(-100%)', // 确保底部对齐视觉视口顶部
-          paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' 
+          bottom: `${keyboardOffset}px`, // 动态贴合键盘顶部
+          paddingBottom: keyboardOffset > 0 ? '8px' : 'max(1.5rem, env(safe-area-inset-bottom))',
+          transition: 'bottom 0.1s ease-out' // 增加微小过渡，防止抖动
         }}
       >
           
