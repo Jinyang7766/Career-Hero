@@ -421,62 +421,6 @@ Resume Details:
           }
         }
       }
-        
-        // Mock Interaction logic with professional recruitment strategies
-        if (textToSend.includes('开始') || textToSend.includes('优化')) {
-            const firstPending = suggestions.find(s => s.status === 'pending');
-            if (firstPending) {
-                // Instead of text, we return a message attached with a suggestion object
-                setChatMessages(prev => [...prev, {
-                    id: `ai-sug-${firstPending.id}`,
-                    role: 'model',
-                    text: '好的，我们先从这个问题入手：',
-                    suggestion: firstPending
-                }]);
-                setIsSending(false);
-                return;
-            } else {
-                aiText = `👋 很高兴帮您优化简历！
-
-建议：
-
-1. � 量化成就，如"提升效率30%"
-2. 🎯 优化关键词匹配职位
-
-需要具体建议吗？`;
-            }
-        } else if (textToSend.includes('完成')) {
-            setCurrentStep('comparison');
-            return;
-        } else if (textToSend.includes('猎头') || textToSend.includes('招聘') || textToSend.includes('求职')) {
-            aiText = `🎯 很高兴为您提供求职建议！
-
-建议：
-
-1. 📱 优化LinkedIn，突出关键技能
-2. 🏆 在简历中量化工作成果
-
-需要详细指导吗？`;
-        } else if (textToSend.includes('面试') || textToSend.includes('技巧')) {
-            aiText = `🎭 面试成功的关键是准备！
-
-建议：
-
-1. ⭐ 用STAR法则回答行为问题
-2. � 深入研究公司和职位
-
-需要面试题库吗？`;
-        } else {
-            aiText = `💡 很高兴成为您的职业顾问！
-
-我可以帮您：
-
-1. 📋 优化简历和求职策略
-2. 🎭 准备面试和薪资谈判
-
-请告诉我您的需求！`;
-        }
-      }
 
       setChatMessages(prev => [...prev, { id: `ai-${Date.now()}`, role: 'model', text: aiText }]);
     } catch (error) {
@@ -505,14 +449,12 @@ Resume Details:
   };
 
   const getScoreColor = (s: number) => {
-    if (s >= 85) return 'text-green-500';
-    if (s >= 60) return 'text-primary';
+    if (s >= 90) return 'text-green-500';
+    if (s >= 70) return 'text-primary';
     return 'text-orange-500';
   };
 
   // ================= RENDER STEPS =================
-
-  // 1. Resume Selection
   if (currentStep === 'resume_select') {
     return (
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
