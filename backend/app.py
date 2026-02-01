@@ -457,13 +457,15 @@ def export_pdf():
         # 首先尝试简单的测试 PDF
         try:
             simple_html = "<h1>Hello World - PDF Test</h1><p>This is a test PDF to verify WeasyPrint is working.</p>"
-            simple_css = "body { font-family: Arial; padding: 20px; }"
             
             html_doc = HTML(string=simple_html)
-            css_doc = CSS(string=simple_css)
             
             pdf_buffer = BytesIO()
-            html_doc.write_pdf(target=pdf_buffer, stylesheets=[css_doc])
+            html_doc.write_pdf(
+                target=pdf_buffer,
+                presentational_hints=True,
+                optimize_size=('fonts', 'images')
+            )
             pdf_buffer.seek(0)
             
             logger.info("Simple test PDF generated successfully")
@@ -486,7 +488,7 @@ def export_pdf():
         html_content = generate_resume_html(resume_data)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
-        # Create CSS for A4 styling
+        # Create CSS for A4 styling - 简化样式避免 transform 错误
         css_content = """
         @page {
             size: A4;
@@ -494,7 +496,7 @@ def export_pdf():
         }
         
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, sans-serif;
             font-size: 12px;
             line-height: 1.4;
             color: #333;
@@ -581,12 +583,17 @@ def export_pdf():
         """
         
         logger.info("Creating WeasyPrint document...")
-        # Generate PDF
+        # Generate PDF with optimized settings
         html_doc = HTML(string=html_content)
         css_doc = CSS(string=css_content)
         
         pdf_buffer = BytesIO()
-        html_doc.write_pdf(target=pdf_buffer, stylesheets=[css_doc])
+        html_doc.write_pdf(
+            target=pdf_buffer,
+            stylesheets=[css_doc],
+            presentational_hints=True,
+            optimize_size=('fonts', 'images')
+        )
         pdf_buffer.seek(0)
         
         logger.info("PDF generated successfully")

@@ -1,5 +1,5 @@
-# 使用官方 Python 3.11 slim 镜像
-FROM python:3.11-slim
+# 使用更全的 Python 3.11 bookworm 镜像，包含更新的图形库
+FROM python:3.11-bookworm
 
 # 设置工作目录
 WORKDIR /app
@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y \
     libtiff5-dev \
     libwebp-dev \
     zlib1g-dev \
+    libglib2.0-0 \
     fonts-liberation \
     fonts-dejavu-core \
     fonts-noto-cjk \
