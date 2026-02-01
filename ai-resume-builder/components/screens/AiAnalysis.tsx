@@ -862,7 +862,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219]">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -962,9 +962,9 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
             </div>
         )}
 
-        {/* Input Area */}
-        <div className="p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-8">
-            <div className="flex gap-2 items-end">
+        {/* Input Area - Fixed above bottom navigation */}
+        <div className="fixed bottom-24 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
+            <div className="flex gap-2 items-end max-w-md mx-auto">
                 <textarea 
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
@@ -984,7 +984,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
                     disabled={!inputMessage.trim() || isSending}
                     className="size-12 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md shrink-0 mb-0.5"
                 >
-                    <span className="material-symbols-outlined">send</span>
+                    <span className="normal-case material-symbols-outlined">send</span>
                 </button>
             </div>
         </div>
