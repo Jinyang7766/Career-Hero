@@ -77,7 +77,25 @@ function App() {
         
         // Format date to Beijing timezone (UTC+8) with seconds
         const formatDateTime = (dateString: string) => {
+          console.log('原始日期字符串:', dateString);
+          console.log('日期字符串类型:', typeof dateString);
+          console.log('日期字符串长度:', dateString?.length);
+          
+          if (!dateString) {
+            console.log('❌ 日期字符串为空');
+            return '时间未知';
+          }
+          
           const date = new Date(dateString);
+          console.log('解析后的日期对象:', date);
+          console.log('是否为有效日期:', !isNaN(date.getTime()));
+          console.log('日期对象toString:', date.toString());
+          
+          if (isNaN(date.getTime())) {
+            console.log('❌ 无效日期');
+            return '时间格式错误';
+          }
+          
           // Convert to Beijing timezone (UTC+8)
           const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
           
@@ -88,8 +106,23 @@ function App() {
           const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
           const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
           
-          return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+          const formatted = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+          console.log('格式化后的时间:', formatted);
+          
+          return formatted;
         };
+        
+        console.log('=== 处理简历数据 ===');
+        result.data.forEach((resume: any, index: number) => {
+          console.log(`简历 ${index}:`, {
+            id: resume.id,
+            title: resume.title,
+            created_at: resume.created_at,
+            created_at_type: typeof resume.created_at,
+            score: resume.score,
+            has_dot: resume.has_dot
+          });
+        });
         
         const resumes: ResumeSummary[] = result.data.map((resume: any) => ({
           id: resume.id,
