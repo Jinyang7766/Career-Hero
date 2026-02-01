@@ -354,15 +354,15 @@ Resume Details:
 
         const prompt = `你是一位专业的简历顾问。请遵循以下原则：
 
-📝 **风格要求**：克制、专业、简短
-📏 **长度限制**：最多300字，分点说明
+📝 **风格要求**：克制、专业、极简
+📏 **长度限制**：最多150字，分点说明
 🎯 **内容重点**：提供可执行的具体建议
 📋 **格式要求**：使用Markdown格式，适当使用emoji
 
 **回复结构**：
-- 简短开场（1-2句话）
-- 2-3个关键点（使用数字列表）
-- 每点不超过50字
+- 简短开场（1句话）
+- 2个关键点（使用数字列表）
+- 每点不超过30字
 - 结尾鼓励（1句话）
 
 **避免**：
@@ -985,7 +985,7 @@ ${resumeDetails}
         )}
 
         {/* Input Area - Fixed above bottom navigation */}
-        <div className="fixed bottom-24 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
+        <div className="fixed bottom-20 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
             <div className="flex gap-2 items-end max-w-md mx-auto">
                 <textarea 
                     value={inputMessage}
