@@ -63,6 +63,9 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 
 # Google Gemini AI configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
+GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
+gemini_request_count = 0  # Track daily usage
+
 if GEMINI_API_KEY != 'your-gemini-api-key':
     genai.configure(api_key=GEMINI_API_KEY)
     model = genai.GenerativeModel('gemini-3-flash-preview')
@@ -116,6 +119,18 @@ def token_required(f):
         return f(current_user_id, *args, **kwargs)
     
     return decorated
+
+def check_gemini_quota():
+    """Check if Gemini API quota is available"""
+    global gemini_request_count
+    
+    # Simple quota check - in production, this should be stored in database
+    if gemini_request_count >= GEMINI_QUOTA_LIMIT:
+        return False
+    
+    gemini_request_count += 1
+    print(f"Gemini API request count: {gemini_request_count}/{GEMINI_QUOTA_LIMIT}")
+    return True
 
 def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -360,6 +375,54 @@ def calculate_resume_score(resume_data):
         score += 10
     
     return min(score, 100)
+
+def generate_enhanced_suggestions(resume_data, score, job_description=""):
+    """Generate enhanced mock suggestions when AI is unavailable"""
+    suggestions = []
+    
+    # Basic suggestions from original function
+    basic_suggestions = generate_suggestions(resume_data, score)
+    suggestions.extend(basic_suggestions)
+    
+    # Add JD-specific suggestions if available
+    if job_description:
+        # Extract common keywords from JD
+        jd_keywords = []
+        common_tech_keywords = ['python', 'javascript', 'react', 'node.js', 'sql', 'aws', 'docker', 'git', 'agile', 'scrum']
+        jd_lower = job_description.lower()
+        
+        for keyword in common_tech_keywords:
+            if keyword in jd_lower and keyword not in resume_data.get('skills', []):
+                jd_keywords.append(keyword.title())
+        
+        if jd_keywords:
+            suggestions.append({
+                'id': f'jd-keywords-{len(suggestions)}',
+                'type': 'missing',
+                'title': '技能关键词补充',
+                'reason': f'目标职位提到 {", ".join(jd_keywords[:3])}，建议添加这些技能以提升匹配度。',
+                'targetSection': 'skills',
+                'suggestedValue': resume_data.get('skills', []) + jd_keywords,
+                'status': 'pending'
+            })
+    
+    # Add experience enhancement suggestions
+    for exp in resume_data.get('workExps', []):
+        if not exp.get('description') or len(exp.get('description', '')) < 50:
+            suggestions.append({
+                'id': f'exp-detail-{exp.get("id", len(suggestions))}',
+                'type': 'optimization',
+                'title': '工作经历详细描述',
+                'reason': f'"{exp.get("title", "工作经历")}" 的描述过于简单，建议使用 STAR 法则补充具体成果和数据。',
+                'targetSection': 'workExps',
+                'targetId': exp.get('id'),
+                'targetField': 'description',
+                'originalValue': exp.get('description', ''),
+                'suggestedValue': '负责核心项目的开发与优化，通过技术改进提升了团队效率30%，成功交付了3个重要项目，获得客户高度认可。',
+                'status': 'pending'
+            })
+    
+    return suggestions
 
 def generate_suggestions(resume_data, score):
     suggestions = []
@@ -864,8 +927,8 @@ def analyze_resume(current_user_id):
         if not resume_data:
             return jsonify({'error': 'Resume data is required'}), 400
         
-        # Use Gemini AI if available, otherwise fall back to mock analysis
-        if model and job_description:
+        # Use Gemini AI if available and quota permits, otherwise fall back to mock analysis
+        if model and job_description and check_gemini_quota():
             try:
                 # Prepare prompt for Gemini
                 prompt = f"""
@@ -907,8 +970,27 @@ def analyze_resume(current_user_id):
                 }), 200
                 
             except Exception as ai_error:
-                print(f"AI analysis failed: {ai_error}")
-                # Fall back to mock analysis
+                print(f"Gemini AI analysis failed: {ai_error}")
+                logger.error(f"Gemini AI analysis failed: {ai_error}")
+                logger.error(f"Full traceback: {traceback.format_exc()}")
+                
+                # 检查是否是配额超限错误
+                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
+                    print("Gemini API quota exceeded, falling back to enhanced mock analysis")
+                    logger.warning("Gemini API quota exceeded, falling back to enhanced mock analysis")
+                
+                # Fall back to enhanced mock analysis
+                score = calculate_resume_score(resume_data)
+                suggestions = generate_enhanced_suggestions(resume_data, score, job_description)
+                
+                return jsonify({
+                    'score': score,
+                    'summary': 'AI分析服务暂时不可用，已为您生成基础分析报告。建议稍后重试以获取更精准的AI分析。',
+                    'suggestions': suggestions,
+                    'strengths': ['简历结构清晰', '格式规范'],
+                    'weaknesses': ['AI分析服务暂时不可用', '建议稍后重试获取详细分析'],
+                    'missingKeywords': ['AI服务暂时不可用']
+                }), 200
         
         # Mock AI analysis - fallback
         score = calculate_resume_score(resume_data)
@@ -1001,8 +1083,8 @@ def ai_chat(current_user_id):
         if not message:
             return jsonify({'error': 'Message is required'}), 400
         
-        # Use Gemini AI if available, otherwise fall back to mock responses
-        if model:
+        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+        if model and check_gemini_quota():
             try:
                 # Prepare prompt for Gemini
                 prompt = f"""
@@ -1044,7 +1126,19 @@ def ai_chat(current_user_id):
                 
             except Exception as ai_error:
                 print(f"AI chat failed: {ai_error}")
-                # Fall back to mock response
+                logger.error(f"AI chat failed: {ai_error}")
+                
+                # 检查是否是配额超限错误
+                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
+                    print("Gemini API quota exceeded, falling back to enhanced mock chat response")
+                    logger.warning("Gemini API quota exceeded, falling back to enhanced mock chat response")
+                
+                # Fall back to enhanced mock chat response
+                mock_response = generate_enhanced_mock_chat_response(message, score, suggestions)
+                
+                return jsonify({
+                    'response': mock_response
+                }), 200
         
         # Mock chat response - fallback
         mock_response = generate_mock_chat_response(message, score, suggestions)
@@ -1055,6 +1149,28 @@ def ai_chat(current_user_id):
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def generate_enhanced_mock_chat_response(message, score, suggestions):
+    """Generate enhanced mock chat response when AI is unavailable"""
+    lower_message = message.lower()
+    
+    # Check for pending suggestions
+    pending_suggestions = [s for s in suggestions if s.get('status') == 'pending']
+    
+    if pending_suggestions and ('好' in lower_message or '可以' in lower_message or '开始' in lower_message):
+        next_suggestion = pending_suggestions[0]
+        return f"好的！让我们从第一个建议开始：\n\n**{next_suggestion.get('title', '优化建议')}**\n{next_suggestion.get('reason', '根据分析结果')}\n\n您希望我帮您应用这个建议吗？"
+    
+    if '评分' in lower_message or '分数' in lower_message:
+        return f"您当前的简历评分是 {score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。"
+    
+    if '技能' in lower_message or 'skills' in lower_message:
+        return "关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？"
+    
+    if 'api' in lower_message or '配额' in lower_message or '错误' in lower_message:
+        return "抱歉，AI服务暂时遇到配额限制。我已经为您生成了基础分析报告，建议稍后重试以获取更精准的AI分析。现有建议仍然可以帮助您优化简历。"
+    
+    return "我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。由于AI服务暂时不可用，我已为您准备了基础优化建议。您想从哪个方面开始改进呢？"
 
 def generate_mock_chat_response(message, score, suggestions):
     """Generate mock chat response when AI is unavailable"""
