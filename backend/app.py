@@ -600,7 +600,7 @@ def generate_resume_html(resume_data):
         skills_html += f'<span class="skill-item">{clean_skill}</span>'
     skills_html += '</div></div>'
     
-    # Combine all sections with CSS for xhtml2pdf (简化CSS2.1语法)
+    # Combine all sections with CSS for xhtml2pdf (简化CSS2.1语法 + Noto Sans SC 中文字体)
     full_html = f"""
     <!DOCTYPE html>
     <html>
@@ -613,10 +613,18 @@ def generate_resume_html(resume_data):
                 margin: 1.5cm;
             }}
             
+            /* Noto Sans SC 中文字体支持 */
+            @font-face {{
+                font-family: 'Noto Sans SC';
+                src: url('font.ttf');
+                font-weight: normal;
+                font-style: normal;
+            }}
+            
             body {{
-                font-family: Arial, sans-serif;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
                 font-size: 11px;
-                line-height: 1.3;
+                line-height: 1.4;
                 color: #333333;
                 margin: 0;
                 padding: 10px;
@@ -631,15 +639,17 @@ def generate_resume_html(resume_data):
             
             .resume-header h1 {{
                 margin: 0;
-                font-size: 20px;
+                font-size: 22px;
                 font-weight: bold;
-                line-height: 1.2;
+                line-height: 1.3;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .resume-header .contact {{
                 margin: 8px 0;
                 font-size: 12px;
-                line-height: 1.4;
+                line-height: 1.5;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .section {{
@@ -647,12 +657,13 @@ def generate_resume_html(resume_data):
             }}
             
             .section h2 {{
-                font-size: 14px;
+                font-size: 15px;
                 font-weight: bold;
                 border-bottom: 1px solid #cccccc;
                 padding-bottom: 3px;
                 margin-bottom: 10px;
                 color: #333333;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .work-experience, .education, .projects {{
@@ -663,7 +674,8 @@ def generate_resume_html(resume_data):
                 font-size: 12px;
                 font-weight: bold;
                 margin: 0 0 3px 0;
-                line-height: 1.2;
+                line-height: 1.3;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .work-experience .date, .education .date, .projects .date {{
@@ -671,13 +683,15 @@ def generate_resume_html(resume_data):
                 color: #666666;
                 font-style: italic;
                 margin-bottom: 3px;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .work-experience .description, .education .description, .projects .description {{
                 font-size: 10px;
                 margin: 0;
-                line-height: 1.3;
+                line-height: 1.4;
                 text-align: left;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             .skills {{
@@ -685,12 +699,14 @@ def generate_resume_html(resume_data):
             }}
             
             .skill-item {{
-                background-color: #f5f5f5;
-                padding: 2px 6px;
+                background-color: #f8f9fa;
+                padding: 3px 8px;
                 margin: 2px;
                 font-size: 9px;
-                border: 1px solid #dddddd;
+                border: 1px solid #e9ecef;
+                border-radius: 3px;
                 display: inline-block;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
             
             ul {{
@@ -701,7 +717,8 @@ def generate_resume_html(resume_data):
             li {{
                 margin-bottom: 2px;
                 font-size: 10px;
-                line-height: 1.3;
+                line-height: 1.4;
+                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
         </style>
     </head>
