@@ -496,7 +496,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         
         console.log('Initializing Google GenAI...');
         const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
+        const model = ai.getGenerativeModel({ model: 'gemini-3-flash' });
         
         const resumeDetails = `
 Resume Details:
@@ -543,7 +543,7 @@ Resume Details:
           
           // If API fails, try fallback model
           if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model') || apiError.message?.includes('not found')) {
-            console.log('Trying fallback model: gemini-3-flash-preview');
+            console.log('Trying fallback model: gemini-3-flash');
             try {
               const response = await model.generateContent({
                    contents: [{ role: 'user', parts: [{ text: prompt }] }]
