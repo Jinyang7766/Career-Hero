@@ -95,8 +95,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 获取认证 token
       const token = localStorage.getItem('authToken');
       if (!token) {
-        console.error('No auth token found');
-        return null;
+        throw new Error('用户未登录，请先登录后再使用 AI 分析功能');
       }
       
       // 调用后端 AI 分析接口
@@ -125,19 +124,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         summary: result.summary || 'AI分析完成',
         strengths: result.strengths || [],
         weaknesses: result.weaknesses || [],
-        missingKeywords: [], // 后端暂不支持，保持为空
+        missingKeywords: result.missingKeywords || [],
         scoreBreakdown: {
           experience: Math.round(result.score * 0.4), // 假设经验占40%
           skills: Math.round(result.score * 0.4),     // 技能占40%
           format: Math.round(result.score * 0.2)      // 格式占20%
         },
-        suggestions: [] // 后端暂不支持建议，保持为空
+        suggestions: result.suggestions || [] // 使用后端返回的建议
       };
       
       return analysisResult;
     } catch (error) {
       console.error('AI Analysis Error:', error);
-      return null;
+      // 直接抛出错误，不回退到模拟数据
+      throw error;
     }
   };
 
@@ -150,7 +150,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setCurrentStep('analyzing');
     
     try {
-      // 尝试使用真实AI分析
+      // 直接调用真实AI分析，不回退到模拟数据
       const aiAnalysisResult = await generateRealAnalysis();
       
       if (aiAnalysisResult) {
@@ -199,99 +199,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }]);
         
         setCurrentStep('report');
-        return;
       }
     } catch (error) {
-      console.error('Real AI analysis failed, falling back to mock:', error);
+      console.error('AI analysis failed:', error);
+      // 显示错误提示，不回退到模拟数据
+      alert(`AI 分析失败：${error.message || '网络连接异常，请稍后重试'}`);
+      setCurrentStep('jd_input');
     }
-    
-    // 回退到模拟分析
-    console.log('Using mock analysis as fallback');
-    
-    setTimeout(() => {
-      if (!resumeData) return;
-
-      const hasJD = jdText.length > 0 || jdImage !== null;
-      let calculatedScore = hasJD ? 62 : 70; 
-
-      const newSuggestions: Suggestion[] = [];
-      const newReport: AnalysisReport = {
-        summary: hasJD 
-          ? '您的简历与目标职位匹配度一般。虽然教育背景符合，但在具体项目经验和工具技能上与 JD 描述存在一定差距。'
-          : '您的简历整体结构清晰，但在工作经历的量化描述上略显不足。',
-        strengths: ['教育背景优异', '工作年限符合要求'],
-        weaknesses: ['项目描述缺乏数据支撑', '部分核心技能未提及'],
-        missingKeywords: [],
-        scoreBreakdown: {
-            experience: hasJD ? 60 : 70,
-            skills: hasJD ? 55 : 80,
-            format: 95
-        }
-      };
-
-      // 1. Logic based on JD (Simulated)
-      if (hasJD) {
-        newReport.missingKeywords = ['A/B Testing', 'User Research', 'Agile'];
-        
-        newSuggestions.push({
-          id: 'jd-keyword-1',
-          type: 'missing',
-          title: '技能关键词补充',
-          reason: '目标职位多次提到 "A/B Testing" 和 "User Research"，AI 建议将这些高频词加入您的技能列表。',
-          targetSection: 'skills',
-          suggestedValue: [...resumeData.skills, 'A/B Testing', 'User Research'],
-          status: 'pending'
-        });
-        
-        calculatedScore += 5; 
-      }
-
-      // 2. Generic Logic (Existing)
-      if (resumeData.personalInfo.title && !resumeData.personalInfo.title.includes('资深') && !resumeData.personalInfo.title.includes('Senior')) {
-        newSuggestions.push({
-          id: 'opt-title',
-          type: 'optimization',
-          title: '职位头衔优化',
-          reason: '添加级别描述（如“资深”、“高级”）可以让招聘者更快了解您的经验水平。',
-          targetSection: 'personalInfo',
-          targetField: 'title',
-          originalValue: resumeData.personalInfo.title,
-          suggestedValue: `资深${resumeData.personalInfo.title}`,
-          status: 'pending'
-        });
-      }
-
-      resumeData.workExps.forEach(exp => {
-        if (!exp.description || exp.description.length < 20) {
-          newSuggestions.push({
-            id: `miss-exp-${exp.id}`,
-            type: 'missing',
-            title: '工作经历描述扩充',
-            reason: `"${exp.title}" 的经历描述过于简单。AI 根据 STAR 法则为您生成了优化版本。`,
-            targetSection: 'workExps',
-            targetId: exp.id,
-            targetField: 'description',
-            originalValue: exp.description,
-            suggestedValue: '负责主导核心产品的用户界面设计与交互体验优化，通过用户研究和数据分析，提升了产品易用性，使转化率提升了 15%。协同开发团队建立设计规范系统，提高了 30% 的团队协作效率。',
-            status: 'pending'
-          });
-        }
-      });
-
-      setScore(calculatedScore);
-      setSuggestions(newSuggestions);
-      setReport(newReport);
-      
-      // Init Chat with specific logic
-      // We don't dump all suggestions at once, the user guides the flow.
-      setChatMessages([{ 
-        id: 'init-1',
-        role: 'model', 
-        text: '您好，我是您的专属 AI 猎头顾问。分析报告已生成。我发现您的简历有几个关键点可以优化，这能显著提升通过率。我们要现在开始逐一修改吗？' 
-      }]);
-
-      setCurrentStep('report');
-    }, 2000);
   };
 
   const updateScore = (points: number) => {
@@ -484,19 +398,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         throw new Error('Backend chat API failed');
       }
     } catch (error) {
-      console.error('Chat API failed, using fallback:', error);
-      
-      // 回退到模拟响应
-      setTimeout(() => {
-        const mockResponse = generateMockChatResponse(textToSend);
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'model',
-          text: mockResponse.text,
-          suggestion: mockResponse.suggestion
-        };
-        setChatMessages(prev => [...prev, aiMessage]);
-      }, 1000);
+      console.error('Chat API failed:', error);
+      // 显示 Toast 提示，不回退到模拟响应
+      alert('AI 连接暂时中断');
     } finally {
       setIsSending(false);
     }
