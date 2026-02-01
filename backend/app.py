@@ -444,8 +444,7 @@ def get_templates():
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/export-pdf', methods=['POST'])
-@token_required
-def export_pdf(current_user_id):
+def export_pdf():
     try:
         data = request.get_json()
         resume_data = data.get('resumeData')
@@ -453,7 +452,7 @@ def export_pdf(current_user_id):
         if not resume_data:
             return jsonify({'error': 'Resume data is required'}), 400
         
-        logger.info(f"Starting PDF generation for user {current_user_id}")
+        logger.info(f"Starting PDF generation")
         
         # 首先尝试简单的测试 PDF
         try:

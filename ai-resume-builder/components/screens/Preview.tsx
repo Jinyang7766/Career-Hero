@@ -11,18 +11,11 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     setIsGenerating(true);
     
     try {
-      // 获取当前用户的 token
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        throw new Error('用户未登录');
-      }
-
       // 调用后端 PDF 导出接口
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
           resumeData: resumeData
@@ -31,7 +24,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'PDF 生成失败');
+        throw new Error(errorData.error || errorData.message || 'PDF 生成失败');
       }
 
       // 获取 PDF 文件流并下载
