@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, ResumeData, ResumeSummary } from './types';
 import { API_BASE_URL } from './src/api-config';
-import { supabase } from './src/supabase-client';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/screens/Dashboard';
 import Templates from './components/screens/Templates';
@@ -23,7 +22,6 @@ function App() {
   const [currentView, setCurrentView] = useState<View>(View.LOGIN);
   const [history, setHistory] = useState<View[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [error, setError] = useState<string>('');
 
   // Load user resumes when authenticated
   useEffect(() => {
@@ -32,60 +30,17 @@ function App() {
     }
   }, [isAuthenticated]);
 
-  // Check authentication status on mount and handle auth callback
+  // Check authentication status on mount
   useEffect(() => {
-    const initializeAuth = async () => {
-      // 首先检查当前会话
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        console.log('检测到现有会话，自动登录');
-        localStorage.setItem('authToken', session.access_token);
-        localStorage.setItem('currentUser', JSON.stringify(session.user));
-        setCurrentUser(session.user);
-        setIsAuthenticated(true);
-        setCurrentView(View.DASHBOARD);
-        return;
-      }
-
-      // 常规的认证检查
-      const token = localStorage.getItem('authToken');
-      const user = localStorage.getItem('user');
-      
-      if (token && user) {
-        const userData = JSON.parse(user);
-        setCurrentUser(userData);
-        setIsAuthenticated(true);
-        setCurrentView(View.DASHBOARD);
-      }
-    };
-
-    // 监听认证状态变化
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('认证状态变化:', event, session);
-      
-      if (event === 'SIGNED_IN' && session) {
-        console.log('用户已登录');
-        localStorage.setItem('authToken', session.access_token);
-        localStorage.setItem('currentUser', JSON.stringify(session.user));
-        setCurrentUser(session.user);
-        setIsAuthenticated(true);
-        setCurrentView(View.DASHBOARD);
-      } else if (event === 'SIGNED_OUT') {
-        console.log('用户已登出');
-        localStorage.removeItem('authToken');
-        localStorage.removeItem('currentUser');
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-        setCurrentView(View.LOGIN);
-      }
-    });
-
-    initializeAuth();
-
-    // 清理订阅
-    return () => {
-      subscription.unsubscribe();
-    };
+    const token = localStorage.getItem('authToken');
+    const user = localStorage.getItem('user');
+    
+    if (token && user) {
+      const userData = JSON.parse(user);
+      setCurrentUser(userData);
+      setIsAuthenticated(true);
+      setCurrentView(View.DASHBOARD);
+    }
   }, []);
 
   // Load user resumes from backend

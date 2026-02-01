@@ -1,22 +1,10 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import { AuthService } from '../../src/auth-service';
+import { supabase } from '../../src/supabase-client';
 
 const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
-
-  const handleTestEmail = async () => {
-    console.log('测试邮件配置...');
-    const result = await AuthService.testEmailConfig();
-    console.log('邮件配置测试结果:', result);
-    
-    if (result.success) {
-      alert('邮件配置正常！请检查是否收到测试邮件。');
-    } else {
-      alert(`邮件配置有问题: ${result.error}`);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,31 +17,99 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
     const password = formData.get('password') as string;
 
     try {
-      console.log('开始注册用户...', { name, email });
+      console.log('Attempting signup with:', { email, name });
       
-      const result = await AuthService.signup(email, password, name);
-
-      console.log('注册结果:', result);
-
-      if (result.success) {
-        // 注册成功，显示提示信息
-        setError('');
-        alert(result.message || '注册成功！请检查邮箱验证链接。');
-        
-        // 可选：直接跳转到登录页面
-        setCurrentView(View.LOGIN);
-      } else {
-        console.error('注册失败:', result.error, result.details);
-        setError(result.error || '注册失败');
-        
-        // 如果有详细错误信息，也显示出来
-        if (result.details && result.details.message !== result.error) {
-          console.error('详细错误:', result.details);
+      // 获取当前环境的重定向URL
+      const redirectUrl = window.location.origin + '/login';
+      console.log('Email redirect URL:', redirectUrl);
+      
+      const signupData = {
+        email,
+        password,
+        options: {
+          data: {
+            name: name,
+          },
+          emailRedirectTo: redirectUrl
         }
+      };
+      
+      console.log('Signup request data:', signupData);
+      
+      let data, error;
+      
+      try {
+        const result = await supabase.auth.signUp(signupData);
+        data = result.data;
+        error = result.error;
+      } catch (supabaseError) {
+        console.error('Supabase signUp threw exception:', supabaseError);
+        error = supabaseError;
       }
-    } catch (err: any) {
-      console.error('注册异常:', err);
-      setError('网络错误，请稍后重试');
+
+      console.log('Supabase signup complete response:', { 
+        data: JSON.stringify(data, null, 2), 
+        error: JSON.stringify(error, null, 2) 
+      });
+
+      if (error) {
+        console.error('Signup error details:', {
+          message: error.message,
+          status: error.status,
+          code: error.code,
+          fullError: error
+        });
+        
+        // 显示具体错误原因
+        let errorMessage = '注册失败';
+        if (error.message.includes('User already registered')) {
+          errorMessage = '该邮箱已被注册，请直接登录或使用其他邮箱';
+        } else if (error.message.includes('Password should be at least')) {
+          errorMessage = '密码长度至少需要6位字符';
+        } else if (error.message.includes('Invalid email')) {
+          errorMessage = '邮箱格式不正确，请检查后重试';
+        } else if (error.message.includes('over_email_send_rate_limit')) {
+          errorMessage = '发送邮件过于频繁，请稍后再试';
+        } else if (error.message.includes('signup_disabled')) {
+          errorMessage = '注册功能已禁用，请联系管理员';
+        } else {
+          errorMessage = `注册失败: ${error.message}`;
+        }
+        
+        setError(errorMessage);
+        return;
+      }
+
+      if (data.user) {
+        console.log('User created successfully:', data.user);
+        
+        // 注册成功，但可能需要邮箱验证
+        if (data.session) {
+          // 直接登录成功
+          localStorage.setItem('supabase_session', JSON.stringify(data.session));
+          localStorage.setItem('user', JSON.stringify(data.user));
+          
+          console.log('Signup and login successful:', data.user);
+          if (onLogin) onLogin(data.user);
+        } else {
+          // 需要邮箱验证
+          console.log('Signup successful, email verification required');
+          setError('注册成功！请检查邮箱并点击验证链接以完成注册');
+          setTimeout(() => {
+            setCurrentView?.(View.LOGIN);
+          }, 3000);
+        }
+      } else {
+        console.error('No user data returned from signup');
+        setError('注册失败：未返回用户信息，请重试');
+      }
+    } catch (err) {
+      console.error('Unexpected signup error (outer catch):', {
+        error: err,
+        message: err instanceof Error ? err.message : 'Unknown error',
+        stack: err instanceof Error ? err.stack : 'No stack trace'
+      });
+      setError(`网络错误: ${err instanceof Error ? err.message : '未知错误'}`);
     } finally {
       setIsLoading(false);
     }
@@ -155,16 +211,6 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
                 className="flex w-full justify-center rounded-xl bg-primary px-3 py-3.5 text-sm font-bold leading-6 text-white shadow-sm hover:bg-blue-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isLoading ? '创建账户中...' : '注册账号'}
-              </button>
-            </div>
-
-            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-              <button
-                type="button"
-                onClick={handleTestEmail}
-                className="flex w-full justify-center rounded-xl bg-slate-100 dark:bg-slate-800 px-3 py-2.5 text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-all"
-              >
-                测试邮件配置
               </button>
             </div>
           </form>

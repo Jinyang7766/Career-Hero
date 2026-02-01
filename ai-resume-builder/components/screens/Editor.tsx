@@ -111,7 +111,7 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
         });
       } else {
         // Create new resume
-        response = await fetch('${API_BASE_URL}/api/resumes', {
+        response = await fetch(`${API_BASE_URL}/api/resumes`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

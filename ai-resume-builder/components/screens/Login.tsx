@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import { AuthService } from '../../src/auth-service';
+import { supabase } from '../../src/supabase-client';
 
 const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,18 +16,51 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
     const password = formData.get('password') as string;
 
     try {
-      const result = await AuthService.login(email, password);
+      console.log('Attempting login with:', { email });
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
-      if (result.success) {
-        localStorage.setItem('authToken', result.session?.access_token || '');
-        localStorage.setItem('currentUser', JSON.stringify(result.user));
-        onLogin(result.user);
-        setCurrentView(View.DASHBOARD);
-      } else {
-        setError(result.error || '登录失败');
+      console.log('Supabase response:', { data, error });
+
+      if (error) {
+        console.error('Login error details:', {
+          message: error.message,
+          status: error.status,
+          code: error.code
+        });
+        
+        // 显示具体错误原因
+        let errorMessage = '登录失败';
+        if (error.message.includes('Invalid login credentials')) {
+          errorMessage = '邮箱或密码错误，请检查后重试';
+        } else if (error.message.includes('Email not confirmed')) {
+          errorMessage = '邮箱未验证，请检查邮箱并点击验证链接';
+        } else if (error.message.includes('Too many requests')) {
+          errorMessage = '请求过于频繁，请稍后再试';
+        } else {
+          errorMessage = `登录失败: ${error.message}`;
+        }
+        
+        setError(errorMessage);
+        return;
+      }
+
+      if (data.user) {
+        // Store user session
+        localStorage.setItem('supabase_session', JSON.stringify(data.session));
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        console.log('Login successful:', data.user);
+        
+        // Login successful
+        if (onLogin) onLogin(data.user);
       }
     } catch (err) {
-      setError('网络错误，请稍后重试');
+      console.error('Unexpected login error:', err);
+      setError('网络错误，请检查连接后重试');
     } finally {
       setIsLoading(false);
     }
