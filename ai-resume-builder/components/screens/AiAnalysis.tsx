@@ -711,7 +711,7 @@ Resume Details:
   // 5. Chat Page (Full Screen with Interactive Cards)
   if (currentStep === 'chat') {
     return (
-      <div className="fixed inset-0 z-[100] bg-white flex flex-col animate-in slide-in-from-right duration-300">
+      <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300">
         {/* Chat Header */}
         <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
             <div className="flex items-center gap-3">
@@ -750,7 +750,7 @@ Resume Details:
                         <div className={`max-w-[90%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
                             msg.role === 'user' 
                                 ? 'bg-primary text-white rounded-br-none' 
-                                : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
+                                : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
                         }`}>
                             {msg.text}
                         </div>
@@ -758,7 +758,7 @@ Resume Details:
 
                     {/* Interactive Suggestion Card */}
                     {msg.role === 'model' && msg.suggestion && (
-                        <div className="mt-2 ml-10 max-w-[90%] w-full bg-white dark:bg-[#1c2936] rounded-xl border border-blue-100 dark:border-blue-900/30 overflow-hidden shadow-sm animate-in zoom-in-95 duration-300">
+                        <div className="mt-2 ml-10 max-w-[90%] w-full bg-slate-100 dark:bg-[#1c2936] rounded-xl border border-blue-100 dark:border-blue-900/30 overflow-hidden shadow-sm animate-in zoom-in-95 duration-300">
                              <div className="p-3 bg-blue-50/50 dark:bg-blue-900/10 border-b border-blue-100 dark:border-blue-900/30 flex justify-between items-center">
                                  <span className="text-xs font-bold text-primary uppercase tracking-wide flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[16px]">auto_fix_high</span>
@@ -823,7 +823,7 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[110] p-4 pb-safe bg-white border-t border-slate-200 dark:border-white/5">
+      <div className="fixed bottom-0 left-0 right-0 z-[110] p-4 pb-safe bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5">
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
@@ -831,13 +831,13 @@ Resume Details:
                   <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar pointer-events-auto bg-gradient-to-t from-slate-50/90 to-transparent dark:from-[#0b1219]/90">
                       <button 
                           onClick={() => handleSendMessage('请开始帮我优化简历')} 
-                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
+                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
                       >
                           ✨ 开始优化
                       </button>
                       <button 
                           onClick={() => handleSendMessage('这个 JD 看重什么能力？')} 
-                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-white dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
+                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
                       >
                           📄 JD 解读
                       </button>
@@ -846,7 +846,7 @@ Resume Details:
           )}
 
           {/* Input controls */}
-          <div className="p-4 bg-white dark:bg-[#1c2936]">
+          <div className="p-4 bg-transparent">
               <div className="flex gap-2 items-end max-w-md mx-auto">
                   <textarea 
                       value={inputMessage}
