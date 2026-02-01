@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import { API_BASE_URL } from '../../src/api-config';
+import { AuthService } from '../../src/auth-service';
 
 const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -17,33 +17,31 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
     const password = formData.get('password') as string;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-          password,
-        }),
-      });
+      console.log('开始注册用户...', { name, email });
+      
+      const result = await AuthService.signup(email, password, name);
 
-      const data = await response.json();
+      console.log('注册结果:', result);
 
-      if (response.ok) {
-        // Store token in localStorage
-        localStorage.setItem('authToken', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
+      if (result.success) {
+        // 注册成功，显示提示信息
+        setError('');
+        alert(result.message || '注册成功！请检查邮箱验证链接。');
         
-        // Registration successful
-        if (onLogin) onLogin(data.user);
+        // 可选：直接跳转到登录页面
+        setCurrentView(View.LOGIN);
       } else {
-        // Registration failed
-        setError(data.error || 'Registration failed');
+        console.error('注册失败:', result.error, result.details);
+        setError(result.error || '注册失败');
+        
+        // 如果有详细错误信息，也显示出来
+        if (result.details && result.details.message !== result.error) {
+          console.error('详细错误:', result.details);
+        }
       }
-    } catch (err) {
-      setError('Network error. Please try again.');
+    } catch (err: any) {
+      console.error('注册异常:', err);
+      setError('网络错误，请稍后重试');
     } finally {
       setIsLoading(false);
     }

@@ -10,17 +10,32 @@ export class AuthService {
   // 注册
   static async signup(email: string, password: string, name?: string) {
     try {
+      console.log('开始注册流程...', { email, name: name || '' });
+      
+      // 获取当前环境的重定向URL
+      const redirectUrl = import.meta.env.PROD 
+        ? 'https://career-hero-frontend.vercel.app' 
+        : 'http://localhost:5173';
+      
+      console.log('使用重定向URL:', redirectUrl);
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
             name: name || '',
-          }
+          },
+          emailRedirectTo: `${redirectUrl}/auth/callback`
         }
       });
 
-      if (error) throw error;
+      console.log('Supabase注册响应:', { data, error });
+
+      if (error) {
+        console.error('注册错误详情:', error);
+        throw error;
+      }
 
       return { 
         success: true, 
@@ -28,9 +43,15 @@ export class AuthService {
         message: '注册成功！请检查邮箱验证链接。'
       };
     } catch (error: any) {
+      console.error('完整错误对象:', error);
+      console.error('错误信息:', error.message);
+      console.error('错误状态:', error.status);
+      console.error('错误代码:', error.code);
+      
       return { 
         success: false, 
-        error: error.message || '注册失败' 
+        error: error.message || '注册失败',
+        details: error
       };
     }
   }
