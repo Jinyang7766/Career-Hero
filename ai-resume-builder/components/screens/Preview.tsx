@@ -46,63 +46,77 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     if (!originalElement) return;
 
     setIsGenerating(true);
-    try {
-        // 1. 创建一个独立的影子包装器
-        const wrapper = document.createElement('div');
-        wrapper.style.position = 'absolute';
-        wrapper.style.left = '-9999px';
-        wrapper.style.top = '0';
-        wrapper.style.width = '794px'; // 严格锁定 A4 宽度 (px)
-        wrapper.style.backgroundColor = '#ffffff';
+    
+    // 1. 创建沙盒容器：彻底脱离当前窄屏视口
+    const sandbox = document.createElement('div');
+    sandbox.style.position = 'fixed';
+    sandbox.style.left = '-5000px'; // 移动到视口外
+    sandbox.style.top = '0';
+    sandbox.style.width = '794px'; // 强制 A4 宽度
+    sandbox.style.zIndex = '-1';
+    document.body.appendChild(sandbox);
 
-        // 2. 克隆内容并注入
+    try {
+        // 2. 深度克隆内容并进行"PDF 专属优化"
         const clone = originalElement.cloneNode(true) as HTMLElement;
         
-        // 🔴 强制抹除所有可能导致缩进或窄屏适配的 Tailwind 类名
-        clone.style.width = '794px';
-        clone.style.maxWidth = '794px';
-        clone.style.minWidth = '794px';
-        clone.style.transform = 'none';
-        clone.style.margin = '0';
-        clone.style.padding = '40px'; // 模拟 A4 内边距
-        clone.style.boxShadow = 'none';
-        clone.style.borderRadius = '0';
+        // 强制移除所有可能干扰 PDF 的类名
+        clone.classList.remove('rounded-3xl', 'shadow-2xl', 'overflow-hidden');
         
-        // 3. 处理克隆节点中的所有 Flex 布局，防止其在窄屏模式下堆叠
-        const allFlexElements = clone.querySelectorAll('.flex');
-        allFlexElements.forEach((el) => {
-          (el as HTMLElement).style.display = 'flex';
-          (el as HTMLElement).style.flexDirection = 'row'; // 强行拉回横向布局
+        // 覆盖样式：强制 A4 布局
+        clone.style.width = '794px';
+        clone.style.padding = '40px';
+        clone.style.backgroundColor = '#ffffff';
+        clone.style.color = '#000000';
+        clone.style.transform = 'none';
+
+        // 🟢 解决"细长条"的核心：递归修复 Flex 布局
+        // 将所有在手机上堆叠的 flex-col 强行恢复为横向，并确保宽度占满
+        const flexElements = clone.querySelectorAll('.flex');
+        flexElements.forEach((el) => {
+            const style = (el as HTMLElement).style;
+            // 只有当不是专门为了纵向设计的元素时，才强制横向
+            if (!el.classList.contains('flex-col') || el.classList.contains('md:flex-row')) {
+                style.display = 'flex';
+                style.flexDirection = 'row';
+                style.flexWrap = 'nowrap';
+                style.alignItems = 'flex-start';
+                style.justifyContent = 'space-between';
+            }
         });
 
-        wrapper.appendChild(clone);
-        document.body.appendChild(wrapper);
+        // 确保图片加载（如果有头像）
+        const images = clone.getElementsByTagName('img');
+        await Promise.all(Array.from(images).map(img => {
+            if (img.complete) return Promise.resolve();
+            return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
+        }));
+
+        sandbox.appendChild(clone);
 
         const opt = {
             margin: 0,
             filename: `简历优化_${resumeData?.personalInfo?.name || '未命名'}.pdf`,
             image: { type: 'jpeg', quality: 1.0 },
             html2canvas: { 
-                scale: 2, 
-                useCORS: true, 
+                scale: 2, // 提高清晰度
+                useCORS: true,
                 width: 794,
                 windowWidth: 794,
                 scrollY: 0,
-                scrollX: 0
+                backgroundColor: '#ffffff'
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
         const html2pdf = (window as any).html2pdf;
-        // 使用新的 wrapper 进行导出
-        await html2pdf().set(opt).from(wrapper).save();
-        
-        // 4. 清理
-        document.body.removeChild(wrapper);
+        await html2pdf().set(opt).from(sandbox).save();
+
     } catch (error) {
-        console.error('PDF导出极致失败:', error);
-        alert('导出失败，请尝试在电脑端操作或检查网络');
+        console.error('PDF 终极导出失败:', error);
     } finally {
+        // 3. 清理现场
+        document.body.removeChild(sandbox);
         setIsGenerating(false);
     }
   };
