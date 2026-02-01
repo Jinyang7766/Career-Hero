@@ -93,9 +93,24 @@ def token_required(f):
             return jsonify({'message': 'Token is missing!'}), 401
         
         try:
+            # 首先尝试 Supabase token 验证
+            try:
+                # 使用 Supabase 客户端验证 token
+                user = supabase.auth.get_user(token)
+                if user.user:
+                    current_user_id = user.user.id
+                    print(f"Supabase user authenticated: {current_user_id}")
+                    return f(current_user_id, *args, **kwargs)
+            except Exception as supabase_error:
+                print(f"Supabase auth failed: {supabase_error}")
+                
+            # 如果 Supabase 验证失败，尝试自定义 JWT 验证
             data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
             current_user_id = data['user_id']
-        except:
+            print(f"Custom JWT authenticated: {current_user_id}")
+            
+        except Exception as e:
+            print(f"Token validation failed: {e}")
             return jsonify({'message': 'Token is invalid!'}), 401
         
         return f(current_user_id, *args, **kwargs)
@@ -838,6 +853,9 @@ def parse_resume():
 @app.route('/api/ai/analyze', methods=['POST'])
 @token_required
 def analyze_resume(current_user_id):
+    print(f"Request Headers: {request.headers}")
+    print(f"Current User ID: {current_user_id}")
+    
     try:
         data = request.get_json()
         resume_data = data.get('resumeData')
@@ -970,6 +988,9 @@ def parse_ai_response(response_text):
 @app.route('/api/ai/chat', methods=['POST'])
 @token_required
 def ai_chat(current_user_id):
+    print(f"Chat Request Headers: {request.headers}")
+    print(f"Chat Current User ID: {current_user_id}")
+    
     try:
         data = request.get_json()
         message = data.get('message', '')

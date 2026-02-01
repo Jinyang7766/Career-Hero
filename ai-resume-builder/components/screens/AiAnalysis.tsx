@@ -92,10 +92,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       console.log('Generating real AI analysis via backend API...');
       
-      // 获取认证 token
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('用户未登录，请先登录后再使用 AI 分析功能');
+      // 获取认证 token - 使用 Supabase session
+      const supabaseSession = localStorage.getItem('supabase_session');
+      if (!supabaseSession) {
+        throw new Error('请先登录以使用 AI 功能');
+      }
+      
+      let token;
+      try {
+        const session = JSON.parse(supabaseSession);
+        token = session.access_token;
+      } catch (error) {
+        throw new Error('登录状态无效，请重新登录');
+      }
+      
+      if (!token || token.trim() === '') {
+        throw new Error('请先登录以使用 AI 功能');
       }
       
       // 调用后端 AI 分析接口
@@ -365,9 +377,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
       
-      const token = localStorage.getItem('authToken');
-      if (!token) {
-        throw new Error('No auth token found');
+      // 获取认证 token - 使用 Supabase session
+      const supabaseSession = localStorage.getItem('supabase_session');
+      if (!supabaseSession) {
+        throw new Error('请先登录以使用 AI 功能');
+      }
+      
+      let token;
+      try {
+        const session = JSON.parse(supabaseSession);
+        token = session.access_token;
+      } catch (error) {
+        throw new Error('登录状态无效，请重新登录');
+      }
+      
+      if (!token || token.trim() === '') {
+        throw new Error('请先登录以使用 AI 功能');
       }
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`, {
@@ -404,37 +429,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     } finally {
       setIsSending(false);
     }
-  };
-
-  const generateMockChatResponse = (userMessage: string) => {
-    const lowerMessage = userMessage.toLowerCase();
-    
-    // 检查是否有待处理的建议
-    const pendingSuggestions = suggestions.filter(s => s.status === 'pending');
-    
-    if (pendingSuggestions.length > 0 && (lowerMessage.includes('好') || lowerMessage.includes('可以') || lowerMessage.includes('开始'))) {
-      const nextSuggestion = pendingSuggestions[0];
-      return {
-        text: `好的！让我们从第一个建议开始：\n\n**${nextSuggestion.title}**\n${nextSuggestion.reason}\n\n您希望我帮您应用这个建议吗？`,
-        suggestion: nextSuggestion
-      };
-    }
-    
-    if (lowerMessage.includes('评分') || lowerMessage.includes('分数')) {
-      return {
-        text: `您当前的简历评分是 ${score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。`
-      };
-    }
-    
-    if (lowerMessage.includes('技能') || lowerMessage.includes('skills')) {
-      return {
-        text: '关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？'
-      };
-    }
-    
-    return {
-      text: '我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。您想从哪个方面开始改进呢？'
-    };
   };
 
   const getScoreColor = (s: number) => {
