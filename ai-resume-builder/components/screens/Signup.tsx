@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
+import { DatabaseService } from '../../src/database-service';
 
 const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -82,6 +83,17 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
 
       if (data.user) {
         console.log('User created successfully:', data.user);
+        
+        // 创建用户在数据库中的记录
+        const userResult = await DatabaseService.createUser(data.user.id, data.user.email, name);
+        
+        if (!userResult.success) {
+          console.error('Error creating user record in database:', userResult.error);
+          // 即使数据库记录创建失败，也不应该阻止注册流程
+          console.warn('User auth created but database record failed');
+        } else {
+          console.log('User record created successfully in database');
+        }
         
         // 注册成功，但可能需要邮箱验证
         if (data.session) {
