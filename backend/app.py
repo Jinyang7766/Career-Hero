@@ -16,7 +16,37 @@ import google.generativeai as genai
 from io import BytesIO
 
 app = Flask(__name__)
-CORS(app)
+
+# 强化 CORS 配置
+CORS(app, 
+     resources={
+         r"/api/*": {
+             "origins": [
+                 "*",  # 允许所有域名，生产环境应该限制
+                 "http://localhost:5173",
+                 "http://localhost:3000",
+                 "http://localhost:5174",
+                 "https://localhost:5173",
+                 "https://localhost:3000"
+             ],
+             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
+             "supports_credentials": True
+         }
+     },
+     supports_credentials=True
+)
+
+# 添加 OPTIONS 预检请求处理
+@app.before_request
+def handle_options_request():
+    if request.method == 'OPTIONS':
+        response = jsonify({'status': 'success'})
+        response.headers.add('Access-Control-Allow-Origin', '*')
+        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
+        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        return response
 
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')

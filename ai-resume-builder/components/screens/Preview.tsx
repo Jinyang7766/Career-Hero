@@ -18,7 +18,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
       }
 
       // 调用后端 PDF 导出接口
-      const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/export-pdf`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
