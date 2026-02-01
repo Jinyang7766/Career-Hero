@@ -862,7 +862,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-20">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -963,7 +963,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         )}
 
         {/* Input Area */}
-        <div className="p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-safe">
+        <div className="p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-6">
             <div className="flex gap-2 items-end">
                 <textarea 
                     value={inputMessage}
