@@ -58,18 +58,22 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         console.log('使用html2pdf生成PDF');
         
         const opt = {
-          margin: [0, 0, 0, 0],
+          margin: 0, // 移除默认边距，由CSS控制
           filename: `${resumeData?.personalInfo?.name || '简历'}_Resume.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
+          image: { type: 'jpeg', quality: 1 }, // 提高图片质量
           html2canvas: { 
             scale: 2, 
             useCORS: true,
             allowTaint: true,
             backgroundColor: '#ffffff',
             logging: false,
-            windowWidth: 1200, // 锁定导出宽度
+            // 🔴 关键：强制导出时的窗口宽度为 A4 标准像素 (约 794px)
+            windowWidth: 800,
             height: element.scrollHeight,
-            width: element.scrollWidth
+            width: element.scrollWidth,
+            // 添加字体渲染优化
+            letterRendering: true,
+            removeContainer: false
           },
           jsPDF: { 
             unit: 'mm', 
@@ -88,6 +92,24 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         console.log('PDF配置:', opt);
         console.log('目标元素:', element);
 
+        // 🔴 关键：在导出前，临时给 element 增加一个 A4 宽度的样式，导出完移除
+        const originalWidth = element.style.width;
+        const originalMinWidth = element.style.minWidth;
+        const originalMaxWidth = element.style.maxWidth;
+        
+        // 强制设置为A4标准宽度
+        element.style.width = '794px'; // A4标准像素宽度
+        element.style.minWidth = '794px';
+        element.style.maxWidth = '794px';
+        
+        // 强制重新渲染
+        element.style.overflow = 'visible';
+        
+        console.log('临时设置A4宽度: 794px');
+
+        // 等待DOM更新
+        await new Promise(resolve => setTimeout(resolve, 100));
+
         // 生成PDF
         await (window as any).html2pdf()
           .from(element)
@@ -95,12 +117,19 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
           .save()
           .then(() => {
             console.log('PDF生成成功');
-            setIsGenerating(false);
           })
           .catch((error: any) => {
             console.error('PDF生成失败:', error);
-            setIsGenerating(false);
             alert('PDF生成失败，请重试或使用浏览器打印功能');
+          })
+          .finally(() => {
+            // 🔴 关键：导出完成后恢复原始样式
+            element.style.width = originalWidth;
+            element.style.minWidth = originalMinWidth;
+            element.style.maxWidth = originalMaxWidth;
+            element.style.overflow = '';
+            console.log('恢复原始样式');
+            setIsGenerating(false);
           });
 
       } else {
@@ -111,11 +140,24 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
           const printContent = element.innerHTML;
           const printStyles = `
             <style>
-              body { margin: 0; padding: 20px; font-family: 'Noto Sans SC', 'Inter', sans-serif; }
+              body { 
+                margin: 0; 
+                padding: 20px; 
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+                width: 794px; /* A4标准宽度 */
+                background: #ffffff !important;
+              }
               .no-print { display: none !important; }
               @media print {
-                body { margin: 0; padding: 10px; }
-                @page { margin: 10mm; }
+                body { 
+                  margin: 0; 
+                  padding: 10px; 
+                  width: 794px !important;
+                }
+                @page { 
+                  margin: 10mm;
+                  size: A4 portrait;
+                }
               }
             </style>
           `;
@@ -183,15 +225,20 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"', // 标准中文系统字体序列
                         color: '#1a1a1a', // 确保文字颜色
                         fontSize: '12px', // 基础字体大小
-                        lineHeight: '1.4' // 行高
+                        lineHeight: '1.4', // 行高
+                        // 🔴 关键：确保字体在PDF中正确渲染
+                        textRendering: 'optimizeLegibility',
+                        WebkitFontSmoothing: 'antialiased',
+                        MozOsxFontSmoothing: 'grayscale'
                     }}
                 >
                     <style dangerouslySetInnerHTML={{
                         __html: `
                             @media print {
                                 #resume-content {
-                                    width: 210mm !important;
-                                    height: 297mm !important;
+                                    width: 794px !important; /* A4标准像素宽度 */
+                                    min-width: 794px !important;
+                                    max-width: 794px !important;
                                     margin: 0 !important;
                                     padding: 15mm !important;
                                     box-shadow: none !important;
@@ -200,6 +247,11 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                                     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
                                     color: #1a1a1a !important;
                                     overflow: visible !important;
+                                    font-size: 12px !important;
+                                    line-height: 1.4 !important;
+                                    text-rendering: optimizeLegibility !important;
+                                    -webkit-font-smoothing: antialiased !important;
+                                    -moz-osx-font-smoothing: grayscale !important;
                                 }
                                 .no-print {
                                     display: none !important;
@@ -221,10 +273,19 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                                     margin: 0;
                                     padding: 0;
                                     background: #ffffff !important;
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
                                 }
                                 * {
                                     -webkit-print-color-adjust: exact !important;
                                     color-adjust: exact !important;
+                                }
+                                /* 🔴 关键：确保中文字体在PDF中正确显示 */
+                                h1, h2, h3, h4, h5, h6 {
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
+                                    font-weight: bold !important;
+                                }
+                                p, span, div {
+                                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif !important;
                                 }
                             }
                             
@@ -244,6 +305,23 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                             li, .flex {
                                 break-inside: avoid;
                                 page-break-inside: avoid;
+                            }
+                            
+                            /* 🔴 关键：字体加载优化 */
+                            @font-face {
+                                font-family: 'PingFang SC';
+                                src: local('PingFang SC'), local('PingFang SC Regular');
+                                font-display: swap;
+                            }
+                            @font-face {
+                                font-family: 'Microsoft YaHei';
+                                src: local('Microsoft YaHei'), local('Microsoft YaHei Regular');
+                                font-display: swap;
+                            }
+                            @font-face {
+                                font-family: 'Hiragino Sans GB';
+                                src: local('Hiragino Sans GB'), local('Hiragino Sans GB W3');
+                                font-display: swap;
                             }
                         `
                     }} />
