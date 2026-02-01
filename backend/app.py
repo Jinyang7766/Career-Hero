@@ -962,5 +962,92 @@ def parse_ai_response(response_text):
         'missingKeywords': []
     }
 
+@app.route('/api/ai/chat', methods=['POST'])
+@token_required
+def ai_chat(current_user_id):
+    try:
+        data = request.get_json()
+        message = data.get('message', '')
+        resume_data = data.get('resumeData')
+        score = data.get('score', 0)
+        suggestions = data.get('suggestions', [])
+        
+        if not message:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        # Use Gemini AI if available, otherwise fall back to mock responses
+        if model:
+            try:
+                # Prepare prompt for Gemini
+                prompt = f"""
+你是一位专业的简历顾问。请遵循以下原则：
+
+📝 **风格要求**：克制、专业、极简
+📏 **长度限制**：最多150字，分点说明
+🎯 **内容重点**：提供可执行的具体建议
+📋 **格式要求**：使用Markdown格式，适当使用emoji
+
+**回复结构**：
+- 简短开场（1句话）
+- 2个关键点（使用数字列表）
+- 每点不超过30字
+- 结尾鼓励（1句话）
+
+**避免**：
+- 长篇大论
+- 过多解释
+- 重复内容
+- 复杂术语
+
+用户问题：{message}
+
+简历信息：
+{format_resume_for_ai(resume_data) if resume_data else '无简历信息'}
+
+当前评分：{score}/100
+
+待处理建议：{len([s for s in suggestions if s.get('status') == 'pending'])} 条
+"""
+                
+                response = model.generate_content(prompt)
+                ai_response = response.text
+                
+                return jsonify({
+                    'response': ai_response
+                })
+                
+            except Exception as ai_error:
+                print(f"AI chat failed: {ai_error}")
+                # Fall back to mock response
+        
+        # Mock chat response - fallback
+        mock_response = generate_mock_chat_response(message, score, suggestions)
+        
+        return jsonify({
+            'response': mock_response
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+def generate_mock_chat_response(message, score, suggestions):
+    """Generate mock chat response when AI is unavailable"""
+    lower_message = message.lower()
+    
+    # Check for pending suggestions
+    pending_suggestions = [s for s in suggestions if s.get('status') == 'pending']
+    
+    if pending_suggestions and ('好' in lower_message or '可以' in lower_message or '开始' in lower_message):
+        next_suggestion = pending_suggestions[0]
+        return f"好的！让我们从第一个建议开始：\n\n**{next_suggestion.get('title', '优化建议')}**\n{next_suggestion.get('reason', '根据AI分析结果')}\n\n您希望我帮您应用这个建议吗？"
+    
+    if '评分' in lower_message or '分数' in lower_message:
+        return f"您当前的简历评分是 {score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。"
+    
+    if '技能' in lower_message or 'skills' in lower_message:
+        return "关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？"
+    
+    return "我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。您想从哪个方面开始改进呢？"
+
 if __name__ == '__main__':
     app.run(debug=True, port=5000)

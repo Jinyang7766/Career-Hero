@@ -92,11 +92,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       console.log('Generating real AI analysis via backend API...');
       
+      // 获取认证 token
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        console.error('No auth token found');
+        return null;
+      }
+      
       // 调用后端 AI 分析接口
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
           resumeData: resumeData,
@@ -429,161 +437,100 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     const textToSend = textOverride || inputMessage;
     if (!textToSend.trim()) return;
 
-    setChatMessages(prev => [...prev, { id: `user-${Date.now()}`, role: 'user', text: textToSend }]);
+    // Add user message
+    const userMessage: ChatMessage = {
+      id: `user-${Date.now()}`,
+      role: 'user',
+      text: textToSend
+    };
+    setChatMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsSending(true);
 
-    let aiText = "";
-
     try {
-      // 优先尝试使用Serverless API
-      console.log('Trying Serverless API first...');
-      const serverlessResult = await AIService.sendMessage(textToSend, resumeData, score, suggestions);
+      // 优先尝试使用后端 API
+      console.log('Trying backend API for chat...');
       
-      if (serverlessResult.success) {
-        console.log('Serverless API success');
-        setChatMessages(prev => [...prev, { id: `ai-${Date.now()}`, role: 'model', text: serverlessResult.text }]);
-        setIsSending(false);
-        return;
-      } else {
-        console.log('Serverless API failed, falling back to direct Gemini API:', serverlessResult.error);
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No auth token found');
       }
-
-      // Fallback to direct Gemini API
-      console.log('Using direct Gemini API as fallback...');
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
       
-      // 安全检查：确保API Key存在且有效
-      if (!apiKey) {
-        console.log('No API key found, using mock responses');
-        await new Promise(r => setTimeout(r, 1000));
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          message: textToSend,
+          resumeData: resumeData,
+          score: score,
+          suggestions: suggestions
+        })
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Backend chat API success');
         
-        // Mock Interaction logic with professional recruitment strategies
-        if (textToSend.includes('开始') || textToSend.includes('优化')) {
-            const firstPending = suggestions.find(s => s.status === 'pending');
-            if (firstPending) {
-                // Instead of text, we return a message attached with a suggestion object
-                setChatMessages(prev => [...prev, {
-                    id: `ai-sug-${firstPending.id}`,
-                    role: 'model',
-                    text: '好的，我们先解决这个问题：',
-                    suggestion: firstPending
-                }]);
-                setIsSending(false);
-                return;
-            }
-            aiText = `✨ **优化建议**
-1. 📊 **量化数据**：将"负责销售"改为"月均销售额提升20%"。
-2. 🔑 **关键词**：补充JD中的核心技能词。
-
-要为您生成改写示例吗？`;
-        } else {
-            aiText = `💡 **专业建议**
-1. 🎯 **聚焦重点**：删除与目标职位无关的兼职经历。
-2. 📝 **排版优化**：技能部分建议使用列表展示。
-
-您想看修改后的预览吗？`;
-        }
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: 'model',
+          text: result.response || '感谢您的咨询，我会继续为您提供优化建议。'
+        };
+        setChatMessages(prev => [...prev, aiMessage]);
       } else {
-        // API Key exists, proceed with API calls
-        console.log('API Key configured:', !!apiKey);
-        
-        // 验证API密钥格式
-        if (!apiKey.startsWith('AIza')) {
-          console.error('Invalid API key format. Gemini API keys should start with "AIza"');
-          throw new Error('API密钥格式无效，请检查您的Gemini API密钥');
-        }
-        
-        console.log('Initializing Google GenAI...');
-        const ai = new GoogleGenerativeAI(apiKey);
-        const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-        
-        const resumeDetails = `
-Resume Details:
-- Name: ${resumeData?.personalInfo.name || 'N/A'}
-- Title: ${resumeData?.personalInfo.title || 'N/A'}
-- Email: ${resumeData?.personalInfo.email || 'N/A'}
-- Phone: ${resumeData?.personalInfo.phone || 'N/A'}
-- Gender: ${resumeData?.gender || 'N/A'}
-- Work Experience: ${resumeData?.workExps.length} positions
-  ${resumeData?.workExps.map((exp, i) => `  ${i+1}. ${exp.title} at ${exp.subtitle} (${exp.date})`).join('\n')}
-- Education: ${resumeData?.educations.length} degrees
-  ${resumeData?.educations.map((edu, i) => `  ${i+1}. ${edu.title} at ${edu.subtitle} (${edu.date})`).join('\n')}
-- Projects: ${resumeData?.projects.length} projects
-  ${resumeData?.projects.map((proj, i) => `  ${i+1}. ${proj.title} (${proj.date})`).join('\n')}
-- Skills: ${resumeData?.skills.join(', ') || 'None'}
-- Current Score: ${score}/100
-- Pending Suggestions: ${suggestions.filter(s => s.status === 'pending').map(s => s.title).join(', ')}
-`;
-
-        // 1. 定义极其严格的 Prompt
-        const prompt = `你是一名专业简历顾问。
-原则：字数严格控制在100字内。严禁废话。
-格式：Markdown。
-结构：
-1. 简短结论
-2. 两个具体优化点 (Emoji开头)
-3. 一个引导性提问`;
-
-        console.log('Sending request to Gemini API...');
-        try {
-          const response = await model.generateContent({
-               contents: [{ role: 'user', parts: [{ text: prompt + `\n\n用户输入: ${textToSend}\n简历概要: ${resumeDetails}` }] }]
-          });
-          aiText = response.response.text() || "";
-          console.log('Gemini API response received');
-        } catch (apiError) {
-          console.error('Gemini API Error:', apiError);
-          console.error('Error details:', {
-            message: apiError.message,
-            status: apiError.status,
-            statusText: apiError.statusText,
-            stack: apiError.stack
-          });
-          
-          // If API fails, try fallback model
-          if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model') || apiError.message?.includes('not found')) {
-            console.log('Trying fallback model: gemini-3-flash-preview');
-            try {
-              const response = await model.generateContent({
-                   contents: [{ role: 'user', parts: [{ text: prompt }] }]
-              });
-              aiText = response.response.text() || "";
-              console.log('Gemini API response received with fallback model');
-            } catch (fallbackError) {
-              console.error('Fallback model also failed:', fallbackError);
-              throw fallbackError;
-            }
-          } else {
-            throw apiError;
-          }
-        }
+        throw new Error('Backend chat API failed');
       }
-
-      setChatMessages(prev => [...prev, { id: `ai-${Date.now()}`, role: 'model', text: aiText }]);
     } catch (error) {
-      console.error("Chat error:", error);
-      console.error("Error details:", error.message);
+      console.error('Chat API failed, using fallback:', error);
       
-      let errorMessage = `网络连接异常：${error.message || '请稍后再试。'}`;
-      
-      // Provide specific solutions for common errors
-      if (error.message?.includes('404') || error.message?.includes('not found')) {
-        errorMessage += `\n\n解决方案：\n1. 确认API密钥有效且未过期\n2. 检查Google AI Studio中的项目状态\n3. 验证API密钥有生成内容权限\n4. 尝试重新生成API密钥`;
-      } else if (error.message?.includes('403') || error.message?.includes('permission')) {
-        errorMessage += `\n\n解决方案：\n1. 检查API密钥是否有生成内容权限\n2. 访问 Google AI Studio 重新配置权限\n3. 确认API密钥未过期`;
-      } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
-        errorMessage += `\n\n解决方案：\n1. 检查网络连接\n2. 确认防火墙允许访问 Google API\n3. 尝试使用 VPN 或切换网络`;
-      }
-      
-      setChatMessages(prev => [...prev, { 
-        id: `err-${Date.now()}`, 
-        role: 'model', 
-        text: errorMessage
-      }]);
+      // 回退到模拟响应
+      setTimeout(() => {
+        const mockResponse = generateMockChatResponse(textToSend);
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: 'model',
+          text: mockResponse.text,
+          suggestion: mockResponse.suggestion
+        };
+        setChatMessages(prev => [...prev, aiMessage]);
+      }, 1000);
     } finally {
       setIsSending(false);
     }
+  };
+
+  const generateMockChatResponse = (userMessage: string) => {
+    const lowerMessage = userMessage.toLowerCase();
+    
+    // 检查是否有待处理的建议
+    const pendingSuggestions = suggestions.filter(s => s.status === 'pending');
+    
+    if (pendingSuggestions.length > 0 && (lowerMessage.includes('好') || lowerMessage.includes('可以') || lowerMessage.includes('开始'))) {
+      const nextSuggestion = pendingSuggestions[0];
+      return {
+        text: `好的！让我们从第一个建议开始：\n\n**${nextSuggestion.title}**\n${nextSuggestion.reason}\n\n您希望我帮您应用这个建议吗？`,
+        suggestion: nextSuggestion
+      };
+    }
+    
+    if (lowerMessage.includes('评分') || lowerMessage.includes('分数')) {
+      return {
+        text: `您当前的简历评分是 ${score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。`
+      };
+    }
+    
+    if (lowerMessage.includes('技能') || lowerMessage.includes('skills')) {
+      return {
+        text: '关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？'
+      };
+    }
+    
+    return {
+      text: '我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。您想从哪个方面开始改进呢？'
+    };
   };
 
   const getScoreColor = (s: number) => {
