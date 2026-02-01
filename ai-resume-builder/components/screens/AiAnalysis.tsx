@@ -748,7 +748,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         </div>
 
         {/* Prominent Chat Entry Button - Moved to end of report content */}
-        <div className="px-4 pb-8">
+        <div className="px-4 pb-32">
             <button 
               onClick={() => setCurrentStep('chat')}
               className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
