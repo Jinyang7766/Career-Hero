@@ -11,8 +11,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 # 复制 requirements.txt
 COPY backend/requirements.txt .
 
-# 安装 Python 依赖
-RUN pip install --no-cache-dir --upgrade pip && \
+# 清理 pip 缓存并安装 Python 依赖
+RUN pip cache purge && \
+    pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # 复制后端代码
