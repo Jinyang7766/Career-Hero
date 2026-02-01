@@ -485,16 +485,48 @@ def export_pdf():
         logger.error(f"Resume data received: {data}")
         return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
 
+def clean_text_for_pdf(text):
+    """清理文本中的特殊字符，确保PDF生成兼容"""
+    if not text:
+        return ""
+    
+    # 移除或替换可能导致问题的字符
+    text = str(text)
+    
+    # 替换常见的特殊字符
+    replacements = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+        '\u2018': '&#39;',  # 左单引号
+        '\u2019': '&#39;',  # 右单引号
+        '\u201c': '&quot;', # 左双引号
+        '\u201d': '&quot;', # 右双引号
+        '\u2013': '-',      # en dash
+        '\u2014': '--',     # em dash
+        '\u2026': '...',    # 省略号
+    }
+    
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    
+    # 移除控制字符
+    text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\r\t')
+    
+    return text
+
 def generate_resume_html(resume_data):
     """Generate HTML content for resume based on resume data"""
     
-    # Personal Info - 使用数据防御
+    # Personal Info - 使用数据防御和清理
     personal_info = resume_data.get('personalInfo', {}) or {}
-    name = personal_info.get('name', '') or '姓名'
-    title = personal_info.get('title', '') or '职位'
-    email = personal_info.get('email', '') or '邮箱'
-    phone = personal_info.get('phone', '') or '电话'
-    location = personal_info.get('location', '') or '地点'
+    name = clean_text_for_pdf(personal_info.get('name', '') or '姓名')
+    title = clean_text_for_pdf(personal_info.get('title', '') or '职位')
+    email = clean_text_for_pdf(personal_info.get('email', '') or '邮箱')
+    phone = clean_text_for_pdf(personal_info.get('phone', '') or '电话')
+    location = clean_text_for_pdf(personal_info.get('location', '') or '地点')
     
     header_html = f"""
     <div class="resume-header">
@@ -506,15 +538,15 @@ def generate_resume_html(resume_data):
     </div>
     """
     
-    # Work Experience - 使用数据防御
+    # Work Experience - 使用数据防御和清理
     work_exps = resume_data.get('workExps', []) or []
     work_html = '<div class="section"><h2>工作经验</h2>'
     for exp in work_exps or []:
-        company = exp.get('company', '') or '公司名称'
-        position = exp.get('position', '') or '职位'
-        start_date = exp.get('startDate', '') or '开始时间'
-        end_date = exp.get('endDate', '') or '结束时间'
-        description = exp.get('description', '') or '工作描述'
+        company = clean_text_for_pdf(exp.get('company', '') or '公司名称')
+        position = clean_text_for_pdf(exp.get('position', '') or '职位')
+        start_date = clean_text_for_pdf(exp.get('startDate', '') or '开始时间')
+        end_date = clean_text_for_pdf(exp.get('endDate', '') or '结束时间')
+        description = clean_text_for_pdf(exp.get('description', '') or '工作描述')
         
         work_html += f"""
         <div class="work-experience">
@@ -525,15 +557,15 @@ def generate_resume_html(resume_data):
         """
     work_html += '</div>'
     
-    # Education - 使用数据防御
+    # Education - 使用数据防御和清理
     educations = resume_data.get('educations', []) or []
     edu_html = '<div class="section"><h2>教育背景</h2>'
     for edu in educations or []:
-        school = edu.get('school', '') or '学校名称'
-        degree = edu.get('degree', '') or '学位'
-        major = edu.get('major', '') or '专业'
-        start_date = edu.get('startDate', '') or '开始时间'
-        end_date = edu.get('endDate', '') or '结束时间'
+        school = clean_text_for_pdf(edu.get('school', '') or '学校名称')
+        degree = clean_text_for_pdf(edu.get('degree', '') or '学位')
+        major = clean_text_for_pdf(edu.get('major', '') or '专业')
+        start_date = clean_text_for_pdf(edu.get('startDate', '') or '开始时间')
+        end_date = clean_text_for_pdf(edu.get('endDate', '') or '结束时间')
         
         edu_html += f"""
         <div class="education">
@@ -543,13 +575,13 @@ def generate_resume_html(resume_data):
         """
     edu_html += '</div>'
     
-    # Projects - 使用数据防御
+    # Projects - 使用数据防御和清理
     projects = resume_data.get('projects', []) or []
     proj_html = '<div class="section"><h2>项目经验</h2>'
     for proj in projects or []:
-        title = proj.get('title', '') or '项目名称'
-        description = proj.get('description', '') or '项目描述'
-        date = proj.get('date', '') or '项目时间'
+        title = clean_text_for_pdf(proj.get('title', '') or '项目名称')
+        description = clean_text_for_pdf(proj.get('description', '') or '项目描述')
+        date = clean_text_for_pdf(proj.get('date', '') or '项目时间')
         
         proj_html += f"""
         <div class="projects">
@@ -560,14 +592,15 @@ def generate_resume_html(resume_data):
         """
     proj_html += '</div>'
     
-    # Skills - 使用数据防御
+    # Skills - 使用数据防御和清理
     skills = resume_data.get('skills', []) or []
     skills_html = '<div class="section"><h2>技能专长</h2><div class="skills">'
     for skill in skills or []:
-        skills_html += f'<span class="skill-item">{skill or "技能"}</span>'
+        clean_skill = clean_text_for_pdf(skill or "技能")
+        skills_html += f'<span class="skill-item">{clean_skill}</span>'
     skills_html += '</div></div>'
     
-    # Combine all sections with CSS for xhtml2pdf (包含中文支持和A4优化)
+    # Combine all sections with CSS for xhtml2pdf (简化CSS2.1语法)
     full_html = f"""
     <!DOCTYPE html>
     <html>
@@ -580,24 +613,18 @@ def generate_resume_html(resume_data):
                 margin: 1.5cm;
             }}
             
-            /* 中文字体支持 - 使用系统自带字体 */
-            @font-face {{
-                font-family: 'DejaVu Sans';
-                src: local('DejaVu Sans');
-            }}
-            
             body {{
-                font-family: 'DejaVu Sans', Arial, sans-serif;
+                font-family: Arial, sans-serif;
                 font-size: 11px;
                 line-height: 1.3;
-                color: #333;
+                color: #333333;
                 margin: 0;
                 padding: 10px;
             }}
             
             .resume-header {{
                 text-align: center;
-                border-bottom: 2px solid #333;
+                border-bottom: 2px solid #333333;
                 padding-bottom: 15px;
                 margin-bottom: 20px;
             }}
@@ -617,21 +644,19 @@ def generate_resume_html(resume_data):
             
             .section {{
                 margin-bottom: 20px;
-                page-break-inside: avoid;
             }}
             
             .section h2 {{
                 font-size: 14px;
                 font-weight: bold;
-                border-bottom: 1px solid #ccc;
+                border-bottom: 1px solid #cccccc;
                 padding-bottom: 3px;
                 margin-bottom: 10px;
-                color: #333;
+                color: #333333;
             }}
             
             .work-experience, .education, .projects {{
                 margin-bottom: 12px;
-                page-break-inside: avoid;
             }}
             
             .work-experience h3, .education h3, .projects h3 {{
@@ -643,7 +668,7 @@ def generate_resume_html(resume_data):
             
             .work-experience .date, .education .date, .projects .date {{
                 font-size: 10px;
-                color: #666;
+                color: #666666;
                 font-style: italic;
                 margin-bottom: 3px;
             }}
@@ -652,22 +677,20 @@ def generate_resume_html(resume_data):
                 font-size: 10px;
                 margin: 0;
                 line-height: 1.3;
-                text-align: justify;
+                text-align: left;
             }}
             
             .skills {{
-                display: flex;
-                flex-wrap: wrap;
-                gap: 6px;
                 margin-top: 5px;
             }}
             
             .skill-item {{
                 background-color: #f5f5f5;
                 padding: 2px 6px;
-                border-radius: 2px;
+                margin: 2px;
                 font-size: 9px;
-                border: 1px solid #ddd;
+                border: 1px solid #dddddd;
+                display: inline-block;
             }}
             
             ul {{
@@ -680,18 +703,12 @@ def generate_resume_html(resume_data):
                 font-size: 10px;
                 line-height: 1.3;
             }}
-            
-            /* 确保中文内容正确显示 */
-            .chinese-text {{
-                font-family: 'DejaVu Sans', Arial, sans-serif;
-                line-height: 1.4;
-            }}
         </style>
     </head>
     <body>
         <div class="resume-header">
-            <h1 class="chinese-text">{name}</h1>
-            <div class="contact chinese-text">
+            <h1>{name}</h1>
+            <div class="contact">
                 {title}<br>
                 {email} | {phone} | {location}
             </div>
