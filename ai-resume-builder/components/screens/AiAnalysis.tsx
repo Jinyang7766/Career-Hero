@@ -667,7 +667,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 pb-24">
+      <main className="flex-1 overflow-y-auto p-4">
         {/* Score Card with Breakdown */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 mb-6 relative overflow-hidden">
             <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${score >= 80 ? 'from-green-400 to-emerald-600' : 'from-orange-400 to-red-500'}`}></div>
@@ -746,31 +746,31 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
                 AI 顾问已准备好为您提供具体的修改建议。
             </p>
         </div>
-      </main>
 
-      {/* Prominent Chat Entry Button */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-[#101922] border-t border-slate-200 dark:border-white/5 z-50">
-          <button 
-            onClick={() => setCurrentStep('chat')}
-            className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
-          >
-              <div className="flex items-center gap-4">
-                  <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/30 bg-white">
-                    <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Headhunter" className="w-full h-full object-cover" />
-                    <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-white"></span>
-                  </div>
-                  <div className="text-left">
-                      <p className="text-base font-bold flex items-center gap-1">
-                          咨询 AI 猎头顾问
-                      </p>
-                      <p className="text-xs text-blue-100">开始逐一优化简历问题...</p>
-                  </div>
-              </div>
-              <div className="size-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-                  <span className="material-symbols-outlined">arrow_forward</span>
-              </div>
-          </button>
-      </div>
+        {/* Prominent Chat Entry Button - Moved to end of report content */}
+        <div className="px-4 pb-8">
+            <button 
+              onClick={() => setCurrentStep('chat')}
+              className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
+            >
+                <div className="flex items-center gap-4">
+                    <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/30 bg-white">
+                      <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Headhunter" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-white"></span>
+                    </div>
+                    <div className="text-left">
+                        <p className="text-base font-bold flex items-center gap-1">
+                            咨询 AI 猎头顾问
+                        </p>
+                        <p className="text-xs text-blue-100">开始逐一优化简历问题...</p>
+                    </div>
+                </div>
+                <div className="size-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                </div>
+            </button>
+        </div>
+      </main>
     </div>
     );
   }
