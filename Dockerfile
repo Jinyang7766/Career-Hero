@@ -11,24 +11,21 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 # 安装 WeasyPrint 系统依赖
 RUN apt-get update && apt-get install -y \
-    # WeasyPrint 基础依赖
     libpango-1.0-0 \
     libharfbuzz0b \
     libpangoft2-1.0-0 \
     libcairo2 \
-    libgdk-pixbuf2.0-0 \
+    libgdk-pixbuf-2.0-0 \
     libffi-dev \
-    libjpeg-dev \
+    libjpeg62-turbo-dev \
     libopenjp2-7-dev \
     libpng-dev \
     libtiff5-dev \
     libwebp-dev \
     zlib1g-dev \
-    # 字体支持
     fonts-liberation \
     fonts-dejavu-core \
     fonts-noto-cjk \
-    # 其他工具
     curl \
     && rm -rf /var/lib/apt/lists/*
 
