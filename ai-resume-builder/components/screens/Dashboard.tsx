@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { DatabaseService } from '../../src/database-service';
@@ -6,11 +6,42 @@ import { supabase } from '../../src/supabase-client';
 
 const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, resumeData, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [isCreating, setIsCreating] = useState(false);
+  const [greeting, setGreeting] = useState('');
   // Show top 3 resumes
   const displayResumes = allResumes ? allResumes.slice(0, 3) : [];
   
   // Get user profile with real name
   const { userProfile, loading, error } = useUserProfile();
+
+  // Get greeting based on Beijing timezone
+  const getBeijingGreeting = () => {
+    const now = new Date();
+    // Convert to Beijing timezone (UTC+8)
+    const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
+    const hour = beijingTime.getHours();
+    
+    if (hour >= 5 && hour < 12) {
+      return '早上好';
+    } else if (hour >= 12 && hour < 18) {
+      return '中午好';
+    } else if (hour >= 18 && hour < 23) {
+      return '晚上好';
+    } else {
+      return '夜深了';
+    }
+  };
+
+  // Update greeting every minute
+  useEffect(() => {
+    const updateGreeting = () => {
+      setGreeting(getBeijingGreeting());
+    };
+    
+    updateGreeting();
+    const interval = setInterval(updateGreeting, 60000); // Update every minute
+    
+    return () => clearInterval(interval);
+  }, []);
 
   // Handle resume preview
   const handleResumePreview = async (resumeId: number) => {
@@ -103,32 +134,24 @@ const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, re
     <div className="flex flex-col pb-24 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md">
-         <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
-        {loading ? '加载中...' : userProfile?.name || '用户'}
-      </h2>
-      </div>
-
-      {/* Progress Card */}
-      <div className="px-4 pb-6 pt-2">
-        <div className="flex flex-col gap-3 p-4 rounded-xl bg-white dark:bg-card-dark shadow-sm border border-gray-100 dark:border-gray-800">
-          <div className="flex gap-6 justify-between items-center">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[20px] fill-1">verified</span>
-              <p className="text-base font-bold leading-normal">简历完整度</p>
-            </div>
-            <span className="text-primary font-bold">{completeness}%</span>
-          </div>
-          <div className="h-2 w-full rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
-            <div className="h-full rounded-full bg-primary transition-all duration-500 ease-out" style={{ width: `${completeness}%` }}></div>
-          </div>
-          <p className="text-gray-500 dark:text-gray-400 text-sm font-normal leading-normal">
-            {completeness === 100 ? '简历已臻完美！' : '完善更多信息以提升求职成功率。'}
-          </p>
-        </div>
+         <div className="flex flex-col">
+           <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
+             {greeting}，{loading ? '用户' : userProfile?.name || '用户'}
+           </h2>
+           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+             {new Date().toLocaleDateString('zh-CN', { 
+               weekday: 'long', 
+               year: 'numeric', 
+               month: 'long', 
+               day: 'numeric',
+               timeZone: 'Asia/Shanghai'
+             })}
+           </p>
+         </div>
       </div>
 
       {/* Create New Card */}
-      <div className="px-4 pb-6">
+      <div className="px-4 pb-6 pt-4">
         <div 
           onClick={() => {
             if (isCreating) return;
