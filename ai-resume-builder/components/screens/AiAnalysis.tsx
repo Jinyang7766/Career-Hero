@@ -316,7 +316,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }
         
         // Test API connection
-        console.log('Testing API connection with model: gemini-2.5-flash');
+        console.log('Testing API connection with model: gemini-1.5-flash');
         
         const resumeDetails = `
 Resume Details:
@@ -361,7 +361,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         console.log('Sending request to Gemini API...');
         try {
           const response = await ai.models.generateContent({
-               model: 'gemini-2.5-flash',
+               model: 'gemini-1.5-flash',
                contents: [{ role: 'user', parts: [{ text: prompt }] }]
           });
           aiText = response.text || "";
@@ -376,7 +376,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
           });
           
           // If 2.5-flash fails, try 1.5-flash as fallback
-          if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model')) {
+          if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model') || apiError.message?.includes('not found')) {
             console.log('Trying fallback model: gemini-1.5-flash');
             try {
               const response = await ai.models.generateContent({
@@ -387,7 +387,23 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
               console.log('Gemini API response received with fallback model');
             } catch (fallbackError) {
               console.error('Fallback model also failed:', fallbackError);
-              throw fallbackError;
+              // Try text-bison-001 as final fallback
+              if (fallbackError.message?.includes('not found')) {
+                console.log('Trying final fallback model: text-bison-001');
+                try {
+                  const response = await ai.models.generateContent({
+                       model: 'text-bison-001',
+                       contents: [{ role: 'user', parts: [{ text: prompt }] }]
+                  });
+                  aiText = response.text || "";
+                  console.log('Gemini API response received with final fallback model');
+                } catch (finalError) {
+                  console.error('Final fallback model also failed:', finalError);
+                  throw finalError;
+                }
+              } else {
+                throw fallbackError;
+              }
             }
           } else {
             throw apiError;
