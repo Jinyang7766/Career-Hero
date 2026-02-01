@@ -316,7 +316,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }
         
         // Test API connection
-        console.log('Testing API connection with model: gemini-1.5-flash');
+        console.log('Testing API connection with model: gemini-2.5-flash');
         
         const resumeDetails = `
 Resume Details:
@@ -361,7 +361,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         console.log('Sending request to Gemini API...');
         try {
           const response = await ai.models.generateContent({
-               model: 'gemini-1.5-flash',
+               model: 'gemini-2.5-flash',
                contents: [{ role: 'user', parts: [{ text: prompt }] }]
           });
           aiText = response.text || "";
