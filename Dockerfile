@@ -1,36 +1,12 @@
-# 使用更全的 Python 3.11 bookworm 镜像，包含更新的图形库
-FROM python:3.11-bookworm
+# 使用官方 Python 3.11 镜像
+FROM python:3.11
 
 # 设置工作目录
 WORKDIR /app
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    DEBIAN_FRONTEND=noninteractive
-
-# 安装 WeasyPrint 系统依赖
-RUN apt-get update && apt-get install -y \
-    libpango-1.0-0 \
-    libharfbuzz0b \
-    libpangoft2-1.0-0 \
-    libcairo2 \
-    libgdk-pixbuf-2.0-0 \
-    libffi-dev \
-    libjpeg62-turbo-dev \
-    libopenjp2-7-dev \
-    libpng-dev \
-    libtiff5-dev \
-    libwebp-dev \
-    zlib1g-dev \
-    libglib2.0-0 \
-    fonts-liberation \
-    fonts-dejavu-core \
-    fonts-noto-cjk \
-    fontconfig \
-    curl \
-    && fc-cache -fv \
-    && rm -rf /var/lib/apt/lists/*
+    PYTHONUNBUFFERED=1
 
 # 复制 requirements.txt
 COPY backend/requirements.txt .

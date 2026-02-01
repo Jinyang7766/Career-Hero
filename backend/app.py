@@ -10,12 +10,11 @@ from functools import wraps
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
-import weasyprint
-from weasyprint import HTML, CSS
-import google.generativeai as genai
-from io import BytesIO
+from xhtml2pdf import pisa
+import io
 import logging
 import traceback
+import google.generativeai as genai
 
 app = Flask(__name__)
 
@@ -452,158 +451,69 @@ def export_pdf():
         if not resume_data:
             return jsonify({'error': 'Resume data is required'}), 400
         
-        logger.info(f"Starting PDF generation")
+        logger.info(f"Starting PDF generation with xhtml2pdf")
         
         # 首先尝试简单的测试 PDF
         try:
-            simple_html = "<h1>Hello World - PDF Test</h1><p>This is a test PDF to verify WeasyPrint is working.</p>"
+            simple_html = """
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Test PDF</title>
+                <style>
+                    body { font-family: Arial, sans-serif; padding: 20px; }
+                    h1 { color: #333; }
+                </style>
+            </head>
+            <body>
+                <h1>Hello World - PDF Test</h1>
+                <p>This is a test PDF to verify xhtml2pdf is working.</p>
+            </body>
+            </html>
+            """
             
-            html_doc = HTML(string=simple_html)
+            result = io.BytesIO()
+            pisa_status = pisa.CreatePDF(simple_html, dest=result)
             
-            pdf_buffer = BytesIO()
-            html_doc.write_pdf(
-                target=pdf_buffer,
-                presentational_hints=True,
-                optimize_size=('fonts', 'images')
-            )
-            pdf_buffer.seek(0)
-            
-            logger.info("Simple test PDF generated successfully")
-            
-            return send_file(
-                pdf_buffer,
-                as_attachment=True,
-                download_name="test.pdf",
-                mimetype='application/pdf'
-            )
+            if pisa_status.err:
+                logger.error(f"Simple PDF test failed with xhtml2pdf errors")
+            else:
+                logger.info("Simple test PDF generated successfully")
+                result.seek(0)
+                
+                return send_file(
+                    result,
+                    as_attachment=True,
+                    download_name="test.pdf",
+                    mimetype='application/pdf'
+                )
             
         except Exception as test_error:
             logger.error(f"Simple PDF test failed: {str(test_error)}")
             logger.error(f"Test error traceback: {traceback.format_exc()}")
-            
-            # 如果简单测试失败，继续尝试完整简历
-            logger.info("Attempting full resume PDF generation...")
         
         # Generate HTML for PDF
         html_content = generate_resume_html(resume_data)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
-        # Create CSS for A4 styling - 简化样式避免 transform 错误
-        css_content = """
-        @page {
-            size: A4;
-            margin: 2cm;
-        }
+        # 使用 xhtml2pdf 生成 PDF
+        result = io.BytesIO()
+        pisa_status = pisa.CreatePDF(html_content, dest=result)
         
-        body {
-            font-family: Arial, sans-serif;
-            font-size: 12px;
-            line-height: 1.4;
-            color: #333;
-            margin: 0;
-            padding: 0;
-        }
+        if pisa_status.err:
+            logger.error(f"PDF generation failed with xhtml2pdf errors")
+            return jsonify({'error': 'PDF generation failed'}), 500
         
-        .resume-header {
-            text-align: center;
-            border-bottom: 2px solid #333;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
-        }
-        
-        .resume-header h1 {
-            margin: 0;
-            font-size: 24px;
-            font-weight: bold;
-        }
-        
-        .resume-header .contact {
-            margin: 10px 0;
-            font-size: 14px;
-        }
-        
-        .section {
-            margin-bottom: 25px;
-        }
-        
-        .section h2 {
-            font-size: 16px;
-            font-weight: bold;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 5px;
-            margin-bottom: 15px;
-            color: #333;
-        }
-        
-        .work-experience, .education, .projects {
-            margin-bottom: 15px;
-        }
-        
-        .work-experience h3, .education h3, .projects h3 {
-            font-size: 14px;
-            font-weight: bold;
-            margin: 0 0 5px 0;
-        }
-        
-        .work-experience .date, .education .date, .projects .date {
-            font-size: 12px;
-            color: #666;
-            font-style: italic;
-            margin-bottom: 5px;
-        }
-        
-        .work-experience .description, .education .description, .projects .description {
-            font-size: 12px;
-            margin: 0;
-            line-height: 1.4;
-        }
-        
-        .skills {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .skill-item {
-            background-color: #f5f5f5;
-            padding: 3px 8px;
-            border-radius: 3px;
-            font-size: 11px;
-        }
-        
-        ul {
-            margin: 5px 0;
-            padding-left: 20px;
-        }
-        
-        li {
-            margin-bottom: 3px;
-            font-size: 12px;
-        }
-        """
-        
-        logger.info("Creating WeasyPrint document...")
-        # Generate PDF with optimized settings
-        html_doc = HTML(string=html_content)
-        css_doc = CSS(string=css_content)
-        
-        pdf_buffer = BytesIO()
-        html_doc.write_pdf(
-            target=pdf_buffer,
-            stylesheets=[css_doc],
-            presentational_hints=True,
-            optimize_size=('fonts', 'images')
-        )
-        pdf_buffer.seek(0)
-        
-        logger.info("PDF generated successfully")
+        result.seek(0)
+        logger.info("PDF generated successfully with xhtml2pdf")
         
         # Generate filename
         name = resume_data.get('personalInfo', {}).get('name', 'resume')
         filename = f"{name}_简历_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
         
         return send_file(
-            pdf_buffer,
+            result,
             as_attachment=True,
             download_name=filename,
             mimetype='application/pdf'
@@ -697,13 +607,105 @@ def generate_resume_html(resume_data):
         skills_html += f'<span class="skill-item">{skill or "技能"}</span>'
     skills_html += '</div></div>'
     
-    # Combine all sections
+    # Combine all sections with CSS for xhtml2pdf
     full_html = f"""
     <!DOCTYPE html>
     <html>
     <head>
         <meta charset="UTF-8">
         <title>{name} - 简历</title>
+        <style>
+            @page {{
+                size: A4;
+                margin: 2cm;
+            }}
+            
+            body {{
+                font-family: Arial, sans-serif;
+                font-size: 12px;
+                line-height: 1.4;
+                color: #333;
+                margin: 0;
+                padding: 0;
+            }}
+            
+            .resume-header {{
+                text-align: center;
+                border-bottom: 2px solid #333;
+                padding-bottom: 20px;
+                margin-bottom: 30px;
+            }}
+            
+            .resume-header h1 {{
+                margin: 0;
+                font-size: 24px;
+                font-weight: bold;
+            }}
+            
+            .resume-header .contact {{
+                margin: 10px 0;
+                font-size: 14px;
+            }}
+            
+            .section {{
+                margin-bottom: 25px;
+            }}
+            
+            .section h2 {{
+                font-size: 16px;
+                font-weight: bold;
+                border-bottom: 1px solid #ccc;
+                padding-bottom: 5px;
+                margin-bottom: 15px;
+                color: #333;
+            }}
+            
+            .work-experience, .education, .projects {{
+                margin-bottom: 15px;
+            }}
+            
+            .work-experience h3, .education h3, .projects h3 {{
+                font-size: 14px;
+                font-weight: bold;
+                margin: 0 0 5px 0;
+            }}
+            
+            .work-experience .date, .education .date, .projects .date {{
+                font-size: 12px;
+                color: #666;
+                font-style: italic;
+                margin-bottom: 5px;
+            }}
+            
+            .work-experience .description, .education .description, .projects .description {{
+                font-size: 12px;
+                margin: 0;
+                line-height: 1.4;
+            }}
+            
+            .skills {{
+                display: flex;
+                flex-wrap: wrap;
+                gap: 10px;
+            }}
+            
+            .skill-item {{
+                background-color: #f5f5f5;
+                padding: 3px 8px;
+                border-radius: 3px;
+                font-size: 11px;
+            }}
+            
+            ul {{
+                margin: 5px 0;
+                padding-left: 20px;
+            }}
+            
+            li {{
+                margin-bottom: 3px;
+                font-size: 12px;
+            }}
+        </style>
     </head>
     <body>
         {header_html}
