@@ -985,7 +985,7 @@ ${resumeDetails}
         )}
 
         {/* Input Area - Fixed above bottom navigation */}
-        <div className="fixed bottom-20 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
+        <div className="fixed bottom-16 left-0 right-0 p-4 bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 z-40">
             <div className="flex gap-2 items-end max-w-md mx-auto">
                 <textarea 
                     value={inputMessage}
