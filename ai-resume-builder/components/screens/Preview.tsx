@@ -53,7 +53,12 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     sandbox.style.left = '-5000px'; // 移动到视口外
     sandbox.style.top = '0';
     sandbox.style.width = '794px'; // 强制 A4 宽度
-    sandbox.style.zIndex = '-1';
+    // 注意：不要使用负 z-index，否则部分浏览器会导致 html2canvas 捕获为空白
+    sandbox.style.pointerEvents = 'none';
+    sandbox.style.opacity = '0';
+    sandbox.style.backgroundColor = '#ffffff';
+    sandbox.style.display = 'block';
+    sandbox.style.overflow = 'visible';
     document.body.appendChild(sandbox);
 
     try {
@@ -69,6 +74,8 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         clone.style.backgroundColor = '#ffffff';
         clone.style.color = '#000000';
         clone.style.transform = 'none';
+        clone.style.display = 'block';
+        clone.style.overflow = 'visible';
 
         // 🟢 解决"细长条"的核心：递归修复 Flex 布局
         // 将所有在手机上堆叠的 flex-col 强行恢复为横向，并确保宽度占满
@@ -94,6 +101,9 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
 
         sandbox.appendChild(clone);
 
+        // 确保沙盒有可计算的高度，避免部分浏览器导出空白
+        const exportHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1123);
+
         const opt = {
             margin: 0,
             filename: `简历优化_${resumeData?.personalInfo?.name || '未命名'}.pdf`,
@@ -104,7 +114,8 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                 width: 794,
                 windowWidth: 794,
                 scrollY: 0,
-                backgroundColor: '#ffffff'
+                backgroundColor: '#ffffff',
+                height: exportHeight
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
@@ -116,7 +127,9 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         console.error('PDF 终极导出失败:', error);
     } finally {
         // 3. 清理现场
-        document.body.removeChild(sandbox);
+        if (sandbox.parentNode) {
+          sandbox.parentNode.removeChild(sandbox);
+        }
         setIsGenerating(false);
     }
   };

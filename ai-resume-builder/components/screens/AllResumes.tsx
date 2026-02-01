@@ -155,10 +155,99 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     }
   };
 
-  const handlePreview = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCurrentView(View.PREVIEW);
-    setActiveMenuId(null);
+  const handlePreview = async (resumeId?: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    
+    // 如果没有提供resumeId，使用当前选中的简历
+    if (!resumeId) {
+      console.error('❌ 预览失败：未提供简历ID');
+      alert('预览失败，请通过菜单选择预览');
+      return;
+    }
+
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
+      alert('请先登录');
+      return;
+    }
+
+    try {
+      console.log('=== 简历预览调试信息 ===');
+      console.log('Previewing resume:', resumeId);
+      console.log('Current user:', user.id);
+      
+      // Get all user resumes and find the specific one
+      const result = await DatabaseService.getUserResumes(user.id);
+      
+      console.log('Database result:', result);
+      
+      if (result.success) {
+        console.log('All resumes found:', result.data);
+        
+        const resume = result.data.find(r => r.id === resumeId);
+        
+        console.log('Target resume found:', resume);
+        
+        if (resume) {
+          console.log('Resume data structure:', {
+            id: resume.id,
+            title: resume.title,
+            resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
+            resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
+          });
+          
+          // 检查resume_data是否为空
+          if (!resume.resume_data) {
+            console.error('❌ 简历数据为空: resume_data is null/undefined');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          // 检查resume_data是否为空对象
+          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+            console.error('❌ 简历数据为空对象: resume_data is empty object');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          console.log('✅ Resume loaded for preview:', resume);
+          
+          // Set the resume data with ID for preview
+          if (setResumeData) {
+            const finalResumeData = {
+              id: resume.id,
+              ...resume.resume_data
+            };
+            
+            console.log('Setting resume data for preview:', {
+              id: finalResumeData.id,
+              hasPersonalInfo: !!finalResumeData.personalInfo,
+              hasWorkExps: Array.isArray(finalResumeData.workExps) && finalResumeData.workExps.length > 0,
+              hasEducations: Array.isArray(finalResumeData.educations) && finalResumeData.educations.length > 0,
+              hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
+              dataKeys: Object.keys(finalResumeData)
+            });
+            
+            setResumeData(finalResumeData);
+          }
+          
+          setCurrentView(View.PREVIEW);
+        } else {
+          console.error('❌ Resume not found for preview');
+          alert(`简历不存在 (ID: ${resumeId})`);
+        }
+      } else {
+        console.error('❌ 加载简历失败:', result.error);
+        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+      }
+    } catch (error) {
+      console.error('❌ 预览简历时出错:', error);
+      alert('预览简历失败，请检查网络连接');
+    } finally {
+      setActiveMenuId(null);
+    }
   };
 
   const toggleMenu = (id: number, e: React.MouseEvent) => {
@@ -222,7 +311,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             filteredResumes.map((resume) => (
               <div 
                 key={resume.id}
-                onClick={() => setCurrentView(View.PREVIEW)} 
+                onClick={() => handlePreview(resume.id)} 
                 className="group relative flex items-center gap-4 px-4 py-4 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5"
               >
                 <div className="shrink-0 relative">
@@ -255,7 +344,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                     {activeMenuId === resume.id && (
                         <div className="absolute right-0 top-10 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                              <button 
-                                onClick={handlePreview}
+                                onClick={(e) => handlePreview(resume.id, e)}
                                 className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
                              >
                                 <span className="material-symbols-outlined text-[18px]">visibility</span>
