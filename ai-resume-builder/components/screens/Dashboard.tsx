@@ -1,16 +1,22 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
+import { useUserProfile } from '../../src/useUserProfile';
 
 const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, resumeData, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [isCreating, setIsCreating] = useState(false);
   // Show top 3 resumes
   const displayResumes = allResumes ? allResumes.slice(0, 3) : [];
+  
+  // Get user profile with real name
+  const { userProfile, loading, error } = useUserProfile();
 
   return (
     <div className="flex flex-col pb-24 animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md">
-         <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">{currentUser?.name || '用户'}</h2>
+         <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
+        {loading ? '加载中...' : userProfile?.name || '用户'}
+      </h2>
       </div>
 
       {/* Progress Card */}
