@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScreenProps, ResumeSummary, ResumeData } from '../../types';
 import { GoogleGenAI } from "@google/genai";
+import { AIService } from '../../src/ai-service';
 
 interface Suggestion {
   id: string;
@@ -294,6 +295,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setIsSending(true);
 
     try {
+      // 优先尝试使用Serverless API
+      console.log('Trying Serverless API first...');
+      const serverlessResult = await AIService.sendMessage(textToSend, resumeData, score, suggestions);
+      
+      if (serverlessResult.success) {
+        console.log('Serverless API success');
+        setChatMessages(prev => [...prev, { id: `ai-${Date.now()}`, role: 'model', text: serverlessResult.text }]);
+        setIsSending(false);
+        return;
+      } else {
+        console.log('Serverless API failed, falling back to direct Gemini API:', serverlessResult.error);
+      }
+
+      // Fallback to direct Gemini API
+      console.log('Using direct Gemini API as fallback...');
       const apiKey = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.REACT_APP_GEMINI_API_KEY;
       console.log('API Key available:', !!apiKey);
       console.log('API Key length:', apiKey?.length || 0);
@@ -552,7 +568,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
       
       // Provide specific solutions for common errors
       if (error.message?.includes('404') || error.message?.includes('not found')) {
-        errorMessage += `\n\n解决方案：\n1. 模型名称已更新为 'gemini-1.5-flash'\n2. 请重启应用以使用新模型\n3. 如果仍有问题，请检查API密钥权限`;
+        errorMessage += `\n\n解决方案：\n1. 确认API密钥有效且未过期\n2. 检查Google AI Studio中的项目状态\n3. 验证API密钥有生成内容权限\n4. 尝试重新生成API密钥`;
       } else if (error.message?.includes('403') || error.message?.includes('permission')) {
         errorMessage += `\n\n解决方案：\n1. 检查API密钥是否有生成内容权限\n2. 访问 Google AI Studio 重新配置权限\n3. 确认API密钥未过期`;
       } else if (error.message?.includes('network') || error.message?.includes('fetch')) {
@@ -862,7 +878,7 @@ Always be encouraging, specific, and provide concrete examples. Format your resp
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219]">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-40">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
