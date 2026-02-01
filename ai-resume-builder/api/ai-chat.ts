@@ -1,5 +1,5 @@
 // Vercel Serverless Function for AI Chat
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req: any, res: any) {
   // 只允许POST请求
@@ -15,7 +15,8 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'API密钥未配置' });
     }
 
-    const ai = new GoogleGenAI({ apiKey });
+    const ai = new GoogleGenerativeAI(apiKey);
+    const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
     
     const resumeDetails = `
 Resume Details:
@@ -58,15 +59,14 @@ ${resumeDetails}
 
 请基于以上信息提供简短专业的建议。`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-1.5-flash',
+    const response = await model.generateContent({
       contents: [{ 
         role: 'user', 
         parts: [{ text: prompt }] 
       }]
     });
 
-    const aiText = response.text || "";
+    const aiText = response.response.text() || "";
 
     return res.status(200).json({
       success: true,

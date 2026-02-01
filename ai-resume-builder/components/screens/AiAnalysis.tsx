@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScreenProps, ResumeSummary, ResumeData } from '../../types';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { AIService } from '../../src/ai-service';
 
 interface Suggestion {
@@ -356,7 +356,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }
         
         console.log('Initializing Google GenAI...');
-        const ai = new GoogleGenAI({ apiKey });
+        const ai = new GoogleGenerativeAI(apiKey);
+        const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
         
         const resumeDetails = `
 Resume Details:
@@ -387,11 +388,10 @@ Resume Details:
 
         console.log('Sending request to Gemini API...');
         try {
-          const response = await ai.models.generateContent({
-               model: 'gemini-1.5-flash',
+          const response = await model.generateContent({
                contents: [{ role: 'user', parts: [{ text: prompt + `\n\n用户输入: ${textToSend}\n简历概要: ${resumeDetails}` }] }]
           });
-          aiText = response.text || "";
+          aiText = response.response.text() || "";
           console.log('Gemini API response received');
         } catch (apiError) {
           console.error('Gemini API Error:', apiError);
@@ -404,13 +404,12 @@ Resume Details:
           
           // If API fails, try fallback model
           if (apiError.message?.includes('403') || apiError.message?.includes('permission') || apiError.message?.includes('model') || apiError.message?.includes('not found')) {
-            console.log('Trying fallback model: gemini-1.5-flash');
+            console.log('Trying fallback model: gemini-3-flash-preview');
             try {
-              const response = await ai.models.generateContent({
-                   model: 'gemini-1.5-flash',
+              const response = await model.generateContent({
                    contents: [{ role: 'user', parts: [{ text: prompt }] }]
               });
-              aiText = response.text || "";
+              aiText = response.response.text() || "";
               console.log('Gemini API response received with fallback model');
             } catch (fallbackError) {
               console.error('Fallback model also failed:', fallbackError);
@@ -824,7 +823,7 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[110] bg-white dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5 pb-safe">
+      <div className="fixed bottom-0 left-0 right-0 z-[110] p-4 pb-safe bg-white border-t border-slate-200 dark:border-white/5">
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
