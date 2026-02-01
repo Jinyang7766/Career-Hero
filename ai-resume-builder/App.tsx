@@ -75,10 +75,26 @@ function App() {
       if (result.success) {
         console.log('Resumes loaded successfully:', result.data);
         
+        // Format date to Beijing timezone (UTC+8) with seconds
+        const formatDateTime = (dateString: string) => {
+          const date = new Date(dateString);
+          // Convert to Beijing timezone (UTC+8)
+          const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
+          
+          const year = beijingTime.getFullYear();
+          const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
+          const day = String(beijingTime.getDate()).padStart(2, '0');
+          const hours = String(beijingTime.getHours()).padStart(2, '0');
+          const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
+          const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
+          
+          return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        };
+        
         const resumes: ResumeSummary[] = result.data.map((resume: any) => ({
           id: resume.id,
           title: resume.title,
-          date: new Date(resume.created_at).toLocaleDateString('zh-CN'),
+          date: formatDateTime(resume.created_at),
           score: resume.score,
           hasDot: resume.has_dot,
           thumbnail: (
