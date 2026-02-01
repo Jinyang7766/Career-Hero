@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
+import { API_BASE_URL } from '../../src/api-config';
 
 const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, setResumeData, completeness = 0, createResume, loadUserResumes }) => {
   const [newSkill, setNewSkill] = useState('');
@@ -97,7 +98,7 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
       // Check if we're updating an existing resume or creating a new one
       if (resumeData.id) {
         // Update existing resume
-        response = await fetch(`http://127.0.0.1:5000/api/resumes/${resumeData.id}`, {
+        response = await fetch(`${API_BASE_URL}/api/resumes/${resumeData.id}`, {
           method: 'PUT',
           headers: {
             'Authorization': `Bearer ${token}`,
@@ -110,7 +111,7 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
         });
       } else {
         // Create new resume
-        response = await fetch('http://127.0.0.1:5000/api/resumes', {
+        response = await fetch('${API_BASE_URL}/api/resumes', {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${token}`,

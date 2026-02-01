@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { View, ResumeData, ResumeSummary } from './types';
+import { API_BASE_URL } from './src/api-config';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/screens/Dashboard';
 import Templates from './components/screens/Templates';
@@ -46,7 +47,7 @@ function App() {
   const loadUserResumes = async () => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('http://127.0.0.1:5000/api/resumes', {
+      const response = await fetch(`${API_BASE_URL}/api/resumes`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -80,7 +81,7 @@ function App() {
   const createResume = async (title: string) => {
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('http://127.0.0.1:5000/api/resumes', {
+      const response = await fetch(`${API_BASE_URL}/api/resumes`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,

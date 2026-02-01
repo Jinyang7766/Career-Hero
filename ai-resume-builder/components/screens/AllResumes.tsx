@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
+import { API_BASE_URL } from '../../src/api-config';
 
 const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,7 +35,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     try {
       setIsDeleting(id);
       
-      const response = await fetch(`http://127.0.0.1:5000/api/resumes/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/api/resumes/${id}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -79,7 +80,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     try {
       setIsLoadingResume(true);
       
-      const response = await fetch(`http://127.0.0.1:5000/api/resumes/${resumeId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${token}`,
