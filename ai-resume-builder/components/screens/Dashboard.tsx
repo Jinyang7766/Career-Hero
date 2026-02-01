@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
 const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, resumeData, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [isCreating, setIsCreating] = useState(false);
@@ -9,6 +11,93 @@ const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, re
   
   // Get user profile with real name
   const { userProfile, loading, error } = useUserProfile();
+
+  // Handle resume preview
+  const handleResumePreview = async (resumeId: number) => {
+    try {
+      console.log('=== Dashboard 简历预览调试信息 ===');
+      console.log('Previewing resume from dashboard:', resumeId);
+      
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('❌ User not authenticated:', userError);
+        alert('请先登录');
+        return;
+      }
+
+      console.log('Current user:', user.id);
+      
+      // Get all user resumes and find the specific one
+      const result = await DatabaseService.getUserResumes(user.id);
+      
+      console.log('Database result:', result);
+      
+      if (result.success) {
+        console.log('All resumes found:', result.data);
+        
+        const resume = result.data.find(r => r.id === resumeId);
+        
+        console.log('Target resume found:', resume);
+        
+        if (resume) {
+          console.log('Resume data structure:', {
+            id: resume.id,
+            title: resume.title,
+            resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
+            resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
+          });
+          
+          // 检查resume_data是否为空
+          if (!resume.resume_data) {
+            console.error('❌ 简历数据为空: resume_data is null/undefined');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          // 检查resume_data是否为空对象
+          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+            console.error('❌ 简历数据为空对象: resume_data is empty object');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          console.log('✅ Resume loaded for preview from dashboard:', resume);
+          
+          // Set the resume data with ID for preview
+          if (setResumeData) {
+            const finalResumeData = {
+              id: resume.id,
+              ...resume.resume_data
+            };
+            
+            console.log('Setting resume data for preview:', {
+              id: finalResumeData.id,
+              hasPersonalInfo: !!finalResumeData.personalInfo,
+              hasWorkExps: Array.isArray(finalResumeData.workExps) && finalResumeData.workExps.length > 0,
+              hasEducations: Array.isArray(finalResumeData.educations) && finalResumeData.educations.length > 0,
+              hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
+              dataKeys: Object.keys(finalResumeData)
+            });
+            
+            setResumeData(finalResumeData);
+          }
+          
+          setCurrentView(View.PREVIEW);
+        } else {
+          console.error('❌ Resume not found for preview from dashboard');
+          alert(`简历不存在 (ID: ${resumeId})`);
+        }
+      } else {
+        console.error('❌ 加载简历失败:', result.error);
+        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+      }
+    } catch (error) {
+      console.error('❌ 预览简历时出错:', error);
+      alert('预览简历失败，请检查网络连接');
+    }
+  };
 
   return (
     <div className="flex flex-col pb-24 animate-in fade-in duration-300">
@@ -112,7 +201,7 @@ const Dashboard: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, re
         {displayResumes.map((resume) => (
           <div 
             key={resume.id}
-            onClick={() => setCurrentView(View.PREVIEW)} 
+            onClick={() => handleResumePreview(resume.id)} 
             className="flex items-start gap-4 rounded-xl bg-white dark:bg-card-dark p-3 shadow-sm border border-gray-100 dark:border-gray-800 hover:border-primary/50 transition-colors cursor-pointer"
           >
             <div className="relative shrink-0 w-14 aspect-[210/297] rounded-lg bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 overflow-hidden shadow-inner">
