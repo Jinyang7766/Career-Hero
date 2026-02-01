@@ -738,7 +738,7 @@ Resume Details:
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
             {chatMessages.map((msg) => (
                 <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
                     <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -823,7 +823,7 @@ Resume Details:
       </div>
 
       {/* Input Area - Fixed at bottom */}
-      <div className="fixed bottom-0 left-0 right-0 z-[110] p-4 pb-safe bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5">
+      <div className="fixed bottom-0 left-0 right-0 z-[110] px-4 py-3 pb-safe bg-slate-50/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5">
           
           {/* Prompt Starters - Inside input container */}
           {!isSending && chatMessages.length < 3 && (
@@ -846,8 +846,7 @@ Resume Details:
           )}
 
           {/* Input controls */}
-          <div className="p-4 bg-transparent">
-              <div className="flex gap-2 items-end max-w-md mx-auto">
+          <div className="flex gap-2 items-end max-w-md mx-auto">
                   <textarea 
                       value={inputMessage}
                       onChange={(e) => setInputMessage(e.target.value)}
@@ -871,7 +870,6 @@ Resume Details:
                   </button>
               </div>
           </div>
-      </div>
       </div>
     );
   }
