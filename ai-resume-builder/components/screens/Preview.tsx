@@ -43,7 +43,20 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
   const handleExportPDF = async () => {
     if (!html2pdfLoaded || isGenerating) return;
     const originalElement = document.getElementById('resume-content');
-    if (!originalElement) return;
+    if (!originalElement) {
+      console.error('❌ 未找到resume-content元素');
+      return;
+    }
+
+    console.log('=== PDF导出调试信息 ===');
+    console.log('原始元素:', originalElement);
+    console.log('原始元素内容:', originalElement.innerHTML.length > 0 ? '有内容' : '空白');
+    console.log('原始元素尺寸:', {
+      offsetWidth: originalElement.offsetWidth,
+      offsetHeight: originalElement.offsetHeight,
+      scrollWidth: originalElement.scrollWidth,
+      scrollHeight: originalElement.scrollHeight
+    });
 
     setIsGenerating(true);
     
@@ -53,17 +66,20 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     sandbox.style.left = '-5000px'; // 移动到视口外
     sandbox.style.top = '0';
     sandbox.style.width = '794px'; // 强制 A4 宽度
-    // 注意：不要使用负 z-index，否则部分浏览器会导致 html2canvas 捕获为空白
+    sandbox.style.height = 'auto'; // 让高度自适应
     sandbox.style.pointerEvents = 'none';
     sandbox.style.opacity = '0';
     sandbox.style.backgroundColor = '#ffffff';
     sandbox.style.display = 'block';
     sandbox.style.overflow = 'visible';
+    sandbox.style.zIndex = '9999'; // 确保在顶层
     document.body.appendChild(sandbox);
 
     try {
         // 2. 深度克隆内容并进行"PDF 专属优化"
         const clone = originalElement.cloneNode(true) as HTMLElement;
+        console.log('克隆元素:', clone);
+        console.log('克隆元素内容:', clone.innerHTML.length > 0 ? '有内容' : '空白');
         
         // 强制移除所有可能干扰 PDF 的类名
         clone.classList.remove('rounded-3xl', 'shadow-2xl', 'overflow-hidden');
@@ -76,6 +92,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         clone.style.transform = 'none';
         clone.style.display = 'block';
         clone.style.overflow = 'visible';
+        clone.style.minHeight = '1123px'; // A4高度最小值
 
         // 🟢 解决"细长条"的核心：递归修复 Flex 布局
         // 将所有在手机上堆叠的 flex-col 强行恢复为横向，并确保宽度占满
@@ -92,17 +109,44 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
             }
         });
 
-        // 确保图片加载（如果有头像）
-        const images = clone.getElementsByTagName('img');
-        await Promise.all(Array.from(images).map(img => {
-            if (img.complete) return Promise.resolve();
-            return new Promise(resolve => { img.onload = resolve; img.onerror = resolve; });
-        }));
+        // 等待图片加载完成
+        const images = clone.querySelectorAll('img');
+        if (images.length > 0) {
+          console.log('等待图片加载:', images.length, '张图片');
+          await Promise.all(Array.from(images).map(img => {
+            return new Promise((resolve) => {
+              if (img.complete) {
+                resolve(null);
+              } else {
+                img.onload = resolve;
+                img.onerror = resolve;
+              }
+            });
+          }));
+        }
 
         sandbox.appendChild(clone);
 
+        // 等待DOM更新
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        console.log('沙盒尺寸:', {
+          offsetWidth: sandbox.offsetWidth,
+          offsetHeight: sandbox.offsetHeight,
+          scrollWidth: sandbox.scrollWidth,
+          scrollHeight: sandbox.scrollHeight
+        });
+
+        console.log('克隆元素尺寸:', {
+          offsetWidth: clone.offsetWidth,
+          offsetHeight: clone.offsetHeight,
+          scrollWidth: clone.scrollWidth,
+          scrollHeight: clone.scrollHeight
+        });
+
         // 确保沙盒有可计算的高度，避免部分浏览器导出空白
         const exportHeight = Math.max(clone.scrollHeight, clone.offsetHeight, 1123);
+        console.log('导出高度:', exportHeight);
 
         const opt = {
             margin: 0,
@@ -115,16 +159,26 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
                 windowWidth: 794,
                 scrollY: 0,
                 backgroundColor: '#ffffff',
-                height: exportHeight
+                height: exportHeight,
+                logging: true, // 启用日志
+                allowTaint: true
             },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         };
 
+        console.log('PDF配置:', opt);
+
         const html2pdf = (window as any).html2pdf;
+        console.log('html2pdf库:', html2pdf);
+        
         await html2pdf().set(opt).from(sandbox).save();
+        console.log('✅ PDF导出成功');
 
     } catch (error) {
-        console.error('PDF 终极导出失败:', error);
+        console.error('❌ PDF 终极导出失败:', error);
+        console.error('错误详情:', error.message);
+        console.error('错误堆栈:', error.stack);
+        alert('PDF导出失败，请稍后重试');
     } finally {
         // 3. 清理现场
         if (sandbox.parentNode) {
