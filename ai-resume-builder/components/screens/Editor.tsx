@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
-import { API_BASE_URL } from '../../src/api-config';
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
 const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, setResumeData, completeness = 0, createResume, loadUserResumes }) => {
   const [newSkill, setNewSkill] = useState('');
@@ -91,51 +92,62 @@ const Editor: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, set
   const handleSaveAndPreview = async () => {
     setIsSaving(true);
     try {
-      const token = localStorage.getItem('authToken');
+      console.log('Saving resume with data:', resumeData);
       
-      let response;
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError || !user) {
+        console.error('User not authenticated:', userError);
+        alert('请先登录');
+        return;
+      }
+      
+      console.log('Current user:', user);
+      
+      let result;
+      const title = `${resumeData.personalInfo.name || '未命名'}的简历`;
       
       // Check if we're updating an existing resume or creating a new one
       if (resumeData.id) {
         // Update existing resume
-        response = await fetch(`${API_BASE_URL}/api/resumes/${resumeData.id}`, {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title: `${resumeData.personalInfo.name || '未命名'}的简历`,
-            resume_data: resumeData,
-          }),
+        console.log('Updating existing resume:', resumeData.id);
+        result = await DatabaseService.updateResume(String(resumeData.id), {
+          title: title,
+          resume_data: resumeData,
         });
       } else {
         // Create new resume
-        response = await fetch(`${API_BASE_URL}/api/resumes`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            title: `${resumeData.personalInfo.name || '未命名'}的简历`,
-            resume_data: resumeData,
-          }),
-        });
+        console.log('Creating new resume for user:', user.id);
+        result = await DatabaseService.createResume(user.id, title, resumeData);
       }
 
-      if (response.ok) {
+      console.log('Save result:', result);
+
+      if (result.success) {
+        // Update the resume data with the returned ID if it's a new resume
+        if (!resumeData.id && result.data) {
+          setResumeData(prev => ({ ...prev, id: result.data.id }));
+        }
+        
         // Reload resumes to get the latest list
-        await loadUserResumes?.();
+        if (loadUserResumes) {
+          await loadUserResumes();
+        }
+        
+        console.log('Resume saved successfully, navigating to preview');
         // Navigate to preview
         setCurrentView(View.PREVIEW);
       } else {
-        const errorData = await response.json();
-        console.error('Failed to save resume:', errorData);
-        alert('保存失败，请重试');
+        console.error('Failed to save resume:', result.error);
+        alert(`保存失败: ${result.error?.message || '请重试'}`);
       }
     } catch (error) {
-      console.error('Error saving resume:', error);
+      console.error('Error saving resume:', {
+        error: error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : 'No stack trace'
+      });
       alert('保存失败，请检查网络连接');
     } finally {
       setIsSaving(false);

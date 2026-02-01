@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import { API_BASE_URL } from '../../src/api-config';
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
 const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -20,14 +21,11 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     if (!confirmed) {
       return;
     }
-    
-    if (!currentUser) {
-      alert('请先登录');
-      return;
-    }
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
       alert('请先登录');
       return;
     }
@@ -35,24 +33,20 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     try {
       setIsDeleting(id);
       
-      const response = await fetch(`${API_BASE_URL}/api/resumes/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
+      console.log('Deleting resume:', id);
+      
+      const result = await DatabaseService.deleteResume(String(id));
+      
+      if (result.success) {
+        console.log('Resume deleted successfully');
         // 从本地状态中删除
         if (setAllResumes) {
-          setAllResumes(prev => prev.filter(r => r.id !== id));
+          setAllResumes((prev: any) => prev.filter(r => r.id !== id));
         }
         console.log('简历删除成功');
       } else {
-        const errorData = await response.json();
-        console.error('删除失败:', errorData);
-        alert('删除失败，请重试');
+        console.error('删除失败:', result.error);
+        alert(`删除失败: ${result.error?.message || '请重试'}`);
       }
     } catch (error) {
       console.error('删除简历时出错:', error);
@@ -65,14 +59,11 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
   const handleEdit = async (resumeId: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (!currentUser) {
-      alert('请先登录');
-      return;
-    }
 
-    const token = localStorage.getItem('authToken');
-    if (!token) {
+    // Get current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError || !user) {
       alert('请先登录');
       return;
     }
@@ -80,31 +71,33 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     try {
       setIsLoadingResume(true);
       
-      const response = await fetch(`${API_BASE_URL}/api/resumes/${resumeId}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const resume = data.resume;
+      console.log('Loading resume:', resumeId);
+      
+      // Get all user resumes and find the specific one
+      const result = await DatabaseService.getUserResumes(user.id);
+      
+      if (result.success) {
+        const resume = result.data.find(r => r.id === resumeId);
         
-        // Set the resume data with ID for editing
-        if (setResumeData) {
-          setResumeData({
-            id: resume.id,
-            ...resume.resume_data
-          });
+        if (resume) {
+          console.log('Resume loaded successfully:', resume);
+          
+          // Set the resume data with ID for editing
+          if (setResumeData) {
+            setResumeData({
+              id: resume.id,
+              ...resume.resume_data
+            });
+          }
+          
+          setCurrentView(View.EDITOR);
+        } else {
+          console.error('Resume not found');
+          alert('简历不存在');
         }
-        
-        setCurrentView(View.EDITOR);
       } else {
-        const errorData = await response.json();
-        console.error('加载简历失败:', errorData);
-        alert('加载简历失败，请重试');
+        console.error('加载简历失败:', result.error);
+        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
       }
     } catch (error) {
       console.error('加载简历时出错:', error);

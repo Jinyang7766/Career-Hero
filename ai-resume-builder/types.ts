@@ -55,11 +55,14 @@ export interface ResumeSummary {
 export interface ScreenProps {
   setCurrentView: (view: View) => void;
   goBack?: () => void;
-  onLogin?: () => void;
+  onLogin?: (user: any) => void;
   onLogout?: () => void;
   resumeData?: ResumeData;
-  setResumeData?: any;
+  setResumeData?: (data: ResumeData | ((prev: ResumeData) => ResumeData)) => void;
   completeness?: number;
   allResumes?: ResumeSummary[];
-  setAllResumes?: any;
+  setAllResumes?: (resumes: ResumeSummary[] | ((prev: ResumeSummary[]) => ResumeSummary[])) => void;
+  createResume?: () => void;
+  loadUserResumes?: () => Promise<void>;
+  currentUser?: any;
 }
