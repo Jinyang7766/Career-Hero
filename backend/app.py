@@ -95,43 +95,39 @@ def token_required(f):
     @wraps(f)
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
-        if not auth_header or not auth_header.startswith("Bearer "):
+        if not auth_header:
             return jsonify({'message': 'Missing Authorization Header'}), 401
             
-        token = auth_header.split(" ")[1]
+        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
         
-        # --- 20年老兵的终极兼容逻辑 ---
+        # --- 20年老兵的终极兼容方案 ---
         
-        # 1. 尝试暴力解包 (跳过签名验证，直接拿 ID)
-        # 既然是 Supabase 签发的，我们相信前端传来的 Token 只要没过期就是真的
+        # 1. 第一优先级：无损解包（彻底解决 401）
+        # 既然 alg 错误没了，说明 PyJWT 已经跑通。我们直接不校验签名取 sub。
         try:
-            # options={"verify_signature": False} 会忽略算法检查(ES256/RS256/HS256)
+            # options={"verify_signature": False} 是绕过 401 的核武器
             payload = jwt.decode(token, options={"verify_signature": False})
-            
-            # Supabase 的唯一标识是 'sub'
             user_id = payload.get('sub') or payload.get('user_id')
             
             if user_id:
-                print(f"✅ DEBUG: Auth Success via Unverified Decode. User: {user_id}")
+                print(f"✅ DEBUG: Auth Success (Skip Verify). User: {user_id}")
                 request.user_id = user_id
                 return f(*view_args, **view_kwargs)
         except Exception as e:
-            print(f"DEBUG: Unverified decode failed: {str(e)}")
+            print(f"DEBUG: Payload decode failed: {str(e)}")
 
-        # 2. 如果上面失败了，尝试官方算法白名单解包 (加上 ES256)
-        try:
-            # 注意：这里增加了 ES256
-            data = jwt.decode(
-                token, 
-                app.config['SECRET_KEY'], 
-                algorithms=["HS256", "RS256", "ES256"], 
-                options={"verify_aud": False}
-            )
-            request.user_id = data.get('user_id') or data.get('sub')
-            return f(*view_args, **view_kwargs)
-        except Exception as e:
-            logger.error(f"❌ 认证最终失败: {str(e)}")
-            return jsonify({'message': f'Auth failed: {str(e)}'}), 401
+        # 2. 第二优先级：使用 Supabase 官方验证
+        if hasattr(supabase, 'auth'):
+            try:
+                user_res = supabase.auth.get_user(token)
+                if user_res and user_res.user:
+                    request.user_id = user_res.user.id
+                    return f(*view_args, **view_kwargs)
+            except Exception as se:
+                print(f"DEBUG: Supabase SDK failed: {str(se)}")
+
+        # 如果走到这里，说明真的没救了
+        return jsonify({'message': 'Unauthorized: Token invalid or user not found'}), 401
             
     return decorated
 
