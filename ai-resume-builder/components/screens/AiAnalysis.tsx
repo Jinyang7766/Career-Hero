@@ -136,13 +136,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         summary: result.summary || 'AI分析完成',
         strengths: result.strengths || [],
         weaknesses: result.weaknesses || [],
-        missingKeywords: result.missingKeywords || [],
+        missingKeywords: result.missingKeywords, // 直接使用后端返回的数据
         scoreBreakdown: {
           experience: Math.round(result.score * 0.4), // 假设经验占40%
           skills: Math.round(result.score * 0.4),     // 技能占40%
           format: Math.round(result.score * 0.2)      // 格式占20%
         },
-        suggestions: result.suggestions || [] // 使用后端返回的建议
+        suggestions: result.suggestions // 直接使用后端返回的建议
       };
       
       return analysisResult;
@@ -186,7 +186,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
           strengths: aiAnalysisResult.strengths || ['结构清晰'],
           weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
-          missingKeywords: aiAnalysisResult.missingKeywords || [],
+          missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
           scoreBreakdown: aiAnalysisResult.scoreBreakdown || {
             experience: 75,
             skills: 80,
@@ -772,7 +772,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
                                  <div className="flex gap-2">
                                    <button 
-                                       onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!)}
+                                       onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!.id)}
                                        className="flex-1 py-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 text-xs font-bold hover:bg-slate-50 transition-colors"
                                    >
                                        保持原样
