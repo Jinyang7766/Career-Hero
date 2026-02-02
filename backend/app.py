@@ -18,6 +18,12 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
+# 确保取到 Render 的环境变量
+app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET') or os.environ.get('SECRET_KEY')
+
+if not app.config['SECRET_KEY']:
+    logger.error("🚨 警告：JWT_SECRET 环境变量未找到！认证将失效！")
+
 # 配置日志
 logging.basicConfig(
     level=logging.INFO,
@@ -88,33 +94,32 @@ mock_resumes = {}
 def token_required(f):
     @wraps(f)
     def decorated(*view_args, **view_kwargs):
-        token = None
-        if 'Authorization' in request.headers:
-            auth_header = request.headers['Authorization']
-            if auth_header.startswith("Bearer "):
-                token = auth_header.split(" ")[1]
+        auth_header = request.headers.get('Authorization')
+        if not auth_header:
+            logger.error("❌ 认证失败：请求头没有 Authorization")
+            return jsonify({'message': 'Missing Authorization Header'}), 401
+            
+        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
         
-        if not token:
-            return jsonify({'message': 'Token is missing!'}), 401
+        # 调试：打印 Token 的前 10 位和 Secret 的前 3 位（安全起见只印几位）
+        print(f"🔍 DEBUG: Token prefix: {token[:10]}... | Secret key used: {app.config['SECRET_KEY'][:3]}...")
 
-        # 尝试第一种：验证我们后端自己签发的 JWT
+        # 尝试 JWT 校验
         try:
             data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            request.user_id = data.get('user_id')
+            request.user_id = data['user_id']
             return f(*view_args, **view_kwargs)
+        except jwt.ExpiredSignatureError:
+            return jsonify({'message': 'Token expired'}), 401
         except Exception as e:
-            # 第一种失败了，不要急着报 401，尝试第二种：Supabase Token
+            # 如果 JWT 失败，尝试 Supabase 校验
             try:
-                # 兼容 Supabase 验证
                 user = supabase.auth.get_user(token)
-                if user:
-                    request.user_id = user.user.id
-                    return f(*view_args, **view_kwargs)
-            except Exception as se:
-                # 两种都失败了，才是真的 401
-                logger.error(f"Auth failed. JWT Error: {str(e)}, Supabase Error: {str(se)}")
-                return jsonify({'message': 'Token is invalid or expired!'}), 401
-                
+                request.user_id = user.user.id
+                return f(*view_args, **view_kwargs)
+            except:
+                logger.error(f"❌ 认证最终失败：{str(e)}")
+                return jsonify({'message': f'Auth failed: {str(e)}'}), 401
     return decorated
 
 def check_gemini_quota():

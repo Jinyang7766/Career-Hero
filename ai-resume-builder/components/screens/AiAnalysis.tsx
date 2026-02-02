@@ -116,6 +116,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       }
       // --- End ---
 
+      console.log("🚀 发送到后端的 Token 是:", token);
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
         method: 'POST',
         headers: {
