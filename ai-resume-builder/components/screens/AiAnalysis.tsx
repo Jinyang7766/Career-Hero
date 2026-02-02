@@ -92,44 +92,46 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       console.log('Generating real AI analysis via backend API...');
       
-      // --- 🔴 修改开始：兼容多种 Token 存储方式 ---
+      // --- 终极 Token 获取逻辑 ---
+      // 1. 优先获取自定义登录的 token
+      let token = localStorage.getItem('token');
       
-      // 1. 尝试获取后端登录接口存的 token (通常是字符串)
-      let token = localStorage.getItem('token'); 
-      
-      // 2. 如果没有，尝试获取 supabase_session (以防万一你是纯前端 Supabase 登录)
+      // 2. 如果没有，解析 supabase_session
       if (!token) {
-          const supabaseSession = localStorage.getItem('supabase_session');
-          if (supabaseSession) {
-              try {
-                  const session = JSON.parse(supabaseSession);
-                  token = session.access_token;
-              } catch (e) {
-                  console.warn('Supabase session parse failed');
-              }
+        const sessionStr = localStorage.getItem('supabase_session');
+        if (sessionStr) {
+          try {
+            const session = JSON.parse(sessionStr);
+            token = session.access_token || session.token; // 兼容不同字段名
+          } catch (e) {
+            console.error('Failed to parse supabase_session');
           }
+        }
       }
 
-      // 3. 最后的防线：检查 token 是否存在
-      if (!token || token.trim() === '') {
-        // 尝试跳转登录或提示
-        throw new Error('鉴权令牌丢失，请重新登录');
+      if (!token) {
+        alert('登录已过期，请重新登录');
+        window.location.href = '/login'; // 或者你的登录路由
+        return null;
       }
-      
-      // --- 🟢 修改结束 ---
-      
-      // 调用后端 AI 分析接口
+      // --- End ---
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token.trim()}` // 增加 trim() 防止空格导致 401
         },
         body: JSON.stringify({
           resumeData: resumeData,
           jobDescription: jdText
         })
       });
+
+      // 重点：如果后端返回 401，一定要抛出错误
+      if (response.status === 401) {
+          throw new Error('鉴权失败，服务器不认这个 Token');
+      }
 
       if (!response.ok) {
         const errorData = await response.json();

@@ -87,72 +87,34 @@ mock_resumes = {}
 
 def token_required(f):
     @wraps(f)
-    def decorated(*args, **kwargs):
-        print("🔍 Starting authentication process...")
-        
+    def decorated(*view_args, **view_kwargs):
         token = None
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
-            # --- 添加这行调试日志 ---
-            print(f"🔍 DEBUG - Received Auth Header: {auth_header}") 
-            # ----------------------
-            print(f"📋 Authorization header found: {auth_header[:50]}...")
-            
-            # Check Bearer format
             if auth_header.startswith("Bearer "):
                 token = auth_header.split(" ")[1]
-                print(f"🎫 Token extracted: {token[:20]}...")
-            else:
-                print("❌ Authorization header is not in Bearer format")
-                return jsonify({'message': 'Invalid token format. Expected: Bearer <token>'}), 401
-        else:
-            print("❌ No Authorization header found")
-            return jsonify({'message': 'Token is missing!'}), 401
         
         if not token:
-            print("❌ Token is empty")
             return jsonify({'message': 'Token is missing!'}), 401
-        
-        print(f"🔑 JWT_SECRET configured: {JWT_SECRET != 'your-jwt-secret'}")
-        print(f"🔑 Supabase configured: {SUPABASE_URL != 'your-supabase-url'}")
-        
+
+        # 尝试第一种：验证我们后端自己签发的 JWT
         try:
-            # 首先尝试 Supabase token 验证（优先）
-            print("🔍 Trying Supabase authentication...")
-            try:
-                # 使用 Supabase 客户端验证 token
-                user = supabase.auth.get_user(token)
-                if user.user:
-                    current_user_id = user.user.id
-                    print(f"✅ Supabase user authenticated: {current_user_id}")
-                    print(f"👤 User email: {user.user.email}")
-                    return f(current_user_id, *args, **kwargs)
-                else:
-                    print("❌ Supabase returned no user")
-            except Exception as supabase_error:
-                print(f"❌ Supabase auth failed: {supabase_error}")
-                print(f"❌ Supabase error type: {type(supabase_error)}")
-                
-            # 如果 Supabase 验证失败，尝试自定义 JWT 验证
-            print("🔍 Trying custom JWT authentication...")
-            try:
-                data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-                current_user_id = data['user_id']
-                print(f"✅ Custom JWT authenticated: {current_user_id}")
-                return f(current_user_id, *args, **kwargs)
-            except jwt.InvalidTokenError as jwt_error:
-                print(f"❌ Custom JWT failed: {jwt_error}")
-                print(f"❌ JWT error type: {type(jwt_error)}")
-                
+            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
+            request.user_id = data.get('user_id')
+            return f(*view_args, **view_kwargs)
         except Exception as e:
-            print(f"❌ Token validation failed: {e}")
-            print(f"❌ Error type: {type(e)}")
-            return jsonify({'message': 'Token is invalid!'}), 401
-        
-        # 如果所有验证都失败
-        print("❌ All authentication methods failed")
-        return jsonify({'message': 'Token is invalid!'}), 401
-    
+            # 第一种失败了，不要急着报 401，尝试第二种：Supabase Token
+            try:
+                # 兼容 Supabase 验证
+                user = supabase.auth.get_user(token)
+                if user:
+                    request.user_id = user.user.id
+                    return f(*view_args, **view_kwargs)
+            except Exception as se:
+                # 两种都失败了，才是真的 401
+                logger.error(f"Auth failed. JWT Error: {str(e)}, Supabase Error: {str(se)}")
+                return jsonify({'message': 'Token is invalid or expired!'}), 401
+                
     return decorated
 
 def check_gemini_quota():
