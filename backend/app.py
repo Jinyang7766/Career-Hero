@@ -95,31 +95,37 @@ def token_required(f):
     @wraps(f)
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
-        if not auth_header:
-            logger.error("❌ 认证失败：请求头没有 Authorization")
-            return jsonify({'message': 'Missing Authorization Header'}), 401
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({'message': 'Missing or invalid Authorization Header'}), 401
             
-        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
+        token = auth_header.split(" ")[1]
         
-        # 调试：打印 Token 的前 10 位和 Secret 的前 3 位（安全起见只印几位）
-        print(f"🔍 DEBUG: Token prefix: {token[:10]}... | Secret key used: {app.config['SECRET_KEY'][:3]}...")
-
-        # 尝试 JWT 校验
+        # --- 20年老兵的暴力兼容方案 ---
+        
+        # 1. 尝试使用 Supabase 直接验证 (最安全，兼容 RS256/HS256)
         try:
-            data = jwt.decode(token, app.config['SECRET_KEY'], algorithms=["HS256"])
-            request.user_id = data['user_id']
-            return f(*view_args, **view_kwargs)
-        except jwt.ExpiredSignatureError:
-            return jsonify({'message': 'Token expired'}), 401
-        except Exception as e:
-            # 如果 JWT 失败，尝试 Supabase 校验
-            try:
-                user = supabase.auth.get_user(token)
-                request.user_id = user.user.id
+            # Supabase 的 get_user 会自动处理各种算法的 Token
+            user_response = supabase.auth.get_user(token)
+            if user_response and user_response.user:
+                request.user_id = user_response.user.id
                 return f(*view_args, **view_kwargs)
-            except:
-                logger.error(f"❌ 认证最终失败：{str(e)}")
-                return jsonify({'message': f'Auth failed: {str(e)}'}), 401
+        except Exception as se:
+            print(f"DEBUG: Supabase auth failed, trying custom JWT: {str(se)}")
+
+        # 2. 如果 Supabase 验证失败，再尝试我们后端签发的 HS256 JWT
+        try:
+            # 关键：这里不再强制固定算法，或者增加允许的算法列表
+            data = jwt.decode(
+                token, 
+                app.config['SECRET_KEY'], 
+                algorithms=["HS256", "RS256"]  # 允许两种常见算法
+            )
+            request.user_id = data.get('user_id')
+            return f(*view_args, **view_kwargs)
+        except Exception as e:
+            logger.error(f"❌ 认证彻底失败: {str(e)}")
+            return jsonify({'message': f'Auth failed: {str(e)}'}), 401
+            
     return decorated
 
 def check_gemini_quota():
