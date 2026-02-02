@@ -88,35 +88,67 @@ mock_resumes = {}
 def token_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
+        print("🔍 Starting authentication process...")
+        
         token = None
         if 'Authorization' in request.headers:
-            token = request.headers['Authorization'].split(" ")[1]
-        
-        if not token:
+            auth_header = request.headers['Authorization']
+            print(f"📋 Authorization header found: {auth_header[:50]}...")
+            
+            # Check Bearer format
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                print(f"🎫 Token extracted: {token[:20]}...")
+            else:
+                print("❌ Authorization header is not in Bearer format")
+                return jsonify({'message': 'Invalid token format. Expected: Bearer <token>'}), 401
+        else:
+            print("❌ No Authorization header found")
             return jsonify({'message': 'Token is missing!'}), 401
         
+        if not token:
+            print("❌ Token is empty")
+            return jsonify({'message': 'Token is missing!'}), 401
+        
+        print(f"🔑 JWT_SECRET configured: {JWT_SECRET != 'your-jwt-secret'}")
+        print(f"🔑 Supabase configured: {SUPABASE_URL != 'your-supabase-url'}")
+        
         try:
-            # 首先尝试 Supabase token 验证
+            # 首先尝试 Supabase token 验证（优先）
+            print("🔍 Trying Supabase authentication...")
             try:
                 # 使用 Supabase 客户端验证 token
                 user = supabase.auth.get_user(token)
                 if user.user:
                     current_user_id = user.user.id
-                    print(f"Supabase user authenticated: {current_user_id}")
+                    print(f"✅ Supabase user authenticated: {current_user_id}")
+                    print(f"👤 User email: {user.user.email}")
                     return f(current_user_id, *args, **kwargs)
+                else:
+                    print("❌ Supabase returned no user")
             except Exception as supabase_error:
-                print(f"Supabase auth failed: {supabase_error}")
+                print(f"❌ Supabase auth failed: {supabase_error}")
+                print(f"❌ Supabase error type: {type(supabase_error)}")
                 
             # 如果 Supabase 验证失败，尝试自定义 JWT 验证
-            data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
-            current_user_id = data['user_id']
-            print(f"Custom JWT authenticated: {current_user_id}")
-            
+            print("🔍 Trying custom JWT authentication...")
+            try:
+                data = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+                current_user_id = data['user_id']
+                print(f"✅ Custom JWT authenticated: {current_user_id}")
+                return f(current_user_id, *args, **kwargs)
+            except jwt.InvalidTokenError as jwt_error:
+                print(f"❌ Custom JWT failed: {jwt_error}")
+                print(f"❌ JWT error type: {type(jwt_error)}")
+                
         except Exception as e:
-            print(f"Token validation failed: {e}")
+            print(f"❌ Token validation failed: {e}")
+            print(f"❌ Error type: {type(e)}")
             return jsonify({'message': 'Token is invalid!'}), 401
         
-        return f(current_user_id, *args, **kwargs)
+        # 如果所有验证都失败
+        print("❌ All authentication methods failed")
+        return jsonify({'message': 'Token is invalid!'}), 401
     
     return decorated
 
@@ -914,10 +946,10 @@ def parse_resume():
         return jsonify({'error': f'简历解析失败: {str(e)}'}), 500
 
 @app.route('/api/ai/analyze', methods=['POST'])
-@token_required
+@token_required  # 恢复认证
 def analyze_resume(current_user_id):
-    print(f"Request Headers: {request.headers}")
-    print(f"Current User ID: {current_user_id}")
+    print(f"🔍 Request Headers: {request.headers}")
+    print(f"🔍 Current User ID: {current_user_id}")
     
     try:
         data = request.get_json()
@@ -1068,10 +1100,10 @@ def parse_ai_response(response_text):
     }
 
 @app.route('/api/ai/chat', methods=['POST'])
-@token_required
+@token_required  # 恢复认证
 def ai_chat(current_user_id):
-    print(f"Chat Request Headers: {request.headers}")
-    print(f"Chat Current User ID: {current_user_id}")
+    print(f"🔍 Chat Request Headers: {request.headers}")
+    print(f"🔍 Chat Current User ID: {current_user_id}")
     
     try:
         data = request.get_json()
