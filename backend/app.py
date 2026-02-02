@@ -924,13 +924,14 @@ def parse_resume():
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return jsonify({'error': f'简历解析失败: {str(e)}'}), 500
 
-@app.route('/api/ai/analyze', methods=['POST'])
-@token_required  # 恢复认证
-def analyze_resume(current_user_id):
-    print(f"🔍 Request Headers: {request.headers}")
-    print(f"🔍 Current User ID: {current_user_id}")
-    
+@app.route('/api/ai/analyze', methods=['POST', 'OPTIONS'])
+@token_required
+def analyze_resume():
     try:
+        # 从 request 对象中获取刚才装饰器存进去的 user_id
+        current_user_id = getattr(request, 'user_id', None) 
+        print(f"🔍 Current User ID: {current_user_id}")
+        
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
@@ -1078,13 +1079,14 @@ def parse_ai_response(response_text):
         'missingKeywords': []
     }
 
-@app.route('/api/ai/chat', methods=['POST'])
-@token_required  # 恢复认证
-def ai_chat(current_user_id):
-    print(f"🔍 Chat Request Headers: {request.headers}")
-    print(f"🔍 Chat Current User ID: {current_user_id}")
-    
+@app.route('/api/ai/chat', methods=['POST', 'OPTIONS'])
+@token_required
+def ai_chat():
     try:
+        # 从 request 对象中获取刚才装饰器存进去的 user_id
+        current_user_id = getattr(request, 'user_id', None) 
+        print(f"🔍 Chat Current User ID: {current_user_id}")
+        
         data = request.get_json()
         message = data.get('message', '')
         resume_data = data.get('resumeData')
