@@ -92,23 +92,31 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       console.log('Generating real AI analysis via backend API...');
       
-      // 获取认证 token - 使用 Supabase session
-      const supabaseSession = localStorage.getItem('supabase_session');
-      if (!supabaseSession) {
-        throw new Error('请先登录以使用 AI 功能');
-      }
+      // --- 🔴 修改开始：兼容多种 Token 存储方式 ---
       
-      let token;
-      try {
-        const session = JSON.parse(supabaseSession);
-        token = session.access_token;
-      } catch (error) {
-        throw new Error('登录状态无效，请重新登录');
-      }
+      // 1. 尝试获取后端登录接口存的 token (通常是字符串)
+      let token = localStorage.getItem('token'); 
       
+      // 2. 如果没有，尝试获取 supabase_session (以防万一你是纯前端 Supabase 登录)
+      if (!token) {
+          const supabaseSession = localStorage.getItem('supabase_session');
+          if (supabaseSession) {
+              try {
+                  const session = JSON.parse(supabaseSession);
+                  token = session.access_token;
+              } catch (e) {
+                  console.warn('Supabase session parse failed');
+              }
+          }
+      }
+
+      // 3. 最后的防线：检查 token 是否存在
       if (!token || token.trim() === '') {
-        throw new Error('请先登录以使用 AI 功能');
+        // 尝试跳转登录或提示
+        throw new Error('鉴权令牌丢失，请重新登录');
       }
+      
+      // --- 🟢 修改结束 ---
       
       // 调用后端 AI 分析接口
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
@@ -377,23 +385,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
       
-      // 获取认证 token - 使用 Supabase session
-      const supabaseSession = localStorage.getItem('supabase_session');
-      if (!supabaseSession) {
-        throw new Error('请先登录以使用 AI 功能');
+      // --- 🔴 修改开始 ---
+      let token = localStorage.getItem('token');
+      
+      if (!token) {
+          const supabaseSession = localStorage.getItem('supabase_session');
+          if (supabaseSession) {
+              try {
+                  const session = JSON.parse(supabaseSession);
+                  token = session.access_token;
+              } catch (e) { }
+          }
       }
       
-      let token;
-      try {
-        const session = JSON.parse(supabaseSession);
-        token = session.access_token;
-      } catch (error) {
-        throw new Error('登录状态无效，请重新登录');
-      }
-      
-      if (!token || token.trim() === '') {
+      if (!token) {
         throw new Error('请先登录以使用 AI 功能');
       }
+      // --- 🟢 修改结束 ---
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`, {
         method: 'POST',

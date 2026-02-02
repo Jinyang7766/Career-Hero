@@ -93,6 +93,9 @@ def token_required(f):
         token = None
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
+            # --- 添加这行调试日志 ---
+            print(f"🔍 DEBUG - Received Auth Header: {auth_header}") 
+            # ----------------------
             print(f"📋 Authorization header found: {auth_header[:50]}...")
             
             # Check Bearer format
