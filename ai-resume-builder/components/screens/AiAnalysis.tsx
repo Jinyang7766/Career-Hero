@@ -473,7 +473,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }, 1500);
       }, 1000);
     }
-  }, [currentStep, suggestions, score, chatInitialized]);
+  }, [currentStep, suggestions, score]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
