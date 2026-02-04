@@ -185,10 +185,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` // token 已经在 getAuthToken 函数中修剪过
         },
-        body: JSON.stringify({
-          resumeData: resumeData,
-          jobDescription: jdText
-        })
+        // 后端 analyze_resume() 函数不接收参数，所以发送空对象
+        body: JSON.stringify({})
       });
 
       // 重点：如果后端返回 401，一定要抛出错误
