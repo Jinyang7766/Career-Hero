@@ -242,19 +242,43 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         console.log('Using real AI analysis result');
         console.log('startAnalysis - AI analysis result:', aiAnalysisResult);
         
-        // 转换AI分析结果为我们的数据结构
-        const newSuggestions: Suggestion[] = (aiAnalysisResult.suggestions || []).map((suggestion: any, index: number) => ({
-          id: `ai-suggestion-${index}`,
-          type: suggestion.type || 'optimization',
-          title: suggestion.title || '优化建议',
-          reason: suggestion.reason || '根据AI分析结果',
-          targetSection: suggestion.targetSection || 'skills',
-          targetId: suggestion.targetId,
-          targetField: suggestion.targetField,
-          suggestedValue: suggestion.suggestedValue,
-          originalValue: suggestion.originalValue,
-          status: 'pending' as const
-        }));
+        // 转换后端返回的数据格式为前端需要的格式
+        const newSuggestions: Suggestion[] = [];
+        
+        // 处理后端返回的建议
+        const backendSuggestions = aiAnalysisResult.suggestions || [];
+        
+        backendSuggestions.forEach((suggestion: any, index: number) => {
+          // 如果是字符串，转换为对象
+          if (typeof suggestion === 'string') {
+            newSuggestions.push({
+              id: `ai-suggestion-${index}`,
+              type: 'optimization',
+              title: '优化建议',
+              reason: suggestion,
+              targetSection: 'skills',
+              targetId: undefined,
+              targetField: undefined,
+              suggestedValue: undefined,
+              originalValue: undefined,
+              status: 'pending' as const
+            });
+          } else {
+            // 如果是对象，直接使用
+            newSuggestions.push({
+              id: suggestion.id || `ai-suggestion-${index}`,
+              type: suggestion.type || 'optimization',
+              title: suggestion.title || '优化建议',
+              reason: suggestion.reason || '根据AI分析结果',
+              targetSection: suggestion.targetSection || 'skills',
+              targetId: suggestion.targetId,
+              targetField: suggestion.targetField,
+              suggestedValue: suggestion.suggestedValue,
+              originalValue: suggestion.originalValue,
+              status: 'pending' as const
+            });
+          }
+        });
         
         const newReport: AnalysisReport = {
           summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
@@ -849,35 +873,48 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                                     <div className="mb-2">{msg.text}</div>
                                     
                                     {/* 对比显示 */}
-                                    <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3 mb-3">
-                                        <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">修改对比：</div>
-                                        
-                                        {/* 旧内容 - 红色删除线 */}
-                                        <div className="mb-2">
-                                            <span className="text-red-500 line-through decoration-red-300">
-                                                {msg.suggestion.originalValue || '(空)'}
-                                            </span>
+                                        <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3 mb-3">
+                                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">修改对比：</div>
+                                            
+                                            {/* 旧内容 - 红色删除线 */}
+                                            <div className="mb-2">
+                                                <span className="text-red-500 line-through decoration-red-300">
+                                                    {msg.suggestion.originalValue || '(空)'}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* 新内容 - 绿色加粗 */}
+                                            <div>
+                                                <span className="text-green-600 dark:text-green-400 font-bold">
+                                                    {msg.suggestion.suggestedValue !== undefined ? (
+                                                        Array.isArray(msg.suggestion.suggestedValue) 
+                                                            ? msg.suggestion.suggestedValue.join(', ') 
+                                                            : msg.suggestion.suggestedValue
+                                                    ) : (
+                                                        '(无修改建议)'
+                                                    )}
+                                                </span>
+                                            </div>
                                         </div>
-                                        
-                                        {/* 新内容 - 绿色加粗 */}
-                                        <div>
-                                            <span className="text-green-600 dark:text-green-400 font-bold">
-                                                {Array.isArray(msg.suggestion.suggestedValue) 
-                                                   ? msg.suggestion.suggestedValue.join(', ') 
-                                                   : msg.suggestion.suggestedValue}
-                                            </span>
-                                        </div>
-                                    </div>
                                     
-                                    {/* 接受修改按钮 */}
+                                    {/* 接受和忽略修改按钮 */}
                                     {msg.suggestion.status === 'pending' && (
-                                        <button 
-                                            onClick={() => handleAcceptSuggestionInChat(msg.suggestion!)}
-                                            className="w-full py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
-                                        >
-                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                            接受修改
-                                        </button>
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleAcceptSuggestionInChat(msg.suggestion!)}
+                                                className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                                接受修改
+                                            </button>
+                                            <button 
+                                                onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!.id)}
+                                                className="flex-1 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
+                                            >
+                                                <span className="material-symbols-outlined text-[14px]">close</span>
+                                                忽略
+                                            </button>
+                                        </div>
                                     )}
                                     
                                     {msg.suggestion.status === 'accepted' && (
