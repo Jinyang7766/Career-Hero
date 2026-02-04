@@ -40,6 +40,7 @@ export interface ResumeData {
   educations: ExperienceItem[];
   projects: ExperienceItem[];
   skills: string[];
+  summary?: string;
   gender?: string;
 }
 
