@@ -309,12 +309,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         setSuggestions(newSuggestions);
         setReport(newReport);
         
-        // 初始化聊天
-        setChatMessages([{
-          id: 'init-1',
-          role: 'model',
-          text: `🎯 **AI分析完成！**`
-        }]);
+        
+          
         
         setCurrentStep('report');
       }
@@ -462,7 +458,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         // 数据库错误不影响前端操作，只记录日志
       }
 
-      // AI Follow up automatically after acceptance - 静默更新并自动下一条
+      // AI Follow up with conversation instead of automatic suggestion
       setTimeout(() => {
           console.log('Executing follow-up logic after acceptance');
           // 使用函数式更新获取最新的 suggestions 状态
@@ -470,15 +466,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
               console.log('Remaining pending suggestions:', remaining);
               if (remaining.length > 0) {
-                  const nextSug = remaining[0];
-                  const nextMsg: ChatMessage = {
-                      id: `ai-sug-${nextSug.id}`,
+                  const followUpMsg: ChatMessage = {
+                      id: `ai-follow-${Date.now()}`,
                       role: 'model',
-                      text: '✅ 修改已应用！接下来，我建议优化这个部分：',
-                      suggestion: nextSug
+                      text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
                   };
-                  console.log('Adding next suggestion message:', nextMsg);
-                  setChatMessages(prev => [...prev, nextMsg]);
+                  console.log('Adding follow-up message:', followUpMsg);
+                  setChatMessages(prev => [...prev, followUpMsg]);
               } else {
                    const doneMsg = {
                        id: 'ai-done',
@@ -512,29 +506,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           : msg
     ));
 
-    // AI Follow up
+    // AI Follow up with conversation instead of automatic suggestion
     setTimeout(() => {
         setChatMessages(prev => [...prev, {
             id: `ai-ignore-${Date.now()}`,
             role: 'model',
-            text: '没问题，保留原样。我们看下一个建议？'
+            text: '没问题，保留原样。我还有其他建议可以帮助您优化简历，您想继续讨论其他部分吗？'
         }]);
-        
-        // Push next suggestion if available
-        // 使用函数式更新获取最新的 suggestions 状态
-        setSuggestions(prevSuggestions => {
-            const remaining = prevSuggestions.filter(s => s.id !== suggestionId && s.status === 'pending');
-            if (remaining.length > 0) {
-                 const nextSug = remaining[0];
-                 setChatMessages(prev => [...prev, {
-                     id: `ai-sug-${nextSug.id}`,
-                     role: 'model',
-                     text: '这是下一个优化点：',
-                     suggestion: nextSug
-                 }]);
-            }
-            return prevSuggestions;
-        });
     }, 600);
   };
 
@@ -717,8 +695,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           }]);
         }, 1000);
         setIsSending(false);
-        return;
-      }
+      }, 1000);
+      return;
     }
 
     try {
@@ -1143,24 +1121,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       >
           
           {/* Prompt Starters - Inside input container */}
-          {!isSending && chatMessages.length < 3 && (
-              <div className="absolute top-0 left-0 right-0 -translate-y-full pointer-events-none">
-                  <div className="flex gap-2 px-4 py-3 overflow-x-auto no-scrollbar pointer-events-auto bg-gradient-to-t from-slate-50/90 to-transparent dark:from-[#0b1219]/90">
-                      <button 
-                          onClick={() => handleSendMessage('请开始帮我优化简历')} 
-                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
-                      >
-                          ✨ 开始优化
-                      </button>
-                      <button 
-                          onClick={() => handleSendMessage('这个 JD 看重什么能力？')} 
-                          className="whitespace-nowrap px-4 py-1.5 rounded-full bg-slate-100 dark:bg-[#1c2936] border border-primary/20 text-xs font-bold text-primary shadow-lg shadow-blue-500/10 hover:bg-blue-50 transition-all active:scale-95"
-                      >
-                          📄 JD 解读
-                      </button>
-                  </div>
-              </div>
-          )}
+          
 
           {/* Input controls */}
           <div className="flex gap-2 items-end max-w-md mx-auto">
@@ -1205,7 +1166,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </div>
             </header>
 
-            <main className="flex-1 p-4 pb-40 overflow-y-auto">
+            <main className="flex-1 p-4 pb-60 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-slate-200 dark:bg-slate-700/50 rounded-lg p-3 text-center">
                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">原始评分</p>
@@ -1256,7 +1217,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </div>
             </main>
 
-            <div className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-[#101922] border-t border-slate-200 dark:border-white/5 z-[999]">
+            <div className="fixed bottom-20 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-[#101922] border-t border-slate-200 dark:border-white/5 z-[40]">
                 <button 
                     onClick={handleExportPDF}
                     disabled={isExporting}
