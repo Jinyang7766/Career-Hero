@@ -87,6 +87,18 @@ except Exception as e:
     print("Using mock data storage for development")
     supabase = None
 
+# Mock helper functions
+def is_mock_mode():
+    return supabase is None
+
+def mock_supabase_response(data=None, error=None):
+    """Create a mock response object that mimics Supabase response structure"""
+    class MockResponse:
+        def __init__(self, data=None, error=None):
+            self.data = data or []
+            self.error = error
+    return MockResponse(data, error)
+
 # Mock data storage for development
 mock_users = {}
 mock_resumes = {}
@@ -111,8 +123,7 @@ def token_required(f):
             
             if user_id:
                 print(f"✅ DEBUG: Auth Success (Skip Verify). User: {user_id}")
-                request.user_id = user_id
-                return f(*view_args, **view_kwargs)
+                return f(user_id, *view_args, **view_kwargs)
         except Exception as e:
             print(f"DEBUG: Payload decode failed: {str(e)}")
 
@@ -121,8 +132,7 @@ def token_required(f):
             try:
                 user_res = supabase.auth.get_user(token)
                 if user_res and user_res.user:
-                    request.user_id = user_res.user.id
-                    return f(*view_args, **view_kwargs)
+                    return f(user_res.user.id, *view_args, **view_kwargs)
             except Exception as se:
                 print(f"DEBUG: Supabase SDK failed: {str(se)}")
 
@@ -168,21 +178,33 @@ def register():
             return jsonify({'error': 'Password must be at least 8 characters long'}), 400
         
         # Check if user already exists
-        existing_user = supabase.table('users').select('*').eq('email', email).execute()
-        if existing_user.data:
-            return jsonify({'error': 'User already exists'}), 400
+        if is_mock_mode():
+            # Mock mode: check in mock_users
+            for user_data in mock_users.values():
+                if user_data.get('email') == email:
+                    return jsonify({'error': 'User already exists'}), 400
+        else:
+            existing_user = supabase.table('users').select('*').eq('email', email).execute()
+            if existing_user.data:
+                return jsonify({'error': 'User already exists'}), 400
         
         # Create user
         hashed_password = generate_password_hash(password)
+        user_id = str(uuid.uuid4())
         user_data = {
-            'id': str(uuid.uuid4()),
+            'id': user_id,
             'email': email,
             'password': hashed_password,
             'name': name,
             'created_at': datetime.utcnow().isoformat()
         }
         
-        result = supabase.table('users').insert(user_data).execute()
+        if is_mock_mode():
+            # Mock mode: store in mock_users
+            mock_users[user_id] = user_data
+            result = mock_supabase_response(data=[user_data])
+        else:
+            result = supabase.table('users').insert(user_data).execute()
         
         if result.data:
             token = jwt.encode({'user_id': result.data[0]['id']}, JWT_SECRET, algorithm="HS256")
@@ -212,12 +234,23 @@ def login():
             return jsonify({'error': 'Email and password are required'}), 400
         
         # Get user
-        result = supabase.table('users').select('*').eq('email', email).execute()
-        
-        if not result.data:
-            return jsonify({'error': 'Invalid credentials'}), 401
-        
-        user = result.data[0]
+        if is_mock_mode():
+            # Mock mode: find user in mock_users
+            user = None
+            for user_data in mock_users.values():
+                if user_data.get('email') == email:
+                    user = user_data
+                    break
+            
+            if not user:
+                return jsonify({'error': 'Invalid credentials'}), 401
+        else:
+            result = supabase.table('users').select('*').eq('email', email).execute()
+            
+            if not result.data:
+                return jsonify({'error': 'Invalid credentials'}), 401
+            
+            user = result.data[0]
         
         if not check_password_hash(user['password'], password):
             return jsonify({'error': 'Invalid credentials'}), 401
@@ -256,10 +289,21 @@ def forgot_password():
 @token_required
 def get_resumes(current_user_id):
     try:
-        result = supabase.table('resumes').select('*').eq('user_id', current_user_id).order('created_at', desc=True).execute()
+        if is_mock_mode():
+            # Mock mode: get resumes from mock_resumes
+            user_resumes = []
+            for resume_id, resume_data in mock_resumes.items():
+                if resume_data.get('user_id') == current_user_id:
+                    user_resumes.append(resume_data)
+            
+            # Sort by created_at descending
+            user_resumes.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        else:
+            result = supabase.table('resumes').select('*').eq('user_id', current_user_id).order('created_at', desc=True).execute()
+            user_resumes = result.data
         
         resumes = []
-        for resume in result.data:
+        for resume in user_resumes:
             resumes.append({
                 'id': resume['id'],
                 'title': resume['title'],
@@ -290,7 +334,12 @@ def create_resume(current_user_id):
             'updated_at': datetime.utcnow().isoformat()
         }
         
-        result = supabase.table('resumes').insert(resume_record).execute()
+        if is_mock_mode():
+            # Mock mode: store in mock_resumes
+            mock_resumes[resume_record['id']] = resume_record
+            result = mock_supabase_response(data=[resume_record])
+        else:
+            result = supabase.table('resumes').insert(resume_record).execute()
         
         if result.data:
             return jsonify({
@@ -307,12 +356,20 @@ def create_resume(current_user_id):
 @token_required
 def get_resume(current_user_id, resume_id):
     try:
-        result = supabase.table('resumes').select('*').eq('id', resume_id).eq('user_id', current_user_id).execute()
+        if is_mock_mode():
+            # Mock mode: find resume in mock_resumes
+            resume = mock_resumes.get(resume_id)
+            if not resume or resume.get('user_id') != current_user_id:
+                return jsonify({'error': 'Resume not found'}), 404
+        else:
+            result = supabase.table('resumes').select('*').eq('id', resume_id).eq('user_id', current_user_id).execute()
+            
+            if not result.data:
+                return jsonify({'error': 'Resume not found'}), 404
+            
+            resume = result.data[0]
         
-        if not result.data:
-            return jsonify({'error': 'Resume not found'}), 404
-        
-        return jsonify({'resume': result.data[0]}), 200
+        return jsonify({'resume': resume}), 200
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -335,7 +392,17 @@ def update_resume(current_user_id, resume_id):
         if score is not None:
             update_data['score'] = score
         
-        result = supabase.table('resumes').update(update_data).eq('id', resume_id).eq('user_id', current_user_id).execute()
+        if is_mock_mode():
+            # Mock mode: update in mock_resumes
+            resume = mock_resumes.get(resume_id)
+            if not resume or resume.get('user_id') != current_user_id:
+                return jsonify({'error': 'Resume not found or update failed'}), 404
+            
+            # Update the resume
+            resume.update(update_data)
+            result = mock_supabase_response(data=[resume])
+        else:
+            result = supabase.table('resumes').update(update_data).eq('id', resume_id).eq('user_id', current_user_id).execute()
         
         if result.data:
             return jsonify({
@@ -352,7 +419,17 @@ def update_resume(current_user_id, resume_id):
 @token_required
 def delete_resume(current_user_id, resume_id):
     try:
-        result = supabase.table('resumes').delete().eq('id', resume_id).eq('user_id', current_user_id).execute()
+        if is_mock_mode():
+            # Mock mode: delete from mock_resumes
+            resume = mock_resumes.get(resume_id)
+            if not resume or resume.get('user_id') != current_user_id:
+                return jsonify({'error': 'Resume not found or delete failed'}), 404
+            
+            # Delete the resume
+            deleted_resume = mock_resumes.pop(resume_id)
+            result = mock_supabase_response(data=[deleted_resume])
+        else:
+            result = supabase.table('resumes').delete().eq('id', resume_id).eq('user_id', current_user_id).execute()
         
         if result.data:
             return jsonify({'message': 'Resume deleted successfully'}), 200
@@ -469,12 +546,28 @@ def generate_suggestions(resume_data, score):
 @token_required
 def get_profile(current_user_id):
     try:
-        result = supabase.table('users').select('id, email, name, created_at').eq('id', current_user_id).execute()
+        if is_mock_mode():
+            # Mock mode: find user in mock_users
+            user = mock_users.get(current_user_id)
+            if not user:
+                return jsonify({'error': 'User not found'}), 404
+            
+            # Return only selected fields
+            user_data = {
+                'id': user['id'],
+                'email': user['email'],
+                'name': user['name'],
+                'created_at': user['created_at']
+            }
+        else:
+            result = supabase.table('users').select('id, email, name, created_at').eq('id', current_user_id).execute()
+            
+            if not result.data:
+                return jsonify({'error': 'User not found'}), 404
+            
+            user_data = result.data[0]
         
-        if not result.data:
-            return jsonify({'error': 'User not found'}), 404
-        
-        return jsonify({'user': result.data[0]}), 200
+        return jsonify({'user': user_data}), 200
     
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -487,7 +580,17 @@ def update_profile(current_user_id):
         name = data.get('name')
         
         if name:
-            result = supabase.table('users').update({'name': name}).eq('id', current_user_id).execute()
+            if is_mock_mode():
+                # Mock mode: update in mock_users
+                user = mock_users.get(current_user_id)
+                if not user:
+                    return jsonify({'error': 'Failed to update profile'}), 500
+                
+                # Update the user
+                user['name'] = name
+                result = mock_supabase_response(data=[user])
+            else:
+                result = supabase.table('users').update({'name': name}).eq('id', current_user_id).execute()
             
             if result.data:
                 return jsonify({

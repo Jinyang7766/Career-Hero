@@ -1,6 +1,36 @@
 import React, { useState } from 'react';
-import { View, ScreenProps } from '../../types';
+import { View, ScreenProps, ResumeData } from '../../types';
 import { supabase } from '../../src/supabase-client';
+
+const sanitizeData = (data: any): any => {
+  // 定义要删除的字段
+  const fieldsToRemove = ['suggestions', 'metadata', 'status'];
+  
+  // 如果是数组，递归处理每个元素
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeData(item));
+  }
+  
+  // 如果是对象，递归处理每个属性
+  if (typeof data === 'object' && data !== null) {
+    const sanitized: any = {};
+    
+    for (const [key, value] of Object.entries(data)) {
+      // 跳过要删除的字段
+      if (fieldsToRemove.includes(key)) {
+        continue;
+      }
+      
+      // 递归处理嵌套对象或数组
+      sanitized[key] = sanitizeData(value);
+    }
+    
+    return sanitized;
+  }
+  
+  // 非对象和非数组类型直接返回
+  return data;
+};
 
 const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) => {
   const [isGenerating, setIsGenerating] = useState(false);
@@ -11,6 +41,9 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
     setIsGenerating(true);
     
     try {
+      // 清理简历数据，删除不需要的字段
+      const sanitizedResumeData = sanitizeData(resumeData);
+      
       // 调用后端 PDF 导出接口
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
         method: 'POST',
@@ -18,7 +51,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          resumeData: resumeData
+          resumeData: sanitizedResumeData
         })
       });
 
