@@ -54,6 +54,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [jdText, setJdText] = useState('');
 
   // Analysis Result State
+  const [originalScore, setOriginalScore] = useState(0);
   const [score, setScore] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [report, setReport] = useState<AnalysisReport | null>(null);
@@ -297,6 +298,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           (newReport.scoreBreakdown.experience + newReport.scoreBreakdown.skills + newReport.scoreBreakdown.format) / 3
         );
         
+        // 保存原始分数
+        setOriginalScore(totalScore);
+        // 初始化当前分数为原始分数
         setScore(totalScore);
         setSuggestions(newSuggestions);
         setReport(newReport);
@@ -1140,11 +1144,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-slate-200 dark:bg-slate-700/50 rounded-lg p-3 text-center">
                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">原始评分</p>
-                        <p className="text-2xl font-bold text-slate-700 dark:text-slate-300">65</p>
+                        <p className="text-2xl font-bold text-slate-700 dark:text-slate-300">{originalScore}</p>
                     </div>
                     <div className="bg-green-100 dark:bg-green-900/30 rounded-lg p-3 text-center border border-green-200 dark:border-green-800">
                         <p className="text-xs text-green-600 dark:text-green-400 mb-1">优化后评分</p>
-                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{Math.max(score, 65)}</p>
+                        <p className="text-2xl font-bold text-green-600 dark:text-green-400">{score}</p>
                     </div>
                 </div>
 
