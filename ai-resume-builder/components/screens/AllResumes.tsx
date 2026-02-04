@@ -321,7 +321,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                   {resume.hasDot && (
                     <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
                   )}
-                  {resume.score && resume.score > 0 && (
+                  {typeof resume.score === 'number' && resume.score > 0 && (
                     <div className="absolute -top-1.5 -left-1 bg-primary text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-background-light dark:border-background-dark shadow-sm">
                       {resume.score}
                     </div>
