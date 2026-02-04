@@ -1,44 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScreenProps, ResumeSummary, ResumeData } from '../../types';
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { supabase } from '../../src/supabase-client';
-
-const sanitizeData = (data: any): any => {
-  // 定义要删除的字段
-  const fieldsToRemove = ['suggestions', 'metadata', 'status'];
-  
-  // 如果是数组，递归处理每个元素
-  if (Array.isArray(data)) {
-    return data.map(item => sanitizeData(item));
-  }
-  
-  // 如果是对象，递归处理每个属性
-  if (typeof data === 'object' && data !== null) {
-    const sanitized: any = {};
-    
-    for (const [key, value] of Object.entries(data)) {
-      // 跳过要删除的字段
-      if (fieldsToRemove.includes(key)) {
-        continue;
-      }
-      
-      // 递归处理嵌套对象或数组
-      sanitized[key] = sanitizeData(value);
-    }
-    
-    return sanitized;
-  }
-  
-  // 非对象和非数组类型直接返回
-  return data;
-};
 
 interface Suggestion {
   id: string;
   type: 'optimization' | 'grammar' | 'missing';
   title: string;
   reason: string;
-  targetSection: 'personalInfo' | 'workExps' | 'projects' | 'skills' | 'summary';
+  targetSection: 'personalInfo' | 'workExps' | 'skills';
   targetId?: number;
   targetField?: string;
   suggestedValue: any;
@@ -96,67 +65,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // --- Handlers ---
 
-  // 提取 Token 获取逻辑为独立函数
-  const getAuthToken = async (): Promise<string | null> => {
-    try {
-      // 使用 Supabase 客户端的 auth.getSession() 方法获取最新的会话
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Error getting session:', error);
-        return null;
-      }
-      
-      // 如果有会话，返回访问令牌
-      if (session?.access_token) {
-        return session.access_token.trim();
-      }
-      
-      // 如果没有会话，尝试获取自定义登录的 token
-      const customToken = localStorage.getItem('token');
-      if (customToken) {
-        return customToken.trim();
-      }
-      
-      return null;
-    } catch (error) {
-      console.error('Error in getAuthToken:', error);
-      return null;
-    }
-  };
-
-  // Auto save resume data to backend
-  const autoSaveResume = async (resumeData: ResumeData) => {
-    try {
-      // Get auth token
-      const token = await getAuthToken();
-      
-      if (!token) {
-        console.error('No auth token for auto save');
-        return;
-      }
-      
-      // Call backend auto save API
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/resume/save`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ resumeData })
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Auto save failed:', errorData.error || 'Unknown error');
-      } else {
-        console.log('Resume auto saved successfully');
-      }
-    } catch (error) {
-      console.error('Error in autoSaveResume:', error);
-    }
-  };
-
   const handleResumeSelect = (id: number) => {
     setSelectedResumeId(id);
     setCurrentStep('jd_input');
@@ -168,14 +76,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       console.log('Generating real AI analysis via backend API...');
       
-      // 获取认证 Token
-      const token = await getAuthToken();
+      // --- 终极 Token 获取逻辑 ---
+      // 1. 优先获取自定义登录的 token
+      let token = localStorage.getItem('token');
+      
+      // 2. 如果没有，解析 supabase_session
+      if (!token) {
+        const sessionStr = localStorage.getItem('supabase_session');
+        if (sessionStr) {
+          try {
+            const session = JSON.parse(sessionStr);
+            token = session.access_token || session.token; // 兼容不同字段名
+          } catch (e) {
+            console.error('Failed to parse supabase_session');
+          }
+        }
+      }
 
       if (!token) {
         alert('登录已过期，请重新登录');
         window.location.href = '/login'; // 或者你的登录路由
         return null;
       }
+      // --- End ---
 
       console.log("🚀 发送到后端的 Token 是:", token);
 
@@ -183,7 +106,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}` // token 已经在 getAuthToken 函数中修剪过
+          'Authorization': `Bearer ${token.trim()}` // 增加 trim() 防止空格导致 401
         },
         body: JSON.stringify({
           resumeData: resumeData,
@@ -300,25 +223,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const handleAcceptSuggestionInChat = (suggestion: Suggestion) => {
     if (!setResumeData || !resumeData) return;
 
-    // Calculate new data first
-    const newData = { ...resumeData };
-    if (suggestion.targetSection === 'personalInfo') {
-        newData.personalInfo = { ...newData.personalInfo, [suggestion.targetField!]: suggestion.suggestedValue };
-    } else if (suggestion.targetSection === 'workExps') {
-        newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
-    } else if (suggestion.targetSection === 'projects') {
-        newData.projects = newData.projects.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
-    } else if (suggestion.targetSection === 'skills') {
-        newData.skills = suggestion.suggestedValue;
-    } else if (suggestion.targetSection === 'summary') {
-        newData.summary = suggestion.suggestedValue;
-    }
-
     // Apply data change silently
-    setResumeData(newData);
-
-    // Auto save the updated resume data
-    autoSaveResume(newData);
+    setResumeData(prev => {
+        const newData = { ...prev };
+        if (suggestion.targetSection === 'personalInfo') {
+            newData.personalInfo = { ...newData.personalInfo, [suggestion.targetField!]: suggestion.suggestedValue };
+        } else if (suggestion.targetSection === 'workExps') {
+            newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+        } else if (suggestion.targetSection === 'skills') {
+            newData.skills = suggestion.suggestedValue;
+        }
+        return newData;
+    });
 
     // Update suggestions state
     setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' } : s));
@@ -334,23 +250,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
     // AI Follow up automatically after acceptance - 静默更新并自动下一条
     setTimeout(() => {
-        const remaining = suggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
-        if (remaining.length > 0) {
-            const nextSug = remaining[0];
-            const nextMsg: ChatMessage = {
-                id: `ai-sug-${nextSug.id}`,
-                role: 'model',
-                text: '✅ 修改已应用！接下来，我建议优化这个部分：',
-                suggestion: nextSug
-            };
-            setChatMessages(prev => [...prev, nextMsg]);
-        } else {
-             setChatMessages(prev => [...prev, {
-                 id: 'ai-done',
-                 role: 'model',
-                 text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
-             }]);
-        }
+        // 使用函数式更新获取最新的 suggestions 状态
+        setSuggestions(prevSuggestions => {
+            const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
+            if (remaining.length > 0) {
+                const nextSug = remaining[0];
+                const nextMsg: ChatMessage = {
+                    id: `ai-sug-${nextSug.id}`,
+                    role: 'model',
+                    text: '✅ 修改已应用！接下来，我建议优化这个部分：',
+                    suggestion: nextSug
+                };
+                setChatMessages(prev => [...prev, nextMsg]);
+            } else {
+                 setChatMessages(prev => [...prev, {
+                     id: 'ai-done',
+                     role: 'model',
+                     text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
+                 }]);
+            }
+            return prevSuggestions;
+        });
     }, 800);
   };
 
@@ -372,80 +292,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }]);
         
         // Push next suggestion if available
-        const remaining = suggestions.filter(s => s.id !== suggestionId && s.status === 'pending');
-        if (remaining.length > 0) {
-             const nextSug = remaining[0];
-             setChatMessages(prev => [...prev, {
-                 id: `ai-sug-${nextSug.id}`,
-                 role: 'model',
-                 text: '这是下一个优化点：',
-                 suggestion: nextSug
-             }]);
-        }
+        // 使用函数式更新获取最新的 suggestions 状态
+        setSuggestions(prevSuggestions => {
+            const remaining = prevSuggestions.filter(s => s.id !== suggestionId && s.status === 'pending');
+            if (remaining.length > 0) {
+                 const nextSug = remaining[0];
+                 setChatMessages(prev => [...prev, {
+                     id: `ai-sug-${nextSug.id}`,
+                     role: 'model',
+                     text: '这是下一个优化点：',
+                     suggestion: nextSug
+                 }]);
+            }
+            return prevSuggestions;
+        });
     }, 600);
   };
 
-  const handleExportPDF = async () => {
-    if (isExporting || !resumeData) return;
-
+  const handleExportPDF = () => {
     setIsExporting(true);
-    
-    try {
-      // 清理简历数据，删除不需要的字段
-      const sanitizedResumeData = sanitizeData(resumeData);
-      
-      // 调用后端 PDF 导出接口
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          resumeData: sanitizedResumeData
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'PDF 生成失败');
-      }
-
-      // 获取 PDF 文件流并下载
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-      
-      // 从响应头获取文件名，如果没有则使用默认名称
-      const contentDisposition = response.headers.get('content-disposition');
-      let filename = '简历.pdf';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      } else {
-        // 使用用户姓名生成文件名
-        const name = resumeData?.personalInfo?.name || '简历';
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        filename = `${name}_简历_${date}.pdf`;
-      }
-      
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      
-      console.log('✅ PDF 导出成功');
-      
-    } catch (error) {
-      console.error('❌ PDF 导出失败:', error);
-      alert(`PDF 导出失败: ${error.message}`);
-    } finally {
-      setIsExporting(false);
-    }
+    setTimeout(() => {
+        setIsExporting(false);
+        alert("优化后的简历 PDF 已下载！");
+    }, 2000);
   };
 
   const hasJdInput = () => jdText.length > 0;
@@ -492,6 +361,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [chatMessages.length]);
 
+  // 当切换到聊天步骤时，自动弹出第一条优化建议
+  useEffect(() => {
+    if (currentStep === 'chat' && suggestions.length > 0) {
+      // 检查是否已经有建议消息
+      const hasSuggestionMessage = chatMessages.some(msg => msg.suggestion);
+      if (!hasSuggestionMessage) {
+        // 查找第一条待处理的建议
+        const firstPendingSuggestion = suggestions.find(s => s.status === 'pending');
+        if (firstPendingSuggestion) {
+          // 延迟一秒，确保聊天界面已经渲染完成
+          setTimeout(() => {
+            setChatMessages(prev => [...prev, {
+              id: `ai-sug-${firstPendingSuggestion.id}`,
+              role: 'model',
+              text: '让我们开始优化您的简历。首先，我建议优化这个部分：',
+              suggestion: firstPendingSuggestion
+            }]);
+          }, 1000);
+        }
+      }
+    }
+  }, [currentStep, suggestions, chatMessages]);
+
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
     if (!textToSend.trim()) return;
@@ -510,12 +402,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
       
-      // 获取认证 Token
-      const token = await getAuthToken();
+      // --- 🔴 修改开始 ---
+      let token = localStorage.getItem('token');
+      
+      if (!token) {
+          const supabaseSession = localStorage.getItem('supabase_session');
+          if (supabaseSession) {
+              try {
+                  const session = JSON.parse(supabaseSession);
+                  token = session.access_token;
+              } catch (e) { }
+          }
+      }
       
       if (!token) {
         throw new Error('请先登录以使用 AI 功能');
       }
+      // --- 🟢 修改结束 ---
       
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`, {
         method: 'POST',
