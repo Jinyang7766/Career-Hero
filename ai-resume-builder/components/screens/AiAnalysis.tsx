@@ -71,18 +71,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const handleResumeSelect = async (id: number) => {
     setSelectedResumeId(id);
     
+    // 立即切换到下一步，提高用户体验
+    setCurrentStep('jd_input');
+    
     // 记录当前 resumeData 和 allResumes 的状态
     console.log('handleResumeSelect - Current resumeData:', resumeData);
     console.log('handleResumeSelect - Selected resume ID:', id);
     console.log('handleResumeSelect - All resumes:', allResumes);
     
-    // 从数据库中获取完整的简历数据
+    // 在后台从数据库中获取完整的简历数据
     try {
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       
       if (userError || !user) {
         console.error('User not authenticated:', userError);
+        // 已经切换到下一步，这里只需要显示错误提示
         alert('请先登录');
         return;
       }
@@ -136,8 +140,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       console.error('Error loading resume:', error);
       alert('加载简历失败，请检查网络连接');
     }
-    
-    setCurrentStep('jd_input');
   };
 
   const generateRealAnalysis = async () => {
