@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, ScreenProps, ResumeSummary, ResumeData } from '../../types';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
 interface Suggestion {
   id: string;
@@ -65,7 +67,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // --- Handlers ---
 
-  const handleResumeSelect = (id: number) => {
+  const handleResumeSelect = async (id: number) => {
     setSelectedResumeId(id);
     
     // 记录当前 resumeData 和 allResumes 的状态
@@ -73,16 +75,65 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     console.log('handleResumeSelect - Selected resume ID:', id);
     console.log('handleResumeSelect - All resumes:', allResumes);
     
-    // 从 allResumes 中找到对应的简历摘要
-    if (allResumes) {
-      const selectedResumeSummary = allResumes.find(resume => resume.id === id);
-      console.log('handleResumeSelect - Selected resume summary:', selectedResumeSummary);
+    // 从数据库中获取完整的简历数据
+    try {
+      // Get current user
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
       
-      // 注意：allResumes 只包含 ResumeSummary，不包含完整的简历数据
-      // 完整的简历数据应该由父组件通过 resumeData 属性传递
-      if (!resumeData) {
-        console.warn('handleResumeSelect - resumeData is null or undefined');
+      if (userError || !user) {
+        console.error('User not authenticated:', userError);
+        alert('请先登录');
+        return;
       }
+
+      // Get all user resumes and find the specific one
+      const result = await DatabaseService.getUserResumes(user.id);
+      
+      if (result.success) {
+        console.log('All resumes found:', result.data);
+        
+        const resume = result.data.find(r => r.id === id);
+        
+        if (resume) {
+          console.log('Target resume found:', resume);
+          
+          // 检查resume_data是否为空
+          if (!resume.resume_data) {
+            console.error('Resume data is empty: resume_data is null/undefined');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          // 检查resume_data是否为空对象
+          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+            console.error('Resume data is empty object: resume_data is empty object');
+            alert('简历数据为空，请重新创建简历');
+            return;
+          }
+          
+          console.log('Resume loaded successfully:', resume);
+          
+          // Set the resume data with ID
+          if (setResumeData) {
+            const finalResumeData = {
+              id: resume.id,
+              ...resume.resume_data
+            };
+            
+            console.log('Setting resume data:', finalResumeData);
+            setResumeData(finalResumeData);
+          }
+        } else {
+          console.error('Resume not found');
+          alert(`简历不存在 (ID: ${id})`);
+        }
+      } else {
+        console.error('Failed to load resumes:', result.error);
+        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+      }
+    } catch (error) {
+      console.error('Error loading resume:', error);
+      alert('加载简历失败，请检查网络连接');
     }
     
     setCurrentStep('jd_input');
