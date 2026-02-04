@@ -197,16 +197,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const result = await response.json();
       console.log('Backend AI analysis result:', result);
       
+      // 确保 result.score 存在
+      const backendScore = result.score || 0;
+      
       // 转换后端返回的数据格式为前端需要的格式
       const analysisResult = {
         summary: result.summary || 'AI分析完成',
         strengths: result.strengths || [],
         weaknesses: result.weaknesses || [],
         missingKeywords: result.missingKeywords, // 直接使用后端返回的数据
+        score: backendScore, // 保存原始分数
         scoreBreakdown: {
-          experience: Math.round(result.score * 0.4), // 假设经验占40%
-          skills: Math.round(result.score * 0.4),     // 技能占40%
-          format: Math.round(result.score * 0.2)      // 格式占20%
+          experience: Math.round(backendScore * 0.4), // 假设经验占40%
+          skills: Math.round(backendScore * 0.4),     // 技能占40%
+          format: Math.round(backendScore * 0.2)      // 格式占20%
         },
         suggestions: result.suggestions // 直接使用后端返回的建议
       };
@@ -293,8 +297,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           }
         };
         
-        // 计算总分
-        const totalScore = Math.round(
+        // 使用后端返回的实际分数
+        const totalScore = aiAnalysisResult.score || Math.round(
           (newReport.scoreBreakdown.experience + newReport.scoreBreakdown.skills + newReport.scoreBreakdown.format) / 3
         );
         
@@ -534,12 +538,73 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }, 600);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     setIsExporting(true);
-    setTimeout(() => {
-        setIsExporting(false);
-        alert("优化后的简历 PDF 已下载！");
-    }, 2000);
+    try {
+      // 清理简历数据，删除不需要的字段
+      const sanitizeData = (data: any) => {
+        if (!data) return data;
+        const sanitized = { ...data };
+        // 删除可能导致问题的字段
+        if (sanitized.id) delete sanitized.id;
+        return sanitized;
+      };
+      
+      const sanitizedResumeData = sanitizeData(resumeData);
+      
+      // 调用后端 PDF 导出接口
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          resumeData: sanitizedResumeData
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || 'PDF 生成失败');
+      }
+
+      // 获取 PDF 文件流并下载
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
+      
+      // 从响应头获取文件名，如果没有则使用默认名称
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = '简历.pdf';
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      } else {
+        // 使用用户姓名生成文件名
+        const name = resumeData?.personalInfo?.name || '简历';
+        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        filename = `${name}_优化简历_${date}.pdf`;
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      console.log('✅ PDF 导出成功');
+      alert("优化后的简历 PDF 已下载！");
+      
+    } catch (error) {
+      console.error('❌ PDF 导出失败:', error);
+      alert(`PDF 导出失败: ${error.message}`);
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const hasJdInput = () => jdText.length > 0;
