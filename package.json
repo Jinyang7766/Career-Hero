@@ -12,5 +12,8 @@
   },
   "workspaces": [
     "ai-resume-builder"
-  ]
+  ],
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
 }
