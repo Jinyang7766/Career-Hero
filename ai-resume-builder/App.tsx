@@ -100,20 +100,26 @@ function App() {
           return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         };
         
-        const resumes: ResumeSummary[] = result.data.map((resume: any) => ({
-          id: resume.id,
-          title: resume.title,
-          date: formatDateTime(resume.created_at),
-          score: resume.score,
-          hasDot: resume.has_dot,
-          thumbnail: (
-            <>
-              <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
-              <div className="absolute top-4 left-1.5 w-10 h-0.5 bg-slate-200 dark:bg-slate-600 rounded-sm"></div>
-              <div className="absolute top-9 left-1.5 w-11 h-8 bg-slate-100 dark:bg-slate-800 rounded-sm"></div>
-            </>
-          )
-        }));
+        const resumes: ResumeSummary[] = result.data.map((resume: any) => {
+          const formattedDate = formatDateTime(resume.created_at);
+          // 清理日期字符串，确保只包含纯数字和分隔符
+          const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
+          
+          return {
+            id: resume.id,
+            title: resume.title,
+            date: cleanedDate,
+            score: resume.score,
+            hasDot: resume.has_dot,
+            thumbnail: (
+              <>
+                <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
+                <div className="absolute top-4 left-1.5 w-10 h-0.5 bg-slate-200 dark:bg-slate-600 rounded-sm"></div>
+                <div className="absolute top-9 left-1.5 w-11 h-8 bg-slate-100 dark:bg-slate-800 rounded-sm"></div>
+              </>
+            )
+          };
+        });
         
         console.log('Processed resumes:', resumes);
         setAllResumes(resumes);
