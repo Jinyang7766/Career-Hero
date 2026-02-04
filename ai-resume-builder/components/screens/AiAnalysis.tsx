@@ -9,7 +9,7 @@ interface Suggestion {
   type: 'optimization' | 'grammar' | 'missing';
   title: string;
   reason: string;
-  targetSection: 'personalInfo' | 'workExps' | 'skills';
+  targetSection: 'personalInfo' | 'workExps' | 'skills' | 'projects' | 'summary';
   targetId?: number;
   targetField?: string;
   suggestedValue: any;
