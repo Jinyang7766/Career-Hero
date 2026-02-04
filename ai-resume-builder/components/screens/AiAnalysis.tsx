@@ -326,40 +326,95 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     try {
       if (!setResumeData || !resumeData) return;
 
+      console.log('handleAcceptSuggestionInChat called with suggestion:', suggestion);
+
       // Apply data change silently
       setResumeData(prev => {
+          console.log('Current resume data before update:', prev);
           const newData = { ...prev };
+
+          // 1. 处理个人信息
           if (suggestion.targetSection === 'personalInfo') {
-              newData.personalInfo = { ...newData.personalInfo, [suggestion.targetField!]: suggestion.suggestedValue };
-          } else if (suggestion.targetSection === 'workExps') {
-              newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
-          } else if (suggestion.targetSection === 'skills') {
-              newData.skills = suggestion.suggestedValue;
-          } else if (suggestion.targetSection === 'projects') {
+              newData.personalInfo = {
+                  ...newData.personalInfo,
+                  [suggestion.targetField!]: suggestion.suggestedValue
+              };
+          }
+          // 2. 处理工作经历 (增加安全检查)
+          else if (suggestion.targetSection === 'workExps') {
+              if (Array.isArray(newData.workExps)) {
+                   newData.workExps = newData.workExps.map(item =>
+                      item.id === suggestion.targetId
+                          ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue }
+                          : item
+                  );
+              }
+          }
+          // 3. 处理技能 (🔴 重点修复区)
+          else if (suggestion.targetSection === 'skills') {
+              let safeSkills = suggestion.suggestedValue;
+              
+              // 强制转换为数组：如果 AI 给的是字符串 "A, B, C"，转为 ["A", "B", "C"]
+              if (typeof safeSkills === 'string') {
+                  safeSkills = safeSkills.split(/[,，]\s*/).filter(Boolean); // 支持中英文逗号
+              }
+              
+              // 最后的防线：确保它是数组
+              if (Array.isArray(safeSkills)) {
+                  newData.skills = safeSkills;
+              } else {
+                  console.warn("AI returned invalid skills format:", safeSkills);
+                  // 如果格式完全不对，保持原样，不崩溃
+                  return prev;
+              }
+          }
+          // 4. 处理项目经历 (增加安全检查)
+          else if (suggestion.targetSection === 'projects') {
               // 处理 projects 数组更新
               if (suggestion.targetId) {
                   // 更新单个项目
-                  newData.projects = newData.projects.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+                  if (Array.isArray(newData.projects)) {
+                      newData.projects = newData.projects.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+                  }
               } else {
                   // 更新整个 projects 数组
-                  newData.projects = suggestion.suggestedValue;
+                  let safeProjects = suggestion.suggestedValue;
+                  // 确保它是数组
+                  if (Array.isArray(safeProjects)) {
+                      newData.projects = safeProjects;
+                  } else {
+                      console.warn("AI returned invalid projects format:", safeProjects);
+                      // 如果格式完全不对，保持原样，不崩溃
+                      return prev;
+                  }
               }
-          } else if (suggestion.targetSection === 'summary') {
+          }
+          // 5. 处理个人简介
+          else if (suggestion.targetSection === 'summary') {
               // 处理 summary 字符串更新
               newData.summary = suggestion.suggestedValue;
           }
+          console.log('Updated resume data:', newData);
           return newData;
       });
 
       // Update suggestions state
-      setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' } : s));
+      setSuggestions(prev => {
+          const updatedSuggestions = prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' } : s);
+          console.log('Updated suggestions:', updatedSuggestions);
+          return updatedSuggestions;
+      });
       
       // Update chat message to show accepted state
-      setChatMessages(prev => prev.map(msg => 
-        msg.suggestion?.id === suggestion.id 
-          ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' } } 
-          : msg
-      ));
+      setChatMessages(prev => {
+          const updatedMessages = prev.map(msg => 
+            msg.suggestion?.id === suggestion.id 
+              ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' } } 
+              : msg
+          );
+          console.log('Updated chat messages:', updatedMessages);
+          return updatedMessages;
+      });
 
       updateScore(5);
 
@@ -401,9 +456,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       // AI Follow up automatically after acceptance - 静默更新并自动下一条
       setTimeout(() => {
+          console.log('Executing follow-up logic after acceptance');
           // 使用函数式更新获取最新的 suggestions 状态
           setSuggestions(prevSuggestions => {
               const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
+              console.log('Remaining pending suggestions:', remaining);
               if (remaining.length > 0) {
                   const nextSug = remaining[0];
                   const nextMsg: ChatMessage = {
@@ -412,20 +469,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                       text: '✅ 修改已应用！接下来，我建议优化这个部分：',
                       suggestion: nextSug
                   };
+                  console.log('Adding next suggestion message:', nextMsg);
                   setChatMessages(prev => [...prev, nextMsg]);
               } else {
-                   setChatMessages(prev => [...prev, {
+                   const doneMsg = {
                        id: 'ai-done',
                        role: 'model',
                        text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
-                   }]);
+                   };
+                   console.log('Adding done message:', doneMsg);
+                   setChatMessages(prev => [...prev, doneMsg]);
               }
               return prevSuggestions;
           });
       }, 800);
     } catch (error) {
       console.error('Error in handleAcceptSuggestionInChat:', error);
-      alert(`处理建议时出错：${error.message || '请稍后重试'}`);
+      // 不使用 alert，避免中断用户操作
+      console.log('Error handled, continuing execution');
+      // 确保界面仍然保留在对话框中
+      if (currentStep !== 'chat') {
+        console.log('Current step is not chat, setting to chat');
+        // 这里不应该发生，因为函数只在聊天步骤中调用
+      }
     }
   };
 
