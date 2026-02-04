@@ -67,6 +67,24 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   const handleResumeSelect = (id: number) => {
     setSelectedResumeId(id);
+    
+    // 记录当前 resumeData 和 allResumes 的状态
+    console.log('handleResumeSelect - Current resumeData:', resumeData);
+    console.log('handleResumeSelect - Selected resume ID:', id);
+    console.log('handleResumeSelect - All resumes:', allResumes);
+    
+    // 从 allResumes 中找到对应的简历摘要
+    if (allResumes) {
+      const selectedResumeSummary = allResumes.find(resume => resume.id === id);
+      console.log('handleResumeSelect - Selected resume summary:', selectedResumeSummary);
+      
+      // 注意：allResumes 只包含 ResumeSummary，不包含完整的简历数据
+      // 完整的简历数据应该由父组件通过 resumeData 属性传递
+      if (!resumeData) {
+        console.warn('handleResumeSelect - resumeData is null or undefined');
+      }
+    }
+    
     setCurrentStep('jd_input');
   };
 
@@ -150,10 +168,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   };
 
   const startAnalysis = async () => {
-    // Snapshot original data for comparison later
-    if (resumeData) {
-        setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
+    // 检查 resumeData 是否存在
+    if (!resumeData) {
+      console.error('startAnalysis - resumeData is null or undefined');
+      alert('无法进行 AI 分析：没有找到简历数据');
+      return;
     }
+    
+    // 记录当前 resumeData 的内容
+    console.log('startAnalysis - Resume data:', resumeData);
+    
+    // Snapshot original data for comparison later
+    setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
     setCurrentStep('analyzing');
     
@@ -163,6 +189,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       
       if (aiAnalysisResult) {
         console.log('Using real AI analysis result');
+        console.log('startAnalysis - AI analysis result:', aiAnalysisResult);
         
         // 转换AI分析结果为我们的数据结构
         const newSuggestions: Suggestion[] = (aiAnalysisResult.suggestions || []).map((suggestion: any, index: number) => ({
