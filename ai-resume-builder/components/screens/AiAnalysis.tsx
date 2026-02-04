@@ -310,10 +310,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         setReport(newReport);
         
         // 初始化聊天
-        setChatMessages([{ 
+        setChatMessages([{
           id: 'init-1',
-          role: 'model', 
-          text: `🎯 **AI分析完成！**\n\n${newReport.summary}\n\n我为您生成了 ${newSuggestions.length} 条优化建议，整体评分 ${totalScore}/100 分。要开始逐一优化吗？` 
+          role: 'model',
+          text: `🎯 **AI分析完成！**`
         }]);
         
         setCurrentStep('report');
@@ -1205,7 +1205,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </div>
             </header>
 
-            <main className="flex-1 p-4 pb-24 overflow-y-auto">
+            <main className="flex-1 p-4 pb-40 overflow-y-auto">
                 <div className="grid grid-cols-2 gap-4 mb-6">
                     <div className="bg-slate-200 dark:bg-slate-700/50 rounded-lg p-3 text-center">
                         <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">原始评分</p>
@@ -1256,7 +1256,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </div>
             </main>
 
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-white dark:bg-[#101922] border-t border-slate-200 dark:border-white/5 z-50">
+            <div className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white dark:bg-[#101922] border-t border-slate-200 dark:border-white/5 z-[999]">
                 <button 
                     onClick={handleExportPDF}
                     disabled={isExporting}
