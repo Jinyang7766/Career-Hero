@@ -463,29 +463,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // AI Follow up with conversation instead of automatic suggestion
       setTimeout(() => {
           console.log('Executing follow-up logic after acceptance');
-          // 使用函数式更新获取最新的 suggestions 状态
-          setSuggestions(prevSuggestions => {
-              const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
-              console.log('Remaining pending suggestions:', remaining);
-              if (remaining.length > 0) {
-                  const followUpMsg: ChatMessage = {
-                      id: `ai-follow-${Date.now()}`,
-                      role: 'model',
-                      text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
-                  };
-                  console.log('Adding follow-up message:', followUpMsg);
-                  setChatMessages(prev => [...prev, followUpMsg]);
-              } else {
-                   const doneMsg = {
-                       id: 'ai-done',
-                       role: 'model',
-                       text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
-                   };
-                   console.log('Adding done message:', doneMsg);
-                   setChatMessages(prev => [...prev, doneMsg]);
-              }
-              return prevSuggestions;
-          });
+          // 直接获取最新的 suggestions 状态
+          const remaining = suggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
+          console.log('Remaining pending suggestions:', remaining);
+          if (remaining.length > 0) {
+              const followUpMsg: ChatMessage = {
+                  id: `ai-follow-${Date.now()}`,
+                  role: 'model',
+                  text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
+              };
+              console.log('Adding follow-up message:', followUpMsg);
+              setChatMessages(prev => [...prev, followUpMsg]);
+          } else {
+               const doneMsg = {
+                   id: 'ai-done',
+                   role: 'model',
+                   text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
+               };
+               console.log('Adding done message:', doneMsg);
+               setChatMessages(prev => [...prev, doneMsg]);
+          }
       }, 800);
     } catch (error) {
       console.error('Error in handleAcceptSuggestionInChat:', error);
