@@ -439,32 +439,41 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [chatMessages.length]);
 
+  // 状态变量，用于跟踪是否已经初始化了聊天消息
+  const [chatInitialized, setChatInitialized] = useState(false);
+
+  // 当步骤发生变化时，重置聊天初始化状态
+  useEffect(() => {
+    if (currentStep !== 'chat') {
+      setChatInitialized(false);
+    }
+  }, [currentStep]);
+
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始优化
   useEffect(() => {
-    if (currentStep === 'chat' && suggestions.length > 0) {
-      // 检查是否已经有建议消息
-      const hasSuggestionMessage = chatMessages.some(msg => msg.suggestion);
-      if (!hasSuggestionMessage) {
-        // 先显示总结性消息
+    if (currentStep === 'chat' && suggestions.length > 0 && !chatInitialized) {
+      // 标记聊天已初始化，避免重复运行
+      setChatInitialized(true);
+      
+      // 先显示总结性消息
+      setTimeout(() => {
+        setChatMessages(prev => [...prev, {
+          id: `ai-summary-${Date.now()}`,
+          role: 'model',
+          text: `根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
+        }]);
+        
+        // 然后询问用户是否要开始优化
         setTimeout(() => {
           setChatMessages(prev => [...prev, {
-            id: `ai-summary-${Date.now()}`,
+            id: `ai-ask-${Date.now()}`,
             role: 'model',
-            text: `根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
+            text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议。'
           }]);
-          
-          // 然后询问用户是否要开始优化
-          setTimeout(() => {
-            setChatMessages(prev => [...prev, {
-              id: `ai-ask-${Date.now()}`,
-              role: 'model',
-              text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议。'
-            }]);
-          }, 1500);
-        }, 1000);
-      }
+        }, 1500);
+      }, 1000);
     }
-  }, [currentStep, suggestions, chatMessages, score]);
+  }, [currentStep, suggestions, score, chatInitialized]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
