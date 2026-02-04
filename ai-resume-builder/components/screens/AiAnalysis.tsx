@@ -299,57 +299,62 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   };
 
   const handleAcceptSuggestionInChat = (suggestion: Suggestion) => {
-    if (!setResumeData || !resumeData) return;
+    try {
+      if (!setResumeData || !resumeData) return;
 
-    // Apply data change silently
-    setResumeData(prev => {
-        const newData = { ...prev };
-        if (suggestion.targetSection === 'personalInfo') {
-            newData.personalInfo = { ...newData.personalInfo, [suggestion.targetField!]: suggestion.suggestedValue };
-        } else if (suggestion.targetSection === 'workExps') {
-            newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
-        } else if (suggestion.targetSection === 'skills') {
-            newData.skills = suggestion.suggestedValue;
-        }
-        return newData;
-    });
+      // Apply data change silently
+      setResumeData(prev => {
+          const newData = { ...prev };
+          if (suggestion.targetSection === 'personalInfo') {
+              newData.personalInfo = { ...newData.personalInfo, [suggestion.targetField!]: suggestion.suggestedValue };
+          } else if (suggestion.targetSection === 'workExps') {
+              newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+          } else if (suggestion.targetSection === 'skills') {
+              newData.skills = suggestion.suggestedValue;
+          }
+          return newData;
+      });
 
-    // Update suggestions state
-    setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' } : s));
-    
-    // Update chat message to show accepted state
-    setChatMessages(prev => prev.map(msg => 
-      msg.suggestion?.id === suggestion.id 
-        ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' } } 
-        : msg
-    ));
+      // Update suggestions state
+      setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' } : s));
+      
+      // Update chat message to show accepted state
+      setChatMessages(prev => prev.map(msg => 
+        msg.suggestion?.id === suggestion.id 
+          ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' } } 
+          : msg
+      ));
 
-    updateScore(5);
+      updateScore(5);
 
-    // AI Follow up automatically after acceptance - 静默更新并自动下一条
-    setTimeout(() => {
-        // 使用函数式更新获取最新的 suggestions 状态
-        setSuggestions(prevSuggestions => {
-            const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
-            if (remaining.length > 0) {
-                const nextSug = remaining[0];
-                const nextMsg: ChatMessage = {
-                    id: `ai-sug-${nextSug.id}`,
-                    role: 'model',
-                    text: '✅ 修改已应用！接下来，我建议优化这个部分：',
-                    suggestion: nextSug
-                };
-                setChatMessages(prev => [...prev, nextMsg]);
-            } else {
-                 setChatMessages(prev => [...prev, {
-                     id: 'ai-done',
-                     role: 'model',
-                     text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
-                 }]);
-            }
-            return prevSuggestions;
-        });
-    }, 800);
+      // AI Follow up automatically after acceptance - 静默更新并自动下一条
+      setTimeout(() => {
+          // 使用函数式更新获取最新的 suggestions 状态
+          setSuggestions(prevSuggestions => {
+              const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
+              if (remaining.length > 0) {
+                  const nextSug = remaining[0];
+                  const nextMsg: ChatMessage = {
+                      id: `ai-sug-${nextSug.id}`,
+                      role: 'model',
+                      text: '✅ 修改已应用！接下来，我建议优化这个部分：',
+                      suggestion: nextSug
+                  };
+                  setChatMessages(prev => [...prev, nextMsg]);
+              } else {
+                   setChatMessages(prev => [...prev, {
+                       id: 'ai-done',
+                       role: 'model',
+                       text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
+                   }]);
+              }
+              return prevSuggestions;
+          });
+      }, 800);
+    } catch (error) {
+      console.error('Error in handleAcceptSuggestionInChat:', error);
+      alert(`处理建议时出错：${error.message || '请稍后重试'}`);
+    }
   };
 
   const handleIgnoreSuggestionInChat = (suggestionId: string) => {
