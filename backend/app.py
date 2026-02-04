@@ -784,6 +784,15 @@ def generate_resume_html(resume_data):
         """
     proj_html += '</div>'
     
+    # Summary - 使用数据防御和清理
+    summary = resume_data.get('summary', '') or ''
+    summary_html = ''
+    if summary:
+        summary_html = '<div class="section"><h2>个人简介</h2>'
+        clean_summary = clean_text_for_pdf(summary)
+        summary_html += f'<div class="summary">{clean_summary}</div>'
+        summary_html += '</div>'
+
     # Skills - 使用数据防御和清理
     skills = resume_data.get('skills', []) or []
     skills_html = '<div class="section"><h2>技能专长</h2><div class="skills">'
@@ -923,6 +932,7 @@ def generate_resume_html(resume_data):
             </div>
         </div>
         
+        {summary_html if summary else ''}
         {work_html if work_exps else ''}
         {edu_html if educations else ''}
         {proj_html if projects else ''}

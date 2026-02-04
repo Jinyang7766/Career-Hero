@@ -322,7 +322,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setScore(prev => Math.min(prev + points, 100));
   };
 
-  const handleAcceptSuggestionInChat = (suggestion: Suggestion) => {
+  const handleAcceptSuggestionInChat = async (suggestion: Suggestion) => {
     try {
       if (!setResumeData || !resumeData) return;
 
@@ -335,6 +335,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               newData.workExps = newData.workExps.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
           } else if (suggestion.targetSection === 'skills') {
               newData.skills = suggestion.suggestedValue;
+          } else if (suggestion.targetSection === 'projects') {
+              // 处理 projects 数组更新
+              if (suggestion.targetId) {
+                  // 更新单个项目
+                  newData.projects = newData.projects.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+              } else {
+                  // 更新整个 projects 数组
+                  newData.projects = suggestion.suggestedValue;
+              }
+          } else if (suggestion.targetSection === 'summary') {
+              // 处理 summary 字符串更新
+              newData.summary = suggestion.suggestedValue;
           }
           return newData;
       });
@@ -350,6 +362,42 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       ));
 
       updateScore(5);
+
+      // 数据持久化：将最新数据同步到 Supabase 数据库
+      try {
+        // 获取当前用户
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        
+        if (userError || !user) {
+          console.error('User not authenticated:', userError);
+          return;
+        }
+
+        if (resumeData.id) {
+          // 如果有简历 ID，使用 update 方法
+          // 注意：根据 DatabaseService 的实现，我们需要传递包含 resume_data 字段的对象
+          const updateResult = await DatabaseService.updateResume(resumeData.id, {
+            resume_data: resumeData,
+            updated_at: new Date().toISOString()
+          });
+          if (updateResult.success) {
+            console.log('Resume updated successfully:', updateResult);
+          } else {
+            console.error('Failed to update resume:', updateResult.error);
+          }
+        } else {
+          // 如果没有简历 ID，使用 createResume 方法
+          const createResult = await DatabaseService.createResume(user.id, '优化后的简历', resumeData);
+          if (createResult.success) {
+            console.log('Resume created successfully:', createResult);
+          } else {
+            console.error('Failed to create resume:', createResult.error);
+          }
+        }
+      } catch (dbError) {
+        console.error('Database error in handleAcceptSuggestionInChat:', dbError);
+        // 数据库错误不影响前端操作，只记录日志
+      }
 
       // AI Follow up automatically after acceptance - 静默更新并自动下一条
       setTimeout(() => {
