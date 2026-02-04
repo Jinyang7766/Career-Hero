@@ -182,9 +182,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}` // token 已经在 getAuthToken 函数中修剪过
-        }
-        // 后端 analyze_resume() 函数不接收参数，所以不发送请求体
+        },
+        body: JSON.stringify({
+          resumeData: resumeData,
+          jobDescription: jdText
+        })
       });
 
       // 重点：如果后端返回 401，一定要抛出错误
