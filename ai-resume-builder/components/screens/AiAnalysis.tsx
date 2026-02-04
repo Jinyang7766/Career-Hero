@@ -361,28 +361,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [chatMessages.length]);
 
-  // 当切换到聊天步骤时，自动弹出第一条优化建议
+  // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始优化
   useEffect(() => {
     if (currentStep === 'chat' && suggestions.length > 0) {
       // 检查是否已经有建议消息
       const hasSuggestionMessage = chatMessages.some(msg => msg.suggestion);
       if (!hasSuggestionMessage) {
-        // 查找第一条待处理的建议
-        const firstPendingSuggestion = suggestions.find(s => s.status === 'pending');
-        if (firstPendingSuggestion) {
-          // 延迟一秒，确保聊天界面已经渲染完成
+        // 先显示总结性消息
+        setTimeout(() => {
+          setChatMessages(prev => [...prev, {
+            id: `ai-summary-${Date.now()}`,
+            role: 'model',
+            text: `根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
+          }]);
+          
+          // 然后询问用户是否要开始优化
           setTimeout(() => {
             setChatMessages(prev => [...prev, {
-              id: `ai-sug-${firstPendingSuggestion.id}`,
+              id: `ai-ask-${Date.now()}`,
               role: 'model',
-              text: '让我们开始优化您的简历。首先，我建议优化这个部分：',
-              suggestion: firstPendingSuggestion
+              text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议。'
             }]);
-          }, 1000);
-        }
+          }, 1500);
+        }, 1000);
       }
     }
-  }, [currentStep, suggestions, chatMessages]);
+  }, [currentStep, suggestions, chatMessages, score]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
@@ -397,6 +401,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setChatMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsSending(true);
+
+    // Check if user wants to start optimization
+    const lowerText = textToSend.toLowerCase();
+    if ((lowerText.includes('是') || lowerText.includes('好') || lowerText.includes('开始') || lowerText.includes('yes') || lowerText.includes('ok')) && suggestions.length > 0) {
+      // Find first pending suggestion
+      const firstPendingSuggestion = suggestions.find(s => s.status === 'pending');
+      if (firstPendingSuggestion) {
+        // Show first suggestion after a short delay
+        setTimeout(() => {
+          setChatMessages(prev => [...prev, {
+            id: `ai-sug-${firstPendingSuggestion.id}`,
+            role: 'model',
+            text: '好的，让我们开始优化。首先，我建议修改这个部分：',
+            suggestion: firstPendingSuggestion
+          }]);
+        }, 1000);
+        setIsSending(false);
+        return;
+      }
+    }
 
     try {
       // 优先尝试使用后端 API
