@@ -695,8 +695,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           }]);
         }, 1000);
         setIsSending(false);
-      }, 1000);
       return;
+      }
     }
 
     try {
