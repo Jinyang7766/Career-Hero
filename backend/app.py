@@ -1029,10 +1029,8 @@ def parse_resume():
 
 @app.route('/api/ai/analyze', methods=['POST', 'OPTIONS'])
 @token_required
-def analyze_resume():
+def analyze_resume(current_user_id):
     try:
-        # 从 request 对象中获取刚才装饰器存进去的 user_id
-        current_user_id = getattr(request, 'user_id', None) 
         print(f"🔍 Current User ID: {current_user_id}")
         
         data = request.get_json()
@@ -1184,10 +1182,8 @@ def parse_ai_response(response_text):
 
 @app.route('/api/ai/chat', methods=['POST', 'OPTIONS'])
 @token_required
-def ai_chat():
+def ai_chat(current_user_id):
     try:
-        # 从 request 对象中获取刚才装饰器存进去的 user_id
-        current_user_id = getattr(request, 'user_id', None) 
         print(f"🔍 Chat Current User ID: {current_user_id}")
         
         data = request.get_json()
