@@ -674,7 +674,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   };
 
-  // --- Visual Viewport Logic ---  useEffect(() => {
+  // --- Visual Viewport Logic --- 
+  useEffect(() => {
     // 添加防抖函数，提高计算稳定性
     let debounceTimer: NodeJS.Timeout;
     
