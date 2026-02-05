@@ -10,6 +10,43 @@ export interface UserProfile {
   updated_at: string;
 }
 
+// 本地缓存，存储用户信息
+const userCache = new Map<string, UserProfile>();
+
+// 缓存过期时间（10分钟）
+const CACHE_EXPIRY = 10 * 60 * 1000;
+
+// 缓存项接口
+interface CacheItem {
+  profile: UserProfile;
+  timestamp: number;
+}
+
+// 扩展Map，添加缓存管理方法
+const cacheWithExpiry = {
+  set: (key: string, profile: UserProfile) => {
+    userCache.set(key, {
+      profile,
+      timestamp: Date.now()
+    } as any);
+  },
+  get: (key: string): UserProfile | null => {
+    const item = userCache.get(key) as CacheItem | undefined;
+    if (!item) return null;
+    
+    // 检查缓存是否过期
+    if (Date.now() - item.timestamp > CACHE_EXPIRY) {
+      userCache.delete(key);
+      return null;
+    }
+    
+    return item.profile;
+  },
+  delete: (key: string) => {
+    userCache.delete(key);
+  }
+};
+
 export const useUserProfile = (userId?: string) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -23,6 +60,8 @@ export const useUserProfile = (userId?: string) => {
 
         // Get current authenticated user if no userId provided
         let targetUserId = userId;
+        let authUser = null;
+        
         if (!targetUserId) {
           const { data: { user }, error: userError } = await supabase.auth.getUser();
           if (userError || !user) {
@@ -31,39 +70,55 @@ export const useUserProfile = (userId?: string) => {
             return;
           }
           targetUserId = user.id;
+          authUser = user;
         }
 
         console.log('Loading user profile for:', targetUserId);
 
-        // Try to get user profile from database first
+        // 1. 先检查缓存
+        const cachedProfile = cacheWithExpiry.get(targetUserId);
+        if (cachedProfile) {
+          console.log('User profile loaded from cache:', cachedProfile);
+          setUserProfile(cachedProfile);
+          setLoading(false);
+          return;
+        }
+
+        // 2. 尝试从数据库获取用户信息
         const profileResult = await DatabaseService.getUser(targetUserId);
         
         if (profileResult.success && profileResult.data) {
           console.log('User profile loaded from database:', profileResult.data);
           setUserProfile(profileResult.data);
+          // 缓存用户信息
+          cacheWithExpiry.set(targetUserId, profileResult.data);
         } else {
           console.log('User profile not found in database, using auth user metadata');
           
           // Fallback to auth user metadata
-          const { data: { user }, error: authError } = await supabase.auth.getUser();
-          
-          if (authError || !user) {
-            console.error('Error getting auth user:', authError);
-            setError('获取用户信息失败');
-            return;
+          if (!authUser) {
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+              console.error('Error getting auth user:', authError);
+              setError('获取用户信息失败');
+              return;
+            }
+            authUser = user;
           }
 
           // Create profile from auth user data
           const authProfile: UserProfile = {
-            id: user.id,
-            email: user.email || '',
-            name: user.user_metadata?.name || user.email?.split('@')[0] || '用户',
-            created_at: user.created_at || new Date().toISOString(),
+            id: authUser.id,
+            email: authUser.email || '',
+            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || '用户',
+            created_at: authUser.created_at || new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
 
           console.log('Using auth user profile:', authProfile);
           setUserProfile(authProfile);
+          // 缓存用户信息
+          cacheWithExpiry.set(targetUserId, authProfile);
         }
       } catch (err) {
         console.error('Error loading user profile:', err);
