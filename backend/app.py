@@ -145,6 +145,11 @@ def check_gemini_quota():
     """Check if Gemini API quota is available"""
     global gemini_request_count
     
+    # For development environment, disable quota check to avoid rate limiting issues
+    # In production, this should be stored in database with daily reset
+    if os.environ.get('FLASK_ENV') == 'development':
+        return True
+    
     # Simple quota check - in production, this should be stored in database
     if gemini_request_count >= GEMINI_QUOTA_LIMIT:
         return False
@@ -1226,7 +1231,6 @@ def ai_chat(current_user_id):
 **回复结构**：
 - 自然的开场，直接回应用户问题
 - 具体的建议和改进点，温和地指出简历中的问题
-- 结尾鼓励，给予积极反馈
 
 **避免**：
 - 使用Markdown格式和emoji

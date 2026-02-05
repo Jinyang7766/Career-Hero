@@ -676,22 +676,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // --- Visual Viewport Logic --- 
   useEffect(() => {
-    // 添加防抖函数，提高计算稳定性
-    let debounceTimer: NodeJS.Timeout;
-    
     const handleVisualViewportChange = () => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        if (window.visualViewport) {
-          // 计算键盘弹起带来的底部偏移
-          const offset = Math.max(0, window.innerHeight - window.visualViewport.height);
-          setKeyboardOffset(offset);
-          setViewportHeight(window.visualViewport.height);
-        }
-      }, 10); // 10ms防抖，平衡响应速度和稳定性
+      if (window.visualViewport) {
+        // 计算键盘弹起带来的底部偏移
+        const offset = Math.max(0, window.innerHeight - window.visualViewport.height);
+        setKeyboardOffset(offset);
+        setViewportHeight(window.visualViewport.height);
+      }
     };
     
-    // 监听更多事件，确保及时响应
+    // 监听事件，确保及时响应
     window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
     window.visualViewport?.addEventListener('scroll', handleVisualViewportChange);
     window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
@@ -700,7 +694,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     handleVisualViewportChange();
     
     return () => {
-      clearTimeout(debounceTimer);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportChange);
       window.visualViewport?.removeEventListener('scroll', handleVisualViewportChange);
     };
@@ -1243,11 +1236,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       <div 
         className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
         style={{ 
-          bottom: `${keyboardOffset}px`, // 动态贴合键盘顶部
+          bottom: '0px', // 固定在底部
+          transform: `translateY(${-keyboardOffset}px)`, // 向上移动以避开键盘
           paddingBottom: keyboardOffset > 0 ? '8px' : 'max(1.5rem, env(safe-area-inset-bottom))',
-          transition: 'bottom 0.1s ease-out', // 增加微小过渡，防止抖动
-          transform: 'translateZ(0)', // 启用硬件加速，减少渲染延迟
-          willChange: 'bottom' // 告诉浏览器提前准备动画，提高性能
+          transition: 'transform 0.1s ease-out', // 增加微小过渡，防止抖动
+          willChange: 'transform' // 告诉浏览器提前准备动画，提高性能
         }}
       >
           
