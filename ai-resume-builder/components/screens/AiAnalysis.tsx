@@ -437,27 +437,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           return;
         }
 
-        if (resumeData.id) {
-          // 如果有简历 ID，使用 update 方法
-          // 注意：根据 DatabaseService 的实现，我们需要传递包含 resume_data 字段的对象
-          const updateResult = await DatabaseService.updateResume(resumeData.id, {
-            resume_data: resumeData,
-            updated_at: new Date().toISOString()
-          });
-          if (updateResult.success) {
-            console.log('Resume updated successfully:', updateResult);
+        // 使用函数式更新获取最新的简历数据
+        setResumeData(prev => {
+          const updatedData = prev;
+          
+          if (updatedData.id) {
+            // 如果有简历 ID，使用 update 方法
+            // 注意：根据 DatabaseService 的实现，我们需要传递包含 resume_data 字段的对象
+            DatabaseService.updateResume(updatedData.id, {
+              resume_data: updatedData,
+              updated_at: new Date().toISOString()
+            }).then(updateResult => {
+              if (updateResult.success) {
+                console.log('Resume updated successfully:', updateResult);
+              } else {
+                console.error('Failed to update resume:', updateResult.error);
+              }
+            }).catch(error => {
+              console.error('Database update error:', error);
+            });
           } else {
-            console.error('Failed to update resume:', updateResult.error);
+            // 如果没有简历 ID，使用 createResume 方法
+            DatabaseService.createResume(user.id, '优化后的简历', updatedData).then(createResult => {
+              if (createResult.success) {
+                console.log('Resume created successfully:', createResult);
+              } else {
+                console.error('Failed to create resume:', createResult.error);
+              }
+            }).catch(error => {
+              console.error('Database create error:', error);
+            });
           }
-        } else {
-          // 如果没有简历 ID，使用 createResume 方法
-          const createResult = await DatabaseService.createResume(user.id, '优化后的简历', resumeData);
-          if (createResult.success) {
-            console.log('Resume created successfully:', createResult);
-          } else {
-            console.error('Failed to create resume:', createResult.error);
-          }
-        }
+          
+          return updatedData;
+        });
       } catch (dbError) {
         console.error('Database error in handleAcceptSuggestionInChat:', dbError);
         // 数据库错误不影响前端操作，只记录日志
@@ -466,26 +479,30 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // AI Follow up with conversation instead of automatic suggestion
       setTimeout(() => {
           console.log('Executing follow-up logic after acceptance');
-          // 直接获取最新的 suggestions 状态
-          const remaining = suggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
-          console.log('Remaining pending suggestions:', remaining);
-          if (remaining.length > 0) {
-              const followUpMsg: ChatMessage = {
-                  id: `ai-follow-${Date.now()}`,
-                  role: 'model',
-                  text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
-              };
-              console.log('Adding follow-up message:', followUpMsg);
-              setChatMessages(prev => [...prev, followUpMsg]);
-          } else {
-               const doneMsg = {
-                   id: 'ai-done',
-                   role: 'model',
-                   text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
-               };
-               console.log('Adding done message:', doneMsg);
-               setChatMessages(prev => [...prev, doneMsg]);
-          }
+          // 使用函数式更新来获取最新的 suggestions 状态
+          setSuggestions(prevSuggestions => {
+              // 计算剩余待处理建议
+              const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
+              console.log('Remaining pending suggestions:', remaining);
+              if (remaining.length > 0) {
+                  const followUpMsg: ChatMessage = {
+                      id: `ai-follow-${Date.now()}`,
+                      role: 'model',
+                      text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
+                  };
+                  console.log('Adding follow-up message:', followUpMsg);
+                  setChatMessages(prev => [...prev, followUpMsg]);
+              } else {
+                   const doneMsg = {
+                       id: 'ai-done',
+                       role: 'model',
+                       text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
+                   };
+                   console.log('Adding done message:', doneMsg);
+                   setChatMessages(prev => [...prev, doneMsg]);
+              }
+              return prevSuggestions; // 不改变suggestions状态，只是使用它来计算
+          });
       }, 800);
     } catch (error) {
       console.error('Error in handleAcceptSuggestionInChat:', error);
@@ -736,6 +753,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始优化
   useEffect(() => {
     if (currentStep === 'chat' && suggestions.length > 0 && !chatInitialized) {
+      console.log('Generating chat summary...');
+      console.log('Current state:', {
+        currentStep,
+        suggestionsLength: suggestions.length,
+        chatInitialized,
+        score,
+        resumeData: resumeData?.personalInfo?.name
+      });
+      
       // 标记聊天已初始化，避免重复运行
       setChatInitialized(true);
       
@@ -759,23 +785,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       
       // 先显示问候和总结性消息
       setTimeout(() => {
-        setChatMessages(prev => [...prev, {
+        const summaryMessage = {
           id: `ai-summary-${Date.now()}`,
           role: 'model',
           text: `${userName}，您好！根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
-        }]);
+        };
+        console.log('Adding summary message:', summaryMessage);
+        setChatMessages(prev => [...prev, summaryMessage]);
         
         // 然后询问用户是否要开始优化
         setTimeout(() => {
-          setChatMessages(prev => [...prev, {
+          const askMessage = {
             id: `ai-ask-${Date.now()}`,
             role: 'model',
             text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议，帮助您提升简历质量。'
-          }]);
+          };
+          console.log('Adding ask message:', askMessage);
+          setChatMessages(prev => [...prev, askMessage]);
         }, 1500);
       }, 1000);
     }
-  }, [currentStep, suggestions, score, resumeData]);
+  }, [currentStep, suggestions, score, resumeData, chatInitialized]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
@@ -821,11 +851,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         ? `${import.meta.env.VITE_API_BASE_URL}/api/ai/generate-resume` 
         : `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
       
+      console.log('API Endpoint:', apiEndpoint);
+      console.log('Request Data:', {
+        message: textToSend,
+        resumeData: resumeData,
+        chatHistory: chatMessages,
+        score: score,
+        suggestions: suggestions
+      });
+      
       const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${token.trim()}`
         },
         body: JSON.stringify({
           message: textToSend,
@@ -836,9 +875,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         })
       });
 
+      console.log('Response Status:', response.status);
+      
       if (response.ok) {
         const result = await response.json();
         console.log('Backend API success');
+        console.log('API Response:', result);
         
         if (shouldGenerateResume && result.resumeData) {
           // 清理生成的简历数据，确保不包含任何AI建议或标记
@@ -869,12 +911,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             id: proj.id || index + 1
           }));
           
+          console.log('Cleaned Resume Data:', cleanedResumeData);
+          
           // 更新简历数据为AI生成的版本
           if (setResumeData) {
-            setResumeData(prev => ({
-              ...prev,
-              ...cleanedResumeData
-            }));
+            setResumeData(cleanedResumeData);
           }
           
           // 显示生成成功消息
@@ -894,7 +935,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           setChatMessages(prev => [...prev, aiMessage]);
         }
       } else {
-        throw new Error('Backend API failed');
+        const errorData = await response.json().catch(() => ({}));
+        console.error('Backend API failed:', errorData);
+        throw new Error(errorData.error || 'Backend API failed');
       }
     } catch (error) {
       console.error('API failed:', error);
