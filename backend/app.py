@@ -1272,6 +1272,198 @@ def ai_chat(current_user_id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
+@token_required
+def generate_resume(current_user_id):
+    try:
+        print(f"🔍 Generate Resume Current User ID: {current_user_id}")
+        
+        data = request.get_json()
+        message = data.get('message', '')
+        resume_data = data.get('resumeData')
+        chat_history = data.get('chatHistory', [])
+        score = data.get('score', 0)
+        suggestions = data.get('suggestions', [])
+        
+        if not resume_data:
+            return jsonify({'error': 'Resume data is required'}), 400
+        
+        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+        if model and check_gemini_quota():
+            try:
+                # Format chat history for AI
+                formatted_chat = ""
+                for msg in chat_history:
+                    role = "用户" if msg.get('role') == 'user' else "顾问"
+                    formatted_chat += f"{role}: {msg.get('text', '')}\n"
+                
+                # Prepare prompt for Gemini
+                # 简化 f-string 嵌套，避免语法错误
+                accepted_suggestions = []
+                for s in suggestions:
+                    if s.get('status') == 'accepted':
+                        accepted_suggestions.append(s.get('title', '建议'))
+                
+                accepted_suggestions_str = ', '.join(accepted_suggestions) if accepted_suggestions else '无'
+                
+                resume_info = format_resume_for_ai(resume_data)
+                chat_info = formatted_chat if formatted_chat else '无对话历史'
+                
+                prompt = """
+请根据以下信息生成一份完整的、优化后的简历。这份简历应该是完全可用的，不包含任何AI优化建议或标记。
+
+**输入信息：**
+
+1. **原始简历数据：**
+"""
+                prompt += resume_info
+                prompt += """
+
+2. **对话历史：**
+"""
+                prompt += chat_info
+                prompt += """
+
+3. **当前评分：**
+"""
+                prompt += f"{score}/100"
+                prompt += """
+
+4. **优化建议：**
+"""
+                prompt += f"{accepted_suggestions_str} 已被接受"
+                prompt += """
+
+**生成要求：**
+
+1. **格式要求：** 请严格按照以下JSON格式返回结果，不要添加任何其他说明文字
+2. **内容要求：**
+   - 基于原始简历数据
+   - 融合对话中讨论的优化点
+   - 应用已接受的建议
+   - 生成一份完整的、专业的简历
+   - 不包含任何AI优化建议或标记
+   - 确保所有字段都填充完整，无空值
+
+**返回格式：**
+
+{
+  "resumeData": {
+    "personalInfo": {
+      "name": "姓名",
+      "title": "职位标题",
+      "email": "邮箱地址",
+      "phone": "电话号码",
+      "location": "所在地"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "公司名称",
+        "position": "职位",
+        "startDate": "开始时间",
+        "endDate": "结束时间",
+        "description": "详细的工作描述，包含量化成果"
+      }
+    ],
+    "educations": [
+      {
+        "id": 1,
+        "school": "学校名称",
+        "degree": "学位",
+        "major": "专业",
+        "startDate": "开始时间",
+        "endDate": "结束时间"
+      }
+    ],
+    "projects": [
+      {
+        "id": 1,
+        "title": "项目名称",
+        "description": "详细的项目描述",
+        "date": "项目时间"
+      }
+    ],
+    "skills": ["技能1", "技能2", "技能3"],
+    "summary": "专业的个人简介"
+  }
+}
+
+请生成完整的JSON格式简历数据，确保所有字段都有合理的值。
+"""
+                
+                response = model.generate_content(prompt)
+                ai_result = parse_ai_response(response.text)
+                
+                if ai_result and ai_result.get('resumeData'):
+                    # 数据清理和验证
+                    generated_resume = {
+                        'personalInfo': ai_result['resumeData'].get('personalInfo', {}) or {},
+                        'workExps': ai_result['resumeData'].get('workExps', []) or [],
+                        'educations': ai_result['resumeData'].get('educations', []) or [],
+                        'projects': ai_result['resumeData'].get('projects', []) or [],
+                        'skills': ai_result['resumeData'].get('skills', []) or [],
+                        'summary': ai_result['resumeData'].get('summary', '') or ''
+                    }
+                    
+                    return jsonify({
+                        'resumeData': generated_resume
+                    })
+                else:
+                    # Fallback to enhanced mock resume
+                    enhanced_resume = {
+                        'personalInfo': resume_data.get('personalInfo', {}) or {},
+                        'workExps': resume_data.get('workExps', []) or [],
+                        'educations': resume_data.get('educations', []) or [],
+                        'projects': resume_data.get('projects', []) or [],
+                        'skills': resume_data.get('skills', []) or [],
+                        'summary': resume_data.get('summary', '') or ''
+                    }
+                    
+                    return jsonify({
+                        'resumeData': enhanced_resume
+                    })
+                    
+            except Exception as ai_error:
+                print(f"AI generate resume failed: {ai_error}")
+                logger.error(f"AI generate resume failed: {ai_error}")
+                
+                # 检查是否是配额超限错误
+                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
+                    print("Gemini API quota exceeded, falling back to enhanced mock resume")
+                    logger.warning("Gemini API quota exceeded, falling back to enhanced mock resume")
+                
+                # Fall back to enhanced mock resume
+                enhanced_resume = {
+                    'personalInfo': resume_data.get('personalInfo', {}) or {},
+                    'workExps': resume_data.get('workExps', []) or [],
+                    'educations': resume_data.get('educations', []) or [],
+                    'projects': resume_data.get('projects', []) or [],
+                    'skills': resume_data.get('skills', []) or [],
+                    'summary': resume_data.get('summary', '') or ''
+                }
+                
+                return jsonify({
+                    'resumeData': enhanced_resume
+                }), 200
+        
+        # Mock response - fallback
+        mock_resume = {
+            'personalInfo': resume_data.get('personalInfo', {}) or {},
+            'workExps': resume_data.get('workExps', []) or [],
+            'educations': resume_data.get('educations', []) or [],
+            'projects': resume_data.get('projects', []) or [],
+            'skills': resume_data.get('skills', []) or [],
+            'summary': resume_data.get('summary', '') or ''
+        }
+        
+        return jsonify({
+            'resumeData': mock_resume
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def generate_enhanced_mock_chat_response(message, score, suggestions):
     """Generate enhanced mock chat response when AI is unavailable"""
     lower_message = message.lower()

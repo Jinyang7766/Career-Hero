@@ -678,26 +678,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setInputMessage('');
     setIsSending(true);
 
-    // Check if user wants to start optimization
-    const lowerText = textToSend.toLowerCase();
-    if ((lowerText.includes('是') || lowerText.includes('好') || lowerText.includes('开始') || lowerText.includes('yes') || lowerText.includes('ok')) && suggestions.length > 0) {
-      // Find first pending suggestion
-      const firstPendingSuggestion = suggestions.find(s => s.status === 'pending');
-      if (firstPendingSuggestion) {
-        // Show first suggestion after a short delay
-        setTimeout(() => {
-          setChatMessages(prev => [...prev, {
-            id: `ai-sug-${firstPendingSuggestion.id}`,
-            role: 'model',
-            text: '好的，让我们开始优化。首先，我建议修改这个部分：',
-            suggestion: firstPendingSuggestion
-          }]);
-        }, 1000);
-        setIsSending(false);
-      return;
-      }
-    }
-
     try {
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
@@ -720,7 +700,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       }
       // --- 🟢 修改结束 ---
       
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`, {
+      // 检查是否需要生成新简历
+      const lowerText = textToSend.toLowerCase();
+      const shouldGenerateResume = lowerText.includes('生成简历') || lowerText.includes('创建简历') || lowerText.includes('完成优化') || lowerText.includes('最终简历');
+      
+      const apiEndpoint = shouldGenerateResume 
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/ai/generate-resume` 
+        : `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
+      
+      const response = await fetch(apiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -729,6 +717,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         body: JSON.stringify({
           message: textToSend,
           resumeData: resumeData,
+          chatHistory: chatMessages,
           score: score,
           suggestions: suggestions
         })
@@ -736,19 +725,66 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Backend chat API success');
+        console.log('Backend API success');
         
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'model',
-          text: result.response || '感谢您的咨询，我会继续为您提供优化建议。'
-        };
-        setChatMessages(prev => [...prev, aiMessage]);
+        if (shouldGenerateResume && result.resumeData) {
+          // 清理生成的简历数据，确保不包含任何AI建议或标记
+          const cleanedResumeData = {
+            ...result.resumeData,
+            // 确保所有必要字段都存在且格式正确
+            personalInfo: result.resumeData.personalInfo || {},
+            workExps: result.resumeData.workExps || [],
+            educations: result.resumeData.educations || [],
+            projects: result.resumeData.projects || [],
+            skills: result.resumeData.skills || [],
+            summary: result.resumeData.summary || ''
+          };
+          
+          // 为工作经历、教育背景和项目添加ID字段（如果不存在）
+          cleanedResumeData.workExps = cleanedResumeData.workExps.map((exp: any, index: number) => ({
+            ...exp,
+            id: exp.id || index + 1
+          }));
+          
+          cleanedResumeData.educations = cleanedResumeData.educations.map((edu: any, index: number) => ({
+            ...edu,
+            id: edu.id || index + 1
+          }));
+          
+          cleanedResumeData.projects = cleanedResumeData.projects.map((proj: any, index: number) => ({
+            ...proj,
+            id: proj.id || index + 1
+          }));
+          
+          // 更新简历数据为AI生成的版本
+          if (setResumeData) {
+            setResumeData(prev => ({
+              ...prev,
+              ...cleanedResumeData
+            }));
+          }
+          
+          // 显示生成成功消息
+          const aiMessage: ChatMessage = {
+            id: `ai-${Date.now()}`,
+            role: 'model',
+            text: '✅ 已根据我们的对话内容生成了一份完整的优化简历。您可以点击右上角的"完成优化"按钮查看最终结果并导出PDF。'
+          };
+          setChatMessages(prev => [...prev, aiMessage]);
+        } else {
+          // 普通聊天响应
+          const aiMessage: ChatMessage = {
+            id: `ai-${Date.now()}`,
+            role: 'model',
+            text: result.response || '感谢您的咨询，我会继续为您提供优化建议。'
+          };
+          setChatMessages(prev => [...prev, aiMessage]);
+        }
       } else {
-        throw new Error('Backend chat API failed');
+        throw new Error('Backend API failed');
       }
     } catch (error) {
-      console.error('Chat API failed:', error);
+      console.error('API failed:', error);
       // 显示 Toast 提示，不回退到模拟响应
       alert('AI 连接暂时中断');
     } finally {
@@ -989,28 +1025,35 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300">
         {/* Chat Header */}
         <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
-            <div className="flex items-center gap-3">
-                <button onClick={() => setCurrentStep('report')} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
-                    <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
-                </button>
-                <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white">
-                    <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
-                </div>
-                <div>
-                    <h3 className="font-bold text-slate-900 dark:text-white leading-tight">AI 猎头顾问</h3>
-                    <div className="flex items-center gap-1.5">
-                        <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400">在线</span>
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setCurrentStep('report')} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
+                        <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
+                    </button>
+                    <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white">
+                        <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+                    </div>
+                    <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white leading-tight">AI 猎头顾问</h3>
+                        <div className="flex items-center gap-1.5">
+                            <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400">在线</span>
+                        </div>
                     </div>
                 </div>
+                <button 
+                    onClick={async () => {
+                        // 首先生成最终简历
+                        await handleSendMessage('生成最终优化简历');
+                        // 延迟切换到对比页面，确保生成完成
+                        setTimeout(() => {
+                            setCurrentStep('comparison');
+                        }, 2000);
+                    }}
+                    className="text-sm font-bold text-primary hover:text-blue-600 px-3 py-1.5 bg-primary/10 rounded-lg"
+                >
+                    完成优化
+                </button>
             </div>
-            <button 
-                onClick={() => setCurrentStep('comparison')}
-                className="text-sm font-bold text-primary hover:text-blue-600 px-3 py-1.5 bg-primary/10 rounded-lg"
-            >
-                完成优化
-            </button>
-        </div>
 
         {/* Chat Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
@@ -1027,67 +1070,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                                 ? 'bg-primary text-white rounded-br-none' 
                                 : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
                         }`}>
-                            {/* 如果消息包含建议，显示对比内容 */}
-                            {msg.suggestion ? (
-                                <div>
-                                    <div className="mb-2">{msg.text}</div>
-                                    
-                                    {/* 对比显示 */}
-                                        <div className="bg-white/50 dark:bg-black/20 rounded-lg p-3 mb-3">
-                                            <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">修改对比：</div>
-                                            
-                                            {/* 旧内容 - 红色删除线 */}
-                                            <div className="mb-2">
-                                                <span className="text-red-500 line-through decoration-red-300">
-                                                    {msg.suggestion.originalValue || '(空)'}
-                                                </span>
-                                            </div>
-                                            
-                                            {/* 新内容 - 绿色加粗 */}
-                                            <div>
-                                                <span className="text-green-600 dark:text-green-400 font-bold">
-                                                    {msg.suggestion.suggestedValue !== undefined ? (
-                                                        Array.isArray(msg.suggestion.suggestedValue) 
-                                                            ? msg.suggestion.suggestedValue.join(', ') 
-                                                            : msg.suggestion.suggestedValue
-                                                    ) : (
-                                                        '(无修改建议)'
-                                                    )}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    
-                                    {/* 接受和忽略修改按钮 */}
-                                    {msg.suggestion.status === 'pending' && (
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => handleAcceptSuggestionInChat(msg.suggestion!)}
-                                                className="flex-1 py-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                                接受修改
-                                            </button>
-                                            <button 
-                                                onClick={() => handleIgnoreSuggestionInChat(msg.suggestion!.id)}
-                                                className="flex-1 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 text-xs font-bold rounded-lg transition-colors shadow-sm flex items-center justify-center gap-1"
-                                            >
-                                                <span className="material-symbols-outlined text-[14px]">close</span>
-                                                忽略
-                                            </button>
-                                        </div>
-                                    )}
-                                    
-                                    {msg.suggestion.status === 'accepted' && (
-                                        <div className="text-xs text-green-600 font-bold flex items-center gap-1">
-                                            <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                            已修改
-                                        </div>
-                                    )}
-                                </div>
-                            ) : (
-                                // 普通消息
-                                <div>{msg.text}</div>
-                            )}
+                            {/* 普通消息显示，移除建议弹窗 */}
+                            <div>{msg.text}</div>
                         </div>
                     </div>
               </div>
