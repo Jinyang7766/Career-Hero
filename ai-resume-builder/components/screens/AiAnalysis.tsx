@@ -979,10 +979,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 ></textarea>
                 
                 {/* 截图上传按钮 */}
-                <div className="mt-3 flex justify-center">
+                <div className="mt-3">
                     <button 
                         onClick={() => document.getElementById('jd-screenshot-upload')?.click()}
-                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all"
                     >
                         <span className="material-symbols-outlined">image</span>
                         上传JD截图
