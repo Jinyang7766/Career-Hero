@@ -1240,6 +1240,7 @@ def ai_chat(current_user_id):
 - 复杂术语
 - 重复内容
 - 使用姓氏称呼用户，只使用名字或通用称呼
+- 在每次回复中都带用户名字，只在第一次回复时带名字，后续回复直接开始内容
 
 **对话历史**：
 {formatted_chat if formatted_chat else '无对话历史'}
