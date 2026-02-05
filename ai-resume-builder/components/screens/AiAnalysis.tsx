@@ -644,12 +644,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 标记聊天已初始化，避免重复运行
       setChatInitialized(true);
       
-      // 先显示总结性消息
+      // 获取用户名字
+      const userName = resumeData?.personalInfo?.name || '您好';
+      
+      // 先显示问候和总结性消息
       setTimeout(() => {
         setChatMessages(prev => [...prev, {
           id: `ai-summary-${Date.now()}`,
           role: 'model',
-          text: `根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
+          text: `${userName}，您好！根据分析，您的简历整体评分 ${score}/100 分，我为您准备了 ${suggestions.filter(s => s.status === 'pending').length} 条具体的优化建议。`
         }]);
         
         // 然后询问用户是否要开始优化
@@ -657,12 +660,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           setChatMessages(prev => [...prev, {
             id: `ai-ask-${Date.now()}`,
             role: 'model',
-            text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议。'
+            text: '您想要开始逐一优化这些问题吗？我会按照重要性顺序为您提供具体的修改建议，帮助您提升简历质量。'
           }]);
         }, 1500);
       }, 1000);
     }
-  }, [currentStep, suggestions, score]);
+  }, [currentStep, suggestions, score, resumeData]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;

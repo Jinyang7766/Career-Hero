@@ -1199,6 +1199,7 @@ def ai_chat(current_user_id):
         data = request.get_json()
         message = data.get('message', '')
         resume_data = data.get('resumeData')
+        chat_history = data.get('chatHistory', [])
         score = data.get('score', 0)
         suggestions = data.get('suggestions', [])
         
@@ -1208,11 +1209,17 @@ def ai_chat(current_user_id):
         # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
         if model and check_gemini_quota():
             try:
+                # Format chat history for AI
+                formatted_chat = ""
+                for msg in chat_history:
+                    role = "用户" if msg.get('role') == 'user' else "顾问"
+                    formatted_chat += f"{role}: {msg.get('text', '')}\n"
+                
                 # Prepare prompt for Gemini
                 prompt = f"""
 你是一位专业的简历顾问，说话风格严肃、专业、温和，像一位经验丰富的职场导师。请遵循以下原则：
 
-📝 **风格要求**：严肃、专业、温和，符合日常对话，不要使用Markdown格式和emoji
+📝 **风格要求**：严肃、专业、温和、简略，符合日常对话，不要使用Markdown格式和emoji
 📏 **长度限制**：最多200字，自然流畅的段落形式
 🎯 **内容重点**：提供可执行的具体建议，直接但温和地指出问题所在
 
@@ -1229,14 +1236,19 @@ def ai_chat(current_user_id):
 - 复杂术语
 - 重复内容
 
-用户问题：{message}
+**对话历史**：
+{formatted_chat if formatted_chat else '无对话历史'}
 
-简历信息：
+**最新用户问题**：{message}
+
+**简历信息**：
 {format_resume_for_ai(resume_data) if resume_data else '无简历信息'}
 
-当前评分：{score}/100
+**当前评分**：{score}/100
 
-待处理建议：{len([s for s in suggestions if s.get('status') == 'pending'])} 条
+**待处理建议**：{len([s for s in suggestions if s.get('status') == 'pending'])} 条
+
+请基于对话历史和最新问题，生成一个连贯、自然的回复，不要重复之前已经说过的内容，也不要生成总结性的结论，而是直接回应用户的问题并提供具体的建议。
 """
                 
                 response = model.generate_content(prompt)
