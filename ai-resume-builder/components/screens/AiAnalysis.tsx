@@ -60,6 +60,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [isExporting, setIsExporting] = useState(false);
 
+  // Upload State
+  const [isUploading, setIsUploading] = useState(false);
+
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
@@ -586,19 +589,117 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   const hasJdInput = () => jdText.length > 0;
 
-  // --- Visual Viewport Logic ---
-  useEffect(() => {
+  // 处理JD截图上传
+  const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 文件验证
+    const maxSize = 5 * 1024 * 1024; // 5MB
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+
+    if (file.size > maxSize) {
+      alert('文件大小不能超过5MB');
+      return;
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      alert('只支持JPG、PNG和WEBP格式的图片');
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      // 读取文件并转换为base64
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const base64Image = event.target?.result as string;
+
+        // 获取token
+        let token = localStorage.getItem('token');
+        if (!token) {
+          const supabaseSession = localStorage.getItem('supabase_session');
+          if (supabaseSession) {
+            try {
+              const session = JSON.parse(supabaseSession);
+              token = session.access_token;
+            } catch (e) {}
+          }
+        }
+
+        if (!token) {
+          alert('登录已过期，请重新登录');
+          setIsUploading(false);
+          return;
+        }
+
+        // 调用后端API进行OCR识别
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/parse-screenshot`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token.trim()}`
+          },
+          body: JSON.stringify({
+            image: base64Image
+          })
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.text) {
+            setJdText(result.text);
+            alert('截图识别成功，已填充到文本框');
+          } else {
+            alert('截图识别失败，请重试');
+          }
+        } else {
+          alert('截图识别失败，请重试');
+        }
+
+        setIsUploading(false);
+      };
+
+      reader.onerror = () => {
+        alert('文件读取失败，请重试');
+        setIsUploading(false);
+      };
+
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Screenshot upload error:', error);
+      alert('上传失败，请重试');
+      setIsUploading(false);
+    }
+  };
+
+  // --- Visual Viewport Logic ---  useEffect(() => {
+    // 添加防抖函数，提高计算稳定性
+    let debounceTimer: NodeJS.Timeout;
+    
     const handleVisualViewportChange = () => {
-      if (window.visualViewport) {
-        // 计算键盘弹起带来的底部偏移
-        const offset = window.innerHeight - window.visualViewport.height;
-        setKeyboardOffset(offset);
-        setViewportHeight(window.visualViewport.height);
-      }
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (window.visualViewport) {
+          // 计算键盘弹起带来的底部偏移
+          const offset = Math.max(0, window.innerHeight - window.visualViewport.height);
+          setKeyboardOffset(offset);
+          setViewportHeight(window.visualViewport.height);
+        }
+      }, 10); // 10ms防抖，平衡响应速度和稳定性
     };
+    
+    // 监听更多事件，确保及时响应
     window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
     window.visualViewport?.addEventListener('scroll', handleVisualViewportChange);
+    window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
+    
+    // 初始计算
+    handleVisualViewportChange();
+    
     return () => {
+      clearTimeout(debounceTimer);
       window.visualViewport?.removeEventListener('resize', handleVisualViewportChange);
       window.visualViewport?.removeEventListener('scroll', handleVisualViewportChange);
     };
@@ -644,8 +745,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 标记聊天已初始化，避免重复运行
       setChatInitialized(true);
       
-      // 获取用户名字
-      const userName = resumeData?.personalInfo?.name || '您好';
+      // 获取用户名字，只使用名字部分，不带姓氏
+      let userName = '您好';
+      if (resumeData?.personalInfo?.name) {
+        // 提取名字部分，移除姓氏
+        const fullName = resumeData.personalInfo.name;
+        // 简单处理：如果名字包含空格或中文姓氏，只取最后一个部分
+        if (fullName.includes(' ')) {
+          // 英文名字，取最后一个单词
+          userName = fullName.split(' ').pop() || fullName;
+        } else if (fullName.length > 2) {
+          // 中文名字，取后两个字（假设姓氏为单字）
+          userName = fullName.slice(-2);
+        } else {
+          // 单字名字或其他情况，直接使用
+          userName = fullName;
+        }
+      }
       
       // 先显示问候和总结性消息
       setTimeout(() => {
@@ -860,6 +976,31 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                     placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
                     className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
                 ></textarea>
+                
+                {/* 截图上传按钮 */}
+                <div className="mt-3 flex justify-center">
+                    <button 
+                        onClick={() => document.getElementById('jd-screenshot-upload')?.click()}
+                        className="flex items-center gap-2 px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    >
+                        <span className="material-symbols-outlined">image</span>
+                        上传JD截图
+                    </button>
+                    <input 
+                        type="file" 
+                        id="jd-screenshot-upload"
+                        accept="image/*"
+                        onChange={handleScreenshotUpload}
+                        className="hidden"
+                    />
+                </div>
+                
+                {/* 上传状态显示 */}
+                {isUploading && (
+                    <div className="mt-3 text-center text-sm text-slate-500 dark:text-slate-400">
+                        正在处理截图...
+                    </div>
+                )}
             </div>
 
             <button 
@@ -1102,7 +1243,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         style={{ 
           bottom: `${keyboardOffset}px`, // 动态贴合键盘顶部
           paddingBottom: keyboardOffset > 0 ? '8px' : 'max(1.5rem, env(safe-area-inset-bottom))',
-          transition: 'bottom 0.1s ease-out' // 增加微小过渡，防止抖动
+          transition: 'bottom 0.1s ease-out', // 增加微小过渡，防止抖动
+          transform: 'translateZ(0)', // 启用硬件加速，减少渲染延迟
+          willChange: 'bottom' // 告诉浏览器提前准备动画，提高性能
         }}
       >
           

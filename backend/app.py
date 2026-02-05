@@ -1219,8 +1219,8 @@ def ai_chat(current_user_id):
                 prompt = f"""
 你是一位专业的简历顾问，说话风格严肃、专业、温和，像一位经验丰富的职场导师。请遵循以下原则：
 
-📝 **风格要求**：严肃、专业、温和、简略，符合日常对话，不要使用Markdown格式和emoji
-📏 **长度限制**：最多200字，自然流畅的段落形式
+📝 **风格要求**：严肃、专业、温和，符合日常对话，不要使用Markdown格式和emoji
+📏 **长度限制**：严格控制在50字以内，简洁明了
 🎯 **内容重点**：提供可执行的具体建议，直接但温和地指出问题所在
 
 **回复结构**：
@@ -1235,6 +1235,7 @@ def ai_chat(current_user_id):
 - 长篇大论
 - 复杂术语
 - 重复内容
+- 使用姓氏称呼用户，只使用名字或通用称呼
 
 **对话历史**：
 {formatted_chat if formatted_chat else '无对话历史'}
@@ -1248,7 +1249,7 @@ def ai_chat(current_user_id):
 
 **待处理建议**：{len([s for s in suggestions if s.get('status') == 'pending'])} 条
 
-请基于对话历史和最新问题，生成一个连贯、自然的回复，不要重复之前已经说过的内容，也不要生成总结性的结论，而是直接回应用户的问题并提供具体的建议。
+请基于对话历史和最新问题，生成一个连贯、自然的回复，不要重复之前已经说过的内容，也不要生成总结性的结论，而是直接回应用户的问题并提供具体的建议。严格控制回复长度在50字以内，不要使用姓氏称呼用户。
 """
                 
                 response = model.generate_content(prompt)
@@ -1279,6 +1280,71 @@ def ai_chat(current_user_id):
         
         return jsonify({
             'response': mock_response
+        }), 200
+    
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/ai/parse-screenshot', methods=['POST', 'OPTIONS'])
+@token_required
+def parse_screenshot(current_user_id):
+    try:
+        print(f"🔍 Parse Screenshot Current User ID: {current_user_id}")
+        
+        data = request.get_json()
+        image = data.get('image', '')
+        
+        if not image:
+            return jsonify({'error': 'Image is required'}), 400
+        
+        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+        if model and check_gemini_quota():
+            try:
+                # Prepare prompt for Gemini
+                prompt = "请识别以下图片中的职位描述（JD）内容，提取所有文本信息，不要添加任何解释或分析。"
+                
+                # Call Gemini with image
+                import base64
+                import re
+                
+                # Extract base64 image data
+                base64_data = re.sub('^data:image/.+;base64,', '', image)
+                image_data = base64.b64decode(base64_data)
+                
+                # Create image part for Gemini
+                from google.generativeai.types import ContentType
+                image_part = {
+                    "mime_type": "image/png",
+                    "data": image_data
+                }
+                
+                # Generate content with image
+                response = model.generate_content([prompt, image_part])
+                
+                # Extract text from response
+                extracted_text = response.text.strip()
+                
+                return jsonify({
+                    'text': extracted_text
+                })
+                
+            except Exception as ai_error:
+                print(f"AI parse screenshot failed: {ai_error}")
+                logger.error(f"AI parse screenshot failed: {ai_error}")
+                
+                # 检查是否是配额超限错误
+                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
+                    print("Gemini API quota exceeded, falling back to mock response")
+                    logger.warning("Gemini API quota exceeded, falling back to mock response")
+                
+                # Fall back to mock response
+                return jsonify({
+                    'text': '职位描述识别失败，请手动输入JD内容'
+                }), 200
+        
+        # Mock response - fallback
+        return jsonify({
+            'text': '职位描述识别失败，请手动输入JD内容'
         }), 200
     
     except Exception as e:
