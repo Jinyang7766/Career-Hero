@@ -705,7 +705,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     // 监听事件，确保及时响应
     window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
     window.visualViewport?.addEventListener('scroll', handleVisualViewportChange);
-    window.visualViewport?.addEventListener('resize', handleVisualViewportChange);
     
     // 初始计算
     handleVisualViewportChange();
@@ -721,7 +720,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     // 当消息更新或键盘高度变化时，强制置底
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ 
-        behavior: keyboardOffset > 0 ? "auto" : "smooth", // 键盘弹出时立即跳转，不平滑滚动
+        behavior: keyboardOffset > 0 ? "instant" : "smooth", // 键盘弹出时立即跳转，不平滑滚动
         block: "end" 
       });
     }
@@ -1279,11 +1278,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       <div 
         className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
         style={{ 
-          bottom: '0px', // 固定在底部
-          transform: `translateY(${-keyboardOffset}px)`, // 向上移动以避开键盘
-          paddingBottom: keyboardOffset > 0 ? '8px' : 'max(1.5rem, env(safe-area-inset-bottom))',
-          transition: 'transform 0.1s ease-out', // 增加微小过渡，防止抖动
-          willChange: 'transform' // 告诉浏览器提前准备动画，提高性能
+          bottom: keyboardOffset > 0 ? '0px' : 'max(1.5rem, env(safe-area-inset-bottom))', // 键盘弹出时固定在底部，否则考虑安全区域
+          transform: keyboardOffset > 0 ? `translateY(${-keyboardOffset}px)` : 'none', // 键盘弹出时向上移动，否则不移动
+          paddingBottom: '8px', // 统一padding
+          transition: 'transform 0.1s ease-out, bottom 0.1s ease-out', // 增加bottom过渡
+          willChange: 'transform, bottom' // 性能优化
         }}
       >
           

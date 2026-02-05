@@ -10,28 +10,28 @@ export interface UserProfile {
   updated_at: string;
 }
 
-// 本地缓存，存储用户信息
-const userCache = new Map<string, UserProfile>();
-
-// 缓存过期时间（10分钟）
-const CACHE_EXPIRY = 10 * 60 * 1000;
-
 // 缓存项接口
 interface CacheItem {
   profile: UserProfile;
   timestamp: number;
 }
 
-// 扩展Map，添加缓存管理方法
+// 本地缓存，存储用户信息
+const userCache = new Map<string, CacheItem>();
+
+// 缓存过期时间（10分钟）
+const CACHE_EXPIRY = 10 * 60 * 1000;
+
+// 缓存管理方法
 const cacheWithExpiry = {
   set: (key: string, profile: UserProfile) => {
     userCache.set(key, {
       profile,
       timestamp: Date.now()
-    } as any);
+    });
   },
   get: (key: string): UserProfile | null => {
-    const item = userCache.get(key) as CacheItem | undefined;
+    const item = userCache.get(key);
     if (!item) return null;
     
     // 检查缓存是否过期
@@ -44,6 +44,27 @@ const cacheWithExpiry = {
   },
   delete: (key: string) => {
     userCache.delete(key);
+  }
+};
+
+// 从localStorage获取用户信息
+export const getUserFromLocalStorage = (): any => {
+  try {
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      return JSON.parse(userStr);
+    }
+    
+    const sessionStr = localStorage.getItem('supabase_session');
+    if (sessionStr) {
+      const session = JSON.parse(sessionStr);
+      return session.user;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting user from localStorage:', error);
+    return null;
   }
 };
 
@@ -62,7 +83,11 @@ export const useUserProfile = (userId?: string) => {
         let targetUserId = userId;
         let authUser = null;
         
+        // 1. 优先从localStorage获取用户信息
+        const localStorageUser = getUserFromLocalStorage();
+        
         if (!targetUserId) {
+          // 2. 尝试从supabase获取当前用户
           const { data: { user }, error: userError } = await supabase.auth.getUser();
           if (userError || !user) {
             console.error('No authenticated user found:', userError);
@@ -71,11 +96,14 @@ export const useUserProfile = (userId?: string) => {
           }
           targetUserId = user.id;
           authUser = user;
+        } else if (localStorageUser && localStorageUser.id === targetUserId) {
+          // 如果提供了userId且与localStorage中的用户匹配，使用localStorage中的用户信息
+          authUser = localStorageUser;
         }
 
         console.log('Loading user profile for:', targetUserId);
 
-        // 1. 先检查缓存
+        // 3. 检查内存缓存
         const cachedProfile = cacheWithExpiry.get(targetUserId);
         if (cachedProfile) {
           console.log('User profile loaded from cache:', cachedProfile);
@@ -84,7 +112,22 @@ export const useUserProfile = (userId?: string) => {
           return;
         }
 
-        // 2. 尝试从数据库获取用户信息
+        // 4. 快速回退：如果有authUser，先使用它来显示基本信息
+        if (authUser) {
+          const quickProfile: UserProfile = {
+            id: authUser.id,
+            email: authUser.email || '',
+            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || '用户',
+            created_at: authUser.created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          console.log('Using quick auth user profile for initial load:', quickProfile);
+          setUserProfile(quickProfile);
+          // 不设置loading为false，继续加载完整信息
+        }
+
+        // 5. 尝试从数据库获取完整用户信息（异步，不阻塞UI）
         const profileResult = await DatabaseService.getUser(targetUserId);
         
         if (profileResult.success && profileResult.data) {
@@ -92,37 +135,13 @@ export const useUserProfile = (userId?: string) => {
           setUserProfile(profileResult.data);
           // 缓存用户信息
           cacheWithExpiry.set(targetUserId, profileResult.data);
-        } else {
-          console.log('User profile not found in database, using auth user metadata');
-          
-          // Fallback to auth user metadata
-          if (!authUser) {
-            const { data: { user }, error: authError } = await supabase.auth.getUser();
-            if (authError || !user) {
-              console.error('Error getting auth user:', authError);
-              setError('获取用户信息失败');
-              return;
-            }
-            authUser = user;
-          }
-
-          // Create profile from auth user data
-          const authProfile: UserProfile = {
-            id: authUser.id,
-            email: authUser.email || '',
-            name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || '用户',
-            created_at: authUser.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          };
-
-          console.log('Using auth user profile:', authProfile);
-          setUserProfile(authProfile);
-          // 缓存用户信息
-          cacheWithExpiry.set(targetUserId, authProfile);
         }
       } catch (err) {
         console.error('Error loading user profile:', err);
-        setError('加载用户信息失败');
+        // 如果发生错误，但已经显示了基本信息，不要覆盖
+        if (!userProfile) {
+          setError('加载用户信息失败');
+        }
       } finally {
         setLoading(false);
       }
