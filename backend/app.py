@@ -1301,7 +1301,7 @@ def parse_screenshot(current_user_id):
         if model and check_gemini_quota():
             try:
                 # Prepare prompt for Gemini
-                prompt = "请识别以下图片中的职位描述（JD）内容，提取所有文本信息，不要添加任何解释或分析。"
+                prompt = "请识别以下图片中的职位描述（JD）内容，提取所有文本信息，包括图片顶部和底部的内容，确保不要遗漏任何信息。不要添加任何解释或分析，只返回识别到的纯文本。"
                 
                 # Call Gemini with image
                 import base64
