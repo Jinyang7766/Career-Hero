@@ -698,11 +698,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
     const handleVisualViewportChange = () => {
       if (window.visualViewport) {
-        const vvHeight = window.visualViewport.height;
-        // 键盘高度 = 初始窗口高度 - 当前可视区域高度
-        const keyboardHeight = Math.round(Math.max(0, initialWindowHeight - vvHeight));
-        setKeyboardOffset(keyboardHeight);
-        setViewportHeight(vvHeight);
+        // 只更新 viewport 高度用于滚动，不计算键盘偏移
+        // 浏览器会通过 interactive-widget=resizes-content 自动处理键盘
+        setViewportHeight(window.visualViewport.height);
       }
     };
 
@@ -1177,7 +1175,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               )}
 
               {/* Prominent Chat Entry Button - Directly after missing keywords */}
-              <div className="mt-6">
+              <div className="mt-6 pb-32">
                 <button
                   onClick={() => setCurrentStep('chat')}
                   className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
@@ -1279,14 +1277,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area - Fixed at bottom, follows keyboard */}
+        {/* Input Area - Fixed at bottom, browser handles keyboard via interactive-widget */}
         <div
           className="fixed left-0 right-0 bottom-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
           style={{
-            transform: `translateY(-${keyboardOffset}px)`, // 使用 transform 代替 bottom，性能更好且兼容性更强
-            paddingBottom: keyboardOffset > 0 ? '8px' : 'max(8px, env(safe-area-inset-bottom))', // 键盘弹出时用固定 padding，否则考虑安全区域
-            transition: keyboardOffset > 0 ? 'none' : 'transform 0.15s ease-out', // 键盘弹出时立即响应，收起时平滑过渡
-            willChange: 'transform' // 性能优化
+            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
           }}
         >
 
