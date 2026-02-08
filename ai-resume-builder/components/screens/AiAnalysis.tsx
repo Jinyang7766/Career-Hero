@@ -693,15 +693,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // --- Visual Viewport Logic --- 
   useEffect(() => {
+    // 使用初始窗口高度作为基准（避免浏览器 URL 栏变化影响）
+    const initialWindowHeight = window.innerHeight;
+
     const handleVisualViewportChange = () => {
       if (window.visualViewport) {
-        // 计算键盘弹起带来的底部偏移
-        // 需要同时考虑 viewport 高度变化和 offsetTop (iOS 上键盘弹出时 viewport 会向上滚动)
-        const viewportHeight = window.visualViewport.height;
-        const offsetTop = window.visualViewport.offsetTop || 0;
-        const offset = Math.max(0, window.innerHeight - viewportHeight - offsetTop);
-        setKeyboardOffset(offset);
-        setViewportHeight(viewportHeight);
+        const vvHeight = window.visualViewport.height;
+        // 键盘高度 = 初始窗口高度 - 当前可视区域高度
+        // 使用 Math.round 避免小数导致的抖动
+        const keyboardHeight = Math.round(Math.max(0, initialWindowHeight - vvHeight));
+
+        // 只有当差值大于 100px 时才认为是键盘弹出（排除浏览器 UI 变化）
+        if (keyboardHeight > 100) {
+          setKeyboardOffset(keyboardHeight);
+        } else {
+          setKeyboardOffset(0);
+        }
+        setViewportHeight(vvHeight);
       }
     };
 
