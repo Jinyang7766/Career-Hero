@@ -700,15 +700,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       if (window.visualViewport) {
         const vvHeight = window.visualViewport.height;
         // 键盘高度 = 初始窗口高度 - 当前可视区域高度
-        // 使用 Math.round 避免小数导致的抖动
         const keyboardHeight = Math.round(Math.max(0, initialWindowHeight - vvHeight));
-
-        // 只有当差值大于 100px 时才认为是键盘弹出（排除浏览器 UI 变化）
-        if (keyboardHeight > 100) {
-          setKeyboardOffset(keyboardHeight);
-        } else {
-          setKeyboardOffset(0);
-        }
+        setKeyboardOffset(keyboardHeight);
         setViewportHeight(vvHeight);
       }
     };
@@ -1182,39 +1175,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                   </div>
                 </div>
               )}
+
+              {/* Prominent Chat Entry Button - Directly after missing keywords */}
+              <div className="mt-6">
+                <button
+                  onClick={() => setCurrentStep('chat')}
+                  className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/30 bg-white">
+                      <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Headhunter" className="w-full h-full object-cover" />
+                      <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-white"></span>
+                    </div>
+                    <div className="text-left">
+                      <p className="text-base font-bold flex items-center gap-1">
+                        咨询 AI 猎头顾问
+                      </p>
+                      <p className="text-xs text-blue-100">开始逐一优化简历问题...</p>
+                    </div>
+                  </div>
+                  <div className="size-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                    <span className="material-symbols-outlined">arrow_forward</span>
+                  </div>
+                </button>
+              </div>
             </div>
           )}
-
-          <div className="text-center py-8">
-            <span className="material-symbols-outlined text-5xl text-primary/30 mb-2">chat_spark</span>
-            <p className="text-slate-500 dark:text-slate-400 text-sm max-w-[200px] mx-auto">
-              AI 顾问已准备好为您提供具体的修改建议。
-            </p>
-          </div>
-
-          {/* Prominent Chat Entry Button - Moved to end of report content */}
-          <div className="px-4 pb-32">
-            <button
-              onClick={() => setCurrentStep('chat')}
-              className="w-full flex items-center justify-between px-6 py-4 bg-gradient-to-r from-primary to-blue-600 text-white rounded-2xl shadow-xl shadow-blue-500/20 active:scale-[0.98] transition-all group"
-            >
-              <div className="flex items-center gap-4">
-                <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/30 bg-white">
-                  <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Headhunter" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-white"></span>
-                </div>
-                <div className="text-left">
-                  <p className="text-base font-bold flex items-center gap-1">
-                    咨询 AI 猎头顾问
-                  </p>
-                  <p className="text-xs text-blue-100">开始逐一优化简历问题...</p>
-                </div>
-              </div>
-              <div className="size-10 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-                <span className="material-symbols-outlined">arrow_forward</span>
-              </div>
-            </button>
-          </div>
         </main>
       </div>
     );
