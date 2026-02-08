@@ -1274,15 +1274,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area - Fixed at bottom */}
+      {/* Input Area - Fixed at bottom, follows keyboard */}
       <div 
         className="fixed left-0 right-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
         style={{ 
-          bottom: keyboardOffset > 0 ? '0px' : 'max(1.5rem, env(safe-area-inset-bottom))', // 键盘弹出时固定在底部，否则考虑安全区域
-          transform: keyboardOffset > 0 ? `translateY(${-keyboardOffset}px)` : 'none', // 键盘弹出时向上移动，否则不移动
-          paddingBottom: '8px', // 统一padding
-          transition: 'transform 0.1s ease-out, bottom 0.1s ease-out', // 增加bottom过渡
-          willChange: 'transform, bottom' // 性能优化
+          bottom: `${keyboardOffset}px`, // 直接使用键盘高度作为 bottom 值，键盘弹出时贴合键盘顶部
+          paddingBottom: keyboardOffset > 0 ? '8px' : 'max(8px, env(safe-area-inset-bottom))', // 键盘弹出时用固定 padding，否则考虑安全区域
+          transition: 'bottom 0.15s ease-out', // 平滑过渡
+          willChange: 'bottom' // 性能优化
         }}
       >
           
