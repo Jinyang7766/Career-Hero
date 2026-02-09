@@ -6,7 +6,8 @@ WORKDIR /app
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # 复制 requirements.txt
 COPY backend/requirements.txt .
@@ -16,12 +17,16 @@ RUN pip cache purge && \
     pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# 安装 Playwright 浏览器与依赖（用于 PDF 导出）
+RUN python -m playwright install --with-deps chromium
+
 # 复制后端代码
 COPY backend/ .
 
 # 创建非 root 用户
 RUN useradd --create-home --shell /bin/bash app && \
-    chown -R app:app /app
+    chown -R app:app /app && \
+    chown -R app:app /ms-playwright
 USER app
 
 # 暴露端口
