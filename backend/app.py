@@ -949,6 +949,17 @@ def get_pdf_font_family() -> str:
     _PDF_FONT_FAMILY_CACHE = 'Helvetica'
     return _PDF_FONT_FAMILY_CACHE
 
+
+def get_pdf_font_url() -> str:
+    """Return a file URL to the configured font if available."""
+    font_path = os.getenv("PDF_FONT_PATH", "").strip()
+    if not font_path:
+        return ""
+    if not os.path.isabs(font_path):
+        font_path = os.path.abspath(font_path)
+    # Use file:// URL so Playwright can load local font
+    return f"file:///{font_path.replace(os.sep, '/')}"
+
 def is_safe_external_url(url: str) -> bool:
     try:
         parsed = urllib.parse.urlparse(url)
@@ -1086,6 +1097,49 @@ def build_resume_context(resume_data):
 
     skills = [clean_text_for_pdf(skill) for skill in (resume_data.get('skills', []) or []) if skill]
 
+    # Estimate content length to decide layout density
+    def estimate_content_length() -> int:
+        parts = []
+        parts.append(summary_text or '')
+        for exp in resume_data.get('workExps', []) or []:
+            parts.extend([
+                exp.get('title') or '',
+                exp.get('subtitle') or exp.get('position') or '',
+                exp.get('description') or ''
+            ])
+        for edu in resume_data.get('educations', []) or []:
+            parts.extend([
+                edu.get('title') or edu.get('school') or '',
+                edu.get('subtitle') or edu.get('degree') or edu.get('major') or ''
+            ])
+        for proj in resume_data.get('projects', []) or []:
+            parts.extend([
+                proj.get('title') or '',
+                proj.get('subtitle') or proj.get('role') or '',
+                proj.get('description') or ''
+            ])
+        parts.extend(resume_data.get('skills', []) or [])
+        return sum(len(str(p)) for p in parts if p)
+
+    content_len = estimate_content_length()
+    # Compact for typical one-page content, normal for very long resumes
+    if content_len <= 2600:
+        layout = {
+            'page_margin': '0.9cm 1.2cm',
+            'body_font_size': '9pt',
+            'body_line_height': '1.35',
+            'section_gap': '8px',
+            'item_gap': '5px'
+        }
+    else:
+        layout = {
+            'page_margin': '1.2cm 1.5cm',
+            'body_font_size': '10pt',
+            'body_line_height': '1.45',
+            'section_gap': '10px',
+            'item_gap': '6px'
+        }
+
     return {
         'name': name,
         'title': title,
@@ -1099,13 +1153,15 @@ def build_resume_context(resume_data):
         'educations': educations,
         'projects': projects,
         'skills': skills,
-        'template_id': (resume_data.get('templateId') or 'modern').lower()
+        'template_id': (resume_data.get('templateId') or 'modern').lower(),
+        'layout': layout
     }
 
 def generate_resume_html(resume_data):
     """Generate HTML content for resume based on resume data and template selection"""
     context = build_resume_context(resume_data)
     context['pdf_font_family'] = get_pdf_font_family()
+    context['pdf_font_url'] = get_pdf_font_url()
     template_id = context.get('template_id', 'modern')
 
     templates = {
@@ -1115,16 +1171,40 @@ def generate_resume_html(resume_data):
 <head>
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
-  <style>
-    @page { 
-      size: A4; 
-      margin: 1.2cm 1.5cm; 
-    }
-      body { 
-        font-family: '{{ pdf_font_family }}', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
-        font-size: 10pt; 
-        line-height: 1.4; 
-        color: #1f2937; 
+    <style>
+      {% if pdf_font_url %}
+      @font-face {
+        font-family: 'CustomPDF';
+        src: url('{{ pdf_font_url }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      {% endif %}
+      {% if pdf_font_url %}
+      @font-face {
+        font-family: 'CustomPDF';
+        src: url('{{ pdf_font_url }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      {% endif %}
+      {% if pdf_font_url %}
+      @font-face {
+        font-family: 'CustomPDF';
+        src: url('{{ pdf_font_url }}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
+      {% endif %}
+      @page { 
+        size: A4; 
+        margin: {{ layout.page_margin }}; 
+      }
+        body { 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
+          font-size: {{ layout.body_font_size }}; 
+          line-height: {{ layout.body_line_height }}; 
+          color: #1f2937; 
         margin: 0;
         padding: 0;
         width: 100%;
@@ -1135,8 +1215,8 @@ def generate_resume_html(resume_data):
         box-sizing: border-box;
       }
       .page {
-        width: 18cm;
-        margin: 0 auto;
+        width: 100%;
+        margin: 0;
       }
       .container {
         width: 100%;
@@ -1179,6 +1259,16 @@ def generate_resume_html(resume_data):
         border: 1px solid #d1d5db;
         border-radius: 10px;
         display: inline-block;
+        position: relative;
+      }
+      .avatar-placeholder svg {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 48px;
+        height: 48px;
+        transform: translate(-50%, -50%);
+        fill: #9ca3af;
       }
     .header-name { 
       font-size: 16pt; 
@@ -1196,9 +1286,9 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .section { 
-      margin-bottom: 10px; 
-    }
+      .section { 
+        margin-bottom: {{ layout.section_gap }}; 
+      }
       .section-title { 
         display: block;
         width: 100%;
@@ -1209,9 +1299,9 @@ def generate_resume_html(resume_data):
       padding-bottom: 3px; 
       margin-bottom: 6px; 
     }
-    .item { 
-      margin-bottom: 6px; 
-    }
+      .item { 
+        margin-bottom: {{ layout.item_gap }}; 
+      }
     .item-header {
       width: 100%;
     }
@@ -1239,15 +1329,15 @@ def generate_resume_html(resume_data):
     .skills { 
       margin-top: 3px; 
     }
-    .skill { 
-      display: inline; 
-      background-color: #f3f4f6; 
-      color: #374151; 
-      border: 1px solid #e5e7eb; 
-      padding: 2px 5px; 
-      font-size: 8pt; 
-      margin-right: 4px;
-    }
+      .skill { 
+        display: inline; 
+        background-color: transparent; 
+        color: #374151; 
+        border: none; 
+        padding: 0; 
+        font-size: 8pt; 
+        margin-right: 8px; 
+      }
   </style>
 </head>
 <body>
@@ -1259,7 +1349,12 @@ def generate_resume_html(resume_data):
         {% if avatar %}
           <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
-          <div class="avatar-placeholder"></div>
+          <div class="avatar-placeholder">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="32" cy="22" r="12"></circle>
+              <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+            </svg>
+          </div>
         {% endif %}
       </td>
       <td valign="top">
@@ -1292,7 +1387,7 @@ def generate_resume_html(resume_data):
 
   {% if educations %}
     <div class="section">
-      <div class="section-title">教育经历</div>
+        <div class="section-title">教育背景</div>
       {% for edu in educations %}
         <div class="item">
           <div class="item-title">{{ edu.title }}</div>
@@ -1318,7 +1413,7 @@ def generate_resume_html(resume_data):
 
     {% if skills %}
       <div class="section">
-        <div class="section-title">技能特长</div>
+        <div class="section-title">技能</div>
         <div class="skills">
           {% for skill in skills %}
             <span class="skill">{{ skill }}</span>
@@ -1338,15 +1433,15 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
-    @page { 
-      size: A4; 
-      margin: 1.2cm 1.5cm; 
-    }
-      body { 
-        font-family: '{{ pdf_font_family }}', 'SimSun', 'Times New Roman', serif; 
-        font-size: 10pt; 
-        line-height: 1.5; 
-        color: #111827;
+      @page { 
+        size: A4; 
+        margin: {{ layout.page_margin }}; 
+      }
+        body { 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'SimSun', 'Times New Roman', serif; 
+          font-size: {{ layout.body_font_size }}; 
+          line-height: {{ layout.body_line_height }}; 
+          color: #111827;
         margin: 0;
         padding: 0;
         width: 100%;
@@ -1363,12 +1458,13 @@ def generate_resume_html(resume_data):
         margin-bottom: 14px; 
       }
       .page {
-        width: 18cm;
-        margin: 0 auto;
+        width: 100%;
+        margin: 0;
       }
       .avatar { 
         width: 80px; 
         height: 80px; 
+        border-radius: 9999px;
       }
       .avatar-placeholder { 
         width: 80px; 
@@ -1376,6 +1472,16 @@ def generate_resume_html(resume_data):
         background-color: #e5e7eb;
         border: 1px solid #111827;
         border-radius: 9999px;
+        position: relative;
+      }
+      .avatar-placeholder svg {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 44px;
+        height: 44px;
+        transform: translate(-50%, -50%);
+        fill: #6b7280;
       }
     .name { 
       font-size: 18pt; 
@@ -1393,9 +1499,9 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .section { 
-      margin-bottom: 12px; 
-    }
+      .section { 
+        margin-bottom: {{ layout.section_gap }}; 
+      }
       .section-title { 
         display: block;
         width: 100%;
@@ -1407,10 +1513,10 @@ def generate_resume_html(resume_data):
       background-color: #f3f4f6; 
       padding-left: 5px; 
     }
-    .item { 
-      margin-bottom: 8px; 
-      padding-left: 5px; 
-    }
+      .item { 
+        margin-bottom: {{ layout.item_gap }}; 
+        padding-left: 5px; 
+      }
     .item-title { 
       font-size: 10pt;
       font-weight: bold; 
@@ -1437,9 +1543,14 @@ def generate_resume_html(resume_data):
     <div class="header">
     {% if avatar %}
       <img class="avatar" src="{{ avatar }}" alt="avatar" />
-    {% else %}
-        <div class="avatar-placeholder"></div>
-    {% endif %}
+      {% else %}
+        <div class="avatar-placeholder">
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <circle cx="32" cy="22" r="12"></circle>
+            <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+          </svg>
+        </div>
+      {% endif %}
     <div class="name">{{ name }}</div>
     <div class="title">{{ title }}</div>
     <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
@@ -1447,7 +1558,7 @@ def generate_resume_html(resume_data):
 
   {% if summary %}
     <div class="section">
-      <div class="section-title">简介</div>
+        <div class="section-title">个人简介</div>
       <div class="item-desc">{{ summary }}</div>
     </div>
   {% endif %}
@@ -1510,15 +1621,15 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
-    @page { 
-      size: A4; 
-      margin: 1.2cm 1.5cm; 
-    }
-      body { 
-        font-family: '{{ pdf_font_family }}', 'Microsoft YaHei', Arial, sans-serif; 
-        font-size: 10pt; 
-        line-height: 1.5; 
-        color: #111827;
+      @page { 
+        size: A4; 
+        margin: {{ layout.page_margin }}; 
+      }
+        body { 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'Microsoft YaHei', Arial, sans-serif; 
+          font-size: {{ layout.body_font_size }}; 
+          line-height: {{ layout.body_line_height }}; 
+          color: #111827;
         margin: 0;
         padding: 0;
         width: 100%;
@@ -1534,8 +1645,8 @@ def generate_resume_html(resume_data):
         table-layout: auto;
       }
       .page {
-        width: 18cm;
-        margin: 0 auto;
+        width: 100%;
+        margin: 0;
       }
       td {
         vertical-align: top;
@@ -1551,6 +1662,7 @@ def generate_resume_html(resume_data):
         width: 72px; 
         height: 72px; 
         display: inline-block;
+        border-radius: 9999px;
       }
       .avatar-placeholder { 
         width: 72px; 
@@ -1559,6 +1671,16 @@ def generate_resume_html(resume_data):
         border: 1px solid #cbd5f5;
         border-radius: 9999px;
         display: inline-block;
+        position: relative;
+      }
+      .avatar-placeholder svg {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 40px;
+        height: 40px;
+        transform: translate(-50%, -50%);
+        fill: #94a3b8;
       }
     .name { 
       font-size: 20pt; 
@@ -1576,9 +1698,9 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .section { 
-      margin-bottom: 10px; 
-    }
+      .section { 
+        margin-bottom: {{ layout.section_gap }}; 
+      }
       .section-title { 
         display: block;
         width: 100%;
@@ -1587,9 +1709,9 @@ def generate_resume_html(resume_data):
         color: #9ca3af; 
       margin-bottom: 5px; 
     }
-    .item { 
-      margin-bottom: 8px; 
-    }
+      .item { 
+        margin-bottom: {{ layout.item_gap }}; 
+      }
     .item-title { 
       font-size: 10pt;
       font-weight: bold; 
@@ -1605,13 +1727,13 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .skills span { 
-      display: inline; 
-      margin-right: 8px; 
-      border-bottom: 1px solid #e5e7eb; 
-      padding-bottom: 1px; 
-      font-size: 9pt; 
-    }
+      .skills span { 
+        display: inline; 
+        margin-right: 8px; 
+        border-bottom: none; 
+        padding-bottom: 0; 
+        font-size: 9pt; 
+      }
   </style>
 </head>
   <body>
@@ -1622,9 +1744,14 @@ def generate_resume_html(resume_data):
           <td width="90" valign="top">
             {% if avatar %}
               <img class="avatar" src="{{ avatar }}" alt="avatar" />
-            {% else %}
-              <div class="avatar-placeholder"></div>
-            {% endif %}
+        {% else %}
+          <div class="avatar-placeholder">
+            <svg viewBox="0 0 64 64" aria-hidden="true">
+              <circle cx="32" cy="22" r="12"></circle>
+              <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+            </svg>
+          </div>
+        {% endif %}
           </td>
           <td valign="top">
             <div class="name">{{ name }}</div>
@@ -1637,14 +1764,14 @@ def generate_resume_html(resume_data):
 
   {% if summary %}
     <div class="section">
-      <div class="section-title">Summary</div>
+       <div class="section-title">个人简介</div>
       <div class="item-desc">{{ summary }}</div>
     </div>
   {% endif %}
 
   {% if work_exps %}
     <div class="section">
-      <div class="section-title">Experience</div>
+      <div class="section-title">工作经历</div>
       {% for exp in work_exps %}
         <div class="item">
           <div class="item-title">{{ exp.title }}</div>
@@ -1658,7 +1785,7 @@ def generate_resume_html(resume_data):
 
   {% if educations %}
     <div class="section">
-      <div class="section-title">Education</div>
+      <div class="section-title">教育背景</div>
       {% for edu in educations %}
         <div class="item">
           <div class="item-title">{{ edu.title }}</div>
@@ -1671,7 +1798,7 @@ def generate_resume_html(resume_data):
 
   {% if projects %}
     <div class="section">
-      <div class="section-title">Projects</div>
+      <div class="section-title">项目经历</div>
       {% for proj in projects %}
         <div class="item">
           <div class="item-title">{{ proj.title }}</div>
@@ -1685,7 +1812,7 @@ def generate_resume_html(resume_data):
 
     {% if skills %}
       <div class="section">
-        <div class="section-title">Skills</div>
+        <div class="section-title">技能</div>
         <div class="skills">
           {% for skill in skills %}
             <span>{{ skill }}</span>
