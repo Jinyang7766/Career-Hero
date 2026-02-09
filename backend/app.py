@@ -1009,7 +1009,16 @@ def build_resume_context(resume_data):
         # Robust title (Company)
         title_text = exp.get('company') or exp.get('title') or exp.get('school') or '未填写单位'
         # Robust subtitle (Job Title / Position)
-        subtitle_text = exp.get('position') or exp.get('jobTitle') or exp.get('subtitle') or '职位'
+        raw_subtitle = exp.get('position') or exp.get('jobTitle') or exp.get('subtitle') or '职位'
+        
+        # Clean subtitle: Take only the front part if it looks like a composite title
+        subtitle_text = raw_subtitle
+        if ' | ' in raw_subtitle or ' · ' in raw_subtitle:
+             subtitle_text = raw_subtitle.split(' ')[0] # Basic split for distinctive separators
+        elif ' ' in raw_subtitle:
+             segments = raw_subtitle.split()
+             if len(segments) > 1 and len(segments[0]) >= 2:
+                 subtitle_text = segments[0]
         
         date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '时间不详'
         work_exps.append({

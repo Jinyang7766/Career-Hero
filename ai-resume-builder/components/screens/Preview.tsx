@@ -34,17 +34,38 @@ const resolveExperienceTitle = (item: any): string => {
 
 const resolveExperienceSubtitle = (item: any): string => {
   if (!item) return '';
-  // Priority for job titles/positions
-  if (item.position && String(item.position).trim()) return String(item.position).trim();
-  if (item.jobTitle && String(item.jobTitle).trim()) return String(item.jobTitle).trim();
 
-  // Combine degree and major for education if available
-  const parts = [];
-  if (item.degree && String(item.degree).trim()) parts.push(String(item.degree).trim());
-  if (item.major && String(item.major).trim()) parts.push(String(item.major).trim());
-  if (parts.length > 0) return parts.join(' · ');
+  // 1. Logic for Education (Combine degree and major if visible)
+  const isEducation = !!(item.school || item.degree || item.major);
+  if (isEducation) {
+    const parts = [];
+    if (item.degree && String(item.degree).trim()) parts.push(String(item.degree).trim());
+    if (item.major && String(item.major).trim()) parts.push(String(item.major).trim());
+    if (parts.length > 0) return parts.join(' · ');
+    return (item.subtitle || item.position || item.jobTitle || '').trim();
+  }
 
-  return (item.subtitle || '').trim();
+  // 2. Logic for Work/Projects
+  let raw = (item.position || item.jobTitle || item.subtitle || '').trim();
+  if (!raw) return '';
+
+  // 3. User request: "Only keep the job title" 
+  // If there's a space or distinct separator, we take the first part to keep the title clean.
+  // We use regex to split by common separators.
+  if (raw.includes(' | ') || raw.includes(' · ') || raw.includes(' - ')) {
+    return raw.split(/[\s|·-]+/)[0].trim();
+  }
+
+  // For simple spaces, we split and take the first part if it looks like a Chinese title
+  if (raw.includes(' ')) {
+    const segments = raw.split(/\s+/);
+    // Take front part if the first segment is already a decent name
+    if (segments.length > 1 && segments[0].length >= 2) {
+      return segments[0].trim();
+    }
+  }
+
+  return raw;
 };
 
 const resolveJobTitle = (data: any): string => {
