@@ -1138,29 +1138,28 @@ def generate_resume_html(resume_data):
       vertical-align: top; 
       padding: 0;
     }
-      .header-table { 
-        width: 100%; 
-        table-layout: auto;
+      .header {
+        width: 100%;
         border-bottom: 2px solid #e5e7eb; 
-        padding-bottom: 8px; 
+        padding-bottom: 10px; 
         margin-bottom: 12px; 
       }
-    .header-table td {
-      padding: 4px;
-    }
-      .avatar-cell { 
-        width: 70px; 
+      .header-top {
+        width: 100%;
+        text-align: left;
       }
-    .avatar { 
-      width: 55px; 
-      height: 72px; 
-    }
+      .avatar { 
+        width: 80px; 
+        height: 100px; 
+        display: inline-block;
+      }
       .avatar-placeholder { 
-        width: 55px; 
-        height: 72px; 
+        width: 80px; 
+        height: 100px; 
         background-color: #e5e7eb; 
         border: 1px solid #d1d5db;
-        border-radius: 8px;
+        border-radius: 10px;
+        display: inline-block;
       }
     .header-name { 
       font-size: 16pt; 
@@ -1235,26 +1234,18 @@ def generate_resume_html(resume_data):
 <body>
   <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
   <div class="container">
-    <table class="header-table" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <colgroup>
-        <col style="width:70px;" />
-        <col style="width:auto;" />
-      </colgroup>
-      <tr>
-        <td class="avatar-cell" style="width:70px;">
-          {% if avatar %}
-            <img class="avatar" src="{{ avatar }}" alt="avatar" />
-          {% else %}
-            <div class="avatar-placeholder"></div>
-          {% endif %}
-        </td>
-        <td class="header-main">
-          <h1 class="header-name">{{ name }}</h1>
-          <div class="header-title">{{ title }}</div>
-          <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
-        </td>
-      </tr>
-    </table>
+  <div class="header">
+    <div class="header-top">
+      {% if avatar %}
+        <img class="avatar" src="{{ avatar }}" alt="avatar" />
+      {% else %}
+        <div class="avatar-placeholder"></div>
+      {% endif %}
+      <h1 class="header-name">{{ name }}</h1>
+      <div class="header-title">{{ title }}</div>
+      <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+    </div>
+  </div>
 
   {% if summary %}
     <div class="section">
@@ -1357,13 +1348,13 @@ def generate_resume_html(resume_data):
         width: 100%;
         padding: 0;
       }
-    .avatar { 
-      width: 60px; 
-      height: 60px; 
-    }
+      .avatar { 
+        width: 80px; 
+        height: 80px; 
+      }
       .avatar-placeholder { 
-        width: 60px; 
-        height: 60px; 
+        width: 80px; 
+        height: 80px; 
         background-color: #e5e7eb;
         border: 1px solid #111827;
         border-radius: 9999px;
@@ -1540,22 +1531,21 @@ def generate_resume_html(resume_data):
     .header { 
       margin-bottom: 14px; 
     }
-    .header-top { 
-      width: 100%; 
-    }
-    .header-top td {
-      padding: 4px;
-    }
-    .avatar { 
-      width: 50px; 
-      height: 50px; 
-    }
+      .header-top { 
+        width: 100%; 
+      }
+      .avatar { 
+        width: 72px; 
+        height: 72px; 
+        display: inline-block;
+      }
       .avatar-placeholder { 
-        width: 50px; 
-        height: 50px; 
+        width: 72px; 
+        height: 72px; 
         background-color: #e5e7eb;
         border: 1px solid #cbd5f5;
         border-radius: 9999px;
+        display: inline-block;
       }
     .name { 
       font-size: 20pt; 
@@ -1614,23 +1604,17 @@ def generate_resume_html(resume_data):
   <body>
     <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
     <div class="header">
-      <table class="header-top" width="100%" cellpadding="0" cellspacing="0" border="0">
-      <tr>
-        <td style="width:70px;">
-          {% if avatar %}
-            <img class="avatar" src="{{ avatar }}" alt="avatar" />
-          {% else %}
-              <div class="avatar-placeholder"></div>
-          {% endif %}
-        </td>
-        <td>
-          <div class="name">{{ name }}</div>
-          <div class="title">{{ title }}</div>
-          <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
-        </td>
-      </tr>
-    </table>
-  </div>
+      <div class="header-top">
+        {% if avatar %}
+          <img class="avatar" src="{{ avatar }}" alt="avatar" />
+        {% else %}
+          <div class="avatar-placeholder"></div>
+        {% endif %}
+        <div class="name">{{ name }}</div>
+        <div class="title">{{ title }}</div>
+        <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+      </div>
+    </div>
 
   {% if summary %}
     <div class="section">
