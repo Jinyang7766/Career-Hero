@@ -1862,22 +1862,50 @@ def format_resume_for_ai(resume_data):
         formatted.append(f"职位: {personal.get('title', '')}")
         formatted.append(f"邮箱: {personal.get('email', '')}")
         formatted.append(f"电话: {personal.get('phone', '')}")
+        if personal.get('location'):
+            formatted.append(f"地点: {personal.get('location', '')}")
+
+    # Add summary (top-level or from personalInfo)
+    summary = resume_data.get('summary') or personal.get('summary', '')
+    if summary:
+        formatted.append(f"\n个人简介:\n{summary}")
 
     work_exps = resume_data.get('workExps', [])
     if work_exps:
         formatted.append("\n工作经历:")
         for exp in work_exps:
-            formatted.append(f"- {exp.get('position', '')} @ {exp.get('company', '')}")
-            formatted.append(f"  {exp.get('startDate', '')} - {exp.get('endDate', '')}")
+            company = exp.get('company') or exp.get('title', '')
+            position = exp.get('position') or exp.get('subtitle', '')
+            formatted.append(f"- {position} @ {company}")
+            date_str = exp.get('date') or f"{exp.get('startDate', '')} - {exp.get('endDate', '')}"
+            formatted.append(f"  {date_str}")
             formatted.append(f"  {exp.get('description', '')}")
 
     educations = resume_data.get('educations', [])
     if educations:
         formatted.append("\n教育背景:")
         for edu in educations:
-            formatted.append(f"- {edu.get('degree', '')} {edu.get('major', '')}")
-            formatted.append(f"  {edu.get('school', '')}")
-            formatted.append(f"  {edu.get('startDate', '')} - {edu.get('endDate', '')}")
+            school = edu.get('school') or edu.get('title', '')
+            degree = edu.get('degree') or edu.get('subtitle', '')
+            major = edu.get('major', '')
+            formatted.append(f"- {degree} {major}")
+            formatted.append(f"  {school}")
+            date_str = edu.get('date') or f"{edu.get('startDate', '')} - {edu.get('endDate', '')}"
+            formatted.append(f"  {date_str}")
+
+    projects = resume_data.get('projects', [])
+    if projects:
+        formatted.append("\n项目经历:")
+        for proj in projects:
+            title = proj.get('title', '')
+            role = proj.get('subtitle') or proj.get('role', '')
+            formatted.append(f"- {title}")
+            if role:
+                formatted.append(f"  角色: {role}")
+            date_str = proj.get('date', '')
+            if date_str:
+                formatted.append(f"  {date_str}")
+            formatted.append(f"  {proj.get('description', '')}")
 
     skills = resume_data.get('skills', [])
     if skills:

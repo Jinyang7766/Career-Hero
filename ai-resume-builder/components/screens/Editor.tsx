@@ -38,7 +38,21 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const wizardMode = true;
   const [currentStep, setCurrentStep] = useState<WizardStep>('import');
 
-  const [summary, setSummary] = useState('');
+  const [summary, setSummary] = useState(resumeData?.summary || '');
+
+  // Sync summary state to resumeData whenever it changes
+  useEffect(() => {
+    if (summary !== resumeData?.summary) {
+      setResumeData(prev => ({ ...prev, summary }));
+    }
+  }, [summary]);
+
+  // Sync resumeData.summary to local state if it changes externally
+  useEffect(() => {
+    if (resumeData?.summary && resumeData.summary !== summary) {
+      setSummary(resumeData.summary);
+    }
+  }, [resumeData?.summary]);
 
 
 
@@ -64,7 +78,10 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           name: importedData.personalInfo.name || prev.personalInfo.name,
           title: importedData.personalInfo.title || prev.personalInfo.title,
           email: importedData.personalInfo.email || prev.personalInfo.email,
-          phone: importedData.personalInfo.phone || prev.personalInfo.phone
+          phone: importedData.personalInfo.phone || prev.personalInfo.phone,
+          avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
+          location: importedData.personalInfo.location || prev.personalInfo.location,
+          summary: importedData.personalInfo.summary || prev.personalInfo.summary
         };
       }
 
@@ -88,6 +105,16 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
         const existingSkills = new Set(prev.skills);
         const newSkills = importedData.skills.filter(skill => !existingSkills.has(skill));
         mergedData.skills = [...prev.skills, ...newSkills];
+      }
+
+      // Merge summary (top-level)
+      if (importedData.summary) {
+        mergedData.summary = importedData.summary;
+      }
+
+      // Merge gender if provided
+      if (importedData.gender) {
+        mergedData.gender = importedData.gender;
       }
 
       return mergedData;
@@ -434,7 +461,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           />
         )}
 
-        
+
 
         {/* Work Experience - show in free edit or when wizard step is 'work' */}
         {(!wizardMode || currentStep === 'work') && (

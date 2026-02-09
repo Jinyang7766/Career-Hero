@@ -68,6 +68,14 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       </div>
     </div>
 
+    {/* Summary */}
+    {data?.summary && (
+      <div className="mb-5 no-break">
+        <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-1 mb-2" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>个人简介</h3>
+        <p className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{data.summary}</p>
+      </div>
+    )}
+
     {/* Body */}
     {data?.workExps && data.workExps.length > 0 && (
       <div className="mb-5 space-y-2 no-break">
@@ -147,6 +155,14 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       </div>
     </div>
 
+    {/* Summary */}
+    {data?.summary && (
+      <div className="mb-8 px-2 no-break">
+        <h3 className="text-sm font-bold text-gray-900 border-b-2 border-gray-900 mb-2 pb-0.5" style={{ fontSize: '14px', fontWeight: 'bold' }}>个人简介</h3>
+        <p className="text-xs text-gray-700 italic leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>{data.summary}</p>
+      </div>
+    )}
+
     {/* Body */}
     {data?.workExps && data.workExps.length > 0 && (
       <div className="mb-6 space-y-4 no-break">
@@ -225,6 +241,16 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     </div>
 
     <div className="flex flex-col gap-8">
+      {/* Summary Section */}
+      {data?.summary && (
+        <section className="mb-6 no-break">
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px] mb-2" style={{ fontSize: '14px' }}>Summary</h3>
+          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>
+            {data.summary}
+          </p>
+        </section>
+      )}
+
       {/* Experience */}
       {data?.workExps && data.workExps.length > 0 && (
         <div className="no-break">
@@ -243,6 +269,8 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
           </div>
         </div>
       )}
+
+
 
       {/* Education */}
       {data?.educations && data.educations.length > 0 && (
