@@ -37,7 +37,7 @@ Career-Hero/
 ## 🛠️ 技术栈
 
 ### 前端技术
-- **React 19.2.4** - 现代化UI框架
+- **React 18.2.0** - 现代化UI框架
 - **TypeScript** - 类型安全的JavaScript
 - **Vite** - 快速构建工具
 - **Tailwind CSS** - 实用优先的CSS框架
