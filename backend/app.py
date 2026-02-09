@@ -23,6 +23,11 @@ import urllib.request
 import ipaddress
 import socket
 import os
+try:
+    from playwright.sync_api import sync_playwright
+    HAS_PLAYWRIGHT = True
+except Exception:
+    HAS_PLAYWRIGHT = False
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
@@ -785,22 +790,41 @@ def export_pdf():
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
         
-        logger.info(f"Starting PDF generation with xhtml2pdf")
+        engine = os.getenv("PDF_ENGINE", "playwright").lower()
+        logger.info(f"Starting PDF generation with engine: {engine}")
         
         # Generate HTML for PDF
         html_content = generate_resume_html(resume_data)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
-        # 使用 xhtml2pdf 生成 PDF
-        result = io.BytesIO()
-        pisa_status = pisa.CreatePDF(html_content, dest=result)
-        
-        if pisa_status.err:
-            logger.error("PDF 生成失败（xhtml2pdf 报错）")
-            return jsonify({'error': 'PDF 生成失败'}), 500
-        
-        result.seek(0)
-        logger.info("PDF generated successfully with xhtml2pdf")
+        if engine == "playwright" and HAS_PLAYWRIGHT:
+            try:
+                with sync_playwright() as p:
+                    browser = p.chromium.launch()
+                    page = browser.new_page()
+                    page.set_content(html_content, wait_until="load")
+                    pdf_bytes = page.pdf(
+                        print_background=True,
+                        prefer_css_page_size=True
+                    )
+                    browser.close()
+                result = io.BytesIO(pdf_bytes)
+                result.seek(0)
+                logger.info("PDF generated successfully with Playwright")
+            except Exception as pw_err:
+                logger.error(f"Playwright PDF generation failed: {pw_err}")
+                return jsonify({'error': 'PDF 生成失败'}), 500
+        else:
+            # 使用 xhtml2pdf 生成 PDF（回退）
+            result = io.BytesIO()
+            pisa_status = pisa.CreatePDF(html_content, dest=result)
+            
+            if pisa_status.err:
+                logger.error("PDF 生成失败（xhtml2pdf 报错）")
+                return jsonify({'error': 'PDF 生成失败'}), 500
+            
+            result.seek(0)
+            logger.info("PDF generated successfully with xhtml2pdf")
 
         # 处理自定义文件名（来自前端的简历标题）
         custom_filename = data.get('filename', '').strip() if data.get('filename') else ''
@@ -1110,17 +1134,12 @@ def generate_resume_html(resume_data):
       * {
         box-sizing: border-box;
       }
+      .page {
+        width: 18cm;
+        margin: 0 auto;
+      }
       .container {
         width: 100%;
-      }
-      .page-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-      .page-table td {
-        width: 100%;
-        padding: 0;
       }
       table { 
         width: 100%; 
@@ -1232,20 +1251,24 @@ def generate_resume_html(resume_data):
   </style>
 </head>
 <body>
-  <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
+  <div class="page">
   <div class="container">
-  <div class="header">
-    <div class="header-top">
-      {% if avatar %}
-        <img class="avatar" src="{{ avatar }}" alt="avatar" />
-      {% else %}
-        <div class="avatar-placeholder"></div>
-      {% endif %}
-      <h1 class="header-name">{{ name }}</h1>
-      <div class="header-title">{{ title }}</div>
-      <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
-    </div>
-  </div>
+  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td width="90" valign="top">
+        {% if avatar %}
+          <img class="avatar" src="{{ avatar }}" alt="avatar" />
+        {% else %}
+          <div class="avatar-placeholder"></div>
+        {% endif %}
+      </td>
+      <td valign="top">
+        <h1 class="header-name">{{ name }}</h1>
+        <div class="header-title">{{ title }}</div>
+        <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+      </td>
+    </tr>
+  </table>
 
   {% if summary %}
     <div class="section">
@@ -1304,7 +1327,7 @@ def generate_resume_html(resume_data):
       </div>
     {% endif %}
   </div>
-  </td></tr></table>
+  </div>
   </body>
   </html>
         """,
@@ -1339,14 +1362,9 @@ def generate_resume_html(resume_data):
         padding-bottom: 10px; 
         margin-bottom: 14px; 
       }
-      .page-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-      .page-table td {
-        width: 100%;
-        padding: 0;
+      .page {
+        width: 18cm;
+        margin: 0 auto;
       }
       .avatar { 
         width: 80px; 
@@ -1415,7 +1433,7 @@ def generate_resume_html(resume_data):
   </style>
 </head>
   <body>
-  <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
+  <div class="page">
     <div class="header">
     {% if avatar %}
       <img class="avatar" src="{{ avatar }}" alt="avatar" />
@@ -1481,7 +1499,7 @@ def generate_resume_html(resume_data):
         <div class="item-desc">{{ skills | join(' | ') }}</div>
       </div>
     {% endif %}
-    </td></tr></table>
+  </div>
   </body>
   </html>
         """,
@@ -1515,14 +1533,9 @@ def generate_resume_html(resume_data):
         border-collapse: collapse;
         table-layout: auto;
       }
-      .page-table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: fixed;
-      }
-      .page-table td {
-        width: 100%;
-        padding: 0;
+      .page {
+        width: 18cm;
+        margin: 0 auto;
       }
       td {
         vertical-align: top;
@@ -1602,18 +1615,24 @@ def generate_resume_html(resume_data):
   </style>
 </head>
   <body>
-    <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
+  <div class="page">
     <div class="header">
-      <div class="header-top">
-        {% if avatar %}
-          <img class="avatar" src="{{ avatar }}" alt="avatar" />
-        {% else %}
-          <div class="avatar-placeholder"></div>
-        {% endif %}
-        <div class="name">{{ name }}</div>
-        <div class="title">{{ title }}</div>
-        <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="90" valign="top">
+            {% if avatar %}
+              <img class="avatar" src="{{ avatar }}" alt="avatar" />
+            {% else %}
+              <div class="avatar-placeholder"></div>
+            {% endif %}
+          </td>
+          <td valign="top">
+            <div class="name">{{ name }}</div>
+            <div class="title">{{ title }}</div>
+            <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+          </td>
+        </tr>
+      </table>
     </div>
 
   {% if summary %}
@@ -1674,7 +1693,7 @@ def generate_resume_html(resume_data):
         </div>
       </div>
     {% endif %}
-    </td></tr></table>
+  </div>
   </body>
   </html>
         """,
