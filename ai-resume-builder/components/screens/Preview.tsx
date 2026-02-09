@@ -431,6 +431,52 @@ const sanitizeData = (data: any): any => {
   return data;
 };
 
+const buildExportHtml = (templateId: string): string | null => {
+  const resumeEl = document.getElementById(`resume-content-${templateId}`);
+  if (!resumeEl) return null;
+
+  const resumeHtml = resumeEl.outerHTML;
+
+  return `
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=794, initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 794px;
+        background: #ffffff;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      #resume-root {
+        width: 794px;
+        min-height: 1123px;
+      }
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .no-break { break-inside: avoid; page-break-inside: avoid; }
+      h1, h2, h3, h4, h5, h6 { break-after: avoid; page-break-after: avoid; }
+      @page { size: A4; margin: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="resume-root">
+      ${resumeHtml}
+    </div>
+  </body>
+</html>
+  `.trim();
+};
+
 const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, setResumeData }) => {
   const [isGenerating, setIsGenerating] = useState(false);
   const isOptimized = resumeData?.optimizationStatus === 'optimized';
@@ -470,13 +516,16 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
 
     try {
       const sanitizedResumeData = sanitizeData(resumeData);
+      const htmlContent = buildExportHtml(currentTemplateId);
+      const payload: Record<string, unknown> = {
+        resumeData: sanitizedResumeData,
+        jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : ''
+      };
+      if (htmlContent) payload.htmlContent = htmlContent;
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          resumeData: sanitizedResumeData,
-          jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : ''
-        })
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {

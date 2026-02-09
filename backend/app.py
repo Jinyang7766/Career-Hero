@@ -778,7 +778,7 @@ def submit_feedback(current_user_id):
 @app.route('/api/export-pdf', methods=['POST'])
 def export_pdf():
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         resume_data = data.get('resumeData')
         jd_text = data.get('jdText', '')
         
@@ -788,7 +788,11 @@ def export_pdf():
         logger.info("Starting PDF generation with Playwright")
         
         # Generate HTML for PDF
-        html_content = generate_resume_html(resume_data)
+        html_content = data.get('htmlContent')
+        if not html_content:
+            html_content = generate_resume_html(resume_data)
+        else:
+            html_content = inject_font_css_into_html(html_content)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
         try:
@@ -796,11 +800,12 @@ def export_pdf():
                 browser = p.chromium.launch()
                 page = browser.new_page(viewport={"width": 794, "height": 1123})
                 page.emulate_media(media="print")
-                page.set_content(html_content, wait_until="load")
+                page.set_content(html_content, wait_until="networkidle")
                 pdf_bytes = page.pdf(
                     print_background=True,
-                    prefer_css_page_size=True,
+                    prefer_css_page_size=False,
                     format="A4",
+                    margin={"top": "0cm", "bottom": "0cm", "left": "0cm", "right": "0cm"},
                     scale=1
                 )
                 browser.close()
@@ -944,6 +949,38 @@ def get_pdf_font_url() -> str:
         font_path = os.path.abspath(font_path)
     # Use file:// URL so Playwright can load local font
     return f"file:///{font_path.replace(os.sep, '/')}"
+
+def inject_font_css_into_html(html_content: str) -> str:
+    if not html_content:
+        return html_content
+    if 'data-pdf-font' in html_content:
+        return html_content
+
+    font_url = get_pdf_font_url()
+    if not font_url:
+        return html_content
+
+    font_name = os.getenv("PDF_FONT_NAME", "").strip() or "CustomPDF"
+    font_css = f"""
+    <style data-pdf-font="1">
+      @font-face {{
+        font-family: '{font_name}';
+        src: url('{font_url}') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+        font-display: swap;
+      }}
+      html, body, #resume-root {{
+        font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+      }}
+    </style>
+    """
+
+    if '</head>' in html_content:
+        return html_content.replace('</head>', f'{font_css}</head>', 1)
+    if '<body' in html_content:
+        return html_content.replace('<body', f'{font_css}<body', 1)
+    return f'{font_css}{html_content}'
 
 def is_safe_external_url(url: str) -> bool:
     try:
