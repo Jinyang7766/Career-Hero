@@ -123,12 +123,12 @@ def token_required(f):
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            return jsonify({'message': '?? Authorization ???'}), 401
+            return jsonify({'message': '缺少 Authorization 请求头'}), 401
 
         token = auth_header.split(" ")[1] if " " in auth_header else auth_header
 
-        # --- ????? ---
-        # 1. ????????????????
+        # --- 临时修复 ---
+        # 1. 尝试直接解码而不验证签名
         try:
             payload = jwt.decode(token, options={"verify_signature": False})
             user_id = payload.get('sub') or payload.get('user_id')
@@ -139,7 +139,7 @@ def token_required(f):
         except Exception as e:
             print(f"DEBUG: Payload decode failed: {str(e)}")
 
-        # 2. ?? Supabase ????
+        # 2. 调用 Supabase 验证用户
         if hasattr(supabase, 'auth'):
             try:
                 user_res = supabase.auth.get_user(token)
@@ -148,8 +148,8 @@ def token_required(f):
             except Exception as se:
                 print(f"DEBUG: Supabase SDK failed: {str(se)}")
 
-        # ????
-        return jsonify({'message': '??????????????'}), 401
+        # 验证失败
+        return jsonify({'message': 'Token 无效或已过期，请重新登录'}), 401
 
     return decorated
 
@@ -214,7 +214,7 @@ def clean_list_dicts(values, allowed_keys, max_items=100):
 
 def clean_resume_payload(payload):
     if not isinstance(payload, dict):
-        return None, 'resumeData ?????'
+        return None, '简历数据缺失'
 
     personal_info = payload.get('personalInfo', {})
     if not isinstance(personal_info, dict):
@@ -315,10 +315,10 @@ def register():
 
         if result.data:
             if not JWT_SECRET:
-                return jsonify({'error': 'JWT_SECRET ??????????'}), 500
+                return jsonify({'error': 'JWT_SECRET 未配置'}), 500
             token = jwt.encode({'user_id': result.data[0]['id']}, JWT_SECRET, algorithm="HS256")
             return jsonify({
-                'message': '????',
+                'message': '注册成功',
                 'token': token,
                 'user': {
                     'id': result.data[0]['id'],
@@ -364,7 +364,7 @@ def login():
             return jsonify({'error': '账号或密码错误'}), 401
 
         if not JWT_SECRET:
-            return jsonify({'error': 'JWT_SECRET ??????????'}), 500
+            return jsonify({'error': 'JWT_SECRET 未配置'}), 500
         token = jwt.encode({'user_id': user['id']}, JWT_SECRET, algorithm="HS256")
         return jsonify({
             'message': '登录成功',
@@ -426,7 +426,7 @@ def get_resumes(current_user_id):
 def create_resume(current_user_id):
     try:
         data = request.get_json()
-        title = data.get('title', '???')
+        title = data.get('title', '新简历')
         title = clean_string(title, 200)
         resume_data = data.get('resumeData', {})
         cleaned_resume_data, err = clean_resume_payload(resume_data)
@@ -500,7 +500,7 @@ def update_resume(current_user_id, resume_id):
             update_data['resume_data'] = cleaned_resume_data
         if score is not None:
             if not isinstance(score, (int, float)) or score < 0 or score > 100:
-                return jsonify({'error': 'score ??? 0-100 ???'}), 400
+                return jsonify({'error': '分数必须在 0-100 之间'}), 400
             update_data['score'] = score
 
         if is_mock_mode():
@@ -730,8 +730,8 @@ def get_templates():
             },
             {
                 'id': 3,
-                'name': '????',
-                'description': '?????????',
+                'name': '极简风格',
+                'description': '注重内容的极简设计',
                 'preview': 'minimal'
             }
         ]
@@ -940,39 +940,39 @@ def normalize_date_range(start_date: str, end_date: str) -> str:
 
 def build_resume_context(resume_data):
     personal_info = resume_data.get('personalInfo', {}) or {}
-    name = clean_text_for_pdf(personal_info.get('name', '') or '??')
-    title = clean_text_for_pdf(personal_info.get('title', '') or '????')
+    name = clean_text_for_pdf(personal_info.get('name', '') or '未填写姓名')
+    title = clean_text_for_pdf(personal_info.get('title', '') or '未填写职位')
     email = clean_text_for_pdf(personal_info.get('email', '') or 'email@example.com')
     phone = clean_text_for_pdf(personal_info.get('phone', '') or '+86 138 0000 0000')
     location = clean_text_for_pdf(personal_info.get('location', '') or '')
     avatar = normalize_avatar_data(personal_info.get('avatar', '') or '')
-    avatar_initial = (name[:1] if name else '?')
+    avatar_initial = (name[:1] if name else '您')
 
     summary_text = resume_data.get('summary') or personal_info.get('summary') or ''
     summary = format_multiline(summary_text) if summary_text else ''
 
     work_exps = []
     for exp in resume_data.get('workExps', []) or []:
-        title_text = exp.get('title') or exp.get('company') or '????'
-        subtitle_text = exp.get('subtitle') or exp.get('position') or '??'
-        date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '????'
+        title_text = exp.get('title') or exp.get('company') or '未填写公司'
+        subtitle_text = exp.get('subtitle') or exp.get('position') or '未填写职位'
+        date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '时间不详'
         work_exps.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
             'date': clean_text_for_pdf(date_text),
-            'description': format_multiline(exp.get('description') or '????')
+            'description': format_multiline(exp.get('description') or '未填写描述')
         })
 
     educations = []
     for edu in resume_data.get('educations', []) or []:
-        title_text = edu.get('title') or edu.get('school') or '????'
+        title_text = edu.get('title') or edu.get('school') or '未填写学校'
         subtitle_parts = []
         if edu.get('degree'):
             subtitle_parts.append(edu.get('degree'))
         if edu.get('major'):
             subtitle_parts.append(edu.get('major'))
-        subtitle_text = edu.get('subtitle') or ' '.join([p for p in subtitle_parts if p]) or '??/??'
-        date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or '????'
+        subtitle_text = edu.get('subtitle') or ' '.join([p for p in subtitle_parts if p]) or '未说明学历/专业'
+        date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or '时间不详'
         educations.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
@@ -981,14 +981,14 @@ def build_resume_context(resume_data):
 
     projects = []
     for proj in resume_data.get('projects', []) or []:
-        title_text = proj.get('title') or '????'
-        subtitle_text = proj.get('subtitle') or proj.get('role') or '????'
-        date_text = proj.get('date') or '????'
+        title_text = proj.get('title') or '未填写项目名称'
+        subtitle_text = proj.get('subtitle') or proj.get('role') or '未填写角色'
+        date_text = proj.get('date') or '时间不详'
         projects.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
             'date': clean_text_for_pdf(date_text),
-            'description': format_multiline(proj.get('description') or '????')
+            'description': format_multiline(proj.get('description') or '未填写项目描述')
         })
 
     skills = [clean_text_for_pdf(skill) for skill in (resume_data.get('skills', []) or []) if skill]
@@ -1020,7 +1020,7 @@ def generate_resume_html(resume_data):
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>{{ name }} - ??</title>
+  <title>{{ name }} - 简历</title>
   <style>
     @page { size: A4; margin: 1.5cm; }
     body { font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #1f2937; }
@@ -1062,14 +1062,14 @@ def generate_resume_html(resume_data):
 
   {% if summary %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">个人简介</div>
       <div class="item-desc">{{ summary }}</div>
     </div>
   {% endif %}
 
   {% if work_exps %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">工作经历</div>
       {% for exp in work_exps %}
         <div class="item">
           <div class="item-title">{{ exp.title }}{% if exp.subtitle %} - {{ exp.subtitle }}{% endif %}</div>
@@ -1082,7 +1082,7 @@ def generate_resume_html(resume_data):
 
   {% if educations %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">教育经历</div>
       {% for edu in educations %}
         <div class="item">
           <div class="item-title">{{ edu.title }}</div>
@@ -1095,7 +1095,7 @@ def generate_resume_html(resume_data):
 
   {% if projects %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">项目经历</div>
       {% for proj in projects %}
         <div class="item">
           <div class="item-title">{{ proj.title }}{% if proj.subtitle %} - {{ proj.subtitle }}{% endif %}</div>
@@ -1108,7 +1108,7 @@ def generate_resume_html(resume_data):
 
   {% if skills %}
     <div class="section">
-      <div class="section-title">??</div>
+      <div class="section-title">技能特长</div>
       <div class="skills">
         {% for skill in skills %}
           <span class="skill">{{ skill }}</span>
@@ -1124,7 +1124,7 @@ def generate_resume_html(resume_data):
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>{{ name }} - ??</title>
+  <title>{{ name }} - 简历</title>
   <style>
     @page { size: A4; margin: 1.5cm; }
     body { font-family: 'Times New Roman', 'SimSun', serif; font-size: 12px; line-height: 1.6; color: #111827; }
@@ -1157,14 +1157,14 @@ def generate_resume_html(resume_data):
 
   {% if summary %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">简介</div>
       <div class="item-desc">{{ summary }}</div>
     </div>
   {% endif %}
 
   {% if work_exps %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">工作经历</div>
       {% for exp in work_exps %}
         <div class="item">
           <div class="item-title">{{ exp.title }}</div>
@@ -1178,7 +1178,7 @@ def generate_resume_html(resume_data):
 
   {% if educations %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">教育背景</div>
       {% for edu in educations %}
         <div class="item">
           <div class="item-title">{{ edu.title }}</div>
@@ -1191,7 +1191,7 @@ def generate_resume_html(resume_data):
 
   {% if projects %}
     <div class="section">
-      <div class="section-title">????</div>
+      <div class="section-title">项目经历</div>
       {% for proj in projects %}
         <div class="item">
           <div class="item-title">{{ proj.title }}</div>
@@ -1205,8 +1205,8 @@ def generate_resume_html(resume_data):
 
   {% if skills %}
     <div class="section">
-      <div class="section-title">????</div>
-      <div class="item-desc">{{ skills | join(' ? ') }}</div>
+      <div class="section-title">技能</div>
+      <div class="item-desc">{{ skills | join(' | ') }}</div>
     </div>
   {% endif %}
 </body>
@@ -1217,7 +1217,7 @@ def generate_resume_html(resume_data):
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>{{ name }} - ??</title>
+  <title>{{ name }} - 简历</title>
   <style>
     @page { size: A4; margin: 1.5cm; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #111827; }
@@ -1479,8 +1479,13 @@ def analyze_resume(current_user_id):
             try:
                 if job_description:
                     prompt = f"""
-请分析以下简历与职位描述的匹配度，并提供详细优化建议。
+请扮演资深招聘专家，分析以下简历与职位描述的匹配度，并提供详细评分和优化建议。
 请使用中文输出，字段值必须为中文。
+
+评分标准（总分100）：
+- 经历匹配（40分）：工作经历与JD职责的重合度、项目经验的含金量。
+- 技能匹配（30分）：硬技能（编程语言、工具）和软技能的覆盖率。
+- 格式规范（30分）：简历排版整洁度、关键信息的易读性、是否有错别字。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -1491,6 +1496,11 @@ def analyze_resume(current_user_id):
 请仅返回 JSON（仅中文内容）：
 {{
   "score": 85,
+  "scoreBreakdown": {{
+    "experience": 35,
+    "skills": 25,
+    "format": 25
+  }},
   "summary": "匹配度分析完成。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
@@ -1510,8 +1520,13 @@ def analyze_resume(current_user_id):
 """
                 else:
                     prompt = f"""
-请分析简历并提供详细优化建议。
+请扮演资深招聘专家，分析简历质量并提供详细评分和优化建议。
 请使用中文输出，字段值必须为中文。
+
+评分标准（总分100）：
+- 经历质量（40分）：工作内容的具体程度、是否有量化成果（使用STAR法则）。
+- 技能概况（30分）：技能栈是否完整、是否突出了核心竞争力。
+- 格式规范（30分）：结构是否清晰、排版是否专业、语言是否精炼。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -1519,6 +1534,11 @@ def analyze_resume(current_user_id):
 请仅返回 JSON（仅中文内容）：
 {{
   "score": 75,
+  "scoreBreakdown": {{
+    "experience": 30,
+    "skills": 20,
+    "format": 25
+  }},
   "summary": "简历分析完成。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
@@ -1551,6 +1571,7 @@ def analyze_resume(current_user_id):
 
                 return jsonify({
                     'score': ai_result.get('score', 70),
+                    'scoreBreakdown': ai_result.get('scoreBreakdown', {'experience': 0, 'skills': 0, 'format': 0}),
                     'summary': ai_result.get('summary', '智能分析完成，简历整体评估已生成。'),
                     'suggestions': ai_result.get('suggestions', []),
                     'strengths': ai_result.get('strengths', []),

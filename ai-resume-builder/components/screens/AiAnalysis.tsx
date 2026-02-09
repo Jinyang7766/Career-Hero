@@ -1058,6 +1058,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [currentStep]);
 
+
   // 记住用户所在步骤，切换回来可恢复
   useEffect(() => {
     localStorage.setItem('ai_analysis_step', currentStep);
@@ -1080,7 +1081,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
 
     AICacheService.get(resumeData, restoredJdText).then((cached) => {
-      if (!cached) return;
+      if (!cached) {
+        // 如果没有缓存数据，且处于需要数据的步骤，则重置回第一步
+        if (currentStep !== 'resume_select' && currentStep !== 'jd_input') {
+          console.log('No cached analysis data found, resetting step to resume_select');
+          setCurrentStep('resume_select');
+        }
+        return;
+      }
 
       setOriginalScore(cached.score || 0);
       setScore(cached.score || 0);
@@ -1100,6 +1108,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       hasRestoredAnalysisRef.current = true;
     });
   }, [resumeData, jdText, score, suggestions.length, currentStep]);
+
+  // 如果处于分析或聊天步骤但没有分数数据，强制返回第一步（兜底策略）
+  useEffect(() => {
+    if ((currentStep === 'report' || currentStep === 'chat') && score === 0 && suggestions.length === 0 && !isFromCache && hasRestoredAnalysisRef.current) {
+      console.log('Detected detailed step without data, resetting to resume_select');
+      setCurrentStep('resume_select');
+    }
+  }, [currentStep, score, suggestions.length, isFromCache]);
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
@@ -1267,63 +1283,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       }
       // --- 🟢 修改结束 ---
 
-      // 检查是否需要生成新简历
-      const lowerText = textToSend.toLowerCase();
-      const shouldGenerateResume = lowerText.includes('生成简历') || lowerText.includes('创建简历') || lowerText.includes('完成优化') || lowerText.includes('最终简历');
 
-      if (shouldGenerateResume) {
-        const sanitizeData = (data: any) => {
-          if (!data) return data;
-          const sanitized = { ...data };
-          const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory'];
-          fieldsToRemove.forEach((field) => {
-            if (field in sanitized) delete sanitized[field];
-          });
-          return sanitized;
-        };
-
-        const cleanedResumeData = sanitizeData(resumeData);
-        const finalResumeData = {
-          ...cleanedResumeData,
-          personalInfo: cleanedResumeData?.personalInfo || {},
-          workExps: cleanedResumeData?.workExps || [],
-          educations: cleanedResumeData?.educations || [],
-          projects: cleanedResumeData?.projects || [],
-          skills: cleanedResumeData?.skills || [],
-          summary: cleanedResumeData?.summary || ''
-        };
-
-        const preservedTemplateId = resumeData?.templateId || finalResumeData.templateId;
-        if (preservedTemplateId) {
-          finalResumeData.templateId = preservedTemplateId;
-        }
-
-        if (setResumeData && finalResumeData) {
-          setResumeData(finalResumeData);
-        }
-
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'model',
-          text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
-        };
-
-        const newMessages = [...chatMessages, userMessage, aiMessage];
-        setChatMessages(newMessages);
-        await persistInterviewSession(newMessages, jdText);
-        setIsSending(false);
-        return;
-      }
 
       const apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
 
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';
       const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(textToSend) && !isNegative(textToSend);
+      const isStartPhase = chatMessages.length > 0 && (chatMessages[chatMessages.length - 1].id === 'ai-ask' || chatMessages[chatMessages.length - 1].text.includes('准备好'));
       const interviewWrapped = isInterviewChat
         ? (isQaMode
           ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${textToSend}`
-          : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程，避免简历优化建议。每次回复需包含：1.简短点评；2.改进要点（1-2条）；3.参考回复；4.下一题。】\n\n候选人回答：${textToSend}`)
+          : (isStartPhase && isAffirmative(textToSend)
+            ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请根据简历和JD，提出与岗位匹配的第一个专业面试问题。直接提问，不要加任何前缀或标签。】`
+            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。】\n\n候选人回答：${textToSend}`)
+        )
         : textToSend;
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
@@ -1365,79 +1339,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         console.log('Backend API success');
         console.log('API Response:', result);
 
-        if (shouldGenerateResume && result.resumeData) {
-          // 清理生成的简历数据，确保不包含任何AI建议或标记
-          const cleanedResumeData = {
-            ...result.resumeData,
-            // 确保所有必要字段都存在且格式正确
-            personalInfo: result.resumeData.personalInfo || {},
-            workExps: result.resumeData.workExps || [],
-            educations: result.resumeData.educations || [],
-            projects: result.resumeData.projects || [],
-            skills: result.resumeData.skills || [],
-            summary: result.resumeData.summary || ''
-          };
-
-          const preservedTemplateId = resumeData?.templateId || cleanedResumeData.templateId;
-          if (preservedTemplateId) {
-            cleanedResumeData.templateId = preservedTemplateId;
-          }
-
-          // 为工作经历、教育背景和项目添加ID字段（如果不存在）
-          cleanedResumeData.workExps = cleanedResumeData.workExps.map((exp: any, index: number) => ({
-            ...exp,
-            id: exp.id || index + 1
-          }));
-
-          cleanedResumeData.educations = cleanedResumeData.educations.map((edu: any, index: number) => ({
-            ...edu,
-            id: edu.id || index + 1
-          }));
-
-          cleanedResumeData.projects = cleanedResumeData.projects.map((proj: any, index: number) => ({
-            ...proj,
-            id: proj.id || index + 1
-          }));
-
-          console.log('Cleaned Resume Data:', cleanedResumeData);
-
-          // 更新简历数据为AI生成的版本
-          if (setResumeData) {
-            setResumeData(cleanedResumeData);
-          }
-
-          // 显示生成成功消息
-          const aiMessage: ChatMessage = {
-            id: `ai-${Date.now()}`,
+        // 普通聊天响应
+        const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
+        const { cleaned, next } = splitNextQuestion(unmaskedText);
+        const aiMessage: ChatMessage = {
+          id: `ai-${Date.now()}`,
+          role: 'model',
+          text: cleaned || unmaskedText
+        };
+        const newMessages = [...chatMessages, userMessage, aiMessage];
+        let finalMessages = newMessages;
+        if (next) {
+          setPendingNextQuestion(next);
+          const askNext: ChatMessage = {
+            id: `ai-ask-next-${Date.now()}`,
             role: 'model',
-            text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
+            text: '要继续下一题吗？'
           };
-          const newMessages = [...chatMessages, userMessage, aiMessage];
-          setChatMessages(newMessages);
-          await persistInterviewSession(newMessages, jdText);
-        } else {
-          // 普通聊天响应
-          const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
-          const { cleaned, next } = splitNextQuestion(unmaskedText);
-          const aiMessage: ChatMessage = {
-            id: `ai-${Date.now()}`,
-            role: 'model',
-            text: cleaned || unmaskedText
-          };
-          const newMessages = [...chatMessages, userMessage, aiMessage];
-          let finalMessages = newMessages;
-          if (next) {
-            setPendingNextQuestion(next);
-            const askNext: ChatMessage = {
-              id: `ai-ask-next-${Date.now()}`,
-              role: 'model',
-              text: '要继续下一题吗？'
-            };
-            finalMessages = [...newMessages, askNext];
-          }
-          setChatMessages(finalMessages);
-          await persistInterviewSession(finalMessages, jdText);
+          finalMessages = [...newMessages, askNext];
         }
+        setChatMessages(finalMessages);
+        await persistInterviewSession(finalMessages, jdText);
+
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Backend API failed:', errorData);
@@ -1692,7 +1615,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
                 {hasJdInput() ? '人岗匹配度' : '简历综合评分'}
               </p>
-            <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(originalScore || score)}`}>
+              <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(originalScore || score)}`}>
                 {score}
                 <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
               </div>
@@ -1777,12 +1700,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                       </div>
                     </div>
 
-                    {/* Original and Suggested Content - Side by Side */}
-                    <div className="grid md:grid-cols-2 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-white/5">
+                    {/* Original and Suggested Content - Stacked for better mobile view */}
+                    <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
                       {/* Original */}
                       <div className="p-4 bg-red-50/30 dark:bg-red-900/5">
                         <p className="text-xs font-bold text-red-400 mb-2 uppercase">修改前</p>
-                        <div className="text-sm text-slate-500 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[60px]">
+                        <div className="text-sm text-slate-500 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[80px]">
                           {suggestion.originalValue || <span className="italic text-slate-400">无内容</span>}
                         </div>
                       </div>
@@ -1800,7 +1723,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                               s.id === suggestion.id ? { ...s, suggestedValue: e.target.value } : s
                             ));
                           }}
-                          className="w-full text-sm text-slate-800 dark:text-slate-200 bg-white dark:bg-black/20 p-3 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[60px] focus:ring-2 focus:ring-green-500/30 outline-none resize-none transition-all"
+                          className="w-full text-sm text-slate-800 dark:text-slate-200 bg-white dark:bg-black/20 p-3 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[120px] focus:ring-2 focus:ring-green-500/30 outline-none resize-y transition-all"
                         />
                       </div>
                     </div>
@@ -1867,12 +1790,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </>
               )}
             </button>
-            {!hasAcceptedSuggestion && (
-              <p className="text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-sm">info</span>
-                请至少采纳一条 AI 优化建议后再导出
-              </p>
-            )}
+
           </div>
         </main>
 
