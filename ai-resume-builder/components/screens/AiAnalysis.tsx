@@ -41,7 +41,7 @@ interface AnalysisReport {
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
-const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes, loadUserResumes }) => {
+const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
   // --- Privacy masking helpers ---
   const createMasker = () => {
     const mapping = new Map<string, string>();
@@ -121,9 +121,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   });
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [resumeTitle, setResumeTitle] = useState('');
+  const [stepHistory, setStepHistory] = useState<Step[]>([]);
 
+  // Wrapper for setCurrentStep that records history
+  const navigateToStep = (nextStep: Step, replace: boolean = false) => {
+    if (nextStep !== currentStep) {
+      if (!replace) {
+        setStepHistory(prev => [...prev, currentStep]);
+      }
+      setCurrentStep(nextStep);
+    }
+  };
 
-  // Data State
+  // Improved back logic
+  const handleStepBack = () => {
+    if (stepHistory.length > 0) {
+      const prev = [...stepHistory];
+      const lastStep = prev.pop()!;
+      setStepHistory(prev);
+      setCurrentStep(lastStep);
+    } else if (goBack) {
+      goBack();
+    }
+  };
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
   const [jdText, setJdText] = useState('');
 
@@ -394,7 +414,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setSelectedResumeId(id);
 
     // 立即切换到下一步，提高用户体验
-    setCurrentStep('jd_input');
+    navigateToStep('jd_input');
 
     // 记录当前 resumeData 和 allResumes 的状态
     console.log('handleResumeSelect - Current resumeData:', resumeData);
@@ -607,7 +627,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
 
     setAnalysisInProgress(true);
-    setCurrentStep('analyzing');
+    navigateToStep('analyzing');
 
     try {
       // 直接调用真实AI分析，不回退到模拟数据
@@ -682,13 +702,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
 
 
-        setCurrentStep('report');
+        navigateToStep('report', true); // Replace 'analyzing' step so back goes to 'jd_input'
       }
     } catch (error) {
       console.error('AI analysis failed:', error);
       // 显示错误提示，不回退到模拟数据
       alert(`AI 分析失败：${error.message || '网络连接异常，请稍后重试'}`);
-      setCurrentStep('jd_input');
+      navigateToStep('jd_input');
     } finally {
       setAnalysisInProgress(false);
     }
@@ -1477,8 +1497,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     return (
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
         <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
-          <div className="flex items-center justify-center h-14 px-4 relative">
+          <div className="flex items-center justify-between h-14 px-4 relative">
+            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
             <h1 className="text-lg font-bold tracking-tight">AI 智能诊断</h1>
+            <div className="w-8"></div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 pb-32">
@@ -1563,7 +1587,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
         <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
           <div className="flex items-center justify-between h-14 px-4 relative">
-            <button onClick={() => setCurrentStep('resume_select')} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
+            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <h1 className="text-lg font-bold tracking-tight">第二步：添加职位描述</h1>
@@ -1656,7 +1680,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
         <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
           <div className="flex items-center justify-between h-14 px-4 relative">
-            <button onClick={() => setCurrentStep('jd_input')} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
+            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <h1 className="text-lg font-bold tracking-tight">诊断报告</h1>
@@ -1880,7 +1904,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         {/* Chat Header */}
         <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-10">
           <div className="flex items-center gap-3">
-            <button onClick={() => setCurrentStep('report')} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
+            <button onClick={handleStepBack} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
               <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
             </button>
             <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white">
