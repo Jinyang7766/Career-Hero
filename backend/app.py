@@ -1106,13 +1106,27 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .container {
-      width: 100%;
-    }
-      table { 
-        width: 100%; 
+      .container {
+        width: 100%;
+      }
+      .page-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .page-table td {
+        padding: 0;
+      }
+      table {
+        width: 100%;
         border-collapse: collapse;
         table-layout: fixed;
+      }
+      .page-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .page-table td {
+        padding: 0;
       }
     td { 
       vertical-align: top; 
@@ -1163,10 +1177,12 @@ def generate_resume_html(resume_data):
     .section { 
       margin-bottom: 10px; 
     }
-    .section-title { 
-      font-size: 11pt; 
-      font-weight: bold; 
-      color: #1e40af; 
+      .section-title { 
+        display: block;
+        width: 100%;
+        font-size: 11pt; 
+        font-weight: bold; 
+        color: #1e40af; 
       border-bottom: 1px solid #dbeafe; 
       padding-bottom: 3px; 
       margin-bottom: 6px; 
@@ -1213,7 +1229,8 @@ def generate_resume_html(resume_data):
   </style>
 </head>
 <body>
-<div class="container">
+  <table class="page-table"><tr><td>
+  <div class="container">
   <table class="header-table">
     <tr>
       <td class="avatar-cell">
@@ -1277,19 +1294,20 @@ def generate_resume_html(resume_data):
     </div>
   {% endif %}
 
-  {% if skills %}
-    <div class="section">
-      <div class="section-title">技能特长</div>
-      <div class="skills">
-        {% for skill in skills %}
-          <span class="skill">{{ skill }}</span>
-        {% endfor %}
+    {% if skills %}
+      <div class="section">
+        <div class="section-title">技能特长</div>
+        <div class="skills">
+          {% for skill in skills %}
+            <span class="skill">{{ skill }}</span>
+          {% endfor %}
+        </div>
       </div>
-    </div>
-  {% endif %}
-</div>
-</body>
-</html>
+    {% endif %}
+  </div>
+  </td></tr></table>
+  </body>
+  </html>
         """,
         'classic': """
 <!DOCTYPE html>
@@ -1312,12 +1330,19 @@ def generate_resume_html(resume_data):
         word-break: break-all;
         word-wrap: break-word;
       }
-    .header { 
-      text-align: center; 
-      border-bottom: 2px solid #111827; 
-      padding-bottom: 10px; 
-      margin-bottom: 14px; 
-    }
+      .header { 
+        text-align: center; 
+        border-bottom: 2px solid #111827; 
+        padding-bottom: 10px; 
+        margin-bottom: 14px; 
+      }
+      .page-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .page-table td {
+        padding: 0;
+      }
     .avatar { 
       width: 60px; 
       height: 60px; 
@@ -1349,10 +1374,12 @@ def generate_resume_html(resume_data):
     .section { 
       margin-bottom: 12px; 
     }
-    .section-title { 
-      font-size: 11pt; 
-      font-weight: bold; 
-      border-bottom: 1px solid #111827; 
+      .section-title { 
+        display: block;
+        width: 100%;
+        font-size: 11pt; 
+        font-weight: bold; 
+        border-bottom: 1px solid #111827; 
       padding-bottom: 3px; 
       margin-bottom: 6px; 
       background-color: #f3f4f6; 
@@ -1383,8 +1410,9 @@ def generate_resume_html(resume_data):
       }
   </style>
 </head>
-<body>
-  <div class="header">
+  <body>
+    <table class="page-table"><tr><td>
+    <div class="header">
     {% if avatar %}
       <img class="avatar" src="{{ avatar }}" alt="avatar" />
     {% else %}
@@ -1443,14 +1471,15 @@ def generate_resume_html(resume_data):
     </div>
   {% endif %}
 
-  {% if skills %}
-    <div class="section">
-      <div class="section-title">技能</div>
-      <div class="item-desc">{{ skills | join(' | ') }}</div>
-    </div>
-  {% endif %}
-</body>
-</html>
+    {% if skills %}
+      <div class="section">
+        <div class="section-title">技能</div>
+        <div class="item-desc">{{ skills | join(' | ') }}</div>
+      </div>
+    {% endif %}
+    </td></tr></table>
+  </body>
+  </html>
         """,
         'minimal': """
 <!DOCTYPE html>
@@ -1522,10 +1551,12 @@ def generate_resume_html(resume_data):
     .section { 
       margin-bottom: 10px; 
     }
-    .section-title { 
-      font-size: 9pt; 
-      font-weight: bold; 
-      color: #9ca3af; 
+      .section-title { 
+        display: block;
+        width: 100%;
+        font-size: 9pt; 
+        font-weight: bold; 
+        color: #9ca3af; 
       margin-bottom: 5px; 
     }
     .item { 
@@ -1555,8 +1586,9 @@ def generate_resume_html(resume_data):
     }
   </style>
 </head>
-<body>
-  <div class="header">
+  <body>
+    <table class="page-table"><tr><td>
+    <div class="header">
     <table class="header-top">
       <tr>
         <td style="width:70px;">
@@ -1623,18 +1655,19 @@ def generate_resume_html(resume_data):
     </div>
   {% endif %}
 
-  {% if skills %}
-    <div class="section">
-      <div class="section-title">Skills</div>
-      <div class="skills">
-        {% for skill in skills %}
-          <span>{{ skill }}</span>
-        {% endfor %}
+    {% if skills %}
+      <div class="section">
+        <div class="section-title">Skills</div>
+        <div class="skills">
+          {% for skill in skills %}
+            <span>{{ skill }}</span>
+          {% endfor %}
+        </div>
       </div>
-    </div>
-  {% endif %}
-</body>
-</html>
+    {% endif %}
+    </td></tr></table>
+  </body>
+  </html>
         """,
     }
 
