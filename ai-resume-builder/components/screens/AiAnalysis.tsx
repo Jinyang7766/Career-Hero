@@ -511,7 +511,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       console.log("🚀 发送到后端的 Token 是:", token);
 
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // Increase timeout to 60s
 
       const masker = createMasker();
       const maskedResumeData = masker.maskObject(resumeData);
