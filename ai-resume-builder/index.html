@@ -27,18 +27,25 @@
               "text-secondary": "#92adc9",
             },
             fontFamily: {
-              sans: ["Noto Sans SC", "Inter", "sans-serif"],
-              display: ["Noto Sans SC", "Inter", "sans-serif"],
+              sans: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
+              display: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
             },
           },
         },
       }
     </script>
     <style>
+      @font-face {
+        font-family: 'CustomFont';
+        src: url('/font.ttf') format('truetype');
+        font-weight: normal;
+        font-style: normal;
+      }
       body {
         margin: 0;
         min-height: 100vh;
         background-color: #101922; /* Default to dark match */
+        font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
       }
       .no-scrollbar::-webkit-scrollbar {
         display: none;

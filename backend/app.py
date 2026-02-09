@@ -1022,8 +1022,12 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
+    @font-face {
+        font-family: 'CustomFont';
+        src: url('font.ttf');
+    }
     @page { size: A4; margin: 1.5cm; }
-    body { font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #1f2937; }
+    body { font-family: 'CustomFont', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #1f2937; }
     .header-table { width: 100%; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 16px; }
     .avatar-cell { width: 70px; vertical-align: top; }
     .avatar { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
@@ -1126,8 +1130,12 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
+    @font-face {
+        font-family: 'CustomFont';
+        src: url('font.ttf');
+    }
     @page { size: A4; margin: 1.5cm; }
-    body { font-family: 'Times New Roman', 'SimSun', serif; font-size: 12px; line-height: 1.6; color: #111827; }
+    body { font-family: 'CustomFont', 'Times New Roman', 'SimSun', serif; font-size: 12px; line-height: 1.6; color: #111827; }
     .header { text-align: center; border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 18px; }
     .avatar { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 1px solid #111827; margin-bottom: 8px; }
     .avatar-placeholder { width: 70px; height: 70px; border-radius: 50%; border: 1px solid #111827; display: inline-block; line-height: 70px; font-size: 20px; font-weight: bold; }
@@ -1219,8 +1227,12 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
+    @font-face {
+        font-family: 'CustomFont';
+        src: url('font.ttf');
+    }
     @page { size: A4; margin: 1.5cm; }
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #111827; }
+    body { font-family: 'CustomFont', 'Helvetica Neue', Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #111827; }
     .header { margin-bottom: 18px; }
     .header-top { width: 100%; }
     .avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb; }
