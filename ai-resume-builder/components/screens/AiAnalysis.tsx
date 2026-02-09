@@ -1132,9 +1132,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
 
     AICacheService.get(resumeData, restoredJdText).then((cached) => {
+      // 无论是否找到缓存，都标记为已尝试恢复，避免重复查询
+      hasRestoredAnalysisRef.current = true;
+
       if (!cached) {
-        // 如果没有缓存数据，且处于需要数据的步骤，则重置回第一步
-        if (currentStep !== 'resume_select' && currentStep !== 'jd_input') {
+        // 如果没有缓存数据，且处于需要数据的步骤（排除 resume_select, jd_input, 和 analyzing），则重置回第一步
+        // 关键修复：排除 'analyzing' 状态，防止正在分析时被强制跳回
+        if (currentStep !== 'resume_select' && currentStep !== 'jd_input' && currentStep !== 'analyzing') {
           console.log('No cached analysis data found, resetting step to resume_select');
           setCurrentStep('resume_select');
         }
