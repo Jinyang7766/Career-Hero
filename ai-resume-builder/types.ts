@@ -65,6 +65,12 @@ export interface ResumeData {
   templateId?: string;
   optimizationStatus?: 'optimized' | 'unoptimized';
   lastJdText?: string;
+  aiSuggestionFeedback?: Record<string, {
+    rating: 'up' | 'down';
+    ratedAt: string;
+    title?: string;
+    reason?: string;
+  }>;
   interviewSessions?: Record<string, {
     jdText: string;
     messages: { id: string; role: 'user' | 'model'; text: string }[];

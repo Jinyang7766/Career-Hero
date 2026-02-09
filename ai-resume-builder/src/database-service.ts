@@ -222,4 +222,42 @@ export class DatabaseService {
       return { success: false, error: err };
     }
   }
+
+  // 记录 AI 建议评分
+  static async createSuggestionFeedback(feedback: {
+    userId: string;
+    resumeId?: string | number | null;
+    suggestionId: string;
+    rating: 'up' | 'down';
+    title?: string;
+    reasonMasked?: string;
+    originalValueMasked?: any;
+    suggestedValueMasked?: any;
+  }) {
+    try {
+      const { error } = await supabase
+        .from('ai_suggestion_feedback')
+        .insert({
+          user_id: feedback.userId,
+          resume_id: feedback.resumeId ?? null,
+          suggestion_id: feedback.suggestionId,
+          rating: feedback.rating,
+          title: feedback.title,
+          reason_masked: feedback.reasonMasked ?? null,
+          original_value_masked: feedback.originalValueMasked ?? null,
+          suggested_value_masked: feedback.suggestedValueMasked ?? null,
+          created_at: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error creating suggestion feedback:', error);
+        return { success: false, error };
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error('Database operation failed:', err);
+      return { success: false, error: err };
+    }
+  }
 }

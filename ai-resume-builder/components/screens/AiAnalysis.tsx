@@ -15,6 +15,7 @@ interface Suggestion {
   suggestedValue: any;
   originalValue?: string;
   status: 'pending' | 'accepted' | 'ignored';
+  rating?: 'up' | 'down';
 }
 
 interface ChatMessage {
@@ -189,6 +190,81 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       });
     } catch (err) {
       console.error('Failed to record export history:', err);
+    }
+  };
+
+  const applySuggestionFeedback = (items: Suggestion[]) => {
+    const feedback = resumeData?.aiSuggestionFeedback || {};
+    if (!feedback || Object.keys(feedback).length === 0) return items;
+    return items.map(item => {
+      const entry = feedback[item.id];
+      return entry?.rating ? { ...item, rating: entry.rating } : item;
+    });
+  };
+
+  const maskSuggestionPayload = (suggestion: Suggestion) => {
+    const masker = createMasker();
+    const maskValue = (value: any) => {
+      if (value === null || value === undefined) return value;
+      if (typeof value === 'string') return masker.maskText(value);
+      return masker.maskObject(value);
+    };
+
+    return {
+      reasonMasked: suggestion.reason ? masker.maskText(suggestion.reason) : undefined,
+      originalValueMasked: maskValue(suggestion.originalValue),
+      suggestedValueMasked: maskValue(suggestion.suggestedValue)
+    };
+  };
+
+  const persistSuggestionFeedback = async (suggestion: Suggestion, rating: 'up' | 'down') => {
+    if (!resumeData) return;
+    if (suggestion.rating === rating) return;
+
+    const updatedFeedback = {
+      ...(resumeData.aiSuggestionFeedback || {}),
+      [suggestion.id]: {
+        rating,
+        ratedAt: new Date().toISOString(),
+        title: suggestion.title,
+        reason: suggestion.reason
+      }
+    };
+
+    const updatedResumeData: ResumeData = {
+      ...resumeData,
+      aiSuggestionFeedback: updatedFeedback
+    };
+
+    setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, rating } : s));
+    if (setResumeData) {
+      setResumeData(updatedResumeData);
+    }
+
+    if (!resumeData.id) return;
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const masked = rating === 'down' ? maskSuggestionPayload(suggestion) : {};
+
+      await DatabaseService.createSuggestionFeedback({
+        userId: user.id,
+        resumeId: resumeData.id ?? null,
+        suggestionId: suggestion.id,
+        rating,
+        title: suggestion.title,
+        reasonMasked: (masked as any).reasonMasked,
+        originalValueMasked: (masked as any).originalValueMasked,
+        suggestedValueMasked: (masked as any).suggestedValueMasked
+      });
+
+      await DatabaseService.updateResume(String(resumeData.id), {
+        resume_data: updatedResumeData,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Failed to persist suggestion feedback:', err);
     }
   };
 
@@ -563,7 +639,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         setOriginalScore(totalScore);
         // 初始化当前分数为原始分数
         setScore(totalScore);
-        setSuggestions(newSuggestions);
+        setSuggestions(applySuggestionFeedback(newSuggestions));
         setReport(newReport);
 
 
@@ -1008,7 +1084,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       setOriginalScore(cached.score || 0);
       setScore(cached.score || 0);
-      setSuggestions(cached.suggestions || []);
+      setSuggestions(applySuggestionFeedback(cached.suggestions || []));
       setReport({
         summary: cached.summary || '',
         strengths: cached.strengths || [],
@@ -1676,6 +1752,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                         <span className="text-xs font-bold text-primary uppercase tracking-wider">{suggestion.title}</span>
                       </div>
                       <p className="text-sm text-slate-600 dark:text-slate-300">{suggestion.reason}</p>
+                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span>这条建议有帮助吗？</span>
+                        <button
+                          onClick={() => persistSuggestionFeedback(suggestion, 'up')}
+                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'up'
+                            ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
+                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
+                            }`}
+                          aria-label="点赞"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">thumb_up</span>
+                        </button>
+                        <button
+                          onClick={() => persistSuggestionFeedback(suggestion, 'down')}
+                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'down'
+                            ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
+                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
+                            }`}
+                          aria-label="点踩"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">thumb_down</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Original and Suggested Content - Side by Side */}
