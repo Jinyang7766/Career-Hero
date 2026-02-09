@@ -1030,33 +1030,121 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
-    @font-face {
-        font-family: 'CustomFont';
-        src: url('font.ttf');
+    @page { 
+      size: A4; 
+      margin: 1.2cm 1.5cm; 
     }
-    @page { size: A4; margin: 1.5cm; }
-    * { box-sizing: border-box; }
-    html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: 'CustomFont', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #1f2937; max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-    .header-table { width: 100%; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 16px; table-layout: fixed; }
-    .avatar-cell { width: 70px; vertical-align: top; }
-    .avatar { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
-    .avatar-placeholder { width: 60px; height: 80px; background: #cbd5f5; color: #1e3a8a; display: table-cell; text-align: center; vertical-align: middle; font-size: 18px; font-weight: bold; border-radius: 4px; }
-    .header-name { font-size: 18px; font-weight: bold; margin: 0; }
-    .header-title { font-size: 13px; color: #4b5563; margin: 2px 0 6px 0; }
-    .header-contact { font-size: 10px; color: #6b7280; }
-    .section { margin-bottom: 14px; width: 100%; }
-    .section-title { font-size: 13px; font-weight: bold; color: #1e40af; border-bottom: 1px solid #dbeafe; padding-bottom: 4px; margin-bottom: 8px; }
-    .item { margin-bottom: 8px; width: 100%; }
-    .item-title { font-size: 11px; font-weight: bold; color: #111827; }
-    .item-subtitle { font-size: 10px; color: #374151; margin: 2px 0; }
-    .item-date { font-size: 9px; color: #6b7280; }
-    .item-desc { font-size: 10px; color: #4b5563; width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; white-space: pre-wrap; }
-    .skills { margin-top: 4px; }
-    .skill { display: inline-block; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; padding: 2px 6px; font-size: 9px; border-radius: 3px; margin: 2px; }
+    body { 
+      font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
+      font-size: 10pt; 
+      line-height: 1.4; 
+      color: #1f2937; 
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      width: 100%;
+    }
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+    }
+    td { 
+      vertical-align: top; 
+      padding: 0;
+    }
+    .header-table { 
+      width: 100%; 
+      border-bottom: 2px solid #e5e7eb; 
+      padding-bottom: 8px; 
+      margin-bottom: 12px; 
+    }
+    .header-table td {
+      padding: 4px;
+    }
+    .avatar-cell { 
+      width: 65px; 
+    }
+    .avatar { 
+      width: 55px; 
+      height: 72px; 
+    }
+    .avatar-placeholder { 
+      width: 55px; 
+      height: 72px; 
+      background-color: #cbd5f5; 
+      color: #1e3a8a; 
+      text-align: center; 
+      font-size: 16pt; 
+      font-weight: bold; 
+      line-height: 72px;
+    }
+    .header-name { 
+      font-size: 16pt; 
+      font-weight: bold; 
+      margin: 0 0 4px 0; 
+    }
+    .header-title { 
+      font-size: 11pt; 
+      color: #4b5563; 
+      margin: 0 0 4px 0; 
+    }
+    .header-contact { 
+      font-size: 9pt; 
+      color: #6b7280; 
+    }
+    .section { 
+      margin-bottom: 10px; 
+    }
+    .section-title { 
+      font-size: 11pt; 
+      font-weight: bold; 
+      color: #1e40af; 
+      border-bottom: 1px solid #dbeafe; 
+      padding-bottom: 3px; 
+      margin-bottom: 6px; 
+    }
+    .item { 
+      margin-bottom: 6px; 
+    }
+    .item-header {
+      width: 100%;
+    }
+    .item-title { 
+      font-size: 10pt; 
+      font-weight: bold; 
+      color: #111827; 
+    }
+    .item-subtitle { 
+      font-size: 9pt; 
+      color: #374151; 
+      margin: 2px 0; 
+    }
+    .item-date { 
+      font-size: 8pt; 
+      color: #6b7280; 
+    }
+    .item-desc { 
+      font-size: 9pt; 
+      color: #4b5563; 
+      margin-top: 2px;
+    }
+    .skills { 
+      margin-top: 3px; 
+    }
+    .skill { 
+      display: inline; 
+      background-color: #f3f4f6; 
+      color: #374151; 
+      border: 1px solid #e5e7eb; 
+      padding: 2px 5px; 
+      font-size: 8pt; 
+      margin-right: 4px;
+    }
   </style>
 </head>
 <body>
+<div class="container">
   <table class="header-table">
     <tr>
       <td class="avatar-cell">
@@ -1130,6 +1218,7 @@ def generate_resume_html(resume_data):
       </div>
     </div>
   {% endif %}
+</div>
 </body>
 </html>
         """,
@@ -1140,27 +1229,83 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
-    @font-face {
-        font-family: 'CustomFont';
-        src: url('font.ttf');
+    @page { 
+      size: A4; 
+      margin: 1.2cm 1.5cm; 
     }
-    @page { size: A4; margin: 1.5cm; }
-    * { box-sizing: border-box; }
-    html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: 'CustomFont', 'Times New Roman', 'SimSun', serif; font-size: 12px; line-height: 1.6; color: #111827; max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-    .header { text-align: center; border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 18px; }
-    .avatar { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 1px solid #111827; margin-bottom: 8px; }
-    .avatar-placeholder { width: 70px; height: 70px; border-radius: 50%; border: 1px solid #111827; display: inline-block; line-height: 70px; font-size: 20px; font-weight: bold; }
-    .name { font-size: 22px; font-weight: bold; text-transform: uppercase; }
-    .title { font-size: 14px; font-style: italic; margin-top: 4px; }
-    .contact { font-size: 11px; color: #4b5563; margin-top: 6px; }
-    .section { margin-bottom: 16px; width: 100%; }
-    .section-title { font-size: 13px; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 4px; margin-bottom: 8px; background: #f3f4f6; padding-left: 6px; }
-    .item { margin-bottom: 10px; padding-left: 6px; width: 100%; }
-    .item-title { font-weight: bold; }
-    .item-subtitle { font-style: italic; color: #374151; }
-    .item-date { font-size: 11px; color: #6b7280; }
-    .item-desc { font-size: 11px; width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; white-space: pre-wrap; }
+    body { 
+      font-family: 'SimSun', 'Times New Roman', serif; 
+      font-size: 10pt; 
+      line-height: 1.5; 
+      color: #111827;
+      margin: 0;
+      padding: 0;
+    }
+    .header { 
+      text-align: center; 
+      border-bottom: 2px solid #111827; 
+      padding-bottom: 10px; 
+      margin-bottom: 14px; 
+    }
+    .avatar { 
+      width: 60px; 
+      height: 60px; 
+    }
+    .avatar-placeholder { 
+      width: 60px; 
+      height: 60px; 
+      text-align: center;
+      font-size: 18pt; 
+      font-weight: bold; 
+      line-height: 60px;
+    }
+    .name { 
+      font-size: 18pt; 
+      font-weight: bold; 
+    }
+    .title { 
+      font-size: 11pt; 
+      font-style: italic; 
+      margin-top: 4px; 
+    }
+    .contact { 
+      font-size: 9pt; 
+      color: #4b5563; 
+      margin-top: 5px; 
+    }
+    .section { 
+      margin-bottom: 12px; 
+    }
+    .section-title { 
+      font-size: 11pt; 
+      font-weight: bold; 
+      border-bottom: 1px solid #111827; 
+      padding-bottom: 3px; 
+      margin-bottom: 6px; 
+      background-color: #f3f4f6; 
+      padding-left: 5px; 
+    }
+    .item { 
+      margin-bottom: 8px; 
+      padding-left: 5px; 
+    }
+    .item-title { 
+      font-size: 10pt;
+      font-weight: bold; 
+    }
+    .item-subtitle { 
+      font-size: 9pt;
+      font-style: italic; 
+      color: #374151; 
+    }
+    .item-date { 
+      font-size: 8pt; 
+      color: #6b7280; 
+    }
+    .item-desc { 
+      font-size: 9pt; 
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
@@ -1239,28 +1384,93 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
   <style>
-    @font-face {
-        font-family: 'CustomFont';
-        src: url('font.ttf');
+    @page { 
+      size: A4; 
+      margin: 1.2cm 1.5cm; 
     }
-    @page { size: A4; margin: 1.5cm; }
-    * { box-sizing: border-box; }
-    html, body { width: 100%; margin: 0; padding: 0; }
-    body { font-family: 'CustomFont', 'Helvetica Neue', Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #111827; max-width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; }
-    .header { margin-bottom: 18px; width: 100%; }
-    .header-top { width: 100%; table-layout: fixed; }
-    .avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb; }
-    .avatar-placeholder { width: 60px; height: 60px; border-radius: 50%; border: 1px solid #e5e7eb; display: inline-block; line-height: 60px; text-align: center; font-size: 18px; font-weight: bold; }
-    .name { font-size: 26px; font-weight: 800; margin: 0; }
-    .title { font-size: 14px; color: #6b7280; margin: 4px 0 8px 0; }
-    .contact { font-size: 10px; color: #9ca3af; }
-    .section { margin-bottom: 14px; width: 100%; }
-    .section-title { font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
-    .item { margin-bottom: 10px; width: 100%; }
-    .item-title { font-weight: bold; }
-    .item-date { font-size: 10px; color: #9ca3af; }
-    .item-desc { font-size: 10px; color: #374151; width: 100%; overflow-wrap: break-word; word-wrap: break-word; word-break: break-word; white-space: pre-wrap; }
-    .skills span { display: inline-block; margin-right: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; font-size: 10px; }
+    body { 
+      font-family: 'Microsoft YaHei', Arial, sans-serif; 
+      font-size: 10pt; 
+      line-height: 1.5; 
+      color: #111827;
+      margin: 0;
+      padding: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    td {
+      vertical-align: top;
+      padding: 0;
+    }
+    .header { 
+      margin-bottom: 14px; 
+    }
+    .header-top { 
+      width: 100%; 
+    }
+    .header-top td {
+      padding: 4px;
+    }
+    .avatar { 
+      width: 50px; 
+      height: 50px; 
+    }
+    .avatar-placeholder { 
+      width: 50px; 
+      height: 50px; 
+      text-align: center; 
+      font-size: 16pt; 
+      font-weight: bold; 
+      line-height: 50px;
+    }
+    .name { 
+      font-size: 20pt; 
+      font-weight: bold; 
+      margin: 0; 
+    }
+    .title { 
+      font-size: 11pt; 
+      color: #6b7280; 
+      margin: 3px 0 6px 0; 
+    }
+    .contact { 
+      font-size: 9pt; 
+      color: #9ca3af; 
+    }
+    .section { 
+      margin-bottom: 10px; 
+    }
+    .section-title { 
+      font-size: 9pt; 
+      font-weight: bold; 
+      color: #9ca3af; 
+      margin-bottom: 5px; 
+    }
+    .item { 
+      margin-bottom: 8px; 
+    }
+    .item-title { 
+      font-size: 10pt;
+      font-weight: bold; 
+    }
+    .item-date { 
+      font-size: 8pt; 
+      color: #9ca3af; 
+    }
+    .item-desc { 
+      font-size: 9pt; 
+      color: #374151; 
+      margin-top: 2px;
+    }
+    .skills span { 
+      display: inline; 
+      margin-right: 8px; 
+      border-bottom: 1px solid #e5e7eb; 
+      padding-bottom: 1px; 
+      font-size: 9pt; 
+    }
   </style>
 </head>
 <body>
