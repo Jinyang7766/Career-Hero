@@ -104,6 +104,7 @@ def mock_supabase_response(data=None, error=None):
 # Mock data storage for development
 mock_users = {}
 mock_resumes = {}
+mock_feedback = []
 
 def token_required(f):
     @wraps(f)
@@ -628,6 +629,37 @@ def get_templates():
         return jsonify({'templates': templates}), 200
     
     except Exception as e:
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@app.route('/api/feedback', methods=['POST'])
+@token_required
+def submit_feedback(current_user_id):
+    try:
+        data = request.get_json() or {}
+        description = (data.get('description') or '').strip()
+        images = data.get('images') or []
+
+        if not description:
+            return jsonify({'error': '问题描述不能为空'}), 400
+
+        record = {
+            'id': str(uuid.uuid4()),
+            'user_id': current_user_id,
+            'description': description,
+            'images': images,
+            'created_at': datetime.utcnow().isoformat()
+        }
+
+        if is_mock_mode():
+            mock_feedback.append(record)
+            result = mock_supabase_response(data=[record])
+        else:
+            result = supabase.table('feedback').insert(record).execute()
+
+        if result.data:
+            return jsonify({'message': '反馈已提交', 'feedback': result.data[0]}), 201
+        return jsonify({'error': '提交失败'}), 500
+    except Exception:
         return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/export-pdf', methods=['POST'])

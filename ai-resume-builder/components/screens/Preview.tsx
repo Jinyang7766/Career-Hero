@@ -423,12 +423,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
 
 
 
-        <button
-          onClick={() => setCurrentView(View.EDITOR)}
-          className="flex size-10 items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-white"
-        >
-          <span className="material-symbols-outlined text-[20px]">edit</span>
-        </button>
+        <div className="size-10" />
       </header>
 
       <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">
