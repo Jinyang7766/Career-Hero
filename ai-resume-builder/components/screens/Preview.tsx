@@ -209,7 +209,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
             {data.workExps.map((exp: any) => (
               <div key={exp.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{exp.title}</h4>
+                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{exp.company || exp.title}</h4>
                   <span className="text-sm text-gray-600 font-mono">{exp.date}</span>
                 </div>
                 <p className="text-sm text-gray-700 mb-2 font-medium italic">{exp.subtitle}</p>
@@ -228,10 +228,10 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
             {data.educations.map((edu: any) => (
               <div key={edu.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{edu.title}</h4>
+                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{edu.school || edu.title}</h4>
                   <span className="text-sm text-gray-600 font-mono">{edu.date}</span>
                 </div>
-                {edu.subtitle && <p className="text-sm text-gray-700 italic">{edu.subtitle}</p>}
+                {(edu.degree || edu.subtitle) && <p className="text-sm text-gray-700 italic">{edu.degree || edu.subtitle}</p>}
               </div>
             ))}
           </div>
