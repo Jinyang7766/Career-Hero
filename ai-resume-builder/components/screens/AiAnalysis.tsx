@@ -823,6 +823,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             setOptimizedResumeId(newId);
             console.log('🚀 Created new optimized resume record:', newTitle, 'ID:', newId);
 
+            // 关键修改：此时需要更新 resumeData 的 ID 为新创建的 ID
+            // 这样确保后续的操作（如再次采纳建议）都是基于新建立的副本，而不是覆盖原简历
+            if (setResumeData) {
+              setResumeData(prev => ({
+                ...prev,
+                id: newId,
+                optimizationStatus: 'optimized' as const,
+                lastJdText: jdText
+              }));
+            }
+
             // 可选：触发外部刷新列表
             if (loadUserResumes) loadUserResumes();
           }
