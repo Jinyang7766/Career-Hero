@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, ScreenProps, ResumeSummary, ResumeData } from '../../types';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { ScreenProps, ResumeData } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { AICacheService } from '../../src/ai-cache-service';
@@ -121,9 +120,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   });
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
 
-  // Visual Viewport State
-  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
 
   // Data State
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
@@ -951,47 +947,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   };
 
-  // --- Visual Viewport Logic --- 
-  useEffect(() => {
-    // 使用初始窗口高度作为基准（避免浏览器 URL 栏变化影响）
-    const initialWindowHeight = window.innerHeight;
-
-    const handleVisualViewportChange = () => {
-      if (window.visualViewport) {
-        // 只更新 viewport 高度用于滚动，不计算键盘偏移
-        // 浏览器会通过 interactive-widget=resizes-content 自动处理键盘
-        setViewportHeight(window.visualViewport.height);
-      }
-    };
-
-    // 监听事件，确保及时响应
-    const vv = window.visualViewport;
-    if (vv) {
-      vv.addEventListener('resize', handleVisualViewportChange);
-      vv.addEventListener('scroll', handleVisualViewportChange);
-    }
-
-    // 备用方案：监听 window resize 事件（兼容性更好）
-    window.addEventListener('resize', handleVisualViewportChange);
-
-    // 初始计算
-    handleVisualViewportChange();
-
-    return () => {
-      if (vv) {
-        vv.removeEventListener('resize', handleVisualViewportChange);
-        vv.removeEventListener('scroll', handleVisualViewportChange);
-      }
-      window.removeEventListener('resize', handleVisualViewportChange);
-    };
-  }, []);
-
   // --- Chat Logic ---
   const scrollToBottom = () => {
     // 当消息更新或键盘高度变化时，强制置底
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({
-        behavior: keyboardOffset > 0 ? "instant" : "smooth", // 键盘弹出时立即跳转，不平滑滚动
+        behavior: "smooth", // 键盘弹出时立即跳转，不平滑滚动
         block: "end"
       });
     }
@@ -1001,7 +962,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     if (currentStep === 'chat') {
       scrollToBottom();
     }
-  }, [chatMessages, isSending, keyboardOffset]);
+  }, [chatMessages, isSending]);
 
   // 额外的滚动逻辑，确保新消息时立即滚动
   useEffect(() => {

@@ -47,8 +47,7 @@ CORS(app,
                  "https://localhost:3000"
              ],
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"],
-             "supports_credentials": True
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
          }
      },
      supports_credentials=True
