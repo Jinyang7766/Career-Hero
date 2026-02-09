@@ -150,6 +150,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
   const [isSelectOptimizedOpen, setIsSelectOptimizedOpen] = useState(true);
   const [isSelectUnoptimizedOpen, setIsSelectUnoptimizedOpen] = useState(true);
+  const hasRestoredAnalysisRef = useRef(false);
 
   const setAnalysisInProgress = (value: boolean) => {
     if (value) {
@@ -985,6 +986,44 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   useEffect(() => {
     localStorage.setItem('ai_analysis_step', currentStep);
   }, [currentStep]);
+
+  // 恢复分析结果：从缓存中恢复分数/建议，避免切页后变成 0
+  useEffect(() => {
+    if (!resumeData) return;
+    if (hasRestoredAnalysisRef.current) return;
+
+    const restoredJdText = (jdText || resumeData.lastJdText || '').trim();
+    if (!jdText && restoredJdText) {
+      setJdText(restoredJdText);
+    }
+
+    const shouldRestore = score === 0 && suggestions.length === 0;
+    if (!shouldRestore) {
+      hasRestoredAnalysisRef.current = true;
+      return;
+    }
+
+    AICacheService.get(resumeData, restoredJdText).then((cached) => {
+      if (!cached) return;
+
+      setOriginalScore(cached.score || 0);
+      setScore(cached.score || 0);
+      setSuggestions(cached.suggestions || []);
+      setReport({
+        summary: cached.summary || '',
+        strengths: cached.strengths || [],
+        weaknesses: cached.weaknesses || [],
+        missingKeywords: cached.missingKeywords || [],
+        scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
+      });
+
+      if (currentStep === 'report' || currentStep === 'chat') {
+        setCurrentStep('report');
+      }
+
+      hasRestoredAnalysisRef.current = true;
+    });
+  }, [resumeData, jdText, score, suggestions.length, currentStep]);
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
