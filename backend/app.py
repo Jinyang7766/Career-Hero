@@ -12,6 +12,9 @@ import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 from xhtml2pdf import pisa
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from pypdf import PdfReader
 from docx import Document
 import io
@@ -19,6 +22,7 @@ import base64
 import urllib.request
 import ipaddress
 import socket
+import os
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
@@ -888,6 +892,39 @@ def clean_text_for_pdf(text):
 
     return text
 
+
+_PDF_FONT_FAMILY_CACHE = None
+
+
+def get_pdf_font_family() -> str:
+    """Return a font family name that can render CJK text in PDFs."""
+    global _PDF_FONT_FAMILY_CACHE
+    if _PDF_FONT_FAMILY_CACHE:
+        return _PDF_FONT_FAMILY_CACHE
+
+    # 1) Prefer user-provided font file for maximum compatibility
+    font_path = os.getenv("PDF_FONT_PATH", "").strip()
+    if font_path and os.path.exists(font_path):
+        font_name = os.getenv("PDF_FONT_NAME", "").strip() or "CustomPDF"
+        try:
+            pdfmetrics.registerFont(TTFont(font_name, font_path))
+            _PDF_FONT_FAMILY_CACHE = font_name
+            return _PDF_FONT_FAMILY_CACHE
+        except Exception as exc:
+            logger.warning(f"Failed to register PDF font from {font_path}: {exc}")
+
+    # 2) Fallback to built-in CID font for Chinese (ReportLab)
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+        _PDF_FONT_FAMILY_CACHE = 'STSong-Light'
+        return _PDF_FONT_FAMILY_CACHE
+    except Exception as exc:
+        logger.warning(f"Failed to register CID font STSong-Light: {exc}")
+
+    # 3) Last resort: standard PDF font (may not render CJK)
+    _PDF_FONT_FAMILY_CACHE = 'Helvetica'
+    return _PDF_FONT_FAMILY_CACHE
+
 def is_safe_external_url(url: str) -> bool:
     try:
         parsed = urllib.parse.urlparse(url)
@@ -1020,6 +1057,7 @@ def build_resume_context(resume_data):
 def generate_resume_html(resume_data):
     """Generate HTML content for resume based on resume data and template selection"""
     context = build_resume_context(resume_data)
+    context['pdf_font_family'] = get_pdf_font_family()
     template_id = context.get('template_id', 'modern')
 
     templates = {
@@ -1034,13 +1072,13 @@ def generate_resume_html(resume_data):
       size: A4; 
       margin: 1.2cm 1.5cm; 
     }
-    body { 
-      font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
-      font-size: 10pt; 
-      line-height: 1.4; 
-      color: #1f2937; 
-      margin: 0;
-      padding: 0;
+      body { 
+        font-family: '{{ pdf_font_family }}', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
+        font-size: 10pt; 
+        line-height: 1.4; 
+        color: #1f2937; 
+        margin: 0;
+        padding: 0;
     }
     .container {
       width: 100%;
@@ -1233,13 +1271,13 @@ def generate_resume_html(resume_data):
       size: A4; 
       margin: 1.2cm 1.5cm; 
     }
-    body { 
-      font-family: 'SimSun', 'Times New Roman', serif; 
-      font-size: 10pt; 
-      line-height: 1.5; 
-      color: #111827;
-      margin: 0;
-      padding: 0;
+      body { 
+        font-family: '{{ pdf_font_family }}', 'SimSun', 'Times New Roman', serif; 
+        font-size: 10pt; 
+        line-height: 1.5; 
+        color: #111827;
+        margin: 0;
+        padding: 0;
     }
     .header { 
       text-align: center; 
@@ -1388,13 +1426,13 @@ def generate_resume_html(resume_data):
       size: A4; 
       margin: 1.2cm 1.5cm; 
     }
-    body { 
-      font-family: 'Microsoft YaHei', Arial, sans-serif; 
-      font-size: 10pt; 
-      line-height: 1.5; 
-      color: #111827;
-      margin: 0;
-      padding: 0;
+      body { 
+        font-family: '{{ pdf_font_family }}', 'Microsoft YaHei', Arial, sans-serif; 
+        font-size: 10pt; 
+        line-height: 1.5; 
+        color: #111827;
+        margin: 0;
+        padding: 0;
     }
     table {
       width: 100%;
