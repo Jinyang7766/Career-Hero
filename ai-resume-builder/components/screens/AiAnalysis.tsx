@@ -42,6 +42,43 @@ interface AnalysisReport {
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
 const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
+  const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
+
+  const normalizeScoreBreakdown = (raw: ScoreBreakdown, totalScore?: number): ScoreBreakdown => {
+    if (!raw) return { experience: 0, skills: 0, format: 0 };
+
+    const sum = (raw.experience || 0) + (raw.skills || 0) + (raw.format || 0);
+    const maxExpected = {
+      experience: Math.round(SCORE_WEIGHTS.experience * 100),
+      skills: Math.round(SCORE_WEIGHTS.skills * 100),
+      format: Math.round(SCORE_WEIGHTS.format * 100),
+    };
+
+    const looksLikeContrib =
+      sum > 0 &&
+      sum <= 100 &&
+      (totalScore ? Math.abs(sum - totalScore) <= 3 : true) &&
+      raw.experience <= maxExpected.experience &&
+      raw.skills <= maxExpected.skills &&
+      raw.format <= maxExpected.format;
+
+    if (!looksLikeContrib) {
+      return {
+        experience: Math.min(100, Math.max(0, Math.round(raw.experience || 0))),
+        skills: Math.min(100, Math.max(0, Math.round(raw.skills || 0))),
+        format: Math.min(100, Math.max(0, Math.round(raw.format || 0))),
+      };
+    }
+
+    const toDimScore = (value: number, weight: number) =>
+      Math.min(100, Math.max(0, Math.round((value || 0) / weight)));
+
+    return {
+      experience: toDimScore(raw.experience || 0, SCORE_WEIGHTS.experience),
+      skills: toDimScore(raw.skills || 0, SCORE_WEIGHTS.skills),
+      format: toDimScore(raw.format || 0, SCORE_WEIGHTS.format),
+    };
+  };
   const sanitizeSuggestedValue = (value: any, targetSection?: Suggestion['targetSection']) => {
     if (targetSection === 'skills') return value;
     if (typeof value !== 'string') return value;
@@ -612,19 +649,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const backendScore = unmaskedResult.score || 0;
 
       // 转换后端返回的数据格式为前端需要的格式
-      const analysisResult = {
-        summary: unmaskedResult.summary || 'AI分析完成',
-        strengths: unmaskedResult.strengths || [],
-        weaknesses: unmaskedResult.weaknesses || [],
-        missingKeywords: unmaskedResult.missingKeywords, // 直接使用后端返回的数据
-        score: backendScore, // 保存原始分数
-        scoreBreakdown: {
-          experience: Math.round(backendScore * 0.4), // 假设经验占40%
-          skills: Math.round(backendScore * 0.4),     // 技能占40%
-          format: Math.round(backendScore * 0.2)      // 格式占20%
-        },
-        suggestions: unmaskedResult.suggestions // 直接使用后端返回的建议
-      };
+        const analysisResult = {
+          summary: unmaskedResult.summary || 'AI分析完成',
+          strengths: unmaskedResult.strengths || [],
+          weaknesses: unmaskedResult.weaknesses || [],
+          missingKeywords: unmaskedResult.missingKeywords, // 直接使用后端返回的数据
+          score: backendScore, // 保存原始分数
+          scoreBreakdown: {
+            experience: Math.round(backendScore * 0.4), // 假设经验占40%
+            skills: Math.round(backendScore * 0.4),     // 技能占40%
+            format: Math.round(backendScore * 0.2)      // 格式占20%
+          },
+          suggestions: unmaskedResult.suggestions // 直接使用后端返回的建议
+        };
 
       // ========== 缓存存储 ==========
       // 将新的分析结果存入缓存
@@ -718,16 +755,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           }
         });
 
+        const normalizedBreakdown = normalizeScoreBreakdown(
+          aiAnalysisResult.scoreBreakdown || {
+            experience: 75,
+            skills: 80,
+            format: 90
+          },
+          aiAnalysisResult.score || 0
+        );
+
         const newReport: AnalysisReport = {
           summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
           strengths: aiAnalysisResult.strengths || ['结构清晰'],
           weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
           missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
-          scoreBreakdown: aiAnalysisResult.scoreBreakdown || {
-            experience: 75,
-            skills: 80,
-            format: 90
-          }
+          scoreBreakdown: normalizedBreakdown
         };
 
         // 使用后端返回的实际分数
@@ -1273,7 +1315,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       return;
     }
 
-    AICacheService.get(resumeData, restoredJdText).then((cached) => {
+      AICacheService.get(resumeData, restoredJdText).then((cached) => {
       // 无论是否找到缓存，都标记为已尝试恢复，避免重复查询
       hasRestoredAnalysisRef.current = true;
 
@@ -1290,13 +1332,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       setOriginalScore(cached.score || 0);
       setScore(cached.score || 0);
       setSuggestions(applySuggestionFeedback(cached.suggestions || []));
-      setReport({
-        summary: cached.summary || '',
-        strengths: cached.strengths || [],
-        weaknesses: cached.weaknesses || [],
-        missingKeywords: cached.missingKeywords || [],
-        scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
-      });
+        const normalizedBreakdown = normalizeScoreBreakdown(
+          cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+          cached.score || 0
+        );
+        setReport({
+          summary: cached.summary || '',
+          strengths: cached.strengths || [],
+          weaknesses: cached.weaknesses || [],
+          missingKeywords: cached.missingKeywords || [],
+          scoreBreakdown: normalizedBreakdown
+        });
 
       // 数据恢复完成后，保持当前步骤不变，由 localStorage 初始值或外部跳转逻辑决定步骤
       // 移除原有的强制跳转到 report 的逻辑，以修复从预览页跳转 chat 却落到 report 的问题
