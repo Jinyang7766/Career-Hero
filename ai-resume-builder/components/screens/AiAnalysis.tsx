@@ -1423,7 +1423,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             <h1 className="text-lg font-bold tracking-tight">AI 智能诊断</h1>
           </div>
         </header>
-        <main className="p-4">
+        <main className="flex-1 overflow-y-auto p-4 pb-32">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">第一步：选择简历</h2>
           <div className="grid gap-4">
             <button

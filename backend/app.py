@@ -123,9 +123,11 @@ def token_required(f):
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
+            logger.info('Auth failed: missing Authorization header')
             return jsonify({'message': '?? Authorization ???'}), 401
 
         token = auth_header.split(" ")[1] if " " in auth_header else auth_header
+        logger.info('Auth attempt: token length=%s', len(token) if token else 0)
 
         # 1) ?? JWT ????? JWT_SECRET ??????
         if JWT_SECRET:
@@ -133,23 +135,29 @@ def token_required(f):
                 payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
                 user_id = payload.get('sub') or payload.get('user_id')
                 if user_id:
+                    logger.info('Auth success: local JWT user_id=%s', user_id)
                     return f(user_id, *view_args, **view_kwargs)
+                logger.info('Auth failed: local JWT missing user_id')
             except jwt.ExpiredSignatureError:
+                logger.info('Auth failed: JWT expired')
                 return jsonify({'message': '?????????'}), 401
-            except jwt.InvalidTokenError:
-                pass
+            except jwt.InvalidTokenError as e:
+                logger.info('Auth failed: JWT invalid (%s)', str(e))
         else:
-            logger.error("JWT_SECRET ????????? JWT ??")
+            logger.error('JWT_SECRET ????????? JWT ??')
 
         # 2) Supabase SDK ??
         if hasattr(supabase, 'auth'):
             try:
                 user_res = supabase.auth.get_user(token)
                 if user_res and user_res.user:
+                    logger.info('Auth success: supabase user_id=%s', user_res.user.id)
                     return f(user_res.user.id, *view_args, **view_kwargs)
+                logger.info('Auth failed: supabase user not found')
             except Exception as se:
-                print(f"DEBUG: Supabase SDK failed: {str(se)}")
+                logger.info('Auth failed: supabase exception %s', str(se))
 
+        logger.info('Auth failed: token rejected')
         return jsonify({'message': '??????????????'}), 401
 
     return decorated
