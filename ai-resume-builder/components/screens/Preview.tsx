@@ -207,7 +207,7 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-1 mb-2" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>技能</h3>
         <div className="flex flex-wrap gap-2">
           {data.skills.map((skill: string, index: number) => (
-            <span key={index} className="px-2 py-0.5 bg-gray-100 text-gray-700 text-[10px] rounded" style={{ fontSize: '10px', backgroundColor: '#f3f4f6', color: '#374151' }}>{skill}</span>
+            <span key={index} className="text-gray-700 text-[10px] mr-2" style={{ fontSize: '10px', color: '#374151' }}>{skill}</span>
           ))}
         </div>
       </div>

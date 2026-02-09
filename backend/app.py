@@ -11,7 +11,6 @@ from functools import wraps
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
-from xhtml2pdf import pisa
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
@@ -23,11 +22,7 @@ import urllib.request
 import ipaddress
 import socket
 import os
-try:
-    from playwright.sync_api import sync_playwright
-    HAS_PLAYWRIGHT = True
-except Exception:
-    HAS_PLAYWRIGHT = False
+from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
@@ -790,41 +785,31 @@ def export_pdf():
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
         
-        engine = os.getenv("PDF_ENGINE", "playwright").lower()
-        logger.info(f"Starting PDF generation with engine: {engine}")
+        logger.info("Starting PDF generation with Playwright")
         
         # Generate HTML for PDF
         html_content = generate_resume_html(resume_data)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
-        if engine == "playwright" and HAS_PLAYWRIGHT:
-            try:
-                with sync_playwright() as p:
-                    browser = p.chromium.launch()
-                    page = browser.new_page()
-                    page.set_content(html_content, wait_until="load")
-                    pdf_bytes = page.pdf(
-                        print_background=True,
-                        prefer_css_page_size=True
-                    )
-                    browser.close()
-                result = io.BytesIO(pdf_bytes)
-                result.seek(0)
-                logger.info("PDF generated successfully with Playwright")
-            except Exception as pw_err:
-                logger.error(f"Playwright PDF generation failed: {pw_err}")
-                return jsonify({'error': 'PDF 生成失败'}), 500
-        else:
-            # 使用 xhtml2pdf 生成 PDF（回退）
-            result = io.BytesIO()
-            pisa_status = pisa.CreatePDF(html_content, dest=result)
-            
-            if pisa_status.err:
-                logger.error("PDF 生成失败（xhtml2pdf 报错）")
-                return jsonify({'error': 'PDF 生成失败'}), 500
-            
+        try:
+            with sync_playwright() as p:
+                browser = p.chromium.launch()
+                page = browser.new_page(viewport={"width": 794, "height": 1123})
+                page.emulate_media(media="print")
+                page.set_content(html_content, wait_until="load")
+                pdf_bytes = page.pdf(
+                    print_background=True,
+                    prefer_css_page_size=True,
+                    format="A4",
+                    scale=1
+                )
+                browser.close()
+            result = io.BytesIO(pdf_bytes)
             result.seek(0)
-            logger.info("PDF generated successfully with xhtml2pdf")
+            logger.info("PDF generated successfully with Playwright")
+        except Exception as pw_err:
+            logger.error(f"Playwright PDF generation failed: {pw_err}")
+            return jsonify({'error': 'PDF 生成失败'}), 500
 
         # 处理自定义文件名（来自前端的简历标题）
         custom_filename = data.get('filename', '').strip() if data.get('filename') else ''
@@ -1248,15 +1233,15 @@ def generate_resume_html(resume_data):
         text-align: left;
       }
       .avatar { 
-        width: 80px; 
-        height: 100px; 
+        width: 96px; 
+        height: 120px; 
         display: inline-block;
       }
       .avatar-placeholder { 
-        width: 80px; 
-        height: 100px; 
-        background-color: #e5e7eb; 
-        border: 1px solid #d1d5db;
+        width: 96px; 
+        height: 120px; 
+        background-color: #d1d5db; 
+        border: 1px solid #9ca3af;
         border-radius: 10px;
         display: inline-block;
         position: relative;
@@ -1265,10 +1250,10 @@ def generate_resume_html(resume_data):
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 48px;
-        height: 48px;
+        width: 56px;
+        height: 56px;
         transform: translate(-50%, -50%);
-        fill: #9ca3af;
+        fill: #6b7280;
       }
     .header-name { 
       font-size: 16pt; 
@@ -1345,7 +1330,7 @@ def generate_resume_html(resume_data):
   <div class="container">
   <table width="100%" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td width="90" valign="top">
+      <td width="110" valign="top">
         {% if avatar %}
           <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
@@ -1462,14 +1447,14 @@ def generate_resume_html(resume_data):
         margin: 0;
       }
       .avatar { 
-        width: 80px; 
-        height: 80px; 
+        width: 96px; 
+        height: 96px; 
         border-radius: 9999px;
       }
       .avatar-placeholder { 
-        width: 80px; 
-        height: 80px; 
-        background-color: #e5e7eb;
+        width: 96px; 
+        height: 96px; 
+        background-color: #d1d5db;
         border: 1px solid #111827;
         border-radius: 9999px;
         position: relative;
@@ -1478,10 +1463,10 @@ def generate_resume_html(resume_data):
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 44px;
-        height: 44px;
+        width: 56px;
+        height: 56px;
         transform: translate(-50%, -50%);
-        fill: #6b7280;
+        fill: #4b5563;
       }
     .name { 
       font-size: 18pt; 
@@ -1659,15 +1644,15 @@ def generate_resume_html(resume_data):
         width: 100%; 
       }
       .avatar { 
-        width: 72px; 
-        height: 72px; 
+        width: 84px; 
+        height: 84px; 
         display: inline-block;
         border-radius: 9999px;
       }
       .avatar-placeholder { 
-        width: 72px; 
-        height: 72px; 
-        background-color: #e5e7eb;
+        width: 84px; 
+        height: 84px; 
+        background-color: #d1d5db;
         border: 1px solid #cbd5f5;
         border-radius: 9999px;
         display: inline-block;
@@ -1677,10 +1662,10 @@ def generate_resume_html(resume_data):
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 40px;
-        height: 40px;
+        width: 48px;
+        height: 48px;
         transform: translate(-50%, -50%);
-        fill: #94a3b8;
+        fill: #6b7280;
       }
     .name { 
       font-size: 20pt; 
@@ -1741,7 +1726,7 @@ def generate_resume_html(resume_data):
     <div class="header">
       <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
-          <td width="90" valign="top">
+          <td width="110" valign="top">
             {% if avatar %}
               <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
