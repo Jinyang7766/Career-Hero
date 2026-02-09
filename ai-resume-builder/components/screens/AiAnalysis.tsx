@@ -1781,21 +1781,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             </div>
           )}
 
-          {/* Detailed Analysis - Missing Keywords only */}
-          {hasJdInput() && report && report.missingKeywords.length > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-900/10 rounded-xl p-4 border border-orange-100 dark:border-orange-900/30 mb-6">
-              <h4 className="flex items-center gap-2 font-bold text-orange-800 dark:text-orange-400 mb-2">
-                <span className="material-symbols-outlined text-lg">warning</span> 缺失关键词
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {report.missingKeywords.map((k, i) => (
-                  <span key={i} className="px-2 py-1 bg-white dark:bg-orange-900/40 rounded text-xs font-medium text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-                    {k}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
+
 
           {/* Export PDF Button - After suggestions */}
           <div className="mb-52 space-y-3">
