@@ -37,6 +37,7 @@ export interface PersonalInfo {
   linkedin?: string;
   website?: string;
   summary?: string;
+  avatar?: string;
 }
 
 export interface WorkExperience extends ExperienceItem {
@@ -61,6 +62,7 @@ export interface ResumeData {
   skills: string[];
   summary?: string;
   gender?: string;
+  templateId?: string;
   optimizationStatus?: 'optimized' | 'unoptimized';
   lastJdText?: string;
   interviewSessions?: Record<string, {

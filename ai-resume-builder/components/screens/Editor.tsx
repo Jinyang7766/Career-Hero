@@ -498,6 +498,46 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             </summary>
             <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
               <div className="grid gap-4 pt-4">
+
+                {/* Avatar Upload */}
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">上传证件照</label>
+                  <div className="flex items-center gap-4">
+                    <div className="relative size-20 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex items-center justify-center overflow-hidden shrink-0">
+                      {resumeData.personalInfo.avatar ? (
+                        <img
+                          src={resumeData.personalInfo.avatar}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="material-symbols-outlined text-3xl text-slate-300 dark:text-white/20">person</span>
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            // Use FileReader to preview locally
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              handleInfoChange('avatar', reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        title="Upload Photo"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-slate-700 dark:text-white">点击头像上传</span>
+                      <span className="text-xs text-slate-500 dark:text-slate-400">支持 JPG, PNG</span>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">姓名 *</label>
                   <input
@@ -507,6 +547,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
                     onChange={(e) => handleInfoChange('name', e.target.value)}
                   />
                 </div>
+
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">求职意向 *</label>
                   <input
@@ -516,6 +557,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
                     onChange={(e) => handleInfoChange('title', e.target.value)}
                   />
                 </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="flex flex-col gap-2">
                     <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电子邮箱 *</label>
@@ -536,6 +578,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
                     />
                   </div>
                 </div>
+
                 <div className="flex flex-col gap-2">
                   <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">性别 *</label>
                   <select
@@ -590,7 +633,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
                     <div className="grid grid-cols-2 gap-4">
                       <input
                         className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      placeholder="职位名称"
+                        placeholder="职位名称"
                         type="text"
                         value={exp.subtitle}
                         onChange={(e) => updateItem('workExps', exp.id, 'subtitle', e.target.value)}
@@ -845,49 +888,53 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       </main>
 
       {/* Wizard Mode: Bottom Navigation */}
-      {wizardMode && (
-        <div className={`fixed left-0 right-0 bg-white dark:bg-surface-dark border-t border-slate-200 dark:border-[#324d67] p-4 flex gap-4 max-w-md mx-auto transition-all duration-300 ${hasBottomNav ? 'bottom-[calc(76px+env(safe-area-inset-bottom))]' : 'bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
-          {currentStepIndex > 0 && (
+      {
+        wizardMode && (
+          <div className={`fixed left-0 right-0 bg-white dark:bg-surface-dark border-t border-slate-200 dark:border-[#324d67] p-4 flex gap-4 max-w-md mx-auto transition-all duration-300 ${hasBottomNav ? 'bottom-[calc(76px+env(safe-area-inset-bottom))]' : 'bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
+            {currentStepIndex > 0 && (
+              <button
+                onClick={handlePrevStep}
+                className="flex-1 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+              >
+                上一步
+              </button>
+            )}
             <button
-              onClick={handlePrevStep}
-              className="flex-1 py-3 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+              onClick={handleNextStep}
+              disabled={isSaving}
+              className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70"
             >
-              上一步
+              {currentStepIndex === WIZARD_STEPS.length - 1 ? (isSaving ? '保存中...' : '完成并预览') : '下一步'}
             </button>
-          )}
-          <button
-            onClick={handleNextStep}
-            disabled={isSaving}
-            className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70"
-          >
-            {currentStepIndex === WIZARD_STEPS.length - 1 ? (isSaving ? '保存中...' : '完成并预览') : '下一步'}
-          </button>
-        </div>
-      )}
+          </div>
+        )
+      }
 
       {/* Bottom Save Button (only in free edit mode) */}
-      {!wizardMode && (
-        <div className="mt-8 px-4 mb-8">
-          <button
-            onClick={handleSaveAndPreview}
-            disabled={isSaving}
-            className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-bold text-white shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-          >
-            {isSaving ? (
-              <>
-                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                保存中...
-              </>
-            ) : (
-              <>
-                <span className="material-symbols-outlined">save</span>
-                保存并预览              </>
-            )}
-          </button>
-        </div>
-      )}
+      {
+        !wizardMode && (
+          <div className="mt-8 px-4 mb-8">
+            <button
+              onClick={handleSaveAndPreview}
+              disabled={isSaving}
+              className="w-full flex items-center justify-center gap-2 rounded-xl bg-primary px-4 py-3.5 text-base font-bold text-white shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+            >
+              {isSaving ? (
+                <>
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  保存中...
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined">save</span>
+                  保存并预览              </>
+              )}
+            </button>
+          </div>
+        )
+      }
 
-    </div>
+    </div >
   );
 };
 
