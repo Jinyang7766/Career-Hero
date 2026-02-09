@@ -986,7 +986,15 @@ def normalize_date_range(start_date: str, end_date: str) -> str:
 def build_resume_context(resume_data):
     personal_info = resume_data.get('personalInfo', {}) or {}
     name = clean_text_for_pdf(personal_info.get('name', '') or '未填写姓名')
-    title = clean_text_for_pdf(personal_info.get('title', '') or '未填写职位')
+    # Robust title extraction
+    title_raw = (
+        personal_info.get('title') or 
+        personal_info.get('position') or 
+        personal_info.get('jobTitle') or 
+        personal_info.get('job_title') or
+        resume_data.get('title') # Root fallback
+    )
+    title = clean_text_for_pdf(title_raw or '求职意向')
     email = clean_text_for_pdf(personal_info.get('email', '') or 'email@example.com')
     phone = clean_text_for_pdf(personal_info.get('phone', '') or '+86 138 0000 0000')
     location = clean_text_for_pdf(personal_info.get('location', '') or '')
@@ -1079,14 +1087,17 @@ def generate_resume_html(resume_data):
         color: #1f2937; 
         margin: 0;
         padding: 0;
-    }
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .container {
       width: 100%;
     }
-    table { 
-      width: 100%; 
-      border-collapse: collapse; 
-    }
+      table { 
+        width: 100%; 
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
     td { 
       vertical-align: top; 
       padding: 0;
@@ -1127,10 +1138,12 @@ def generate_resume_html(resume_data):
       color: #4b5563; 
       margin: 0 0 4px 0; 
     }
-    .header-contact { 
-      font-size: 9pt; 
-      color: #6b7280; 
-    }
+      .header-contact { 
+        font-size: 9pt; 
+        color: #6b7280; 
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .section { 
       margin-bottom: 10px; 
     }
@@ -1162,11 +1175,13 @@ def generate_resume_html(resume_data):
       font-size: 8pt; 
       color: #6b7280; 
     }
-    .item-desc { 
-      font-size: 9pt; 
-      color: #4b5563; 
-      margin-top: 2px;
-    }
+      .item-desc { 
+        font-size: 9pt; 
+        color: #4b5563; 
+        margin-top: 2px;
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .skills { 
       margin-top: 3px; 
     }
@@ -1278,7 +1293,9 @@ def generate_resume_html(resume_data):
         color: #111827;
         margin: 0;
         padding: 0;
-    }
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .header { 
       text-align: center; 
       border-bottom: 2px solid #111827; 
@@ -1306,11 +1323,13 @@ def generate_resume_html(resume_data):
       font-style: italic; 
       margin-top: 4px; 
     }
-    .contact { 
-      font-size: 9pt; 
-      color: #4b5563; 
-      margin-top: 5px; 
-    }
+      .contact { 
+        font-size: 9pt; 
+        color: #4b5563; 
+        margin-top: 5px; 
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .section { 
       margin-bottom: 12px; 
     }
@@ -1340,10 +1359,12 @@ def generate_resume_html(resume_data):
       font-size: 8pt; 
       color: #6b7280; 
     }
-    .item-desc { 
-      font-size: 9pt; 
-      margin-top: 2px;
-    }
+      .item-desc { 
+        font-size: 9pt; 
+        margin-top: 2px;
+        word-break: break-all;
+        word-wrap: break-word;
+      }
   </style>
 </head>
 <body>
@@ -1433,11 +1454,14 @@ def generate_resume_html(resume_data):
         color: #111827;
         margin: 0;
         padding: 0;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-    }
+        word-break: break-all;
+        word-wrap: break-word;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
     td {
       vertical-align: top;
       padding: 0;
@@ -1473,10 +1497,12 @@ def generate_resume_html(resume_data):
       color: #6b7280; 
       margin: 3px 0 6px 0; 
     }
-    .contact { 
-      font-size: 9pt; 
-      color: #9ca3af; 
-    }
+      .contact { 
+        font-size: 9pt; 
+        color: #9ca3af; 
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .section { 
       margin-bottom: 10px; 
     }
@@ -1497,11 +1523,13 @@ def generate_resume_html(resume_data):
       font-size: 8pt; 
       color: #9ca3af; 
     }
-    .item-desc { 
-      font-size: 9pt; 
-      color: #374151; 
-      margin-top: 2px;
-    }
+      .item-desc { 
+        font-size: 9pt; 
+        color: #374151; 
+        margin-top: 2px;
+        word-break: break-all;
+        word-wrap: break-word;
+      }
     .skills span { 
       display: inline; 
       margin-right: 8px; 

@@ -27,6 +27,40 @@ const formatDateRange = (item: any): string => {
   return '';
 };
 
+const resolveJobTitle = (data: any): string => {
+  if (!data) return '求职意向';
+
+  const personal = data.personalInfo || {};
+
+  // A comprehensive list of keys that might contain the job title
+  const keys = [
+    'title', 'position', 'jobTitle', 'job_title',
+    'occupation', 'profession', 'role', 'subtitle'
+  ];
+
+  let raw = '';
+
+  // 1. Check personalInfo first
+  for (const key of keys) {
+    if (personal[key] && String(personal[key]).trim()) {
+      raw = personal[key];
+      break;
+    }
+  }
+
+  // 2. Check root data if not found in personalInfo
+  if (!raw) {
+    for (const key of keys) {
+      if (data[key] && String(data[key]).trim()) {
+        raw = data[key];
+        break;
+      }
+    }
+  }
+
+  return String(raw || '').trim() || '求职意向';
+};
+
 // --- Template Definitions ---
 
 const TEMPLATE_OPTIONS = [
@@ -59,7 +93,7 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       </div>
       <div className="flex-1 flex flex-col justify-center space-y-1.5">
         <h1 className="text-xl font-bold text-gray-900" style={{ fontSize: '18px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
-        <p className="text-sm text-gray-600" style={{ fontSize: '14px', color: '#666' }}>{data?.personalInfo?.title || '求职意向'}</p>
+        <p className="text-sm text-gray-600" style={{ fontSize: '14px', color: '#666' }}>{resolveJobTitle(data)}</p>
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
           <span>{data?.personalInfo?.email || 'email@example.com'}</span>
           <span>•</span>
@@ -148,7 +182,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     {/* Classic Centered Header */}
     <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
       <h1 className="text-2xl font-bold text-black uppercase tracking-wider mb-2" style={{ fontSize: '24px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
-      <p className="text-base text-gray-800 font-serif italic mb-2" style={{ fontSize: '16px' }}>{data?.personalInfo?.title || '求职意向'}</p>
+      <p className="text-base text-gray-800 font-serif italic mb-2" style={{ fontSize: '16px' }}>{resolveJobTitle(data)}</p>
       <div className="flex justify-center gap-4 text-xs text-gray-600" style={{ fontSize: '12px', color: '#333' }}>
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
@@ -233,7 +267,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     {/* Minimal Header */}
     <div className="mb-10 no-break">
       <h1 className="text-4xl font-black text-black tracking-tight mb-2" style={{ fontSize: '36px', fontWeight: '900' }}>{data?.personalInfo?.name || '姓名'}</h1>
-      <p className="text-lg text-gray-500 font-light mb-4" style={{ fontSize: '18px' }}>{data?.personalInfo?.title || '求职意向'}</p>
+      <p className="text-lg text-gray-500 font-light mb-4" style={{ fontSize: '18px' }}>{resolveJobTitle(data)}</p>
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
