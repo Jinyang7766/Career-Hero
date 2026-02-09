@@ -588,6 +588,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     // 记录当前 resumeData 的内容
     console.log('startAnalysis - Resume data:', resumeData);
 
+    // Reset Chat State for new analysis
+    setChatMessages([]);
+    setChatInitialized(false);
+    setPendingNextQuestion(null);
+
     // Snapshot original data for comparison later
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
