@@ -1805,18 +1805,33 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                       {/* Suggested (Editable) */}
                       <div className="p-4 bg-green-50/30 dark:bg-green-900/5">
                         <p className="text-xs font-bold text-green-500 mb-2 uppercase flex justify-between items-center">
-                          修改后 (可编辑)
-                          <span className="material-symbols-outlined text-[14px]">edit</span>
+                          修改建议 (可编辑)
+                          <span className="material-symbols-outlined text-[14px]">
+                            {suggestion.targetSection === 'skills' ? 'extension' : 'edit'}
+                          </span>
                         </p>
-                        <textarea
-                          value={Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue.join(', ') : suggestion.suggestedValue}
-                          onChange={(e) => {
-                            setSuggestions(prev => prev.map(s =>
-                              s.id === suggestion.id ? { ...s, suggestedValue: e.target.value } : s
-                            ));
-                          }}
-                          className="w-full text-sm text-slate-800 dark:text-slate-200 bg-white dark:bg-black/20 p-3 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[120px] focus:ring-2 focus:ring-green-500/30 outline-none resize-y transition-all"
-                        />
+                        {suggestion.targetSection === 'skills' ? (
+                          <div className="flex flex-wrap gap-2 p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[60px]">
+                            {(Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue : suggestion.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []).map((skill: string, idx: number) => (
+                              <span key={idx} className="px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20">
+                                {skill}
+                              </span>
+                            ))}
+                            {(!suggestion.suggestedValue || (Array.isArray(suggestion.suggestedValue) && suggestion.suggestedValue.length === 0)) && (
+                              <span className="text-slate-400 italic text-xs">建议补充相关技能</span>
+                            )}
+                          </div>
+                        ) : (
+                          <textarea
+                            value={Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue.join(', ') : suggestion.suggestedValue}
+                            onChange={(e) => {
+                              setSuggestions(prev => prev.map(s =>
+                                s.id === suggestion.id ? { ...s, suggestedValue: e.target.value } : s
+                              ));
+                            }}
+                            className="w-full text-sm text-slate-800 dark:text-slate-200 bg-white dark:bg-black/20 p-3 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[120px] focus:ring-2 focus:ring-green-500/30 outline-none resize-y transition-all"
+                          />
+                        )}
                       </div>
                     </div>
 

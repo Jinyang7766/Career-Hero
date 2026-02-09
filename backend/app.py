@@ -1737,7 +1737,7 @@ def analyze_resume(current_user_id):
     "skills": 25,
     "format": 25
   }},
-  "summary": "匹配度分析完成。",
+  "summary": "简历整体评估简述（控制在50字以内）。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -1745,14 +1745,28 @@ def analyze_resume(current_user_id):
       "id": "suggestion-1",
       "type": "optimization",
       "title": "工作经历优化",
-      "reason": "优化原因说明",
+      "reason": "建议补充更多可量化的业绩指标。",
       "targetSection": "workExps",
       "originalValue": "原内容",
-      "suggestedValue": "优化后的内容"
+      "suggestedValue": "在XX项目中通过优化算法，将系统响应速度提升了30%。"
+    }},
+    {{
+      "id": "suggestion-skills",
+      "type": "missing",
+      "title": "核心技能补全",
+      "reason": "JD对AI工程能力有很高要求，建议补齐相关技能。",
+      "targetSection": "skills",
+      "suggestedValue": ["Prompt Engineering", "RAG", "Agent 设计", "Vector DB"]
     }}
   ],
   "missingKeywords": ["关键词1", "关键词2"]
 }}
+
+重要格式要求（必须严格遵守）：
+1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
+2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
+3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组，禁止写成长段文字或列举。如：["React", "Node.js"] 而不是 "熟练掌握React和Node.js"。
+4. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 """
                 else:
                     prompt = f"""
@@ -1775,7 +1789,7 @@ def analyze_resume(current_user_id):
     "skills": 20,
     "format": 25
   }},
-  "summary": "简历分析完成。",
+  "summary": "简历整体评估简述（控制在50字以内）。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -1783,23 +1797,28 @@ def analyze_resume(current_user_id):
       "id": "suggestion-1",
       "type": "optimization",
       "title": "个人简介优化",
-      "reason": "优化原因说明",
+      "reason": "建议突出核心竞争力，让招聘方一眼看到你的价值。",
       "targetSection": "summary",
       "originalValue": "原内容",
-      "suggestedValue": "优化后的内容"
+      "suggestedValue": "优化后的个人简介描述..."
     }},
     {{
-      "id": "suggestion-2",
-      "type": "optimization",
-      "title": "量化成果",
-      "reason": "补充可量化的数据",
-      "targetSection": "workExps",
-      "originalValue": "原描述",
-      "suggestedValue": "优化后的描述（含量化结果）"
+      "id": "suggestion-skills",
+      "type": "missing",
+      "title": "技能栈补全",
+      "reason": "当前技能列表较单薄，建议补充与目标职位相关的专业技能。",
+      "targetSection": "skills",
+      "suggestedValue": ["Python", "数据可视化", "SQL", "项目管理"]
     }}
   ],
   "missingKeywords": []
 }}
+
+重要格式要求（必须严格遵守）：
+1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
+2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
+3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组，禁止写成长段文字或列举。如：["React", "Node.js"] 而不是 "熟练掌握React和Node.js"。
+4. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 """
 
                 response = model.generate_content(prompt)
