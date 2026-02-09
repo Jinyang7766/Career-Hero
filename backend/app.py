@@ -798,11 +798,19 @@ def export_pdf():
         result.seek(0)
         logger.info("PDF generated successfully with xhtml2pdf")
 
-        personal_info = resume_data.get('personalInfo', {}) or {}
-        name = personal_info.get('name', '简历')
-        direction = personal_info.get('title', '')
-        company = extract_company_name_from_jd(jd_text)
-        filename = build_pdf_filename(name=name, direction=direction, company=company)
+        # 处理自定义文件名（来自前端的简历标题）
+        custom_filename = data.get('filename', '').strip() if data.get('filename') else ''
+        if custom_filename:
+            filename = custom_filename
+            if not filename.lower().endswith('.pdf'):
+                filename += '.pdf'
+        else:
+            # 如果没有自定义文件名，使用简历内容生成
+            personal_info = resume_data.get('personalInfo', {}) or {}
+            name = personal_info.get('name', '简历')
+            direction = personal_info.get('title', '')
+            company = extract_company_name_from_jd(jd_text)
+            filename = build_pdf_filename(name=name, direction=direction, company=company)
         
         return send_file(
             result,

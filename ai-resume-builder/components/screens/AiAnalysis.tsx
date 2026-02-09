@@ -120,6 +120,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     return saved || 'resume_select';
   });
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [resumeTitle, setResumeTitle] = useState('');
 
 
   // Data State
@@ -422,6 +423,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
         if (resume) {
           console.log('Target resume found:', resume);
+          // Set resume title
+          setResumeTitle(resume.title);
 
           // 检查resume_data是否为空
           if (!resume.resume_data) {
@@ -908,6 +911,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       const sanitizedResumeData = sanitizeData(resumeData);
 
+      // 确保使用正确的简历标题作为文件名
+      // 优先使用 resumeTitle，如果为空则使用 buildResumeTitle 生成，最后 fallback 到姓名
+      const effectiveFilename = resumeTitle
+        || buildResumeTitle(undefined, resumeData, jdText, true)
+        || resumeData?.personalInfo?.name
+        || '简历';
+
       // 调用后端 PDF 导出接口
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
         method: 'POST',
@@ -916,7 +926,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         },
         body: JSON.stringify({
           resumeData: sanitizedResumeData,
-          jdText: jdText
+          jdText: jdText,
+          filename: effectiveFilename // Pass the title as filename
         })
       });
 

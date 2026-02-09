@@ -10,14 +10,17 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
   const [isLoadingResume, setIsLoadingResume] = useState(false);
   const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
   const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
+  const [isRenamingId, setIsRenamingId] = useState<number | null>(null);
+  const [renameInputValue, setRenameInputValue] = useState('');
+  const [isUpdating, setIsUpdating] = useState(false);
 
-  const filteredResumes = (allResumes || []).filter(resume => 
+  const filteredResumes = (allResumes || []).filter(resume =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const handleDelete = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     // 显示确认对话框
     const confirmed = window.confirm('确定要删除这份简历吗？此操作不可恢复。');
     if (!confirmed) {
@@ -26,7 +29,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !user) {
       alert('请先登录');
       return;
@@ -34,11 +37,11 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
     try {
       setIsDeleting(id);
-      
+
       console.log('Deleting resume:', id);
-      
+
       const result = await DatabaseService.deleteResume(String(id));
-      
+
       if (result.success) {
         console.log('Resume deleted successfully');
         // 从本地状态中删除
@@ -64,7 +67,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !user) {
       alert('请先登录');
       return;
@@ -72,29 +75,29 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
     try {
       setIsLoadingResume(true);
-      
+
       console.log('=== 简历加载调试信息 ===');
       console.log('Loading resume:', resumeId);
       console.log('Current user:', user.id);
-      
+
       // Get all user resumes and find the specific one
       const result = await DatabaseService.getUserResumes(user.id);
-      
+
       console.log('Database result:', result);
-      
+
       if (result.success) {
         console.log('All resumes found:', result.data);
         console.log('Total resumes count:', result.data.length);
-        
+
         const resume = result.data.find(r => r.id === resumeId);
-        
+
         console.log('Target resume found:', resume);
         console.log('Resume ID match check:', {
           lookingFor: resumeId,
           foundIds: result.data.map(r => r.id),
           matches: result.data.filter(r => r.id === resumeId)
         });
-        
+
         if (resume) {
           console.log('Resume data structure:', {
             id: resume.id,
@@ -102,30 +105,30 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
             resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
           });
-          
+
           // 检查resume_data是否为空
           if (!resume.resume_data) {
             console.error('❌ 简历数据为空: resume_data is null/undefined');
             alert('简历数据为空，请重新创建简历');
             return;
           }
-          
+
           // 检查resume_data是否为空对象
           if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
             console.error('❌ 简历数据为空对象: resume_data is empty object');
             alert('简历数据为空，请重新创建简历');
             return;
           }
-          
+
           console.log('✅ Resume loaded successfully:', resume);
-          
+
           // Set the resume data with ID for editing
           if (setResumeData) {
             const finalResumeData = {
               id: resume.id,
               ...resume.resume_data
             };
-            
+
             console.log('Setting resume data:', {
               id: finalResumeData.id,
               hasPersonalInfo: !!finalResumeData.personalInfo,
@@ -134,10 +137,10 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
               hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
               dataKeys: Object.keys(finalResumeData)
             });
-            
+
             setResumeData(finalResumeData);
           }
-          
+
           setCurrentView(View.EDITOR);
         } else {
           console.error('❌ Resume not found');
@@ -159,7 +162,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
   const handlePreview = async (resumeId?: number, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    
+
     // 如果没有提供resumeId，使用当前选中的简历
     if (!resumeId) {
       console.error('❌ 预览失败：未提供简历ID');
@@ -169,7 +172,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
     // Get current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
+
     if (userError || !user) {
       alert('请先登录');
       return;
@@ -179,19 +182,19 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
       console.log('=== 简历预览调试信息 ===');
       console.log('Previewing resume:', resumeId);
       console.log('Current user:', user.id);
-      
+
       // Get all user resumes and find the specific one
       const result = await DatabaseService.getUserResumes(user.id);
-      
+
       console.log('Database result:', result);
-      
+
       if (result.success) {
         console.log('All resumes found:', result.data);
-        
+
         const resume = result.data.find(r => r.id === resumeId);
-        
+
         console.log('Target resume found:', resume);
-        
+
         if (resume) {
           console.log('Resume data structure:', {
             id: resume.id,
@@ -199,30 +202,30 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
             resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
           });
-          
+
           // 检查resume_data是否为空
           if (!resume.resume_data) {
             console.error('❌ 简历数据为空: resume_data is null/undefined');
             alert('简历数据为空，请重新创建简历');
             return;
           }
-          
+
           // 检查resume_data是否为空对象
           if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
             console.error('❌ 简历数据为空对象: resume_data is empty object');
             alert('简历数据为空，请重新创建简历');
             return;
           }
-          
+
           console.log('✅ Resume loaded for preview:', resume);
-          
+
           // Set the resume data with ID for preview
           if (setResumeData) {
             const finalResumeData = {
               id: resume.id,
               ...resume.resume_data
             };
-            
+
             console.log('Setting resume data for preview:', {
               id: finalResumeData.id,
               hasPersonalInfo: !!finalResumeData.personalInfo,
@@ -231,10 +234,10 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
               hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
               dataKeys: Object.keys(finalResumeData)
             });
-            
+
             setResumeData(finalResumeData);
           }
-          
+
           setCurrentView(View.PREVIEW);
         } else {
           console.error('❌ Resume not found for preview');
@@ -252,6 +255,45 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     }
   };
 
+  const handleRenameClick = (id: number, currentTitle: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsRenamingId(id);
+    setRenameInputValue(currentTitle);
+    setActiveMenuId(null);
+  };
+
+  const handleRenameConfirm = async () => {
+    if (!isRenamingId) return;
+    if (!renameInputValue.trim()) {
+      alert('简历名称不能为空');
+      return;
+    }
+
+    try {
+      setIsUpdating(true);
+      const result = await DatabaseService.updateResume(String(isRenamingId), {
+        title: renameInputValue.trim()
+      });
+
+      if (result.success) {
+        if (setAllResumes) {
+          setAllResumes((prev: any) => prev.map((r: any) =>
+            r.id === isRenamingId ? { ...r, title: renameInputValue.trim() } : r
+          ));
+        }
+        setIsRenamingId(null);
+        setRenameInputValue('');
+      } else {
+        alert(`重命名失败: ${result.error?.message || '请重试'}`);
+      }
+    } catch (error) {
+      console.error('Update resume error:', error);
+      alert('重命名失败，请检查网络连接');
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const toggleMenu = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setActiveMenuId(activeMenuId === id ? null : id);
@@ -265,9 +307,9 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="flex flex-col">
       {resumes.map((resume) => (
-        <div 
+        <div
           key={resume.id}
-          onClick={() => handlePreview(resume.id)} 
+          onClick={() => handlePreview(resume.id)}
           className="group relative flex items-center gap-4 px-4 py-4 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5"
         >
           <div className="shrink-0 relative">
@@ -289,62 +331,69 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             </div>
             <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1 mt-0.5">上次修改: {resume.date}</p>
           </div>
-          
+
           <div className="relative">
-              <button 
-                  onClick={(e) => toggleMenu(resume.id, e)}
-                  className="shrink-0 size-10 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-              >
-                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>more_vert</span>
-              </button>
-              
-              {/* Popover Menu */}
-              {activeMenuId === resume.id && (
-                  <div className="absolute right-0 top-10 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                       <button 
-                          onClick={(e) => handlePreview(resume.id, e)}
-                          className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
-                       >
-                          <span className="material-symbols-outlined text-[18px]">visibility</span>
-                          预览
-                       </button>
-                       <button 
-                          onClick={(e) => handleEdit(resume.id, e)}
-                          disabled={isLoadingResume}
-                          className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                       >
-                          {isLoadingResume ? (
-                              <>
-                                  <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
-                                  加载中...
-                              </>
-                          ) : (
-                              <>
-                                  <span className="material-symbols-outlined text-[18px]">edit</span>
-                                  编辑
-                              </>
-                          )}
-                       </button>
-                       <div className="h-px bg-slate-100 dark:bg-white/5"></div>
-                       <button 
-                          onClick={(e) => handleDelete(resume.id, e)}
-                          disabled={isDeleting === resume.id}
-                          className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                       >
-                          {isDeleting === resume.id ? (
-                              <>
-                                  <span className="size-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin"></span>
-                                  删除中...
-                              </>
-                          ) : (
-                              <>
-                                  <span className="material-symbols-outlined text-[18px]">delete</span>
-                                  删除
-                              </>
-                          )}
-                       </button>
-                  </div>
-              )}
+            <button
+              onClick={(e) => toggleMenu(resume.id, e)}
+              className="shrink-0 size-10 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>more_vert</span>
+            </button>
+
+            {/* Popover Menu */}
+            {activeMenuId === resume.id && (
+              <div className="absolute right-0 top-10 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                <button
+                  onClick={(e) => handlePreview(resume.id, e)}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">visibility</span>
+                  预览
+                </button>
+                <button
+                  onClick={(e) => handleEdit(resume.id, e)}
+                  disabled={isLoadingResume}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isLoadingResume ? (
+                    <>
+                      <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
+                      加载中...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                      编辑
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => handleRenameClick(resume.id, resume.title, e)}
+                  className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">drive_file_rename_outline</span>
+                  重命名
+                </button>
+                <div className="h-px bg-slate-100 dark:bg-white/5"></div>
+                <button
+                  onClick={(e) => handleDelete(resume.id, e)}
+                  disabled={isDeleting === resume.id}
+                  className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isDeleting === resume.id ? (
+                    <>
+                      <span className="size-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin"></span>
+                      删除中...
+                    </>
+                  ) : (
+                    <>
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                      删除
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -352,13 +401,13 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
   );
 
   return (
-    <div 
-        onClick={handleContainerClick}
-        className="relative flex h-screen w-full flex-col mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
+    <div
+      onClick={handleContainerClick}
+      className="relative flex h-screen w-full flex-col mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
     >
       <div className="h-10 w-full bg-background-light dark:bg-background-dark shrink-0"></div>
       <div className="flex items-center px-4 pb-2 pt-1 justify-between bg-background-light dark:bg-background-dark shrink-0 z-10">
-        <button 
+        <button
           onClick={goBack}
           className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
         >
@@ -366,7 +415,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
         </button>
         <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center text-slate-900 dark:text-white">全部简历</h2>
         <div className="flex w-10 justify-end">
-          <button 
+          <button
             onClick={() => setCurrentView(View.TEMPLATES)}
             className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
           >
@@ -374,19 +423,19 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
           </button>
         </div>
       </div>
-      
+
       <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
-          <input 
+          <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-200 dark:bg-[#1c2936] text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border-none focus:ring-2 focus:ring-primary/50 placeholder-slate-500 dark:placeholder-slate-400 transition-all" 
-            placeholder="搜索简历名称..." 
+            className="w-full bg-slate-200 dark:bg-[#1c2936] text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border-none focus:ring-2 focus:ring-primary/50 placeholder-slate-500 dark:placeholder-slate-400 transition-all"
+            placeholder="搜索简历名称..."
             type="text"
           />
           {searchQuery && (
-            <button 
+            <button
               onClick={() => setSearchQuery('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
             >
@@ -454,15 +503,58 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             </>
           )}
         </div>
-        
+
         {filteredResumes.length > 0 && (
           <div className="h-8 flex items-center justify-center mt-2">
             <p className="text-xs text-slate-400 dark:text-slate-600">
-               {filteredResumes.length === (allResumes?.length || 0) ? '已加载全部内容' : `显示 ${filteredResumes.length} 条结果`}
+              {filteredResumes.length === (allResumes?.length || 0) ? '已加载全部内容' : `显示 ${filteredResumes.length} 条结果`}
             </p>
           </div>
         )}
       </div>
+
+      {/* Rename Modal */}
+      {isRenamingId !== null && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsRenamingId(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">重命名简历</h3>
+              <input
+                autoFocus
+                type="text"
+                value={renameInputValue}
+                onChange={(e) => setRenameInputValue(e.target.value)}
+                className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-6 border border-transparent focus:border-primary/50"
+                placeholder="输入新的简历名称"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameConfirm();
+                  if (e.key === 'Escape') setIsRenamingId(null);
+                }}
+              />
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsRenamingId(null)}
+                  className="flex-1 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleRenameConfirm}
+                  disabled={isUpdating || !renameInputValue.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/30"
+                >
+                  {isUpdating ? (
+                    <>
+                      <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                      保存中
+                    </>
+                  ) : '保存'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
