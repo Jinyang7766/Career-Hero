@@ -200,78 +200,76 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       </div>
     </div>
 
-    <div className="grid grid-cols-[120px_1fr] gap-8">
-      {/* Left Column (Labels) / Right Column (Content) */}
-
+    <div className="flex flex-col gap-8">
       {/* Experience */}
       {data?.workExps && data.workExps.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1">Experience</div>
+        <div className="no-break">
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4">Experience</h3>
           <div className="space-y-6">
             {data.workExps.map((exp: any) => (
               <div key={exp.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '14px' }}>{exp.title}</h4>
-                  <span className="text-xs text-gray-400 font-mono">{exp.date}</span>
+                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{exp.title}</h4>
+                  <span className="text-sm text-gray-600 font-mono">{exp.date}</span>
                 </div>
-                <p className="text-xs text-gray-600 mb-2 font-medium">{exp.subtitle}</p>
-                <p className="text-xs text-gray-800 leading-relaxed">{exp.description}</p>
+                <p className="text-sm text-gray-700 mb-2 font-medium italic">{exp.subtitle}</p>
+                <p className="text-sm text-gray-800 leading-relaxed text-justify">{exp.description}</p>
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {/* Education */}
       {data?.educations && data.educations.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1 mt-6">Education</div>
-          <div className="space-y-4 mt-6">
+        <div className="no-break">
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4">Education</h3>
+          <div className="space-y-4">
             {data.educations.map((edu: any) => (
               <div key={edu.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '14px' }}>{edu.title}</h4>
-                  <span className="text-xs text-gray-400 font-mono">{edu.date}</span>
+                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{edu.title}</h4>
+                  <span className="text-sm text-gray-600 font-mono">{edu.date}</span>
                 </div>
-                {edu.subtitle && <p className="text-xs text-gray-600">{edu.subtitle}</p>}
+                {edu.subtitle && <p className="text-sm text-gray-700 italic">{edu.subtitle}</p>}
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {/* Projects */}
       {data?.projects && data.projects.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1 mt-6">Projects</div>
-          <div className="space-y-6 mt-6">
+        <div className="no-break">
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4">Projects</h3>
+          <div className="space-y-6">
             {data.projects.map((proj: any) => (
               <div key={proj.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '14px' }}>{proj.title}</h4>
-                  <span className="text-xs text-gray-400 font-mono">{proj.date}</span>
+                  <h4 className="font-bold text-black" style={{ fontSize: '15px' }}>{proj.title}</h4>
+                  <span className="text-sm text-gray-600 font-mono">{proj.date}</span>
                 </div>
-                <p className="text-xs text-gray-600 mb-2 font-medium">{proj.subtitle}</p>
-                <p className="text-xs text-gray-800 leading-relaxed">{proj.description}</p>
+                <p className="text-sm text-gray-700 mb-2 font-medium italic">{proj.subtitle}</p>
+                <p className="text-sm text-gray-800 leading-relaxed text-justify">{proj.description}</p>
               </div>
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {/* Skills */}
       {data?.skills && data.skills.length > 0 && (
-        <>
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest pt-1 mt-6">Skills</div>
-          <div className="mt-6 flex flex-wrap gap-x-4 gap-y-2">
+        <div className="no-break">
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4">Skills</h3>
+          <div className="flex flex-wrap gap-x-6 gap-y-3">
             {data.skills.map((skill: string) => (
-              <span key={skill} className="text-xs text-black border-b border-gray-200 pb-0.5">{skill}</span>
+              <span key={skill} className="text-sm text-black font-medium">{skill}</span>
             ))}
           </div>
-        </>
+        </div>
       )}
     </div>
-  </div>
+  </div >
 );
 
 
