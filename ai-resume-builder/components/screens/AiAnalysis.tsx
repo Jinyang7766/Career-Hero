@@ -489,7 +489,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
       DatabaseService.updateResume(String(resumeData.id), {
         title: updatedTitle,
-        resume_data: { ...resumeData, optimizationStatus: 'unoptimized', lastJdText: jdText }
+        resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText }
       }).then(res => console.log('Original resume marked as unoptimized:', res.success));
     }
 
@@ -691,7 +691,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         // 确保数据带有“已优化”标记
         const updatedDataWithStatus = {
           ...nextResumeData,
-          optimizationStatus: 'optimized',
+          optimizationStatus: 'optimized' as const,
           lastJdText: jdText
         };
 
@@ -1199,7 +1199,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         const sanitizeData = (data: any) => {
           if (!data) return data;
           const sanitized = { ...data };
-        const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory'];
+          const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory'];
           fieldsToRemove.forEach((field) => {
             if (field in sanitized) delete sanitized[field];
           });
@@ -1216,6 +1216,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           skills: cleanedResumeData?.skills || [],
           summary: cleanedResumeData?.summary || ''
         };
+
+        const preservedTemplateId = resumeData?.templateId || finalResumeData.templateId;
+        if (preservedTemplateId) {
+          finalResumeData.templateId = preservedTemplateId;
+        }
 
         if (setResumeData && finalResumeData) {
           setResumeData(finalResumeData);
@@ -1241,8 +1246,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(textToSend) && !isNegative(textToSend);
       const interviewWrapped = isInterviewChat
         ? (isQaMode
-            ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${textToSend}`
-            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程，避免简历优化建议。每次回复需包含：1.简短点评；2.改进要点（1-2条）；3.参考回复；4.下一题。】\n\n候选人回答：${textToSend}`)
+          ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${textToSend}`
+          : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程，避免简历优化建议。每次回复需包含：1.简短点评；2.改进要点（1-2条）；3.参考回复；4.下一题。】\n\n候选人回答：${textToSend}`)
         : textToSend;
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
@@ -1297,6 +1302,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             summary: result.resumeData.summary || ''
           };
 
+          const preservedTemplateId = resumeData?.templateId || cleanedResumeData.templateId;
+          if (preservedTemplateId) {
+            cleanedResumeData.templateId = preservedTemplateId;
+          }
+
           // 为工作经历、教育背景和项目添加ID字段（如果不存在）
           cleanedResumeData.workExps = cleanedResumeData.workExps.map((exp: any, index: number) => ({
             ...exp,
@@ -1324,7 +1334,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           const aiMessage: ChatMessage = {
             id: `ai-${Date.now()}`,
             role: 'model',
-          text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
+            text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
           };
           const newMessages = [...chatMessages, userMessage, aiMessage];
           setChatMessages(newMessages);
@@ -1606,7 +1616,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
                 {hasJdInput() ? '人岗匹配度' : '简历综合评分'}
               </p>
-              <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(score)}`}>
+            <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(originalScore || score)}`}>
                 {score}
                 <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
               </div>

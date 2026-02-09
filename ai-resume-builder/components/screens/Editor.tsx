@@ -2,6 +2,13 @@
 import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import ImportStep from '../editor/steps/ImportStep';
+import PersonalStep from '../editor/steps/PersonalStep';
+import WorkStep from '../editor/steps/WorkStep';
+import EducationStep from '../editor/steps/EducationStep';
+import ProjectsStep from '../editor/steps/ProjectsStep';
+import SkillsStep from '../editor/steps/SkillsStep';
+import SummaryStep from '../editor/steps/SummaryStep';
 // Popup import removed; inline import UI only
 
 
@@ -209,15 +216,15 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   // Check if section is completed
   const isPersonalInfoComplete = () => {
     const { personalInfo } = resumeData;
-    return personalInfo.name && personalInfo.title && personalInfo.email && personalInfo.phone && resumeData.gender;
+    return Boolean(personalInfo.name && personalInfo.title && personalInfo.email && personalInfo.phone && resumeData.gender);
   };
 
   const isWorkExperienceComplete = () => {
-    return resumeData.workExps.length > 0 && resumeData.workExps.some(exp => exp.title && exp.subtitle && exp.date);
+    return resumeData.workExps.length > 0 && resumeData.workExps.some(exp => Boolean(exp.title && exp.subtitle && exp.date));
   };
 
   const isEducationComplete = () => {
-    return resumeData.educations.length > 0 && resumeData.educations.some(edu => edu.title && edu.subtitle && edu.date);
+    return resumeData.educations.length > 0 && resumeData.educations.some(edu => Boolean(edu.title && edu.subtitle && edu.date));
   };
 
   const isSkillsComplete = () => {
@@ -227,7 +234,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
   const isProjectsComplete = () => {
     // Projects are optional, only show check if user has added projects
-    return resumeData.projects.length > 0 && resumeData.projects.some(proj => proj.title && proj.description);
+    return resumeData.projects.length > 0 && resumeData.projects.some(proj => Boolean(proj.title && proj.description));
   };
 
   const handleAddSkill = () => {
@@ -405,485 +412,82 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       <main className="flex flex-col gap-4 px-4 pb-24 pt-6">
         {/* Import Step - First step of wizard */}
         {currentStep === 'import' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] p-6 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 bg-primary/10 rounded-full flex items-center justify-center">
-                <span className="material-symbols-outlined text-3xl text-primary">upload_file</span>
-              </div>
-              <h2 className="text-lg font-bold text-slate-900 dark:text-white mb-2">导入已有简历</h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
-                上传您的简历文件或粘贴文本，AI 将自动解析并填充信息
-              </p>
-
-              <div className="space-y-3">
-                <button
-                  onClick={() => pdfInputRef.current?.click()}
-                  className="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 active:scale-[0.98] transition-all shadow-lg shadow-blue-500/20"
-                >
-                  <span className="material-symbols-outlined">description</span>
-                  上传 PDF / Word 文件
-                </button>
-                <input
-                  ref={pdfInputRef}
-                  type="file"
-                  accept=".pdf,.doc,.docx"
-                  onChange={handlePDFImport}
-                  className="hidden"
-                />
-
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-px bg-slate-200 dark:bg-white/10"></div>
-                  <span className="text-xs text-slate-400">或</span>
-                  <div className="flex-1 h-px bg-slate-200 dark:bg-white/10"></div>
-                </div>
-
-                <textarea
-                  value={textResume}
-                  onChange={(e) => setTextResume(e.target.value)}
-                  placeholder="请粘贴您的简历内容..."
-                  className="w-full h-40 px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
-                />
-                <button
-                  onClick={handleTextImport}
-                  disabled={isProcessing || !textResume.trim()}
-                  className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                >
-                  {isProcessing ? (
-                    <>
-                      <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                      处理中...
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined">auto_fix_high</span>
-                      智能识别
-                    </>
-                  )}
-                </button>
-                {pdfError && (
-                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-sm text-red-600 dark:text-red-400">{pdfError}</p>
-                  </div>
-                )}
-                {textError && (
-                  <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                    <p className="text-sm text-red-600 dark:text-red-400">{textError}</p>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="text-center">
-              <button
-                onClick={() => setCurrentStep('personal')}
-                className="text-sm text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
-              >
-                跳过，从头开始填写 →
-              </button>
-            </div>
-          </div>
+          <ImportStep
+            textResume={textResume}
+            onTextResumeChange={setTextResume}
+            onTextImport={handleTextImport}
+            isProcessing={isProcessing}
+            textError={textError}
+            pdfError={pdfError}
+            onPdfImport={handlePDFImport}
+            pdfInputRef={pdfInputRef}
+            onSkip={() => setCurrentStep('personal')}
+          />
         )}
 
         {/* Personal Info - show when wizard step is 'personal' */}
         {currentStep === 'personal' && (
-          <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open>
-            <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center justify-center size-8 rounded-full ${isPersonalInfoComplete() ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
-                  <span className="material-symbols-outlined text-[18px]">{isPersonalInfoComplete() ? 'check' : 'person'}</span>
-                </div>
-                <span className="font-semibold text-slate-900 dark:text-white">个人信息</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
-            </summary>
-            <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
-              <div className="grid gap-4 pt-4">
-
-                {/* Avatar Upload */}
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">上传证件照</label>
-                  <div className="flex items-center gap-4">
-                    <div className="relative size-20 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex items-center justify-center overflow-hidden shrink-0">
-                      {resumeData.personalInfo.avatar ? (
-                        <img
-                          src={resumeData.personalInfo.avatar}
-                          alt="Avatar"
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="material-symbols-outlined text-3xl text-slate-300 dark:text-white/20">person</span>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) {
-                            // Use FileReader to preview locally
-                            const reader = new FileReader();
-                            reader.onloadend = () => {
-                              handleInfoChange('avatar', reader.result as string);
-                            };
-                            reader.readAsDataURL(file);
-                          }
-                        }}
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        title="Upload Photo"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-sm font-medium text-slate-700 dark:text-white">点击头像上传</span>
-                      <span className="text-xs text-slate-500 dark:text-slate-400">支持 JPG, PNG</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">姓名 *</label>
-                  <input
-                    className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                    type="text"
-                    value={resumeData.personalInfo.name}
-                    onChange={(e) => handleInfoChange('name', e.target.value)}
-                  />
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">求职意向 *</label>
-                  <input
-                    className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                    type="text"
-                    value={resumeData.personalInfo.title}
-                    onChange={(e) => handleInfoChange('title', e.target.value)}
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电子邮箱 *</label>
-                    <input
-                      className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      type="email"
-                      value={resumeData.personalInfo.email}
-                      onChange={(e) => handleInfoChange('email', e.target.value)}
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电话号码 *</label>
-                    <input
-                      className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      type="tel"
-                      value={resumeData.personalInfo.phone}
-                      onChange={(e) => handleInfoChange('phone', e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">性别 *</label>
-                  <select
-                    value={resumeData.gender || ''}
-                    onChange={(e) => handleInfoChange('gender', e.target.value)}
-                    className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                    required
-                  >
-                    <option value="">请选择</option>
-                    <option value="male">男</option>
-                    <option value="female">女</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </details>
+          <PersonalStep
+            resumeData={resumeData}
+            isComplete={isPersonalInfoComplete()}
+            onInfoChange={handleInfoChange}
+          />
         )}
+
+        
 
         {/* Work Experience - show in free edit or when wizard step is 'work' */}
         {(!wizardMode || currentStep === 'work') && (
-          <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open={wizardMode}>
-            <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center justify-center size-8 rounded-full ${isWorkExperienceComplete() ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
-                  <span className="material-symbols-outlined text-[18px]">{isWorkExperienceComplete() ? 'check' : 'work'}</span>
-                </div>
-                <span className="font-semibold text-slate-900 dark:text-white">工作经历</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
-            </summary>
-            <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
-
-              {resumeData.workExps.map((exp, index) => (
-                <div key={exp.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-100 dark:border-white/5 last:border-0 relative">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-sm font-semibold text-primary uppercase tracking-wide">工作经历 {index + 1}</h4>
-                    <button
-                      onClick={() => removeItem('workExps', exp.id)}
-                      className="text-slate-400 hover:text-red-400 p-1"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
-                  </div>
-                  <div className="grid gap-4">
-                    <input
-                      className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      placeholder="公司名称"
-                      type="text"
-                      value={exp.title}
-                      onChange={(e) => updateItem('workExps', exp.id, 'title', e.target.value)}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="职位名称"
-                        type="text"
-                        value={exp.subtitle}
-                        onChange={(e) => updateItem('workExps', exp.id, 'subtitle', e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="任职时间"
-                        type="text"
-                        value={exp.date}
-                        onChange={(e) => updateItem('workExps', exp.id, 'date', e.target.value)}
-                      />
-                    </div>
-                    <div className="relative">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">工作内容</label>
-
-                      </div>
-                      <textarea
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed"
-                        placeholder="描述您的主要职责和业绩成就..."
-                        rows={4}
-                        value={exp.description}
-                        onChange={(e) => updateItem('workExps', exp.id, 'description', e.target.value)}
-                      ></textarea>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <button
-                onClick={() => addItem('workExps')}
-                className="mt-4 w-full py-3 rounded-lg border-2 border-dashed border-slate-300 dark:border-[#324d67] hover:border-primary/50 hover:bg-primary/5 text-slate-500 dark:text-text-secondary hover:text-primary transition-all flex items-center justify-center gap-2 font-medium"
-              >
-                <span className="material-symbols-outlined text-[20px]">add</span>
-                添加工作经历
-              </button>
-            </div>
-          </details>
+          <WorkStep
+            resumeData={resumeData}
+            isComplete={isWorkExperienceComplete()}
+            wizardMode={wizardMode}
+            onAdd={() => addItem('workExps')}
+            onRemove={(id) => removeItem('workExps', id)}
+            onUpdate={(id, field, value) => updateItem('workExps', id, field, value)}
+          />
         )}
 
         {/* Education - show in free edit or when wizard step is 'education' */}
         {(!wizardMode || currentStep === 'education') && (
-          <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open={wizardMode}>
-            <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center justify-center size-8 rounded-full ${isEducationComplete() ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
-                  <span className="material-symbols-outlined text-[18px]">{isEducationComplete() ? 'check' : 'school'}</span>
-                </div>
-                <span className="font-semibold text-slate-900 dark:text-white">教育背景</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
-            </summary>
-            <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
-              {resumeData.educations.map((edu, index) => (
-                <div key={edu.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-100 dark:border-white/5 last:border-0 relative">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-sm font-semibold text-primary uppercase tracking-wide">教育背景 {index + 1}</h4>
-                    <button
-                      onClick={() => removeItem('educations', edu.id)}
-                      className="text-slate-400 hover:text-red-400 p-1"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
-                  </div>
-                  <div className="grid gap-4">
-                    <input
-                      className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      placeholder="学校名称"
-                      type="text"
-                      value={edu.title}
-                      onChange={(e) => updateItem('educations', edu.id, 'title', e.target.value)}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="专业/学位"
-                        type="text"
-                        value={edu.subtitle}
-                        onChange={(e) => updateItem('educations', edu.id, 'subtitle', e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="就读时间"
-                        type="text"
-                        value={edu.date}
-                        onChange={(e) => updateItem('educations', edu.id, 'date', e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <button
-                onClick={() => addItem('educations')}
-                className="mt-4 w-full py-3 rounded-lg border-2 border-dashed border-slate-300 dark:border-[#324d67] hover:border-primary/50 hover:bg-primary/5 text-slate-500 dark:text-text-secondary hover:text-primary transition-all flex items-center justify-center gap-2 font-medium"
-              >
-                <span className="material-symbols-outlined text-[20px]">add</span>
-                添加教育背景
-              </button>
-            </div>
-          </details>
+          <EducationStep
+            resumeData={resumeData}
+            isComplete={isEducationComplete()}
+            wizardMode={wizardMode}
+            onAdd={() => addItem('educations')}
+            onRemove={(id) => removeItem('educations', id)}
+            onUpdate={(id, field, value) => updateItem('educations', id, field, value)}
+          />
         )}
 
         {/* Project Experience - show in free edit or when wizard step is 'projects' */}
         {(!wizardMode || currentStep === 'projects') && (
-          <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open={wizardMode}>
-            <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center justify-center size-8 rounded-full ${isProjectsComplete() ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
-                  <span className="material-symbols-outlined text-[18px]">{isProjectsComplete() ? 'check' : 'rocket_launch'}</span>
-                </div>
-                <span className="font-semibold text-slate-900 dark:text-white">项目经历</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
-            </summary>
-            <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
-              {resumeData.projects.length === 0 && <p className="text-xs text-slate-400 dark:text-slate-500 py-2 italic text-center">暂无项目经历，点击下方按钮添加。</p>}
-
-              {resumeData.projects.map((proj, index) => (
-                <div key={proj.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-100 dark:border-white/5 last:border-0 relative">
-                  <div className="flex justify-between items-center">
-                    <h4 className="text-sm font-semibold text-primary uppercase tracking-wide">项目 {index + 1}</h4>
-                    <button
-                      onClick={() => removeItem('projects', proj.id)}
-                      className="text-slate-400 hover:text-red-400 p-1"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">delete</span>
-                    </button>
-                  </div>
-                  <div className="grid gap-4">
-                    <input
-                      className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                      placeholder="项目名称"
-                      type="text"
-                      value={proj.title}
-                      onChange={(e) => updateItem('projects', proj.id, 'title', e.target.value)}
-                    />
-                    <div className="grid grid-cols-2 gap-4">
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="鎷呬换瑙掕壊"
-                        type="text"
-                        value={proj.subtitle}
-                        onChange={(e) => updateItem('projects', proj.id, 'subtitle', e.target.value)}
-                      />
-                      <input
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                        placeholder="项目时间"
-                        type="text"
-                        value={proj.date}
-                        onChange={(e) => updateItem('projects', proj.id, 'date', e.target.value)}
-                      />
-                    </div>
-                    <div className="relative">
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">项目描述</label>
-
-                      </div>
-                      <textarea
-                        className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed"
-                        placeholder="描述项目细节及您的贡献..."
-                        rows={3}
-                        value={proj.description}
-                        onChange={(e) => updateItem('projects', proj.id, 'description', e.target.value)}
-                      ></textarea>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <button
-                onClick={() => addItem('projects')}
-                className="mt-4 w-full py-3 rounded-lg border-2 border-dashed border-slate-300 dark:border-[#324d67] hover:border-primary/50 hover:bg-primary/5 text-slate-500 dark:text-text-secondary hover:text-primary transition-all flex items-center justify-center gap-2 font-medium"
-              >
-                <span className="material-symbols-outlined text-[20px]">add</span>
-                添加项目经历
-              </button>
-            </div>
-          </details>
+          <ProjectsStep
+            resumeData={resumeData}
+            isComplete={isProjectsComplete()}
+            wizardMode={wizardMode}
+            onAdd={() => addItem('projects')}
+            onRemove={(id) => removeItem('projects', id)}
+            onUpdate={(id, field, value) => updateItem('projects', id, field, value)}
+          />
         )}
 
         {/* Skills - show in free edit or when wizard step is 'skills' */}
         {(!wizardMode || currentStep === 'skills') && (
-          <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open={wizardMode}>
-            <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-              <div className="flex items-center gap-3">
-                <div className={`flex items-center justify-center size-8 rounded-full ${isSkillsComplete() ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
-                  <span className="material-symbols-outlined text-[18px]">{isSkillsComplete() ? 'check' : 'extension'}</span>
-                </div>
-                <span className="font-semibold text-slate-900 dark:text-white">专业技能</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
-            </summary>
-            <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
-              <div className="mt-4 flex flex-wrap gap-2 mb-4">
-                {resumeData.skills.map((skill, index) => (
-                  <span key={index} className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-primary/10 text-primary border border-primary/20 animate-in zoom-in duration-200">
-                    {skill}
-                    <button
-                      onClick={() => handleRemoveSkill(index)}
-                      className="ml-1.5 hover:text-blue-700 flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined text-[14px]">close</span>
-                    </button>
-                  </span>
-                ))}
-              </div>
-              <div className="relative">
-                <input
-                  value={newSkill}
-                  onChange={(e) => setNewSkill(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleAddSkill();
-                    }
-                  }}
-                  className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 pr-10 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                  placeholder="添加技能 (例如: 领导力)"
-                  type="text"
-                />
-                <button
-                  onClick={handleAddSkill}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:bg-primary/10 p-1 rounded-md transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
-                </button>
-              </div>
-            </div>
-          </details>
+          <SkillsStep
+            resumeData={resumeData}
+            isComplete={isSkillsComplete()}
+            wizardMode={wizardMode}
+            newSkill={newSkill}
+            onNewSkillChange={setNewSkill}
+            onAddSkill={handleAddSkill}
+            onRemoveSkill={handleRemoveSkill}
+          />
         )}
+
         {/* Wizard Mode: Summary Step */}
         {wizardMode && currentStep === 'summary' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] p-4 space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="font-semibold text-slate-900 dark:text-white">个人总结</h3>
-
-              </div>
-              <textarea
-                value={summary}
-                onChange={(e) => setSummary(e.target.value)}
-                placeholder="例如：拥有7年前端开发经验的高级工程师，专注于React生态..."
-                className="w-full px-4 py-3 rounded-lg border border-slate-300 dark:border-[#334155] bg-slate-50 dark:bg-[#111a22] text-slate-900 dark:text-white focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all min-h-[150px]"
-              />
-            </div>
-            <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-lg flex items-start space-x-3 text-sm text-green-600 dark:text-green-400">
-              <span className="material-symbols-outlined text-lg">check_circle</span>
-              <p>这是最后一步了！完成后，我们将保存简历并跳转到预览页面。</p>
-            </div>
-          </div>
+          <SummaryStep summary={summary} onSummaryChange={setSummary} />
         )}
       </main>
 

@@ -1,0 +1,120 @@
+﻿import React from 'react';
+import { ResumeData } from '../../../types';
+
+type PersonalStepProps = {
+  resumeData: ResumeData;
+  isComplete: boolean;
+  onInfoChange: (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => void;
+};
+
+const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onInfoChange }) => (
+  <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open>
+    <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+      <div className="flex items-center gap-3">
+        <div className={`flex items-center justify-center size-8 rounded-full ${isComplete ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
+          <span className="material-symbols-outlined text-[18px]">{isComplete ? 'check' : 'person'}</span>
+        </div>
+        <span className="font-semibold text-slate-900 dark:text-white">个人信息</span>
+      </div>
+      <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
+    </summary>
+    <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
+      <div className="grid gap-4 pt-4">
+        {/* Avatar Upload */}
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">上传证件照</label>
+          <div className="flex items-center gap-4">
+            <div className="relative size-20 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex items-center justify-center overflow-hidden shrink-0">
+              {resumeData.personalInfo.avatar ? (
+                <img
+                  src={resumeData.personalInfo.avatar}
+                  alt="Avatar"
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span className="material-symbols-outlined text-3xl text-slate-300 dark:text-white/20">person</span>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                      onInfoChange('avatar', reader.result as string);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                title="Upload Photo"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-sm font-medium text-slate-700 dark:text-white">点击头像上传</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400">支持 JPG, PNG</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">姓名 *</label>
+          <input
+            className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+            type="text"
+            value={resumeData.personalInfo.name}
+            onChange={(e) => onInfoChange('name', e.target.value)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">求职意向 *</label>
+          <input
+            className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+            type="text"
+            value={resumeData.personalInfo.title}
+            onChange={(e) => onInfoChange('title', e.target.value)}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电子邮箱 *</label>
+            <input
+              className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+              type="email"
+              value={resumeData.personalInfo.email}
+              onChange={(e) => onInfoChange('email', e.target.value)}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电话号码 *</label>
+            <input
+              className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+              type="tel"
+              value={resumeData.personalInfo.phone}
+              onChange={(e) => onInfoChange('phone', e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">性别 *</label>
+          <select
+            value={resumeData.gender || ''}
+            onChange={(e) => onInfoChange('gender', e.target.value)}
+            className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+            required
+          >
+            <option value="">请选择</option>
+            <option value="male">男</option>
+            <option value="female">女</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </details>
+);
+
+export default PersonalStep;

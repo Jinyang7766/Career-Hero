@@ -15,6 +15,12 @@ from xhtml2pdf import pisa
 from pypdf import PdfReader
 from docx import Document
 import io
+import base64
+import urllib.request
+import ipaddress
+import socket
+from jinja2 import Environment, BaseLoader
+from markupsafe import Markup
 import logging
 import traceback
 import google.generativeai as genai
@@ -67,7 +73,7 @@ def handle_options_request():
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'your-supabase-key')
-JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
+JWT_SECRET = os.getenv('JWT_SECRET')
 
 # Google Gemini AI configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
@@ -103,32 +109,39 @@ def mock_supabase_response(data=None, error=None):
 
 # Mock data storage for development
 mock_users = {}
-mock_resumes = {}
+mock_resumes = {}  # user_id -> {resume_id: resume_record}
 mock_feedback = []
+
+
+def get_mock_resumes_for_user(user_id: str):
+    if user_id not in mock_resumes:
+        mock_resumes[user_id] = {}
+    return mock_resumes[user_id]
 
 def token_required(f):
     @wraps(f)
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            return jsonify({'message': '缺少 Authorization 请求头'}), 401
+            return jsonify({'message': '?? Authorization ???'}), 401
 
         token = auth_header.split(" ")[1] if " " in auth_header else auth_header
 
-        # --- 兼容性兜底 ---
-        # 1. 优先尝试无损解码（跳过签名验证）
-        try:
-            # options={"verify_signature": False} 是避免 401 的关键
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get('sub') or payload.get('user_id')
+        # 1) ?? JWT ????? JWT_SECRET ??????
+        if JWT_SECRET:
+            try:
+                payload = jwt.decode(token, JWT_SECRET, algorithms=["HS256"])
+                user_id = payload.get('sub') or payload.get('user_id')
+                if user_id:
+                    return f(user_id, *view_args, **view_kwargs)
+            except jwt.ExpiredSignatureError:
+                return jsonify({'message': '?????????'}), 401
+            except jwt.InvalidTokenError:
+                pass
+        else:
+            logger.error("JWT_SECRET ????????? JWT ??")
 
-            if user_id:
-                print(f"DEBUG: Auth Success (Skip Verify). User: {user_id}")
-                return f(user_id, *view_args, **view_kwargs)
-        except Exception as e:
-            print(f"DEBUG: Payload decode failed: {str(e)}")
-
-        # 2. 使用 Supabase 官方验证
+        # 2) Supabase SDK ??
         if hasattr(supabase, 'auth'):
             try:
                 user_res = supabase.auth.get_user(token)
@@ -137,11 +150,9 @@ def token_required(f):
             except Exception as se:
                 print(f"DEBUG: Supabase SDK failed: {str(se)}")
 
-        # 仍然失败
-        return jsonify({'message': '未授权：令牌无效或用户不存在'}), 401
+        return jsonify({'message': '??????????????'}), 401
 
     return decorated
-
 
 def check_gemini_quota():
     """Check if Gemini API quota is available"""
@@ -166,6 +177,98 @@ def validate_email(email):
 
 def validate_password(password):
     return len(password) >= 8
+
+def clean_string(value, max_len=4000):
+    if value is None:
+        return ''
+    if not isinstance(value, str):
+        value = str(value)
+    value = value.replace('', '').strip()
+    return value[:max_len]
+
+def clean_list_strings(values, max_items=200, max_len=200):
+    if not isinstance(values, list):
+        return []
+    cleaned = []
+    for item in values[:max_items]:
+        if item is None:
+            continue
+        cleaned.append(clean_string(item, max_len=max_len))
+    return cleaned
+
+def clean_list_dicts(values, allowed_keys, max_items=100):
+    if not isinstance(values, list):
+        return []
+    cleaned = []
+    for item in values[:max_items]:
+        if not isinstance(item, dict):
+            continue
+        entry = {}
+        for key in allowed_keys:
+            if key in item:
+                if key == 'id':
+                    entry[key] = item.get(key)
+                else:
+                    entry[key] = clean_string(item.get(key), max_len=2000)
+        cleaned.append(entry)
+    return cleaned
+
+def clean_resume_payload(payload):
+    if not isinstance(payload, dict):
+        return None, 'resumeData ?????'
+
+    personal_info = payload.get('personalInfo', {})
+    if not isinstance(personal_info, dict):
+        personal_info = {}
+
+    cleaned = {
+        'personalInfo': {
+            'name': clean_string(personal_info.get('name'), 200),
+            'title': clean_string(personal_info.get('title'), 200),
+            'email': clean_string(personal_info.get('email'), 200),
+            'phone': clean_string(personal_info.get('phone'), 100),
+            'location': clean_string(personal_info.get('location'), 200),
+            'linkedin': clean_string(personal_info.get('linkedin'), 200),
+            'website': clean_string(personal_info.get('website'), 200),
+            'summary': clean_string(personal_info.get('summary'), 4000),
+            'avatar': clean_string(personal_info.get('avatar'), 8000)
+        },
+        'workExps': clean_list_dicts(
+            payload.get('workExps'),
+            ['id', 'title', 'subtitle', 'date', 'description', 'company', 'position', 'startDate', 'endDate'],
+            max_items=50
+        ),
+        'educations': clean_list_dicts(
+            payload.get('educations'),
+            ['id', 'title', 'subtitle', 'date', 'school', 'degree', 'major', 'startDate', 'endDate'],
+            max_items=50
+        ),
+        'projects': clean_list_dicts(
+            payload.get('projects'),
+            ['id', 'title', 'subtitle', 'date', 'description', 'role', 'link'],
+            max_items=50
+        ),
+        'skills': clean_list_strings(payload.get('skills'), max_items=200, max_len=100),
+        'summary': clean_string(payload.get('summary'), 4000),
+        'gender': clean_string(payload.get('gender'), 20),
+        'templateId': clean_string(payload.get('templateId'), 50),
+        'optimizationStatus': clean_string(payload.get('optimizationStatus'), 50),
+        'lastJdText': clean_string(payload.get('lastJdText'), 8000),
+    }
+
+    interview_sessions = payload.get('interviewSessions')
+    if isinstance(interview_sessions, dict):
+        cleaned['interviewSessions'] = interview_sessions
+
+    export_history = payload.get('exportHistory')
+    if isinstance(export_history, list):
+        cleaned['exportHistory'] = clean_list_dicts(
+            export_history,
+            ['filename', 'size', 'type', 'exportedAt'],
+            max_items=200
+        )
+
+    return cleaned, None
 
 @app.route('/api/auth/register', methods=['POST'])
 def register():
@@ -212,9 +315,11 @@ def register():
             result = supabase.table('users').insert(user_data).execute()
 
         if result.data:
+            if not JWT_SECRET:
+                return jsonify({'error': 'JWT_SECRET ??????????'}), 500
             token = jwt.encode({'user_id': result.data[0]['id']}, JWT_SECRET, algorithm="HS256")
             return jsonify({
-                'message': '注册成功',
+                'message': '????',
                 'token': token,
                 'user': {
                     'id': result.data[0]['id'],
@@ -259,8 +364,11 @@ def login():
         if not check_password_hash(user['password'], password):
             return jsonify({'error': '账号或密码错误'}), 401
 
+        if not JWT_SECRET:
+            return jsonify({'error': 'JWT_SECRET ??????????'}), 500
+        if not JWT_SECRET:
+            return jsonify({'error': 'JWT_SECRET ??????????'}), 500
         token = jwt.encode({'user_id': user['id']}, JWT_SECRET, algorithm="HS256")
-
         return jsonify({
             'message': '登录成功',
             'token': token,
@@ -294,12 +402,7 @@ def forgot_password():
 def get_resumes(current_user_id):
     try:
         if is_mock_mode():
-            # Mock mode: get resumes from mock_resumes
-            user_resumes = []
-            for resume_id, resume_data in mock_resumes.items():
-                if resume_data.get('user_id') == current_user_id:
-                    user_resumes.append(resume_data)
-            
+            user_resumes = list(get_mock_resumes_for_user(current_user_id).values())
             # Sort by created_at descending
             user_resumes.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         else:
@@ -326,20 +429,24 @@ def get_resumes(current_user_id):
 def create_resume(current_user_id):
     try:
         data = request.get_json()
-        title = data.get('title', '新简历')
+        title = data.get('title', '???')
+        title = clean_string(title, 200)
         resume_data = data.get('resumeData', {})
+        cleaned_resume_data, err = clean_resume_payload(resume_data)
+        if err:
+            return jsonify({'error': err}), 400
 
         resume_record = {
             'id': str(uuid.uuid4()),
             'user_id': current_user_id,
             'title': title,
-            'resume_data': resume_data,
+            'resume_data': cleaned_resume_data,
             'created_at': datetime.utcnow().isoformat(),
             'updated_at': datetime.utcnow().isoformat()
         }
 
         if is_mock_mode():
-            mock_resumes[resume_record['id']] = resume_record
+            get_mock_resumes_for_user(current_user_id)[resume_record['id']] = resume_record
             result = mock_supabase_response(data=[resume_record])
         else:
             result = supabase.table('resumes').insert(resume_record).execute()
@@ -360,7 +467,7 @@ def create_resume(current_user_id):
 def get_resume(current_user_id, resume_id):
     try:
         if is_mock_mode():
-            resume = mock_resumes.get(resume_id)
+            resume = get_mock_resumes_for_user(current_user_id).get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
                 return jsonify({'error': '未找到简历'}), 404
         else:
@@ -390,12 +497,17 @@ def update_resume(current_user_id, resume_id):
         if title is not None:
             update_data['title'] = title
         if resume_data is not None:
-            update_data['resume_data'] = resume_data
+            cleaned_resume_data, err = clean_resume_payload(resume_data)
+            if err:
+                return jsonify({'error': err}), 400
+            update_data['resume_data'] = cleaned_resume_data
         if score is not None:
+            if not isinstance(score, (int, float)) or score < 0 or score > 100:
+                return jsonify({'error': 'score ??? 0-100 ???'}), 400
             update_data['score'] = score
 
         if is_mock_mode():
-            resume = mock_resumes.get(resume_id)
+            resume = get_mock_resumes_for_user(current_user_id).get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
                 return jsonify({'error': '简历不存在或更新失败'}), 404
 
@@ -420,11 +532,11 @@ def update_resume(current_user_id, resume_id):
 def delete_resume(current_user_id, resume_id):
     try:
         if is_mock_mode():
-            resume = mock_resumes.get(resume_id)
+            resume = get_mock_resumes_for_user(current_user_id).get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
                 return jsonify({'error': '简历不存在或删除失败'}), 404
 
-            deleted_resume = mock_resumes.pop(resume_id)
+            deleted_resume = get_mock_resumes_for_user(current_user_id).pop(resume_id)
             result = mock_supabase_response(data=[deleted_resume])
         else:
             result = supabase.table('resumes').delete().eq('id', resume_id).eq('user_id', current_user_id).execute()
@@ -621,9 +733,9 @@ def get_templates():
             },
             {
                 'id': 3,
-                'name': '创意风格',
-                'description': '适合创意行业的独特模板',
-                'preview': 'creative'
+                'name': '????',
+                'description': '?????????',
+                'preview': 'minimal'
             }
         ]
         return jsonify({'templates': templates}), 200
@@ -771,239 +883,449 @@ def clean_text_for_pdf(text):
 
     return text
 
-def generate_resume_html(resume_data):
-    """Generate HTML content for resume based on resume data"""
+def is_safe_external_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlparse(url)
+        if parsed.scheme not in ('http', 'https'):
+            return False
+        host = parsed.hostname
+        if not host:
+            return False
+        # Block localhost and internal hostnames
+        if host in ('localhost', '127.0.0.1', '::1'):
+            return False
+        # Resolve hostname and block private/loopback/link-local/reserved
+        try:
+            ip = ipaddress.ip_address(host)
+            ips = [ip]
+        except ValueError:
+            try:
+                infos = socket.getaddrinfo(host, None)
+                ips = [ipaddress.ip_address(info[4][0]) for info in infos]
+            except Exception:
+                return False
+        for ip in ips:
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+                return False
+        return True
+    except Exception:
+        return False
 
-    # Personal Info - safe defaults and cleaning
+def normalize_avatar_data(avatar_url: str) -> str:
+    if not avatar_url:
+        return ''
+    avatar_url = str(avatar_url).strip()
+    if avatar_url.startswith('data:image/'):
+        return avatar_url
+    if avatar_url.startswith('http://') or avatar_url.startswith('https://'):
+        if not is_safe_external_url(avatar_url):
+            return ''
+        try:
+            with urllib.request.urlopen(avatar_url, timeout=3) as response:
+                content_type = response.headers.get('Content-Type', 'image/png')
+                data = response.read(2 * 1024 * 1024)
+                encoded = base64.b64encode(data).decode('utf-8')
+                return f"data:{content_type};base64,{encoded}"
+        except Exception:
+            return ''
+    return ''
+
+def format_multiline(text: str) -> Markup:
+    safe_text = clean_text_for_pdf(text or '')
+    return Markup(safe_text.replace('\n', '<br/>'))
+
+def normalize_date_range(start_date: str, end_date: str) -> str:
+    start = clean_text_for_pdf(start_date or '').strip()
+    end = clean_text_for_pdf(end_date or '').strip()
+    if start and end:
+        return f"{start} - {end}"
+    return start or end
+
+def build_resume_context(resume_data):
     personal_info = resume_data.get('personalInfo', {}) or {}
-    name = clean_text_for_pdf(personal_info.get('name', '') or '姓名')
-    title = clean_text_for_pdf(personal_info.get('title', '') or '职位')
-    email = clean_text_for_pdf(personal_info.get('email', '') or '邮箱')
-    phone = clean_text_for_pdf(personal_info.get('phone', '') or '电话')
-    location = clean_text_for_pdf(personal_info.get('location', '') or '所在地')
+    name = clean_text_for_pdf(personal_info.get('name', '') or '??')
+    title = clean_text_for_pdf(personal_info.get('title', '') or '????')
+    email = clean_text_for_pdf(personal_info.get('email', '') or 'email@example.com')
+    phone = clean_text_for_pdf(personal_info.get('phone', '') or '+86 138 0000 0000')
+    location = clean_text_for_pdf(personal_info.get('location', '') or '')
+    avatar = normalize_avatar_data(personal_info.get('avatar', '') or '')
+    avatar_initial = (name[:1] if name else '?')
 
-    header_html = f"""
-    <div class="resume-header">
-        <h1>{name}</h1>
-        <div class="contact">
-            {title}<br>
-            {email} | {phone} | {location}
-        </div>
+    summary_text = resume_data.get('summary') or personal_info.get('summary') or ''
+    summary = format_multiline(summary_text) if summary_text else ''
+
+    work_exps = []
+    for exp in resume_data.get('workExps', []) or []:
+        title_text = exp.get('title') or exp.get('company') or '????'
+        subtitle_text = exp.get('subtitle') or exp.get('position') or '??'
+        date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '????'
+        work_exps.append({
+            'title': clean_text_for_pdf(title_text),
+            'subtitle': clean_text_for_pdf(subtitle_text),
+            'date': clean_text_for_pdf(date_text),
+            'description': format_multiline(exp.get('description') or '????')
+        })
+
+    educations = []
+    for edu in resume_data.get('educations', []) or []:
+        title_text = edu.get('title') or edu.get('school') or '????'
+        subtitle_parts = []
+        if edu.get('degree'):
+            subtitle_parts.append(edu.get('degree'))
+        if edu.get('major'):
+            subtitle_parts.append(edu.get('major'))
+        subtitle_text = edu.get('subtitle') or ' '.join([p for p in subtitle_parts if p]) or '??/??'
+        date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or '????'
+        educations.append({
+            'title': clean_text_for_pdf(title_text),
+            'subtitle': clean_text_for_pdf(subtitle_text),
+            'date': clean_text_for_pdf(date_text)
+        })
+
+    projects = []
+    for proj in resume_data.get('projects', []) or []:
+        title_text = proj.get('title') or '????'
+        subtitle_text = proj.get('subtitle') or proj.get('role') or '????'
+        date_text = proj.get('date') or '????'
+        projects.append({
+            'title': clean_text_for_pdf(title_text),
+            'subtitle': clean_text_for_pdf(subtitle_text),
+            'date': clean_text_for_pdf(date_text),
+            'description': format_multiline(proj.get('description') or '????')
+        })
+
+    skills = [clean_text_for_pdf(skill) for skill in (resume_data.get('skills', []) or []) if skill]
+
+    return {
+        'name': name,
+        'title': title,
+        'email': email,
+        'phone': phone,
+        'location': location,
+        'avatar': avatar,
+        'avatar_initial': avatar_initial,
+        'summary': summary,
+        'work_exps': work_exps,
+        'educations': educations,
+        'projects': projects,
+        'skills': skills,
+        'template_id': (resume_data.get('templateId') or 'modern').lower()
+    }
+
+def generate_resume_html(resume_data):
+    """Generate HTML content for resume based on resume data and template selection"""
+    context = build_resume_context(resume_data)
+    template_id = context.get('template_id', 'modern')
+
+    templates = {
+        'modern': """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>{{ name }} - ??</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    body { font-family: 'Microsoft YaHei', 'SimHei', Arial, sans-serif; font-size: 11px; line-height: 1.5; color: #1f2937; }
+    .header-table { width: 100%; border-bottom: 2px solid #e5e7eb; padding-bottom: 10px; margin-bottom: 16px; }
+    .avatar-cell { width: 70px; vertical-align: top; }
+    .avatar { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid #e5e7eb; }
+    .avatar-placeholder { width: 60px; height: 80px; background: #cbd5f5; color: #1e3a8a; display: table-cell; text-align: center; vertical-align: middle; font-size: 18px; font-weight: bold; border-radius: 4px; }
+    .header-name { font-size: 18px; font-weight: bold; margin: 0; }
+    .header-title { font-size: 13px; color: #4b5563; margin: 2px 0 6px 0; }
+    .header-contact { font-size: 10px; color: #6b7280; }
+    .section { margin-bottom: 14px; }
+    .section-title { font-size: 13px; font-weight: bold; color: #1e40af; border-bottom: 1px solid #dbeafe; padding-bottom: 4px; margin-bottom: 8px; }
+    .item { margin-bottom: 8px; }
+    .item-title { font-size: 11px; font-weight: bold; color: #111827; }
+    .item-subtitle { font-size: 10px; color: #374151; margin: 2px 0; }
+    .item-date { font-size: 9px; color: #6b7280; }
+    .item-desc { font-size: 10px; color: #4b5563; }
+    .skills { margin-top: 4px; }
+    .skill { display: inline-block; background: #f3f4f6; color: #374151; border: 1px solid #e5e7eb; padding: 2px 6px; font-size: 9px; border-radius: 3px; margin: 2px; }
+  </style>
+</head>
+<body>
+  <table class="header-table">
+    <tr>
+      <td class="avatar-cell">
+        {% if avatar %}
+          <img class="avatar" src="{{ avatar }}" alt="avatar" />
+        {% else %}
+          <div class="avatar-placeholder">{{ avatar_initial }}</div>
+        {% endif %}
+      </td>
+      <td>
+        <h1 class="header-name">{{ name }}</h1>
+        <div class="header-title">{{ title }}</div>
+        <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+      </td>
+    </tr>
+  </table>
+
+  {% if summary %}
+    <div class="section">
+      <div class="section-title">????</div>
+      <div class="item-desc">{{ summary }}</div>
     </div>
-    """
+  {% endif %}
 
-    # 工作经历 - safe defaults and cleaning
-    work_exps = resume_data.get('workExps', []) or []
-    work_html = '<div class="section"><h2>工作经历</h2>'
-    for exp in work_exps or []:
-        company = clean_text_for_pdf(exp.get('company', '') or '公司名称')
-        position = clean_text_for_pdf(exp.get('position', '') or '职位')
-        start_date = clean_text_for_pdf(exp.get('startDate', '') or '开始日期')
-        end_date = clean_text_for_pdf(exp.get('endDate', '') or '结束日期')
-        description = clean_text_for_pdf(exp.get('description', '') or '工作描述')
-
-        work_html += f"""
-        <div class="work-experience">
-            <h3>{position} - {company}</h3>
-            <div class="date">{start_date} - {end_date}</div>
-            <div class="description">{description}</div>
+  {% if work_exps %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for exp in work_exps %}
+        <div class="item">
+          <div class="item-title">{{ exp.title }}{% if exp.subtitle %} - {{ exp.subtitle }}{% endif %}</div>
+          <div class="item-date">{{ exp.date }}</div>
+          <div class="item-desc">{{ exp.description }}</div>
         </div>
-        """
-    work_html += '</div>'
+      {% endfor %}
+    </div>
+  {% endif %}
 
-    # 教育背景 - safe defaults and cleaning
-    educations = resume_data.get('educations', []) or []
-    edu_html = '<div class="section"><h2>教育背景</h2>'
-    for edu in educations or []:
-        school = clean_text_for_pdf(edu.get('school', '') or '学校名称')
-        degree = clean_text_for_pdf(edu.get('degree', '') or '学位')
-        major = clean_text_for_pdf(edu.get('major', '') or '专业')
-        start_date = clean_text_for_pdf(edu.get('startDate', '') or '开始日期')
-        end_date = clean_text_for_pdf(edu.get('endDate', '') or '结束日期')
-
-        edu_html += f"""
-        <div class="education">
-            <h3>{school}</h3>
-            <div class="date">{degree} {major} | {start_date} - {end_date}</div>
+  {% if educations %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for edu in educations %}
+        <div class="item">
+          <div class="item-title">{{ edu.title }}</div>
+          <div class="item-subtitle">{{ edu.subtitle }}</div>
+          <div class="item-date">{{ edu.date }}</div>
         </div>
-        """
-    edu_html += '</div>'
+      {% endfor %}
+    </div>
+  {% endif %}
 
-    # 项目经历 - safe defaults and cleaning
-    projects = resume_data.get('projects', []) or []
-    proj_html = '<div class="section"><h2>项目经历</h2>'
-    for proj in projects or []:
-        proj_title = clean_text_for_pdf(proj.get('title', '') or '项目名称')
-        description = clean_text_for_pdf(proj.get('description', '') or '项目描述')
-        date = clean_text_for_pdf(proj.get('date', '') or '项目时间')
-
-        proj_html += f"""
-        <div class="projects">
-            <h3>{proj_title}</h3>
-            <div class="date">{date}</div>
-            <div class="description">{description}</div>
+  {% if projects %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for proj in projects %}
+        <div class="item">
+          <div class="item-title">{{ proj.title }}{% if proj.subtitle %} - {{ proj.subtitle }}{% endif %}</div>
+          <div class="item-date">{{ proj.date }}</div>
+          <div class="item-desc">{{ proj.description }}</div>
         </div>
-        """
-    proj_html += '</div>'
+      {% endfor %}
+    </div>
+  {% endif %}
 
-    # 个人简介 - safe defaults and cleaning
-    summary = resume_data.get('summary', '') or ''
-    summary_html = ''
-    if summary:
-        summary_html = '<div class="section"><h2>个人简介</h2>'
-        clean_summary = clean_text_for_pdf(summary)
-        summary_html += f'<div class="summary">{clean_summary}</div>'
-        summary_html += '</div>'
+  {% if skills %}
+    <div class="section">
+      <div class="section-title">??</div>
+      <div class="skills">
+        {% for skill in skills %}
+          <span class="skill">{{ skill }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</body>
+</html>
+        """,
+        'classic': """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>{{ name }} - ??</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    body { font-family: 'Times New Roman', 'SimSun', serif; font-size: 12px; line-height: 1.6; color: #111827; }
+    .header { text-align: center; border-bottom: 2px solid #111827; padding-bottom: 12px; margin-bottom: 18px; }
+    .avatar { width: 70px; height: 70px; border-radius: 50%; object-fit: cover; border: 1px solid #111827; margin-bottom: 8px; }
+    .avatar-placeholder { width: 70px; height: 70px; border-radius: 50%; border: 1px solid #111827; display: inline-block; line-height: 70px; font-size: 20px; font-weight: bold; }
+    .name { font-size: 22px; font-weight: bold; text-transform: uppercase; }
+    .title { font-size: 14px; font-style: italic; margin-top: 4px; }
+    .contact { font-size: 11px; color: #4b5563; margin-top: 6px; }
+    .section { margin-bottom: 16px; }
+    .section-title { font-size: 13px; font-weight: bold; border-bottom: 1px solid #111827; padding-bottom: 4px; margin-bottom: 8px; background: #f3f4f6; padding-left: 6px; }
+    .item { margin-bottom: 10px; padding-left: 6px; }
+    .item-title { font-weight: bold; }
+    .item-subtitle { font-style: italic; color: #374151; }
+    .item-date { font-size: 11px; color: #6b7280; }
+    .item-desc { font-size: 11px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    {% if avatar %}
+      <img class="avatar" src="{{ avatar }}" alt="avatar" />
+    {% else %}
+      <div class="avatar-placeholder">{{ avatar_initial }}</div>
+    {% endif %}
+    <div class="name">{{ name }}</div>
+    <div class="title">{{ title }}</div>
+    <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+  </div>
 
-    # 技能 - safe defaults and cleaning
-    skills = resume_data.get('skills', []) or []
-    skills_html = '<div class="section"><h2>技能</h2><div class="skills">'
-    for skill in skills or []:
-        clean_skill = clean_text_for_pdf(skill or "技能")
-        skills_html += f'<span class="skill-item">{clean_skill}</span>'
-    skills_html += '</div></div>'
+  {% if summary %}
+    <div class="section">
+      <div class="section-title">????</div>
+      <div class="item-desc">{{ summary }}</div>
+    </div>
+  {% endif %}
 
-    # Combine all sections with CSS for xhtml2pdf
-    full_html = f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="UTF-8">
-        <title>{name} - 简历</title>
-        <style>
-            @page {{
-                size: A4;
-                margin: 1.5cm;
-            }}
-
-            /* Noto Sans SC fallback */
-            @font-face {{
-                font-family: 'Noto Sans SC';
-                src: url('font.ttf');
-                font-weight: normal;
-                font-style: normal;
-            }}
-
-            body {{
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-                font-size: 11px;
-                line-height: 1.4;
-                color: #333333;
-                margin: 0;
-                padding: 10px;
-            }}
-
-            .resume-header {{
-                text-align: center;
-                border-bottom: 2px solid #333333;
-                padding-bottom: 15px;
-                margin-bottom: 20px;
-            }}
-
-            .resume-header h1 {{
-                margin: 0;
-                font-size: 22px;
-                font-weight: bold;
-                line-height: 1.3;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .resume-header .contact {{
-                margin: 8px 0;
-                font-size: 12px;
-                line-height: 1.5;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .section {{
-                margin-bottom: 20px;
-            }}
-
-            .section h2 {{
-                font-size: 15px;
-                font-weight: bold;
-                border-bottom: 1px solid #cccccc;
-                padding-bottom: 3px;
-                margin-bottom: 10px;
-                color: #333333;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .work-experience, .education, .projects {{
-                margin-bottom: 12px;
-            }}
-
-            .work-experience h3, .education h3, .projects h3 {{
-                font-size: 12px;
-                font-weight: bold;
-                margin: 0 0 3px 0;
-                line-height: 1.3;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .work-experience .date, .education .date, .projects .date {{
-                font-size: 10px;
-                color: #666666;
-                font-style: italic;
-                margin-bottom: 3px;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .work-experience .description, .education .description, .projects .description {{
-                font-size: 10px;
-                margin: 0;
-                line-height: 1.4;
-                text-align: left;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            .skills {{
-                margin-top: 5px;
-            }}
-
-            .skill-item {{
-                background-color: #f8f9fa;
-                padding: 3px 8px;
-                margin: 2px;
-                font-size: 9px;
-                border: 1px solid #e9ecef;
-                border-radius: 3px;
-                display: inline-block;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-
-            ul {{
-                margin: 3px 0;
-                padding-left: 15px;
-            }}
-
-            li {{
-                margin-bottom: 2px;
-                font-size: 10px;
-                line-height: 1.4;
-                font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
-            }}
-        </style>
-    </head>
-    <body>
-        <div class="resume-header">
-            <h1>{name}</h1>
-            <div class="contact">
-                {title}<br>
-                {email} | {phone} | {location}
-            </div>
+  {% if work_exps %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for exp in work_exps %}
+        <div class="item">
+          <div class="item-title">{{ exp.title }}</div>
+          <div class="item-subtitle">{{ exp.subtitle }}</div>
+          <div class="item-date">{{ exp.date }}</div>
+          <div class="item-desc">{{ exp.description }}</div>
         </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
-        {summary_html if summary else ''}
-        {work_html if work_exps else ''}
-        {edu_html if educations else ''}
-        {proj_html if projects else ''}
-        {skills_html if skills else ''}
-    </body>
-    </html>
-    """
+  {% if educations %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for edu in educations %}
+        <div class="item">
+          <div class="item-title">{{ edu.title }}</div>
+          <div class="item-subtitle">{{ edu.subtitle }}</div>
+          <div class="item-date">{{ edu.date }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
 
-    return full_html
+  {% if projects %}
+    <div class="section">
+      <div class="section-title">????</div>
+      {% for proj in projects %}
+        <div class="item">
+          <div class="item-title">{{ proj.title }}</div>
+          <div class="item-subtitle">{{ proj.subtitle }}</div>
+          <div class="item-date">{{ proj.date }}</div>
+          <div class="item-desc">{{ proj.description }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if skills %}
+    <div class="section">
+      <div class="section-title">????</div>
+      <div class="item-desc">{{ skills | join(' ? ') }}</div>
+    </div>
+  {% endif %}
+</body>
+</html>
+        """,
+        'minimal': """
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>{{ name }} - ??</title>
+  <style>
+    @page { size: A4; margin: 1.5cm; }
+    body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 11px; line-height: 1.6; color: #111827; }
+    .header { margin-bottom: 18px; }
+    .header-top { width: 100%; }
+    .avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; border: 1px solid #e5e7eb; }
+    .avatar-placeholder { width: 60px; height: 60px; border-radius: 50%; border: 1px solid #e5e7eb; display: inline-block; line-height: 60px; text-align: center; font-size: 18px; font-weight: bold; }
+    .name { font-size: 26px; font-weight: 800; margin: 0; }
+    .title { font-size: 14px; color: #6b7280; margin: 4px 0 8px 0; }
+    .contact { font-size: 10px; color: #9ca3af; }
+    .section { margin-bottom: 14px; }
+    .section-title { font-size: 10px; font-weight: bold; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; }
+    .item { margin-bottom: 10px; }
+    .item-title { font-weight: bold; }
+    .item-date { font-size: 10px; color: #9ca3af; }
+    .item-desc { font-size: 10px; color: #374151; }
+    .skills span { display: inline-block; margin-right: 10px; border-bottom: 1px solid #e5e7eb; padding-bottom: 2px; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <table class="header-top">
+      <tr>
+        <td style="width:70px;">
+          {% if avatar %}
+            <img class="avatar" src="{{ avatar }}" alt="avatar" />
+          {% else %}
+            <div class="avatar-placeholder">{{ avatar_initial }}</div>
+          {% endif %}
+        </td>
+        <td>
+          <div class="name">{{ name }}</div>
+          <div class="title">{{ title }}</div>
+          <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+        </td>
+      </tr>
+    </table>
+  </div>
+
+  {% if summary %}
+    <div class="section">
+      <div class="section-title">Summary</div>
+      <div class="item-desc">{{ summary }}</div>
+    </div>
+  {% endif %}
+
+  {% if work_exps %}
+    <div class="section">
+      <div class="section-title">Experience</div>
+      {% for exp in work_exps %}
+        <div class="item">
+          <div class="item-title">{{ exp.title }}</div>
+          <div class="item-date">{{ exp.date }}</div>
+          <div class="item-desc">{{ exp.subtitle }}</div>
+          <div class="item-desc">{{ exp.description }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if educations %}
+    <div class="section">
+      <div class="section-title">Education</div>
+      {% for edu in educations %}
+        <div class="item">
+          <div class="item-title">{{ edu.title }}</div>
+          <div class="item-date">{{ edu.date }}</div>
+          <div class="item-desc">{{ edu.subtitle }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if projects %}
+    <div class="section">
+      <div class="section-title">Projects</div>
+      {% for proj in projects %}
+        <div class="item">
+          <div class="item-title">{{ proj.title }}</div>
+          <div class="item-date">{{ proj.date }}</div>
+          <div class="item-desc">{{ proj.subtitle }}</div>
+          <div class="item-desc">{{ proj.description }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  {% if skills %}
+    <div class="section">
+      <div class="section-title">Skills</div>
+      <div class="skills">
+        {% for skill in skills %}
+          <span>{{ skill }}</span>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+</body>
+</html>
+        """,
+    }
+
+    template_html = templates.get(template_id, templates['modern'])
+    env = Environment(loader=BaseLoader(), autoescape=True)
+    return env.from_string(template_html).render(**context)
 
 def extract_text_from_pdf(file_bytes):
     """Extract text content from a PDF file (bytes)."""
