@@ -1,7 +1,17 @@
 import React from 'react';
 import { View, ScreenProps } from '../../types';
+import { useUserProfile } from '../../src/useUserProfile';
 
-const AccountSecurity: React.FC<ScreenProps> = ({ goBack }) => {
+const AccountSecurity: React.FC<ScreenProps> = ({ goBack, currentUser }) => {
+  const { userProfile } = useUserProfile();
+  const phone =
+    currentUser?.user_metadata?.phone ||
+    currentUser?.phone ||
+    '';
+  const email =
+    userProfile?.email ||
+    currentUser?.email ||
+    '';
   return (
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
       <div className="flex-none pt-safe-top bg-white/80 dark:bg-[#1c1c1e]/80 backdrop-blur-xl sticky top-0 z-50 border-b border-[#e5e5ea] dark:border-[#38383a] transition-colors duration-300">
@@ -31,13 +41,13 @@ const AccountSecurity: React.FC<ScreenProps> = ({ goBack }) => {
 
             <button className="w-full flex items-center gap-3 px-4 py-3.5 bg-white dark:bg-[#1c1c1e] hover:bg-black/5 dark:hover:bg-white/5 transition-colors group">
               <span className="flex-1 text-left text-[16px] font-medium text-slate-900 dark:text-white">手机号</span>
-              <span className="text-[15px] text-slate-500 dark:text-slate-400 mr-1">138****8888</span>
+              <span className="text-[15px] text-slate-500 dark:text-slate-400 mr-1">{phone || '未绑定'}</span>
               <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]">chevron_right</span>
             </button>
 
              <button className="w-full flex items-center gap-3 px-4 py-3.5 bg-white dark:bg-[#1c1c1e] hover:bg-black/5 dark:hover:bg-white/5 transition-colors group">
-              <span className="flex-1 text-left text-[16px] font-medium text-slate-900 dark:text-white">电子邮箱</span>
-              <span className="text-[15px] text-slate-500 dark:text-slate-400 mr-1">alex@example.com</span>
+             <span className="flex-1 text-left text-[16px] font-medium text-slate-900 dark:text-white">电子邮箱</span>
+              <span className="text-[15px] text-slate-500 dark:text-slate-400 mr-1">{email || '未绑定'}</span>
               <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 text-[20px]">chevron_right</span>
             </button>
           </div>
@@ -50,7 +60,10 @@ const AccountSecurity: React.FC<ScreenProps> = ({ goBack }) => {
             
             <div className="w-full flex items-center justify-between px-4 py-3.5 bg-white dark:bg-[#1c1c1e]">
               <div className="flex items-center gap-3">
-                 <svg className="h-6 w-6 text-slate-900 dark:text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM18.36 13.2H12V10.8H18.36V13.2ZM12 4.4C13.66 4.4 15 5.74 15 7.4C15 9.06 13.66 10.4 12 10.4C10.34 10.4 9 9.06 9 7.4C9 5.74 10.34 4.4 12 4.4ZM6 12C6 10.34 7.34 9 9 9C10.66 9 12 10.34 12 12C12 13.66 10.66 15 9 15C7.34 15 6 13.66 6 12Z"/></svg>
+                 <svg className="h-6 w-6 text-slate-900 dark:text-white" viewBox="0 0 24 24" fill="currentColor" aria-label="WeChat">
+                   <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
+                   <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z"/>
+                 </svg>
                  <span className="text-[16px] font-medium text-slate-900 dark:text-white">微信</span>
               </div>
               <button className="text-[14px] font-medium text-primary hover:opacity-80">

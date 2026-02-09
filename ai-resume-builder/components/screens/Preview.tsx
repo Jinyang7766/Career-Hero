@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
 import { supabase } from '../../src/supabase-client';
+import { DatabaseService } from '../../src/database-service';
 
 const sanitizeData = (data: any): any => {
   // 定义要删除的字段
-  const fieldsToRemove = ['suggestions', 'metadata', 'status'];
+  const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
   
   // 如果是数组，递归处理每个元素
   if (Array.isArray(data)) {
@@ -34,6 +35,35 @@ const sanitizeData = (data: any): any => {
 
 const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) => {
   const [isGenerating, setIsGenerating] = useState(false);
+  const isOptimized = resumeData?.optimizationStatus === 'optimized';
+
+  const recordExportHistory = async (filename: string, size: number) => {
+    if (!resumeData?.id) return;
+
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const currentHistory = resumeData.exportHistory || [];
+      const entry = {
+        filename,
+        size,
+        type: 'PDF' as const,
+        exportedAt: new Date().toISOString()
+      };
+      const updatedResumeData: ResumeData = {
+        ...resumeData,
+        exportHistory: [entry, ...currentHistory].slice(0, 200)
+      };
+
+      await DatabaseService.updateResume(String(resumeData.id), {
+        resume_data: updatedResumeData,
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.error('Failed to record export history:', err);
+    }
+  };
 
   const handleExportPDF = async () => {
     if (isGenerating || !resumeData) return;
@@ -51,7 +81,8 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          resumeData: sanitizedResumeData
+          resumeData: sanitizedResumeData,
+          jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : ''
         })
       });
 
@@ -87,7 +118,9 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
+
+      await recordExportHistory(filename, blob.size);
+
       console.log('✅ PDF 导出成功');
       
     } catch (error) {
@@ -277,6 +310,32 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData }) 
         </div>
 
         <div className="w-[85%] flex flex-col gap-4">
+            {isOptimized && (
+                <button
+                    onClick={() => {
+                        if (resumeData?.id) {
+                            localStorage.setItem('ai_interview_open', '1');
+                            localStorage.setItem('ai_interview_resume_id', String(resumeData.id));
+                        }
+                        setCurrentView(View.AI_ANALYSIS);
+                    }}
+                    className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="relative size-10 rounded-full overflow-hidden border-2 border-white/30 bg-white">
+                            <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Interviewer" className="w-full h-full object-cover" />
+                            <span className="absolute bottom-0 right-0 size-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+                        </div>
+                        <div className="text-left">
+                            <p className="text-sm font-bold">AI 模拟面试官</p>
+                            <p className="text-xs text-blue-100">继续上次面试对话</p>
+                        </div>
+                    </div>
+                    <div className="size-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+                        <span className="material-symbols-outlined text-xl">arrow_forward</span>
+                    </div>
+                </button>
+            )}
             <button 
                 onClick={handleExportPDF}
                 disabled={isGenerating}

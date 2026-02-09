@@ -1,0 +1,6 @@
+# Project AI Rules
+
+Before modifying ANY file in this project, you MUST follow the protocol in [AGENT_RULES.md](file:///g:/AI_project/Career-Hero/AGENT_RULES.md).
+
+## Backup Mandatory
+Every file modification must be preceded by a copy to the `backup/` directory mirroring the source path.

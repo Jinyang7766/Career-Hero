@@ -1,7 +1,36 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { View, ScreenProps } from '../../types';
 
 const Help: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
+  const [images, setImages] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePickImages = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const remaining = Math.max(0, 3 - images.length);
+    const toAdd = files.slice(0, remaining);
+    toAdd.forEach((file) => {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const result = ev.target?.result as string;
+        if (result) {
+          setImages(prev => [...prev, result].slice(0, 3));
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+    e.target.value = '';
+  };
+
+  const removeImage = (idx: number) => {
+    setImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
   return (
     <div className="relative flex h-full min-h-screen w-full flex-col bg-background-light dark:bg-background-dark max-w-[480px] mx-auto animate-in slide-in-from-right duration-300">
       <div className="sticky top-0 z-50 flex items-center bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md p-4 pb-2 justify-between border-b border-gray-200 dark:border-gray-800">
@@ -26,16 +55,32 @@ const Help: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
             <div className="flex flex-col gap-2">
               <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">添加图片 (最多3张)</label>
               <div className="flex gap-3 overflow-x-auto pb-1">
-                <button className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 dark:border-[#324d67] bg-gray-50 dark:bg-[#111a22] hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-colors group">
+                <button
+                  onClick={handlePickImages}
+                  className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 dark:border-[#324d67] bg-gray-50 dark:bg-[#111a22] hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-colors group"
+                >
                   <span className="material-symbols-outlined text-gray-400 dark:text-[#6b7d91] group-hover:text-primary mb-1">add_a_photo</span>
                   <span className="text-[10px] text-gray-400 dark:text-[#6b7d91] group-hover:text-primary">上传截图</span>
                 </button>
-                <div className="relative h-20 w-20 shrink-0 rounded-lg border border-gray-200 dark:border-[#324d67] bg-gray-800 overflow-hidden group">
-                  <img alt="uploaded image" className="h-full w-full object-cover opacity-80" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAvb01bNGhdWkKe3CUJ34dBq72yNWZ48GTcANXLued2gT4rIZx7dmcOKCeI7FUTzxwn7_bsq461Y63FiGsTCKfvYvwP8iBH1jWIrPbK6DXWSSuikIXAECJEDoG4bGnG_GHFEGWj-XVAR0tehIr4mmLVT6flEIUl4tsC08bGE-aYqmGcNUPjVtNIer8e3KreQkS7ToD1W-uf9vTBGEkdUkCmGzdWBusKSOfwTd7j7chNmVdR3EDyvYoJsmt2lMZ53h1yhQ_GPST0a-Id"/>
-                  <button className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm hover:bg-red-500 transition-colors">
-                    <span className="material-symbols-outlined text-[14px]">close</span>
-                  </button>
-                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleFiles}
+                  className="hidden"
+                />
+                {images.map((src, idx) => (
+                  <div key={idx} className="relative h-20 w-20 shrink-0 rounded-lg border border-gray-200 dark:border-[#324d67] bg-gray-800 overflow-hidden group">
+                    <img alt="uploaded" className="h-full w-full object-cover opacity-90" src={src} />
+                    <button
+                      onClick={() => removeImage(idx)}
+                      className="absolute top-1 right-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm hover:bg-red-500 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">close</span>
+                    </button>
+                  </div>
+                ))}
               </div>
             </div>
 

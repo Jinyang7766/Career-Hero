@@ -41,84 +41,9 @@ interface AnalysisReport {
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
-const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes, loadUserResumes }) => {
-  // --- Privacy masking helpers ---
-  const createMasker = () => {
-    const mapping = new Map<string, string>();
-    let counter = 0;
-
-    const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-    const phoneRegex = /(?<!\d)(\+?\d[\d\s-]{7,}\d)(?!\d)/g;
-
-    const maskValue = (value: string, type: string) => {
-      const token = `[[${type}_${++counter}]]`;
-      mapping.set(token, value);
-      return token;
-    };
-
-    const maskText = (text: string) => {
-      if (!text) return text;
-      return text
-        .replace(emailRegex, (m) => maskValue(m, 'EMAIL'))
-        .replace(phoneRegex, (m) => maskValue(m, 'PHONE'));
-    };
-
-    const companyKeys = new Set(['company', 'employer', 'organization', 'org', 'school']);
-    const addressKeys = new Set(['address', 'location', 'city', 'province', 'state', 'country']);
-
-    const maskObject = (input: any): any => {
-      if (input === null || input === undefined) return input;
-      if (typeof input === 'string') return maskText(input);
-      if (Array.isArray(input)) return input.map((item) => maskObject(item));
-      if (typeof input === 'object') {
-        const out: any = {};
-        Object.keys(input).forEach((key) => {
-          const value = input[key];
-          if (typeof value === 'string' && companyKeys.has(key)) {
-            out[key] = maskValue(value, 'COMPANY');
-            return;
-          }
-          if (typeof value === 'string' && addressKeys.has(key)) {
-            out[key] = maskValue(value, 'ADDRESS');
-            return;
-          }
-          out[key] = maskObject(value);
-        });
-        return out;
-      }
-      return input;
-    };
-
-    const unmaskText = (text: string) => {
-      if (!text) return text;
-      let result = text;
-      for (const [token, value] of mapping.entries()) {
-        result = result.split(token).join(value);
-      }
-      return result;
-    };
-
-    const unmaskObject = (input: any): any => {
-      if (input === null || input === undefined) return input;
-      if (typeof input === 'string') return unmaskText(input);
-      if (Array.isArray(input)) return input.map((item) => unmaskObject(item));
-      if (typeof input === 'object') {
-        const out: any = {};
-        Object.keys(input).forEach((key) => {
-          out[key] = unmaskObject(input[key]);
-        });
-        return out;
-      }
-      return input;
-    };
-
-    return { maskText, maskObject, unmaskText, unmaskObject };
-  };
+const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes }) => {
   // Navigation State
-  const [currentStep, setCurrentStep] = useState<Step>(() => {
-    const saved = localStorage.getItem('ai_analysis_step') as Step | null;
-    return saved || 'resume_select';
-  });
+  const [currentStep, setCurrentStep] = useState<Step>('resume_select');
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
 
   // Visual Viewport State
@@ -144,146 +69,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
-  const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
 
   // Cache State
   const [isFromCache, setIsFromCache] = useState(false);
-
-  // Optimized Resume Tracking
-  const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
-  const [isSelectOptimizedOpen, setIsSelectOptimizedOpen] = useState(true);
-  const [isSelectUnoptimizedOpen, setIsSelectUnoptimizedOpen] = useState(true);
-
-  const setAnalysisInProgress = (value: boolean) => {
-    if (value) {
-      localStorage.setItem('ai_analysis_in_progress', '1');
-    } else {
-      localStorage.removeItem('ai_analysis_in_progress');
-    }
-  };
-
-  const recordExportHistory = async (filename: string, size: number) => {
-    if (!resumeData?.id) return;
-
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const currentHistory = resumeData.exportHistory || [];
-      const entry = {
-        filename,
-        size,
-        type: 'PDF' as const,
-        exportedAt: new Date().toISOString()
-      };
-      const updatedResumeData: ResumeData = {
-        ...resumeData,
-        exportHistory: [entry, ...currentHistory].slice(0, 200)
-      };
-
-      if (setResumeData) {
-        setResumeData(updatedResumeData);
-      }
-
-      await DatabaseService.updateResume(String(resumeData.id), {
-        resume_data: updatedResumeData,
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Failed to record export history:', err);
-    }
-  };
-
-  // --- Helper: Extract Company Name from JD ---
-  const getCompanyNameFromJd = (text: string) => {
-    if (!text) return '';
-    const patterns = [
-      /(?:公司|企业|Employer|Company)[:：]\s*([^\n]+)/,
-      /招聘单位[:：]\s*([^\n]+)/,
-      /^([^\n]+(?:公司|集团|有限责任公司|厂))/,
-    ];
-    for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) return match[1].trim().replace(/[ \t]+$/, '');
-    }
-    const firstLine = text.split('\n')[0].trim();
-    return firstLine.length < 20 ? firstLine : '';
-  };
-
-  const makeJdKey = (text: string) => {
-    const normalized = (text || '').trim().toLowerCase();
-    if (!normalized) return 'jd_default';
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i += 1) {
-      hash = (hash * 31 + normalized.charCodeAt(i)) | 0;
-    }
-    return `jd_${Math.abs(hash)}`;
-  };
-
-  const getLatestInterviewSession = (sessions: ResumeData['interviewSessions']) => {
-    if (!sessions) return null;
-    const entries = Object.values(sessions);
-    if (entries.length === 0) return null;
-    return entries.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1))[0];
-  };
-
-  const buildResumeTitle = (baseTitle: string | undefined, data: ResumeData, jd: string, includeCompany: boolean) => {
-    const direction = data?.personalInfo?.title?.trim();
-    const personName = data?.personalInfo?.name?.trim();
-    const parts: string[] = [];
-
-    if (direction) {
-      parts.push(direction);
-    } else if (baseTitle) {
-      parts.push(baseTitle);
-    } else {
-      parts.push('简历');
-    }
-
-    if (includeCompany) {
-      const companyName = getCompanyNameFromJd(jd);
-      if (companyName) {
-        parts.push(companyName);
-      }
-    }
-
-    if (personName) {
-      parts.push(personName);
-    }
-
-    return parts.join(' - ');
-  };
-
-  const persistInterviewSession = async (messages: ChatMessage[], overrideJdText?: string) => {
-    if (!resumeData?.id) return;
-    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    const jdKey = makeJdKey(sessionJdText);
-    const currentSessions = resumeData.interviewSessions || {};
-    const updatedSessions = {
-      ...currentSessions,
-      [jdKey]: {
-        jdText: sessionJdText,
-        messages: messages.map(m => ({ id: m.id, role: m.role, text: m.text })),
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    const updatedResumeData = {
-      ...resumeData,
-      interviewSessions: updatedSessions,
-      lastJdText: sessionJdText
-    };
-
-    if (setResumeData) {
-      setResumeData(updatedResumeData);
-    }
-
-    await DatabaseService.updateResume(String(resumeData.id), {
-      resume_data: updatedResumeData,
-      updated_at: new Date().toISOString()
-    });
-  };
 
   // --- Handlers ---
 
@@ -405,26 +193,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       console.log("🚀 发送到后端的 Token 是:", token);
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-      const masker = createMasker();
-      const maskedResumeData = masker.maskObject(resumeData);
-      const maskedJdText = masker.maskText(jdText || '');
-
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token.trim()}` // 增加 trim() 防止空格导致 401
         },
-        signal: controller.signal,
         body: JSON.stringify({
-          resumeData: maskedResumeData,
-          jobDescription: maskedJdText
+          resumeData: resumeData,
+          jobDescription: jdText
         })
       });
-      clearTimeout(timeoutId);
 
       // 重点：如果后端返回 401，一定要抛出错误
       if (response.status === 401) {
@@ -437,25 +216,24 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       }
 
       const result = await response.json();
-      const unmaskedResult = masker.unmaskObject(result);
       console.log('Backend AI analysis result:', result);
 
       // 确保 result.score 存在
-      const backendScore = unmaskedResult.score || 0;
+      const backendScore = result.score || 0;
 
       // 转换后端返回的数据格式为前端需要的格式
       const analysisResult = {
-        summary: unmaskedResult.summary || 'AI分析完成',
-        strengths: unmaskedResult.strengths || [],
-        weaknesses: unmaskedResult.weaknesses || [],
-        missingKeywords: unmaskedResult.missingKeywords, // 直接使用后端返回的数据
+        summary: result.summary || 'AI分析完成',
+        strengths: result.strengths || [],
+        weaknesses: result.weaknesses || [],
+        missingKeywords: result.missingKeywords, // 直接使用后端返回的数据
         score: backendScore, // 保存原始分数
         scoreBreakdown: {
           experience: Math.round(backendScore * 0.4), // 假设经验占40%
           skills: Math.round(backendScore * 0.4),     // 技能占40%
           format: Math.round(backendScore * 0.2)      // 格式占20%
         },
-        suggestions: unmaskedResult.suggestions // 直接使用后端返回的建议
+        suggestions: result.suggestions // 直接使用后端返回的建议
       };
 
       // ========== 缓存存储 ==========
@@ -486,17 +264,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     // Snapshot original data for comparison later
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
-    // 🔴 标记原始简历为“未优化”
-    if (resumeData.id) {
-      const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-      const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
-      DatabaseService.updateResume(String(resumeData.id), {
-        title: updatedTitle,
-        resume_data: { ...resumeData, optimizationStatus: 'unoptimized', lastJdText: jdText }
-      }).then(res => console.log('Original resume marked as unoptimized:', res.success));
-    }
-
-    setAnalysisInProgress(true);
     setCurrentStep('analyzing');
 
     try {
@@ -579,8 +346,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 显示错误提示，不回退到模拟数据
       alert(`AI 分析失败：${error.message || '网络连接异常，请稍后重试'}`);
       setCurrentStep('jd_input');
-    } finally {
-      setAnalysisInProgress(false);
     }
   };
 
@@ -594,9 +359,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       console.log('handleAcceptSuggestionInChat called with suggestion:', suggestion);
 
-      const applySuggestionToResume = (base: ResumeData) => {
-        console.log('Current resume data before update:', base);
-        const newData = { ...base };
+      // Apply data change silently
+      setResumeData(prev => {
+        console.log('Current resume data before update:', prev);
+        const newData = { ...prev };
 
         // 1. 处理个人信息
         if (suggestion.targetSection === 'personalInfo') {
@@ -630,7 +396,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           } else {
             console.warn("AI returned invalid skills format:", safeSkills);
             // 如果格式完全不对，保持原样，不崩溃
-            return base;
+            return prev;
           }
         }
         // 4. 处理项目经历 (增加安全检查)
@@ -650,7 +416,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             } else {
               console.warn("AI returned invalid projects format:", safeProjects);
               // 如果格式完全不对，保持原样，不崩溃
-              return base;
+              return prev;
             }
           }
         }
@@ -661,10 +427,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         }
         console.log('Updated resume data:', newData);
         return newData;
-      };
-
-      const nextResumeData = applySuggestionToResume(resumeData);
-      setResumeData(nextResumeData);
+      });
 
       // Update suggestions state
       setSuggestions(prev => {
@@ -688,46 +451,51 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       // 数据持久化：将最新数据同步到 Supabase 数据库
       try {
+        // 获取当前用户
         const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) return;
 
-        // 确保数据带有“已优化”标记
-        const updatedDataWithStatus = {
-          ...nextResumeData,
-          optimizationStatus: 'optimized',
-          lastJdText: jdText
-        };
+        if (userError || !user) {
+          console.error('User not authenticated:', userError);
+          return;
+        }
 
-        const originalTitle = allResumes?.find(r => r.id === selectedResumeId)?.title || '简历';
-        const newTitle = buildResumeTitle(originalTitle, updatedDataWithStatus, jdText, true);
+        // 使用函数式更新获取最新的简历数据
+        setResumeData(prev => {
+          const updatedData = prev;
 
-        if (optimizedResumeId) {
-          // 1. 如果本会话已创建过优化副本，则更新它
-          await DatabaseService.updateResume(String(optimizedResumeId), {
-            resume_data: updatedDataWithStatus,
-            title: newTitle,
-            updated_at: new Date().toISOString()
-          });
-          console.log('✅ Real-time update synced to record:', optimizedResumeId);
-        } else {
-          // 2. 第一次采纳建议，创建全新的“优化版”记录
-          const createResult = await DatabaseService.createResume(user.id, newTitle, updatedDataWithStatus);
-
-          if (createResult.success && createResult.data) {
-            const newId = createResult.data.id;
-            setOptimizedResumeId(newId);
-            console.log('🚀 Created new optimized resume record:', newTitle, 'ID:', newId);
-
-            // 可选：触发外部刷新列表
-            if (loadUserResumes) loadUserResumes();
+          if (updatedData.id) {
+            // 如果有简历 ID，使用 update 方法
+            // 注意：根据 DatabaseService 的实现，我们需要传递包含 resume_data 字段的对象
+            DatabaseService.updateResume(String(updatedData.id), {
+              resume_data: updatedData,
+              updated_at: new Date().toISOString()
+            }).then(updateResult => {
+              if (updateResult.success) {
+                console.log('Resume updated successfully:', updateResult);
+              } else {
+                console.error('Failed to update resume:', updateResult.error);
+              }
+            }).catch(error => {
+              console.error('Database update error:', error);
+            });
+          } else {
+            // 如果没有简历 ID，使用 createResume 方法
+            DatabaseService.createResume(user.id, '优化后的简历', updatedData).then(createResult => {
+              if (createResult.success) {
+                console.log('Resume created successfully:', createResult);
+              } else {
+                console.error('Failed to create resume:', createResult.error);
+              }
+            }).catch(error => {
+              console.error('Database create error:', error);
+            });
           }
-        }
 
-        if (optimizedResumeId && loadUserResumes) {
-          loadUserResumes();
-        }
+          return updatedData;
+        });
       } catch (dbError) {
-        console.error('Database error in real-time sync:', dbError);
+        console.error('Database error in handleAcceptSuggestionInChat:', dbError);
+        // 数据库错误不影响前端操作，只记录日志
       }
 
       // AI Follow up with conversation instead of automatic suggestion
@@ -742,7 +510,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             const followUpMsg: ChatMessage = {
               id: `ai-follow-${Date.now()}`,
               role: 'model',
-              text: '收到。我们继续下一题。'
+              text: '✅ 修改已应用！我还有其他建议可以帮助您进一步优化简历。您想继续优化其他部分吗？'
             };
             console.log('Adding follow-up message:', followUpMsg);
             setChatMessages(prev => [...prev, followUpMsg]);
@@ -750,7 +518,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             const doneMsg = {
               id: 'ai-done',
               role: 'model' as const,
-              text: '好的，我们继续面试。'
+              text: '🎉 太棒了！所有核心建议都已处理完毕。您可以点击右上角的“完成”按钮查看优化前后的对比。'
             };
             console.log('Adding done message:', doneMsg);
             setChatMessages(prev => [...prev, doneMsg]);
@@ -784,7 +552,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       setChatMessages(prev => [...prev, {
         id: `ai-ignore-${Date.now()}`,
         role: 'model' as const,
-        text: '没问题，我们继续下一题。'
+        text: '没问题，保留原样。我还有其他建议可以帮助您优化简历，您想继续讨论其他部分吗？'
       }]);
     }, 600);
   };
@@ -797,10 +565,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         if (!data) return data;
         const sanitized = { ...data };
         // 删除可能导致问题的字段
-        const fieldsToRemove = ['id', 'suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText'];
-        fieldsToRemove.forEach((field) => {
-          if (field in sanitized) delete sanitized[field];
-        });
+        if (sanitized.id) delete sanitized.id;
         return sanitized;
       };
 
@@ -813,8 +578,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          resumeData: sanitizedResumeData,
-          jdText: jdText
+          resumeData: sanitizedResumeData
         })
       });
 
@@ -850,8 +614,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       a.click();
       window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-
-      await recordExportHistory(filename, blob.size);
 
       console.log('✅ PDF 导出成功');
       alert("优化后的简历 PDF 已下载！");
@@ -1020,52 +782,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [currentStep]);
 
-  // 记住用户所在步骤，切换回来可恢复
+  // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始优化
   useEffect(() => {
-    localStorage.setItem('ai_analysis_step', currentStep);
-  }, [currentStep]);
-
-  // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
-  useEffect(() => {
-    const inProgress = localStorage.getItem('ai_analysis_in_progress') === '1';
-    if (currentStep === 'analyzing' && !inProgress) {
-      setCurrentStep('jd_input');
-    }
-  }, [currentStep]);
-
-  // 从简历预览页跳转继续面试
-  useEffect(() => {
-    const shouldOpen = localStorage.getItem('ai_interview_open') === '1';
-    const targetId = localStorage.getItem('ai_interview_resume_id');
-
-    if (shouldOpen && resumeData?.id && targetId === String(resumeData.id)) {
-      localStorage.removeItem('ai_interview_open');
-      localStorage.removeItem('ai_interview_resume_id');
-
-      const savedJdText = resumeData.lastJdText || '';
-      if (savedJdText) {
-        setJdText(savedJdText);
-      }
-
-      const sessions = resumeData.interviewSessions || {};
-      const sessionKey = savedJdText ? makeJdKey(savedJdText) : null;
-      const session = sessionKey ? sessions[sessionKey] : getLatestInterviewSession(sessions);
-
-      if (session && session.messages?.length) {
-        setChatMessages(session.messages as ChatMessage[]);
-        setChatInitialized(true);
-      } else {
-        setChatMessages([]);
-        setChatInitialized(false);
-      }
-
-      setCurrentStep('chat');
-    }
-  }, [resumeData?.id]);
-
-  // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
-  useEffect(() => {
-    if (currentStep === 'chat' && !chatInitialized && chatMessages.length === 0) {
+    if (currentStep === 'chat' && suggestions.length > 0 && !chatInitialized) {
       console.log('Generating chat summary...');
       console.log('Current state:', {
         currentStep,
@@ -1099,33 +818,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       // 先显示问候和面试介绍消息
       setTimeout(() => {
         const summaryMessage = {
-          id: 'ai-summary',
+          id: `ai-summary-${Date.now()}`,
           role: 'model' as const,
-          text: `${userName}，您好！我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`
+          text: `${userName}，您好！我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。`
         };
         console.log('Adding summary message:', summaryMessage);
-        setChatMessages(prev => (prev.some(m => m.id === summaryMessage.id) ? prev : [...prev, summaryMessage]));
+        setChatMessages(prev => [...prev, summaryMessage]);
 
         // 然后询问用户是否准备好开始面试
         setTimeout(() => {
           const askMessage = {
-            id: 'ai-ask',
+            id: `ai-ask-${Date.now()}`,
             role: 'model' as const,
             text: '请问您准备好开始模拟面试了吗？您可以回复"准备好了"开始，我会根据您的简历和岗位要求提出面试问题。'
           };
           console.log('Adding ask message:', askMessage);
-          setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
+          setChatMessages(prev => [...prev, askMessage]);
         }, 1500);
       }, 1000);
     }
-  }, [currentStep, suggestions, score, resumeData, chatInitialized, jdText, chatMessages.length]);
-
-  // 进入对话框时预填“准备好了”
-  useEffect(() => {
-    if (currentStep === 'chat' && !inputMessage) {
-      setInputMessage('准备好了');
-    }
-  }, [currentStep]);
+  }, [currentStep, suggestions, score, resumeData, chatInitialized, jdText]);
 
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
@@ -1142,34 +854,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     setIsSending(true);
 
     try {
-      if (currentStep === 'chat' && pendingNextQuestion) {
-        if (isAffirmative(textToSend)) {
-          const nextMsg: ChatMessage = {
-            id: `ai-next-${Date.now()}`,
-            role: 'model',
-            text: `下一题：${pendingNextQuestion}`
-          };
-          const newMessages = [...chatMessages, userMessage, nextMsg];
-          setChatMessages(newMessages);
-          setPendingNextQuestion(null);
-          await persistInterviewSession(newMessages, jdText);
-          setIsSending(false);
-          return;
-        }
-        if (isNegative(textToSend)) {
-          const holdMsg: ChatMessage = {
-            id: `ai-hold-${Date.now()}`,
-            role: 'model',
-            text: '好的，我们先继续讨论。有需要再告诉我“继续下一题”。'
-          };
-          const newMessages = [...chatMessages, userMessage, holdMsg];
-          setChatMessages(newMessages);
-          await persistInterviewSession(newMessages, jdText);
-          setIsSending(false);
-          return;
-        }
-      }
-
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
 
@@ -1195,68 +879,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       const lowerText = textToSend.toLowerCase();
       const shouldGenerateResume = lowerText.includes('生成简历') || lowerText.includes('创建简历') || lowerText.includes('完成优化') || lowerText.includes('最终简历');
 
-      if (shouldGenerateResume) {
-        const sanitizeData = (data: any) => {
-          if (!data) return data;
-          const sanitized = { ...data };
-        const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory'];
-          fieldsToRemove.forEach((field) => {
-            if (field in sanitized) delete sanitized[field];
-          });
-          return sanitized;
-        };
-
-        const cleanedResumeData = sanitizeData(resumeData);
-        const finalResumeData = {
-          ...cleanedResumeData,
-          personalInfo: cleanedResumeData?.personalInfo || {},
-          workExps: cleanedResumeData?.workExps || [],
-          educations: cleanedResumeData?.educations || [],
-          projects: cleanedResumeData?.projects || [],
-          skills: cleanedResumeData?.skills || [],
-          summary: cleanedResumeData?.summary || ''
-        };
-
-        if (setResumeData && finalResumeData) {
-          setResumeData(finalResumeData);
-        }
-
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
-          role: 'model',
-          text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
-        };
-
-        const newMessages = [...chatMessages, userMessage, aiMessage];
-        setChatMessages(newMessages);
-        await persistInterviewSession(newMessages, jdText);
-        setIsSending(false);
-        return;
-      }
-
-      const apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
-
-      const masker = createMasker();
-      const isInterviewChat = currentStep === 'chat';
-      const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(textToSend) && !isNegative(textToSend);
-      const interviewWrapped = isInterviewChat
-        ? (isQaMode
-            ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${textToSend}`
-            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程，避免简历优化建议。每次回复需包含：1.简短点评；2.改进要点（1-2条）；3.参考回复；4.下一题。】\n\n候选人回答：${textToSend}`)
-        : textToSend;
-      const maskedMessage = masker.maskText(interviewWrapped);
-      const maskedResumeData = masker.maskObject(resumeData);
-      const maskedChatHistory = chatMessages.map((m) => ({
-        ...m,
-        text: masker.maskText(m.text)
-      }));
-      const maskedJdText = masker.maskText(jdText || '');
+      const apiEndpoint = shouldGenerateResume
+        ? `${import.meta.env.VITE_API_BASE_URL}/api/ai/generate-resume`
+        : `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
 
       console.log('API Endpoint:', apiEndpoint);
       console.log('Request Data:', {
-        message: maskedMessage,
-        resumeData: maskedResumeData,
-        chatHistory: maskedChatHistory,
+        message: textToSend,
+        resumeData: resumeData,
+        chatHistory: chatMessages,
         score: score,
         suggestions: suggestions
       });
@@ -1268,12 +899,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           'Authorization': `Bearer ${token.trim()}`
         },
         body: JSON.stringify({
-          message: maskedMessage,
-          resumeData: maskedResumeData,
-          jobDescription: maskedJdText,  // Send JD for interview context
-          chatHistory: maskedChatHistory,
+          message: textToSend,
+          resumeData: resumeData,
+          jobDescription: jdText,  // Send JD for interview context
+          chatHistory: chatMessages,
           score: score,
-          suggestions: isInterviewChat ? [] : suggestions
+          suggestions: suggestions
         })
       });
 
@@ -1324,33 +955,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           const aiMessage: ChatMessage = {
             id: `ai-${Date.now()}`,
             role: 'model',
-          text: '✅ 已根据已采纳的修改生成最终简历。您可以前往预览并导出 PDF。'
+            text: '✅ 已根据我们的对话内容生成了一份完整的优化简历。您可以点击右上角的"完成优化"按钮查看最终结果并导出PDF。'
           };
-          const newMessages = [...chatMessages, userMessage, aiMessage];
-          setChatMessages(newMessages);
-          await persistInterviewSession(newMessages, jdText);
+          setChatMessages(prev => [...prev, aiMessage]);
         } else {
           // 普通聊天响应
-          const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
-          const { cleaned, next } = splitNextQuestion(unmaskedText);
           const aiMessage: ChatMessage = {
             id: `ai-${Date.now()}`,
             role: 'model',
-            text: cleaned || unmaskedText
+            text: result.response || '感谢您的咨询，我会继续为您提供优化建议。'
           };
-          const newMessages = [...chatMessages, userMessage, aiMessage];
-          let finalMessages = newMessages;
-          if (next) {
-            setPendingNextQuestion(next);
-            const askNext: ChatMessage = {
-              id: `ai-ask-next-${Date.now()}`,
-              role: 'model',
-              text: '要继续下一题吗？'
-            };
-            finalMessages = [...newMessages, askNext];
-          }
-          setChatMessages(finalMessages);
-          await persistInterviewSession(finalMessages, jdText);
+          setChatMessages(prev => [...prev, aiMessage]);
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -1372,38 +987,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     return 'text-orange-500';
   };
 
-  const parseReferenceReply = (text: string) => {
-    const refLabel = '参考回复：';
-    const nextLabel = '下一题：';
-    const refIndex = text.indexOf(refLabel);
-    if (refIndex === -1) return null;
-    const afterRef = refIndex + refLabel.length;
-    const nextIndex = text.indexOf(nextLabel, afterRef);
-    const before = text.slice(0, refIndex).trim();
-    const reference = (nextIndex === -1 ? text.slice(afterRef) : text.slice(afterRef, nextIndex)).trim();
-    const after = nextIndex === -1 ? '' : text.slice(nextIndex).trim();
-    return { before, reference, after };
-  };
-
-  const splitNextQuestion = (text: string) => {
-    const nextLabel = '下一题：';
-    const nextIndex = text.indexOf(nextLabel);
-    if (nextIndex === -1) return { cleaned: text, next: null };
-    const cleaned = text.slice(0, nextIndex).trim();
-    const next = text.slice(nextIndex + nextLabel.length).trim();
-    return { cleaned, next: next || null };
-  };
-
-  const isAffirmative = (text: string) => {
-    const t = text.trim().toLowerCase();
-    return ['好', '好的', '可以', '继续', '继续吧', '开始', '开始吧', '行', '嗯', 'ok', 'yes'].some(k => t === k || t.includes(k));
-  };
-
-  const isNegative = (text: string) => {
-    const t = text.trim().toLowerCase();
-    return ['不要', '不', '不想', '先不', '稍后', '等等', '暂停', '不是', 'no'].some(k => t === k || t.includes(k));
-  };
-
   // ================= RENDER STEPS =================
   if (currentStep === 'resume_select') {
     return (
@@ -1416,73 +999,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         <main className="p-4">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">第一步：选择简历</h2>
           <div className="grid gap-4">
-            <button
-              onClick={() => setIsSelectOptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between text-lg font-bold text-white"
-            >
-              <span>已优化</span>
-              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
-                {isSelectOptimizedOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </button>
-            {isSelectOptimizedOpen && (
-              (allResumes || []).filter(r => r.optimizationStatus === 'optimized').length > 0 ? (
-                (allResumes || []).filter(r => r.optimizationStatus === 'optimized').map((resume) => (
-                  <div
-                    key={resume.id}
-                    onClick={() => handleResumeSelect(resume.id)}
-                    className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
-                  >
-                    <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
-                      {resume.thumbnail}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
-                    </div>
-                    <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  暂无已优化简历
+            {(allResumes || []).map((resume) => (
+              <div
+                key={resume.id}
+                onClick={() => handleResumeSelect(resume.id)}
+                className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
+              >
+                <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
+                  {resume.thumbnail}
                 </div>
-              )
-            )}
-
-            <button
-              onClick={() => setIsSelectUnoptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between text-lg font-bold text-white"
-            >
-              <span>未优化</span>
-              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
-                {isSelectUnoptimizedOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </button>
-            {isSelectUnoptimizedOpen && (
-              (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').length > 0 ? (
-                (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').map((resume) => (
-                  <div
-                    key={resume.id}
-                    onClick={() => handleResumeSelect(resume.id)}
-                    className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
-                  >
-                    <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
-                      {resume.thumbnail}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
-                    </div>
-                    <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
-                  </div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  暂无未优化简历
+                <div className="flex-1">
+                  <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
+                  <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
                 </div>
-              )
-            )}
+                <span className="material-symbols-outlined text-primary">arrow_forward_ios</span>
+              </div>
+            ))}
           </div>
         </main>
       </div>
@@ -1582,8 +1114,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
   // 4. Report View (Simplified, focus on Chat Entry)
   if (currentStep === 'report') {
-    const hasAcceptedSuggestion = suggestions.some(s => s.status === 'accepted');
-
     return (
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
         <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
@@ -1597,6 +1127,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         </header>
 
         <main className="flex-1 overflow-y-auto p-4">
+          {/* Cache Status Indicator */}
+          {isFromCache && (
+            <div className="mb-4 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700/30 rounded-lg">
+              <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400 text-sm">bolt</span>
+              <span className="text-sm text-emerald-700 dark:text-emerald-300">
+                已使用缓存结果 · 响应更快 · 节省 Token
+              </span>
+            </div>
+          )}
           {/* Score Card with Breakdown */}
           <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 mb-6 relative overflow-hidden">
             <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${score >= 80 ? 'from-green-400 to-emerald-600' : 'from-orange-400 to-red-500'}`}></div>
@@ -1606,10 +1145,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
                 {hasJdInput() ? '人岗匹配度' : '简历综合评分'}
               </p>
-              <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(score)}`}>
+              <div className={`text-7xl font-black tracking-tight mb-2 transition-all duration-500 ${getScoreColor(score)}`}>
                 {score}
                 <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
               </div>
+              <p className="text-slate-600 dark:text-slate-300 text-sm leading-relaxed px-2">
+                {report?.summary}
+              </p>
             </div>
 
             {/* Score Breakdown */}
@@ -1636,19 +1178,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
               </div>
             )}
           </div>
-
-          {/* AI Analysis Summary - NEW POSITION */}
-          {report?.summary && (
-            <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20 mb-6">
-              <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
-                <span className="material-symbols-outlined text-[20px]">psychology</span>
-                AI 深度诊断总结
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                {report.summary}
-              </p>
-            </div>
-          )}
 
           {/* AI Optimization Suggestions - Editable */}
           {suggestions.filter(s => s.status === 'pending').length > 0 && (
@@ -1720,31 +1249,41 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             </div>
           )}
 
-          {/* Detailed Analysis - Missing Keywords only */}
-          {hasJdInput() && report && report.missingKeywords.length > 0 && (
-            <div className="bg-orange-50 dark:bg-orange-900/10 rounded-xl p-4 border border-orange-100 dark:border-orange-900/30 mb-6">
-              <h4 className="flex items-center gap-2 font-bold text-orange-800 dark:text-orange-400 mb-2">
-                <span className="material-symbols-outlined text-lg">warning</span> 缺失关键词
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {report.missingKeywords.map((k, i) => (
-                  <span key={i} className="px-2 py-1 bg-white dark:bg-orange-900/40 rounded text-xs font-medium text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
-                    {k}
-                  </span>
-                ))}
+          {/* Detailed Analysis */}
+          {report && (
+            <div className="grid gap-4 mb-6">
+              <div className="bg-green-50 dark:bg-green-900/10 rounded-xl p-4 border border-green-100 dark:border-green-900/30">
+                <h4 className="flex items-center gap-2 font-bold text-green-800 dark:text-green-400 mb-2">
+                  <span className="material-symbols-outlined text-lg">thumb_up</span> 优势亮点
+                </h4>
+                <ul className="list-disc list-inside text-sm text-green-700 dark:text-green-300/80 space-y-1">
+                  {report.strengths.map((s, i) => <li key={i}>{s}</li>)}
+                </ul>
               </div>
+
+              {hasJdInput() && report.missingKeywords.length > 0 && (
+                <div className="bg-orange-50 dark:bg-orange-900/10 rounded-xl p-4 border border-orange-100 dark:border-orange-900/30">
+                  <h4 className="flex items-center gap-2 font-bold text-orange-800 dark:text-orange-400 mb-2">
+                    <span className="material-symbols-outlined text-lg">warning</span> 缺失关键词
+                  </h4>
+                  <div className="flex flex-wrap gap-2">
+                    {report.missingKeywords.map((k, i) => (
+                      <span key={i} className="px-2 py-1 bg-white dark:bg-orange-900/40 rounded text-xs font-medium text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
+                        {k}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* Export PDF Button - After suggestions */}
-          <div className="mb-52 space-y-3">
+          <div className="mb-32">
             <button
               onClick={handleExportPDF}
-              disabled={isExporting || !hasAcceptedSuggestion}
-              className={`w-full flex items-center justify-center gap-3 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
-                ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
-                : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
-                }`}
+              disabled={isExporting}
+              className="w-full flex items-center justify-center gap-3 h-14 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {isExporting ? (
                 <>
@@ -1758,12 +1297,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 </>
               )}
             </button>
-            {!hasAcceptedSuggestion && (
-              <p className="text-center text-xs text-slate-500 flex items-center justify-center gap-1">
-                <span className="material-symbols-outlined text-sm">info</span>
-                请至少采纳一条 AI 优化建议后再导出
-              </p>
-            )}
           </div>
         </main>
 
@@ -1830,32 +1363,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                   : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
                   }`}>
                   {/* 普通消息显示，移除建议弹窗 */}
-                  {msg.role === 'model' ? (
-                    (() => {
-                      const parsed = parseReferenceReply(msg.text);
-                      if (!parsed) return <div>{msg.text}</div>;
-                      const isExpanded = !!expandedReferences[msg.id];
-                      return (
-                        <div className="space-y-2">
-                          {parsed.before && <div>{parsed.before}</div>}
-                          <button
-                            onClick={() => setExpandedReferences(prev => ({ ...prev, [msg.id]: !isExpanded }))}
-                            className="text-xs font-medium text-primary hover:text-primary/80"
-                          >
-                            {isExpanded ? '收起参考回复' : '查看参考回复'}
-                          </button>
-                          {isExpanded && (
-                            <div className="text-sm text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-white/5 rounded-lg p-2">
-                              {parsed.reference}
-                            </div>
-                          )}
-                          {parsed.after && <div>{parsed.after}</div>}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <div>{msg.text}</div>
-                  )}
+                  <div>{msg.text}</div>
                 </div>
               </div>
             </div>

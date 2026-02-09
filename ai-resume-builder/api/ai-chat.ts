@@ -1,23 +1,24 @@
+﻿// [Backup Protocol Verified] - Last backup: 2026-02-08
 // Vercel Serverless Function for AI Chat
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req: any, res: any) {
-  // 只允许POST请求
+  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
     const { message, resumeData, score, suggestions } = req.body;
-    
+
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'API密钥未配置' });
+      return res.status(500).json({ error: 'API key not configured' });
     }
 
     const ai = new GoogleGenerativeAI(apiKey);
     const model = ai.getGenerativeModel({ model: 'gemini-3-flash-preview' });
-    
+
     const resumeDetails = `
 Resume Details:
 - Name: ${resumeData?.personalInfo?.name || 'N/A'}
@@ -28,41 +29,32 @@ Resume Details:
 - Education: ${resumeData?.educations?.length || 0} degrees
 - Projects: ${resumeData?.projects?.length || 0} projects
 - Skills: ${resumeData?.skills?.join(', ') || 'None'}
-- Current Score: ${score}/100
 `;
 
-    const prompt = `你是一位专业的简历顾问。请遵循以下原则：
+    const prompt = `你是一位资深的 AI 面试官。你的唯一任务是基于候选人的简历信息进行模拟面试，不提供简历优化或猎头建议。请遵循以下原则：
+📝 风格要求：专业、明确、友好，不使用Markdown格式和emoji
+📏 长度限制：严格控制在60字以内，简洁直接
+🎯 内容重点：对回答给出一句简短评价，然后提出下一道问题
 
-📝 **风格要求**：克制、专业、极简
-📏 **长度限制**：最多150字，分点说明
-🎯 **内容重点**：提供可执行的具体建议
-📋 **格式要求**：使用Markdown格式，适当使用emoji
+回复结构：
+- 一句简短反馈（可包含1个改进点）
+- 下一道具体问题（优先基于简历中的项目/经历/技能）
 
-**回复结构**：
-- 简短开场（1句话）
-- 2个关键点（使用数字列表）
-- 每点不超过30字
-- 结尾鼓励（1句话）
+避免：
+- 简历优化建议、猎头策略或岗位匹配指导
+- 长篇大论、复杂术语、重复内容
 
-**避免**：
-- 长篇大论
-- 过多解释
-- 重复内容
-- 复杂术语
+用户问题：${message}
 
----
-
-**用户问题**：${message}
-
-**简历信息**：
+简历信息：
 ${resumeDetails}
 
-请基于以上信息提供简短专业的建议。`;
+请直接给出面试官回复。`;
 
     const response = await model.generateContent({
-      contents: [{ 
-        role: 'user', 
-        parts: [{ text: prompt }] 
+      contents: [{
+        role: 'user',
+        parts: [{ text: prompt }]
       }]
     });
 
@@ -73,14 +65,14 @@ ${resumeDetails}
       response: aiText
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('AI Chat API Error:', error);
-    
-    let errorMessage = '网络连接异常';
+
+    let errorMessage = 'Network error';
     if (error.message?.includes('404') || error.message?.includes('not found')) {
-      errorMessage = '模型未找到，请检查API配置';
+      errorMessage = 'Model not found, please check API configuration';
     } else if (error.message?.includes('403') || error.message?.includes('permission')) {
-      errorMessage = 'API权限不足，请检查API密钥';
+      errorMessage = 'API permission denied, please check API key';
     }
 
     return res.status(500).json({

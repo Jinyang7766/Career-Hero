@@ -1,13 +1,15 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ResumeData } from '../types';
 
 interface ResumeImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onImport: (data: Omit<ResumeData, 'id'>) => void;
+  defaultTab?: 'text' | 'pdf';
+  autoPickPdf?: boolean;
 }
 
-const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose, onImport }) => {
+const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose, onImport, defaultTab = 'text', autoPickPdf = false }) => {
   const [activeTab, setActiveTab] = useState<'text' | 'pdf'>('text');
   const [textResume, setTextResume] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -91,6 +93,14 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
     setActiveTab(tab);
     setError('');
   };
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setActiveTab(defaultTab);
+    if (defaultTab === 'pdf' && autoPickPdf) {
+      setTimeout(() => fileInputRef.current?.click(), 0);
+    }
+  }, [isOpen, defaultTab, autoPickPdf]);
 
   if (!isOpen) return null;
 

@@ -2,12 +2,21 @@ import React, { useState, useRef } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 
-const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, currentUser }) => {
+const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, currentUser, allResumes }) => {
   const [avatar, setAvatar] = useState('https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa');
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Get user profile with real name
   const { userProfile, loading, error } = useUserProfile();
+  const displayName =
+    userProfile?.name ||
+    currentUser?.user_metadata?.name ||
+    currentUser?.email?.split('@')[0] ||
+    '';
+  const displayEmail =
+    userProfile?.email ||
+    currentUser?.email ||
+    '';
 
   const handleAvatarClick = () => {
     fileInputRef.current?.click();
@@ -58,15 +67,17 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
             <div className="flex flex-col flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1">
                 <h2 className="text-xl font-bold truncate">
-                {loading ? '加载中...' : userProfile?.name || '用户'}
+                {displayName || ' '}
               </h2>
               </div>
-              <p className="text-gray-500 dark:text-gray-400 text-sm truncate">
-                {loading ? '加载中...' : userProfile?.email || 'user@example.com'}
-              </p>
+              {displayEmail && (
+                <p className="text-gray-500 dark:text-gray-400 text-sm truncate">
+                  {displayEmail}
+                </p>
+              )}
               <div className="mt-3 flex items-center gap-4 text-xs text-gray-400">
                 <div className="flex items-center gap-1">
-                  <span className="font-semibold text-white">12</span> 份简历
+                  <span className="font-semibold text-white">{allResumes?.length ?? 0}</span> 份简历
                 </div>
                 <div className="w-1 h-1 rounded-full bg-gray-600"></div>
                 <div className="flex items-center gap-1">

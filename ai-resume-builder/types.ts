@@ -28,20 +28,52 @@ export interface ExperienceItem {
   description: string;
 }
 
+export interface PersonalInfo {
+  name: string;
+  title: string;
+  email: string;
+  phone: string;
+  location?: string;
+  linkedin?: string;
+  website?: string;
+  summary?: string;
+}
+
+export interface WorkExperience extends ExperienceItem {
+  company?: string;
+}
+
+export interface Project extends ExperienceItem {
+  link?: string;
+}
+
+export interface Education extends ExperienceItem {
+  school?: string;
+  degree?: string;
+}
+
 export interface ResumeData {
   id?: number;
-  personalInfo: {
-    name: string;
-    title: string;
-    email: string;
-    phone: string;
-  };
-  workExps: ExperienceItem[];
-  educations: ExperienceItem[];
-  projects: ExperienceItem[];
+  personalInfo: PersonalInfo;
+  workExps: WorkExperience[];
+  educations: Education[];
+  projects: Project[];
   skills: string[];
   summary?: string;
   gender?: string;
+  optimizationStatus?: 'optimized' | 'unoptimized';
+  lastJdText?: string;
+  interviewSessions?: Record<string, {
+    jdText: string;
+    messages: { id: string; role: 'user' | 'model'; text: string }[];
+    updatedAt: string;
+  }>;
+  exportHistory?: {
+    filename: string;
+    size: number;
+    type: 'PDF';
+    exportedAt: string;
+  }[];
 }
 
 export interface ResumeSummary {
@@ -50,6 +82,7 @@ export interface ResumeSummary {
   date: string;
   score?: number;
   hasDot?: boolean;
+  optimizationStatus?: 'optimized' | 'unoptimized';
   thumbnail: any;
 }
 
@@ -59,6 +92,7 @@ export interface ScreenProps {
   onLogin?: (user: any) => void;
   onLogout?: () => void;
   resumeData?: ResumeData;
+  hasBottomNav?: boolean;
   setResumeData?: (data: ResumeData | ((prev: ResumeData) => ResumeData)) => void;
   completeness?: number;
   allResumes?: ResumeSummary[];

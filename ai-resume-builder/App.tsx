@@ -24,6 +24,9 @@ function App() {
   const [history, setHistory] = useState<View[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
 
+  // Show bottom nav on main tabs only (Editor has its own navigation)
+  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE].includes(currentView);
+
   // Load user resumes when authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -36,7 +39,7 @@ function App() {
     const checkAuth = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
-        
+
         if (session?.user) {
           console.log('User authenticated:', session.user);
           setCurrentUser(session.user);
@@ -51,7 +54,7 @@ function App() {
         setCurrentView(View.LOGIN);
       }
     };
-    
+
     checkAuth();
   }, []);
 
@@ -59,58 +62,59 @@ function App() {
   const loadUserResumes = async () => {
     try {
       console.log('Loading user resumes...');
-      
+
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError || !user) {
         console.error('User not authenticated:', userError);
         return;
       }
-      
+
       console.log('Loading resumes for user:', user.id);
-      
+
       const result = await DatabaseService.getUserResumes(user.id);
-      
+
       if (result.success) {
         console.log('Resumes loaded successfully:', result.data);
-        
+
         // Format date to Beijing timezone (UTC+8) with seconds
         const formatDateTime = (dateString: string) => {
           if (!dateString) {
             return '时间未知';
           }
-          
+
           const date = new Date(dateString);
-          
+
           if (isNaN(date.getTime())) {
             return '时间格式错误';
           }
-          
+
           // Convert to Beijing timezone (UTC+8)
           const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
-          
+
           const year = beijingTime.getFullYear();
           const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
           const day = String(beijingTime.getDate()).padStart(2, '0');
           const hours = String(beijingTime.getHours()).padStart(2, '0');
           const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
           const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
-          
+
           return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
         };
-        
+
         const resumes: ResumeSummary[] = result.data.map((resume: any) => {
           const formattedDate = formatDateTime(resume.created_at);
           // 清理日期字符串，确保只包含纯数字和分隔符
           const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
-          
+
           return {
             id: resume.id,
             title: resume.title,
             date: cleanedDate,
             score: resume.score,
             hasDot: resume.has_dot,
+            optimizationStatus: resume.resume_data?.optimizationStatus || 'unoptimized',
             thumbnail: (
               <>
                 <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
@@ -120,7 +124,7 @@ function App() {
             )
           };
         });
-        
+
         console.log('Processed resumes:', resumes);
         setAllResumes(resumes);
       } else {
@@ -135,19 +139,19 @@ function App() {
   const createResume = async (title: string) => {
     try {
       console.log('Creating new resume with title:', title);
-      
+
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
+
       if (userError || !user) {
         console.error('User not authenticated:', userError);
         throw new Error('请先登录');
       }
-      
+
       console.log('Creating resume for user:', user.id);
-      
+
       const result = await DatabaseService.createResume(user.id, title, resumeData);
-      
+
       if (result.success) {
         console.log('Resume created successfully:', result.data);
         // Reload resumes to get the latest list
@@ -203,7 +207,7 @@ function App() {
   useEffect(() => {
     // In a real app, verify token or session here
     if (isAuthenticated && [View.LOGIN, View.SIGNUP, View.FORGOT_PASSWORD].includes(currentView)) {
-        handleNavigate(View.DASHBOARD, true);
+      handleNavigate(View.DASHBOARD, true);
     }
   }, [isAuthenticated]);
 
@@ -219,7 +223,7 @@ function App() {
     // Clear localStorage
     localStorage.removeItem('authToken');
     localStorage.removeItem('user');
-    
+
     setCurrentUser(null);
     setIsAuthenticated(false);
     setHistory([]);
@@ -244,19 +248,75 @@ function App() {
       setHistory(newHistory);
       if (previousView) {
         setCurrentView(previousView);
+        // Reset wizard mode when going back
+        if (previousView === View.DASHBOARD) {
+          setShowWizard(false);
+        }
       }
     } else {
       // Fallback if history is empty
+      setShowWizard(false);
       setCurrentView(View.DASHBOARD);
     }
   };
 
-  // Bottom Nav click handler (resets history)
+  // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
+    setShowWizard(false); // Reset wizard mode when navigating via BottomNav
     handleNavigate(view, true);
   };
 
+  // Onboarding Wizard State
+  const [showWizard, setShowWizard] = useState(false);
+
+  // Check if first time user on auth
+  useEffect(() => {
+    if (isAuthenticated && currentUser) {
+      const hasCreatedResume = localStorage.getItem(`has_created_resume_${currentUser.id}`);
+      if (!hasCreatedResume) {
+        // Double check with loaded resumes
+        if (allResumes.length === 0) {
+          // Wait a bit to ensure resumes are loaded
+          setTimeout(() => {
+            if (allResumes.length === 0) {
+              setShowWizard(true);
+            }
+          }, 1000);
+        }
+      }
+    }
+  }, [isAuthenticated, currentUser, allResumes.length]);
+
+  const handleWizardComplete = async (data: ResumeData) => {
+    try {
+      if (!currentUser) return;
+
+      console.log('Wizard completed, saving resume:', data);
+
+      // Create the resume in database
+      const title = data.personalInfo.title ? `${data.personalInfo.name} - ${data.personalInfo.title}` : '我的简历';
+
+      // Update local state first for immediate feedback
+      setResumeData(data);
+
+      const result = await DatabaseService.createResume(currentUser.id, title, data);
+
+      if (result.success) {
+        localStorage.setItem(`has_created_resume_${currentUser.id}`, 'true');
+        setShowWizard(false);
+        await loadUserResumes();
+        setCurrentView(View.EDITOR);
+      } else {
+        alert('保存简历失败: ' + result.error?.message);
+      }
+    } catch (error) {
+      console.error('Wizard complete error:', error);
+      alert('保存简历出错');
+    }
+  };
+
   const renderView = () => {
+
     const commonProps = {
       setCurrentView: (view: View) => handleNavigate(view),
       goBack: handleGoBack,
@@ -267,7 +327,8 @@ function App() {
       setAllResumes,
       createResume,
       loadUserResumes,
-      currentUser
+      currentUser,
+      hasBottomNav: showBottomNav
     };
 
     switch (currentView) {
@@ -278,7 +339,21 @@ function App() {
       case View.FORGOT_PASSWORD:
         return <ForgotPassword setCurrentView={setCurrentView} goBack={() => setCurrentView(View.LOGIN)} />;
       case View.DASHBOARD:
-        return <Dashboard {...commonProps} />;
+        return <Dashboard {...commonProps} createNewResume={() => {
+          // Reset resume data for new resume
+          setResumeData({
+            personalInfo: { name: '', title: '', email: '', phone: '' },
+            workExps: [],
+            educations: [],
+            projects: [],
+            skills: [],
+            gender: ''
+          });
+          setShowWizard(true);
+          handleNavigate(View.EDITOR);
+        }} />;
+      case View.EDITOR:
+        return <Editor {...commonProps} wizardMode={showWizard} />;
       case View.TEMPLATES:
         return <Editor {...commonProps} />;
       case View.AI_ANALYSIS:
@@ -300,12 +375,12 @@ function App() {
       case View.ALL_RESUMES:
         return <AllResumes {...commonProps} />;
       default:
-         // Fallback based on auth status
-        return isAuthenticated ? <Dashboard {...commonProps} /> : <Login setCurrentView={setCurrentView} onLogin={handleLogin} />;
+        // Fallback based on auth status
+        return isAuthenticated ? <Dashboard {...commonProps} createNewResume={() => setShowWizard(true)} /> : <Login setCurrentView={setCurrentView} onLogin={handleLogin} />;
     }
   };
 
-  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.TEMPLATES, View.AI_ANALYSIS, View.PROFILE].includes(currentView);
+
 
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative">

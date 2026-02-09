@@ -1,7 +1,111 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ScreenProps } from '../../types';
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
-const History: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
+type ExportItem = {
+  id: string;
+  resumeId: number;
+  filename: string;
+  size: number;
+  type: string;
+  exportedAt: string;
+};
+
+const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData }) => {
+  const [items, setItems] = useState<ExportItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const formatSize = (bytes: number) => {
+    if (!bytes) return '0 KB';
+    if (bytes < 1024) return `${bytes} B`;
+    const kb = bytes / 1024;
+    if (kb < 1024) return `${kb.toFixed(1)} KB`;
+    return `${(kb / 1024).toFixed(2)} MB`;
+  };
+
+  const formatTime = (iso: string) => {
+    const d = new Date(iso);
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const formatDateLabel = (iso: string) => {
+    const d = new Date(iso);
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(today.getDate() - 1);
+    const sameDay = (a: Date, b: Date) =>
+      a.getFullYear() === b.getFullYear() &&
+      a.getMonth() === b.getMonth() &&
+      a.getDate() === b.getDate();
+
+    if (sameDay(d, today)) return '今天';
+    if (sameDay(d, yesterday)) return '昨天';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const loadHistory = async () => {
+    try {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const result = await DatabaseService.getUserResumes(user.id);
+      if (!result.success) return;
+
+      const exports: ExportItem[] = [];
+      result.data.forEach((resume: any) => {
+        const history = resume.resume_data?.exportHistory || [];
+        history.forEach((h: any, index: number) => {
+          exports.push({
+            id: `${resume.id}-${h.exportedAt || index}`,
+            resumeId: resume.id,
+            filename: h.filename || resume.title || '简历.pdf',
+            size: h.size || 0,
+            type: h.type || 'PDF',
+            exportedAt: h.exportedAt || resume.updated_at || resume.created_at
+          });
+        });
+      });
+
+      exports.sort((a, b) => (a.exportedAt > b.exportedAt ? -1 : 1));
+      setItems(exports);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleReExport = async (resumeId: number) => {
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const result = await DatabaseService.getUserResumes(user.id);
+      if (!result.success) return;
+      const resume = result.data.find((r: any) => r.id === resumeId);
+      if (!resume?.resume_data) return;
+      if (setResumeData) {
+        setResumeData({ id: resume.id, ...resume.resume_data });
+      }
+      setCurrentView(View.PREVIEW);
+    } catch (err) {
+      console.error('Failed to open resume for export:', err);
+    }
+  };
+
+  useEffect(() => {
+    loadHistory();
+  }, []);
+
+  const grouped = items.reduce<Record<string, ExportItem[]>>((acc, item) => {
+    const label = formatDateLabel(item.exportedAt);
+    acc[label] = acc[label] || [];
+    acc[label].push(item);
+    return acc;
+  }, {});
+
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-50 bg-background-light dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
@@ -21,71 +125,41 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
       {/* Search Bar Removed */}
 
       <main className="flex flex-col w-full mt-4">
-        {/* Today */}
-        <div className="flex flex-col">
-          <h3 className="text-slate-500 dark:text-text-secondary text-sm font-semibold px-4 pb-2 pt-2">今天</h3>
-          
-          <div className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
-            <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
-              <span className="material-symbols-outlined">picture_as_pdf</span>
-              <div className="absolute -bottom-1 -right-1 bg-white dark:bg-surface-dark rounded-full p-[2px]">
-                <div className="bg-green-500 size-2.5 rounded-full border border-white dark:border-surface-dark"></div>
-              </div>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <p className="text-slate-900 dark:text-white text-base font-medium truncate">张三_产品经理_简历.pdf</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-text-secondary">PDF</span>
-                <span className="text-slate-500 dark:text-text-secondary text-sm">14:30 • 2.4 MB</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button className="size-9 flex items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors">
-                <span className="material-symbols-outlined text-[22px]">download</span>
-              </button>
-            </div>
+        {loading && (
+          <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
+            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">history</span>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">正在加载导出历史...</p>
           </div>
+        )}
 
-          <div className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
-            <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400">
-              <span className="material-symbols-outlined">description</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <p className="text-slate-900 dark:text-white text-base font-medium truncate">张三_求职信.docx</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-text-secondary">Word</span>
-                <span className="text-slate-500 dark:text-text-secondary text-sm">10:15 • 850 KB</span>
-              </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button className="size-9 flex items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors">
-                <span className="material-symbols-outlined text-[22px]">download</span>
-              </button>
-            </div>
+        {!loading && items.length === 0 && (
+          <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
+            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">history</span>
+            <p className="text-slate-900 dark:text-white font-medium mb-1">暂无导出记录</p>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">导出简历后会显示在这里</p>
           </div>
-        </div>
+        )}
 
-        {/* Yesterday */}
-        <div className="flex flex-col mt-4">
-          <h3 className="text-slate-500 dark:text-text-secondary text-sm font-semibold px-4 pb-2 pt-2">昨天</h3>
-          <div className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
-            <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
-              <span className="material-symbols-outlined">picture_as_pdf</span>
-            </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <p className="text-slate-900 dark:text-white text-base font-medium truncate">张三_通用简历_V2.pdf</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10 text-slate-500 dark:text-text-secondary">PDF</span>
-                <span className="text-slate-500 dark:text-text-secondary text-sm">09:00 • 2.3 MB</span>
+        {!loading && items.length > 0 && Object.entries(grouped).map(([label, group]) => (
+          <div key={label} className="flex flex-col">
+            <h3 className="text-slate-500 dark:text-text-secondary text-sm font-semibold px-4 pb-2 pt-2">{label}</h3>
+            {group.map((item) => (
+              <div key={item.id} className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
+                <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
+                  <span className="material-symbols-outlined">picture_as_pdf</span>
+                </div>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <p className="text-slate-900 dark:text-white text-base font-medium truncate">{item.filename}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-slate-500 dark:text-text-secondary text-sm">
+                      {formatDateLabel(item.exportedAt)} {formatTime(item.exportedAt)} • {formatSize(item.size)}
+                    </span>
+                  </div>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-1 shrink-0">
-              <button className="size-9 flex items-center justify-center rounded-full text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors">
-                <span className="material-symbols-outlined text-[22px]">download_done</span>
-              </button>
-            </div>
+            ))}
           </div>
-        </div>
+        ))}
       </main>
     </div>
   );

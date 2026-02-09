@@ -1,5 +1,6 @@
+# -*- coding: utf-8 -*-
 from dotenv import load_dotenv
-load_dotenv()  # 这行加载.env文件
+load_dotenv()  # 加载 .env 文件
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from supabase import create_client, Client
@@ -11,6 +12,8 @@ import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
 from xhtml2pdf import pisa
+from pypdf import PdfReader
+from docx import Document
 import io
 import logging
 import traceback
@@ -18,25 +21,25 @@ import google.generativeai as genai
 
 app = Flask(__name__)
 
-# 确保取到 Render 的环境变量
+# Ensure Render environment variables are loaded
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET') or os.environ.get('SECRET_KEY')
 
 if not app.config['SECRET_KEY']:
-    logger.error("🚨 警告：JWT_SECRET 环境变量未找到！认证将失效！")
+    logging.getLogger(__name__).error("WARNING: JWT_SECRET env var is missing; auth will fail.")
 
-# 配置日志
+# Logging setup
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
-# 强化 CORS 配置
+# CORS configuration
 CORS(app, 
      resources={
          r"/api/*": {
              "origins": [
-                 "*",  # 允许所有域名，生产环境应该限制
+                 "*",  # Allow all origins; restrict in production
                  "http://localhost:5173",
                  "http://localhost:3000",
                  "http://localhost:5174",
@@ -51,11 +54,11 @@ CORS(app,
      supports_credentials=True
 )
 
-# 添加 OPTIONS 预检请求处理
+# Handle OPTIONS preflight
 @app.before_request
 def handle_options_request():
     if request.method == 'OPTIONS':
-        response = jsonify({'status': 'success'})
+        response = jsonify({'status': '成功'})
         response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
@@ -108,26 +111,24 @@ def token_required(f):
     def decorated(*view_args, **view_kwargs):
         auth_header = request.headers.get('Authorization')
         if not auth_header:
-            return jsonify({'message': 'Missing Authorization Header'}), 401
-            
+            return jsonify({'message': '缺少 Authorization 请求头'}), 401
+
         token = auth_header.split(" ")[1] if " " in auth_header else auth_header
-        
-        # --- 20年老兵的终极兼容方案 ---
-        
-        # 1. 第一优先级：无损解包（彻底解决 401）
-        # 既然 alg 错误没了，说明 PyJWT 已经跑通。我们直接不校验签名取 sub。
+
+        # --- 兼容性兜底 ---
+        # 1. 优先尝试无损解码（跳过签名验证）
         try:
-            # options={"verify_signature": False} 是绕过 401 的核武器
+            # options={"verify_signature": False} 是避免 401 的关键
             payload = jwt.decode(token, options={"verify_signature": False})
             user_id = payload.get('sub') or payload.get('user_id')
-            
+
             if user_id:
-                print(f"✅ DEBUG: Auth Success (Skip Verify). User: {user_id}")
+                print(f"DEBUG: Auth Success (Skip Verify). User: {user_id}")
                 return f(user_id, *view_args, **view_kwargs)
         except Exception as e:
             print(f"DEBUG: Payload decode failed: {str(e)}")
 
-        # 2. 第二优先级：使用 Supabase 官方验证
+        # 2. 使用 Supabase 官方验证
         if hasattr(supabase, 'auth'):
             try:
                 user_res = supabase.auth.get_user(token)
@@ -136,10 +137,11 @@ def token_required(f):
             except Exception as se:
                 print(f"DEBUG: Supabase SDK failed: {str(se)}")
 
-        # 如果走到这里，说明真的没救了
-        return jsonify({'message': 'Unauthorized: Token invalid or user not found'}), 401
-            
+        # 仍然失败
+        return jsonify({'message': '未授权：令牌无效或用户不存在'}), 401
+
     return decorated
+
 
 def check_gemini_quota():
     """Check if Gemini API quota is available"""
@@ -172,27 +174,26 @@ def register():
         email = data.get('email')
         password = data.get('password')
         name = data.get('name', '')
-        
+
         if not email or not password:
-            return jsonify({'error': 'Email and password are required'}), 400
-        
+            return jsonify({'error': '邮箱和密码为必填项'}), 400
+
         if not validate_email(email):
-            return jsonify({'error': 'Invalid email format'}), 400
-        
+            return jsonify({'error': '邮箱格式不正确'}), 400
+
         if not validate_password(password):
-            return jsonify({'error': 'Password must be at least 8 characters long'}), 400
-        
+            return jsonify({'error': '密码长度至少 8 位'}), 400
+
         # Check if user already exists
         if is_mock_mode():
-            # Mock mode: check in mock_users
             for user_data in mock_users.values():
                 if user_data.get('email') == email:
-                    return jsonify({'error': 'User already exists'}), 400
+                    return jsonify({'error': '用户已存在'}), 400
         else:
             existing_user = supabase.table('users').select('*').eq('email', email).execute()
             if existing_user.data:
-                return jsonify({'error': 'User already exists'}), 400
-        
+                return jsonify({'error': '用户已存在'}), 400
+
         # Create user
         hashed_password = generate_password_hash(password)
         user_id = str(uuid.uuid4())
@@ -203,18 +204,17 @@ def register():
             'name': name,
             'created_at': datetime.utcnow().isoformat()
         }
-        
+
         if is_mock_mode():
-            # Mock mode: store in mock_users
             mock_users[user_id] = user_data
             result = mock_supabase_response(data=[user_data])
         else:
             result = supabase.table('users').insert(user_data).execute()
-        
+
         if result.data:
             token = jwt.encode({'user_id': result.data[0]['id']}, JWT_SECRET, algorithm="HS256")
             return jsonify({
-                'message': 'User created successfully',
+                'message': '注册成功',
                 'token': token,
                 'user': {
                     'id': result.data[0]['id'],
@@ -223,10 +223,10 @@ def register():
                 }
             }), 201
         else:
-            return jsonify({'error': 'Failed to create user'}), 500
-    
+            return jsonify({'error': '创建用户失败'}), 500
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/auth/login', methods=['POST'])
 def login():
@@ -234,36 +234,35 @@ def login():
         data = request.get_json()
         email = data.get('email')
         password = data.get('password')
-        
+
         if not email or not password:
-            return jsonify({'error': 'Email and password are required'}), 400
-        
+            return jsonify({'error': '邮箱和密码为必填项'}), 400
+
         # Get user
         if is_mock_mode():
-            # Mock mode: find user in mock_users
             user = None
             for user_data in mock_users.values():
                 if user_data.get('email') == email:
                     user = user_data
                     break
-            
+
             if not user:
-                return jsonify({'error': 'Invalid credentials'}), 401
+                return jsonify({'error': '账号或密码错误'}), 401
         else:
             result = supabase.table('users').select('*').eq('email', email).execute()
-            
+
             if not result.data:
-                return jsonify({'error': 'Invalid credentials'}), 401
-            
+                return jsonify({'error': '账号或密码错误'}), 401
+
             user = result.data[0]
-        
+
         if not check_password_hash(user['password'], password):
-            return jsonify({'error': 'Invalid credentials'}), 401
-        
+            return jsonify({'error': '账号或密码错误'}), 401
+
         token = jwt.encode({'user_id': user['id']}, JWT_SECRET, algorithm="HS256")
-        
+
         return jsonify({
-            'message': 'Login successful',
+            'message': '登录成功',
             'token': token,
             'user': {
                 'id': user['id'],
@@ -271,24 +270,24 @@ def login():
                 'name': user['name']
             }
         }), 200
-    
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/auth/forgot-password', methods=['POST'])
 def forgot_password():
     try:
         data = request.get_json()
         email = data.get('email')
-        
+
         if not email:
-            return jsonify({'error': 'Email is required'}), 400
-        
+            return jsonify({'error': '邮箱为必填项'}), 400
+
         # In a real app, send reset email
-        return jsonify({'message': 'Password reset instructions sent to email'}), 200
-    
+        return jsonify({'message': '重置密码说明已发送至邮箱'}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/resumes', methods=['GET'])
 @token_required
@@ -320,16 +319,16 @@ def get_resumes(current_user_id):
         return jsonify({'resumes': resumes}), 200
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/resumes', methods=['POST'])
 @token_required
 def create_resume(current_user_id):
     try:
         data = request.get_json()
-        title = data.get('title', 'New Resume')
+        title = data.get('title', '新简历')
         resume_data = data.get('resumeData', {})
-        
+
         resume_record = {
             'id': str(uuid.uuid4()),
             'user_id': current_user_id,
@@ -338,46 +337,44 @@ def create_resume(current_user_id):
             'created_at': datetime.utcnow().isoformat(),
             'updated_at': datetime.utcnow().isoformat()
         }
-        
+
         if is_mock_mode():
-            # Mock mode: store in mock_resumes
             mock_resumes[resume_record['id']] = resume_record
             result = mock_supabase_response(data=[resume_record])
         else:
             result = supabase.table('resumes').insert(resume_record).execute()
-        
+
         if result.data:
             return jsonify({
-                'message': 'Resume created successfully',
+                'message': '简历创建成功',
                 'resume': result.data[0]
             }), 201
         else:
-            return jsonify({'error': 'Failed to create resume'}), 500
-    
+            return jsonify({'error': '创建简历失败'}), 500
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/resumes/<resume_id>', methods=['GET'])
 @token_required
 def get_resume(current_user_id, resume_id):
     try:
         if is_mock_mode():
-            # Mock mode: find resume in mock_resumes
             resume = mock_resumes.get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
-                return jsonify({'error': 'Resume not found'}), 404
+                return jsonify({'error': '未找到简历'}), 404
         else:
             result = supabase.table('resumes').select('*').eq('id', resume_id).eq('user_id', current_user_id).execute()
-            
+
             if not result.data:
-                return jsonify({'error': 'Resume not found'}), 404
-            
+                return jsonify({'error': '未找到简历'}), 404
+
             resume = result.data[0]
-        
+
         return jsonify({'resume': resume}), 200
-    
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/resumes/<resume_id>', methods=['PUT'])
 @token_required
@@ -387,62 +384,58 @@ def update_resume(current_user_id, resume_id):
         title = data.get('title')
         resume_data = data.get('resumeData')
         score = data.get('score')
-        
+
         update_data = {'updated_at': datetime.utcnow().isoformat()}
-        
+
         if title is not None:
             update_data['title'] = title
         if resume_data is not None:
             update_data['resume_data'] = resume_data
         if score is not None:
             update_data['score'] = score
-        
+
         if is_mock_mode():
-            # Mock mode: update in mock_resumes
             resume = mock_resumes.get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
-                return jsonify({'error': 'Resume not found or update failed'}), 404
-            
-            # Update the resume
+                return jsonify({'error': '简历不存在或更新失败'}), 404
+
             resume.update(update_data)
             result = mock_supabase_response(data=[resume])
         else:
             result = supabase.table('resumes').update(update_data).eq('id', resume_id).eq('user_id', current_user_id).execute()
-        
+
         if result.data:
             return jsonify({
-                'message': 'Resume updated successfully',
+                'message': '简历更新成功',
                 'resume': result.data[0]
             }), 200
         else:
-            return jsonify({'error': 'Resume not found or update failed'}), 404
-    
+            return jsonify({'error': '简历不存在或更新失败'}), 404
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/resumes/<resume_id>', methods=['DELETE'])
 @token_required
 def delete_resume(current_user_id, resume_id):
     try:
         if is_mock_mode():
-            # Mock mode: delete from mock_resumes
             resume = mock_resumes.get(resume_id)
             if not resume or resume.get('user_id') != current_user_id:
-                return jsonify({'error': 'Resume not found or delete failed'}), 404
-            
-            # Delete the resume
+                return jsonify({'error': '简历不存在或删除失败'}), 404
+
             deleted_resume = mock_resumes.pop(resume_id)
             result = mock_supabase_response(data=[deleted_resume])
         else:
             result = supabase.table('resumes').delete().eq('id', resume_id).eq('user_id', current_user_id).execute()
-        
+
         if result.data:
-            return jsonify({'message': 'Resume deleted successfully'}), 200
+            return jsonify({'message': '简历删除成功'}), 200
         else:
-            return jsonify({'error': 'Resume not found or delete failed'}), 404
-    
+            return jsonify({'error': '简历不存在或删除失败'}), 404
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 def calculate_resume_score(resume_data):
     score = 0
@@ -470,65 +463,65 @@ def calculate_resume_score(resume_data):
     return min(score, 100)
 
 def generate_enhanced_suggestions(resume_data, score, job_description=""):
-    """Generate enhanced mock suggestions when AI is unavailable"""
+    """当 AI 不可用时生成增强建议"""
     suggestions = []
-    
-    # Basic suggestions from original function
+
+    # 基础建议
     basic_suggestions = generate_suggestions(resume_data, score)
     suggestions.extend(basic_suggestions)
-    
-    # Add JD-specific suggestions if available
+
+    # JD 关键词建议
     if job_description:
-        # Extract common keywords from JD
         jd_keywords = []
         common_tech_keywords = ['python', 'javascript', 'react', 'node.js', 'sql', 'aws', 'docker', 'git', 'agile', 'scrum']
         jd_lower = job_description.lower()
-        
+
         for keyword in common_tech_keywords:
             if keyword in jd_lower and keyword not in resume_data.get('skills', []):
                 jd_keywords.append(keyword.title())
-        
+
         if jd_keywords:
             suggestions.append({
                 'id': f'jd-keywords-{len(suggestions)}',
                 'type': 'missing',
-                'title': '技能关键词补充',
-                'reason': f'目标职位提到 {", ".join(jd_keywords[:3])}，建议添加这些技能以提升匹配度。',
+                'title': '技能关键词补全',
+                'reason': f'职位描述中提到 {", ".join(jd_keywords[:3])}，建议补充这些技能以提升匹配度。',
                 'targetSection': 'skills',
                 'suggestedValue': resume_data.get('skills', []) + jd_keywords,
                 'status': 'pending'
             })
-    
-    # Add experience enhancement suggestions
+
+    # 工作经历描述增强
     for exp in resume_data.get('workExps', []):
         if not exp.get('description') or len(exp.get('description', '')) < 50:
             suggestions.append({
                 'id': f'exp-detail-{exp.get("id", len(suggestions))}',
                 'type': 'optimization',
-                'title': '工作经历详细描述',
-                'reason': f'"{exp.get("title", "工作经历")}" 的描述过于简单，建议使用 STAR 法则补充具体成果和数据。',
+                'title': '工作经历细化',
+                'reason': f'“{exp.get("title", "工作经历")}”的描述过于简略，建议用 STAR 法则补充具体成果和数据。',
                 'targetSection': 'workExps',
                 'targetId': exp.get('id'),
                 'targetField': 'description',
                 'originalValue': exp.get('description', ''),
-                'suggestedValue': '负责核心项目的开发与优化，通过技术改进提升了团队效率30%，成功交付了3个重要项目，获得客户高度认可。',
+                'suggestedValue': '负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。',
                 'status': 'pending'
             })
-    
+
     return suggestions
+
 
 def generate_suggestions(resume_data, score):
     suggestions = []
-    
+
     if not resume_data.get('personalInfo', {}).get('name'):
-        suggestions.append("添加您的姓名")
+        suggestions.append("添加姓名")
     if not resume_data.get('personalInfo', {}).get('title'):
-        suggestions.append("添加您的职位标题")
+        suggestions.append("添加职位标题")
     if not resume_data.get('personalInfo', {}).get('email'):
-        suggestions.append("添加您的邮箱地址")
+        suggestions.append("添加邮箱地址")
     if not resume_data.get('personalInfo', {}).get('phone'):
-        suggestions.append("添加您的电话号码")
-    
+        suggestions.append("添加电话号码")
+
     if not resume_data.get('workExps') or len(resume_data['workExps']) == 0:
         suggestions.append("添加工作经验")
     if not resume_data.get('educations') or len(resume_data['educations']) == 0:
@@ -536,15 +529,15 @@ def generate_suggestions(resume_data, score):
     if not resume_data.get('skills') or len(resume_data['skills']) == 0:
         suggestions.append("添加技能列表")
     if not resume_data.get('projects') or len(resume_data['projects']) == 0:
-        suggestions.append("添加项目经验")
-    
+        suggestions.append("添加项目经历")
+
     if score >= 80:
-        suggestions.append("您的简历已经很完整了！")
+        suggestions.append("简历完整度较高，可进一步打磨细节。")
     elif score >= 60:
-        suggestions.append("继续完善简历内容")
+        suggestions.append("继续完善简历内容。")
     else:
-        suggestions.append("请补充更多简历信息")
-    
+        suggestions.append("请补充更多简历信息。")
+
     return suggestions
 
 @app.route('/api/user/profile', methods=['GET'])
@@ -555,7 +548,7 @@ def get_profile(current_user_id):
             # Mock mode: find user in mock_users
             user = mock_users.get(current_user_id)
             if not user:
-                return jsonify({'error': 'User not found'}), 404
+                return jsonify({'error': '用户不存在'}), 404
             
             # Return only selected fields
             user_data = {
@@ -568,14 +561,14 @@ def get_profile(current_user_id):
             result = supabase.table('users').select('id, email, name, created_at').eq('id', current_user_id).execute()
             
             if not result.data:
-                return jsonify({'error': 'User not found'}), 404
+                return jsonify({'error': '用户不存在'}), 404
             
             user_data = result.data[0]
         
         return jsonify({'user': user_data}), 200
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/user/profile', methods=['PUT'])
 @token_required
@@ -589,7 +582,7 @@ def update_profile(current_user_id):
                 # Mock mode: update in mock_users
                 user = mock_users.get(current_user_id)
                 if not user:
-                    return jsonify({'error': 'Failed to update profile'}), 500
+                    return jsonify({'error': '更新个人信息失败'}), 500
                 
                 # Update the user
                 user['name'] = name
@@ -599,16 +592,16 @@ def update_profile(current_user_id):
             
             if result.data:
                 return jsonify({
-                    'message': 'Profile updated successfully',
+                    'message': '个人信息更新成功',
                     'user': result.data[0]
                 }), 200
             else:
-                return jsonify({'error': 'Failed to update profile'}), 500
+                return jsonify({'error': '更新个人信息失败'}), 500
         else:
-            return jsonify({'error': 'Name is required'}), 400
+            return jsonify({'error': '姓名为必填项'}), 400
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/templates', methods=['GET'])
 def get_templates():
@@ -617,7 +610,7 @@ def get_templates():
             {
                 'id': 1,
                 'name': '现代简约',
-                'description': '简洁现代的设计风格',
+                'description': '清爽现代的排版风格',
                 'preview': 'modern'
             },
             {
@@ -628,25 +621,25 @@ def get_templates():
             },
             {
                 'id': 3,
-                'name': '创意设计',
-                'description': '适合创意行业的独特设计',
+                'name': '创意风格',
+                'description': '适合创意行业的独特模板',
                 'preview': 'creative'
             }
         ]
-        
         return jsonify({'templates': templates}), 200
     
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/export-pdf', methods=['POST'])
 def export_pdf():
     try:
         data = request.get_json()
         resume_data = data.get('resumeData')
+        jd_text = data.get('jdText', '')
         
         if not resume_data:
-            return jsonify({'error': 'Resume data is required'}), 400
+            return jsonify({'error': '需要提供简历数据'}), 400
         
         logger.info(f"Starting PDF generation with xhtml2pdf")
         
@@ -659,15 +652,17 @@ def export_pdf():
         pisa_status = pisa.CreatePDF(html_content, dest=result)
         
         if pisa_status.err:
-            logger.error(f"PDF generation failed with xhtml2pdf errors")
-            return jsonify({'error': 'PDF generation failed'}), 500
+            logger.error("PDF 生成失败（xhtml2pdf 报错）")
+            return jsonify({'error': 'PDF 生成失败'}), 500
         
         result.seek(0)
         logger.info("PDF generated successfully with xhtml2pdf")
-        
-        # Generate filename
-        name = resume_data.get('personalInfo', {}).get('name', 'resume')
-        filename = f"{name}_简历_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        personal_info = resume_data.get('personalInfo', {}) or {}
+        name = personal_info.get('name', '简历')
+        direction = personal_info.get('title', '')
+        company = extract_company_name_from_jd(jd_text)
+        filename = build_pdf_filename(name=name, direction=direction, company=company)
         
         return send_file(
             result,
@@ -680,51 +675,82 @@ def export_pdf():
         logger.error(f"PDF generation error: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
         logger.error(f"Resume data received: {data}")
-        return jsonify({'error': f'Failed to generate PDF: {str(e)}'}), 500
+        return jsonify({'error': '生成 PDF 失败'}), 500
+
+def extract_company_name_from_jd(text: str) -> str:
+    if not text:
+        return ''
+    patterns = [
+        r'(?:公司|企业|Employer|Company)[:：\s]*([^\n]+)',
+        r'招聘单位[:：\s]*([^\n]+)',
+        r'^([^\n]+(?:公司|集团|有限公司|有限责任公司|Company|Group|Ltd|Inc|LLC))',
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match and match.group(1):
+            return match.group(1).strip().rstrip()
+    first_line = text.split('\n')[0].strip()
+    return first_line if len(first_line) < 20 else ''
+
+def build_pdf_filename(name: str, direction: str, company: str) -> str:
+    safe_name = sanitize_filename_part(name)
+    safe_direction = sanitize_filename_part(direction)
+    safe_company = sanitize_filename_part(company)
+    parts = [p for p in [safe_direction, safe_company, safe_name] if p]
+    if not parts:
+        parts = ['简历']
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return f"{'_'.join(parts)}_{timestamp}.pdf"
+
+def sanitize_filename_part(text: str) -> str:
+    if not text:
+        return ''
+    text = re.sub(r'[\\/:*?"<>|]+', '', str(text))
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text[:30]
 
 def clean_text_for_pdf(text):
-    """清理文本中的特殊字符，确保PDF生成兼容"""
+    """Clean text and escape special characters for PDF rendering."""
     if not text:
         return ""
-    
-    # 移除或替换可能导致问题的字符
+
+    # Convert to string to avoid type errors
     text = str(text)
-    
-    # 替换常见的特殊字符
+
     replacements = {
         '&': '&amp;',
         '<': '&lt;',
         '>': '&gt;',
         '"': '&quot;',
         "'": '&#39;',
-        '\u2018': '&#39;',  # 左单引号
-        '\u2019': '&#39;',  # 右单引号
-        '\u201c': '&quot;', # 左双引号
-        '\u201d': '&quot;', # 右双引号
-        '\u2013': '-',      # en dash
-        '\u2014': '--',     # em dash
-        '\u2026': '...',    # 省略号
+        '‘': '&#39;',
+        '’': '&#39;',
+        '“': '&quot;',
+        '”': '&quot;',
+        '–': '-',
+        '—': '--',
+        '…': '...',
     }
-    
+
     for old, new in replacements.items():
         text = text.replace(old, new)
-    
-    # 移除控制字符
+
+    # Remove control chars
     text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\r\t')
-    
+
     return text
 
 def generate_resume_html(resume_data):
     """Generate HTML content for resume based on resume data"""
-    
-    # Personal Info - 使用数据防御和清理
+
+    # Personal Info - safe defaults and cleaning
     personal_info = resume_data.get('personalInfo', {}) or {}
     name = clean_text_for_pdf(personal_info.get('name', '') or '姓名')
     title = clean_text_for_pdf(personal_info.get('title', '') or '职位')
     email = clean_text_for_pdf(personal_info.get('email', '') or '邮箱')
     phone = clean_text_for_pdf(personal_info.get('phone', '') or '电话')
-    location = clean_text_for_pdf(personal_info.get('location', '') or '地点')
-    
+    location = clean_text_for_pdf(personal_info.get('location', '') or '所在地')
+
     header_html = f"""
     <div class="resume-header">
         <h1>{name}</h1>
@@ -734,17 +760,17 @@ def generate_resume_html(resume_data):
         </div>
     </div>
     """
-    
-    # Work Experience - 使用数据防御和清理
+
+    # 工作经历 - safe defaults and cleaning
     work_exps = resume_data.get('workExps', []) or []
-    work_html = '<div class="section"><h2>工作经验</h2>'
+    work_html = '<div class="section"><h2>工作经历</h2>'
     for exp in work_exps or []:
         company = clean_text_for_pdf(exp.get('company', '') or '公司名称')
         position = clean_text_for_pdf(exp.get('position', '') or '职位')
-        start_date = clean_text_for_pdf(exp.get('startDate', '') or '开始时间')
-        end_date = clean_text_for_pdf(exp.get('endDate', '') or '结束时间')
+        start_date = clean_text_for_pdf(exp.get('startDate', '') or '开始日期')
+        end_date = clean_text_for_pdf(exp.get('endDate', '') or '结束日期')
         description = clean_text_for_pdf(exp.get('description', '') or '工作描述')
-        
+
         work_html += f"""
         <div class="work-experience">
             <h3>{position} - {company}</h3>
@@ -753,17 +779,17 @@ def generate_resume_html(resume_data):
         </div>
         """
     work_html += '</div>'
-    
-    # Education - 使用数据防御和清理
+
+    # 教育背景 - safe defaults and cleaning
     educations = resume_data.get('educations', []) or []
     edu_html = '<div class="section"><h2>教育背景</h2>'
     for edu in educations or []:
         school = clean_text_for_pdf(edu.get('school', '') or '学校名称')
         degree = clean_text_for_pdf(edu.get('degree', '') or '学位')
         major = clean_text_for_pdf(edu.get('major', '') or '专业')
-        start_date = clean_text_for_pdf(edu.get('startDate', '') or '开始时间')
-        end_date = clean_text_for_pdf(edu.get('endDate', '') or '结束时间')
-        
+        start_date = clean_text_for_pdf(edu.get('startDate', '') or '开始日期')
+        end_date = clean_text_for_pdf(edu.get('endDate', '') or '结束日期')
+
         edu_html += f"""
         <div class="education">
             <h3>{school}</h3>
@@ -771,25 +797,25 @@ def generate_resume_html(resume_data):
         </div>
         """
     edu_html += '</div>'
-    
-    # Projects - 使用数据防御和清理
+
+    # 项目经历 - safe defaults and cleaning
     projects = resume_data.get('projects', []) or []
-    proj_html = '<div class="section"><h2>项目经验</h2>'
+    proj_html = '<div class="section"><h2>项目经历</h2>'
     for proj in projects or []:
-        title = clean_text_for_pdf(proj.get('title', '') or '项目名称')
+        proj_title = clean_text_for_pdf(proj.get('title', '') or '项目名称')
         description = clean_text_for_pdf(proj.get('description', '') or '项目描述')
         date = clean_text_for_pdf(proj.get('date', '') or '项目时间')
-        
+
         proj_html += f"""
         <div class="projects">
-            <h3>{title}</h3>
+            <h3>{proj_title}</h3>
             <div class="date">{date}</div>
             <div class="description">{description}</div>
         </div>
         """
     proj_html += '</div>'
-    
-    # Summary - 使用数据防御和清理
+
+    # 个人简介 - safe defaults and cleaning
     summary = resume_data.get('summary', '') or ''
     summary_html = ''
     if summary:
@@ -798,15 +824,15 @@ def generate_resume_html(resume_data):
         summary_html += f'<div class="summary">{clean_summary}</div>'
         summary_html += '</div>'
 
-    # Skills - 使用数据防御和清理
+    # 技能 - safe defaults and cleaning
     skills = resume_data.get('skills', []) or []
-    skills_html = '<div class="section"><h2>技能专长</h2><div class="skills">'
+    skills_html = '<div class="section"><h2>技能</h2><div class="skills">'
     for skill in skills or []:
         clean_skill = clean_text_for_pdf(skill or "技能")
         skills_html += f'<span class="skill-item">{clean_skill}</span>'
     skills_html += '</div></div>'
-    
-    # Combine all sections with CSS for xhtml2pdf (简化CSS2.1语法 + Noto Sans SC 中文字体)
+
+    # Combine all sections with CSS for xhtml2pdf
     full_html = f"""
     <!DOCTYPE html>
     <html>
@@ -818,15 +844,15 @@ def generate_resume_html(resume_data):
                 size: A4;
                 margin: 1.5cm;
             }}
-            
-            /* Noto Sans SC 中文字体支持 */
+
+            /* Noto Sans SC fallback */
             @font-face {{
                 font-family: 'Noto Sans SC';
                 src: url('font.ttf');
                 font-weight: normal;
                 font-style: normal;
             }}
-            
+
             body {{
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
                 font-size: 11px;
@@ -835,14 +861,14 @@ def generate_resume_html(resume_data):
                 margin: 0;
                 padding: 10px;
             }}
-            
+
             .resume-header {{
                 text-align: center;
                 border-bottom: 2px solid #333333;
                 padding-bottom: 15px;
                 margin-bottom: 20px;
             }}
-            
+
             .resume-header h1 {{
                 margin: 0;
                 font-size: 22px;
@@ -850,18 +876,18 @@ def generate_resume_html(resume_data):
                 line-height: 1.3;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .resume-header .contact {{
                 margin: 8px 0;
                 font-size: 12px;
                 line-height: 1.5;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .section {{
                 margin-bottom: 20px;
             }}
-            
+
             .section h2 {{
                 font-size: 15px;
                 font-weight: bold;
@@ -871,11 +897,11 @@ def generate_resume_html(resume_data):
                 color: #333333;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .work-experience, .education, .projects {{
                 margin-bottom: 12px;
             }}
-            
+
             .work-experience h3, .education h3, .projects h3 {{
                 font-size: 12px;
                 font-weight: bold;
@@ -883,7 +909,7 @@ def generate_resume_html(resume_data):
                 line-height: 1.3;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .work-experience .date, .education .date, .projects .date {{
                 font-size: 10px;
                 color: #666666;
@@ -891,7 +917,7 @@ def generate_resume_html(resume_data):
                 margin-bottom: 3px;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .work-experience .description, .education .description, .projects .description {{
                 font-size: 10px;
                 margin: 0;
@@ -899,11 +925,11 @@ def generate_resume_html(resume_data):
                 text-align: left;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             .skills {{
                 margin-top: 5px;
             }}
-            
+
             .skill-item {{
                 background-color: #f8f9fa;
                 padding: 3px 8px;
@@ -914,12 +940,12 @@ def generate_resume_html(resume_data):
                 display: inline-block;
                 font-family: 'Noto Sans SC', 'Microsoft YaHei', 'SimHei', Arial, sans-serif;
             }}
-            
+
             ul {{
                 margin: 3px 0;
                 padding-left: 15px;
             }}
-            
+
             li {{
                 margin-bottom: 2px;
                 font-size: 10px;
@@ -936,7 +962,7 @@ def generate_resume_html(resume_data):
                 {email} | {phone} | {location}
             </div>
         </div>
-        
+
         {summary_html if summary else ''}
         {work_html if work_exps else ''}
         {edu_html if educations else ''}
@@ -945,8 +971,103 @@ def generate_resume_html(resume_data):
     </body>
     </html>
     """
-    
+
     return full_html
+
+def extract_text_from_pdf(file_bytes):
+    """Extract text content from a PDF file (bytes)."""
+    reader = PdfReader(io.BytesIO(file_bytes))
+    pages_text = []
+    for page in reader.pages:
+        try:
+            page_text = page.extract_text() or ""
+        except Exception:
+            page_text = ""
+        if page_text:
+            pages_text.append(page_text)
+    return "\n".join(pages_text).strip()
+
+def extract_text_from_docx(file_bytes):
+    """Extract text content from a DOCX file (bytes)."""
+    doc = Document(io.BytesIO(file_bytes))
+    paragraphs = [p.text for p in doc.paragraphs if p.text]
+    return "\n".join(paragraphs).strip()
+
+def parse_resume_text_with_ai(resume_text):
+    """Parse resume text into structured data via AI."""
+    if not resume_text.strip():
+        raise ValueError('简历文本为空')
+
+    logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
+
+    genai.configure(api_key=GEMINI_API_KEY)
+    ai_model = genai.GenerativeModel('gemini-3-flash-preview')
+
+    prompt = f"""
+    请解析以下简历文本，并按如下 JSON 格式返回结构化数据：
+    {{
+        "personalInfo": {{
+            "name": "",
+            "title": "",
+            "email": "",
+            "phone": "",
+            "location": ""
+        }},
+        "workExps": [
+            {{
+                "company": "",
+                "position": "",
+                "startDate": "",
+                "endDate": "",
+                "description": ""
+            }}
+        ],
+        "educations": [
+            {{
+                "school": "",
+                "degree": "",
+                "major": "",
+                "startDate": "",
+                "endDate": ""
+            }}
+        ],
+        "projects": [
+            {{
+                "title": "",
+                "description": "",
+                "date": ""
+            }}
+        ],
+        "skills": ["", "", ""]
+    }}
+
+    规则：
+    1. 若字段缺失，返回空字符串。
+    2. 如有多条工作/教育/项目经历，全部提取。
+    3. 技能拆分为单项数组。
+    4. 仅返回 JSON，不要额外文字。
+
+    简历文本：
+    {resume_text}
+    """
+
+    response = ai_model.generate_content(prompt)
+    ai_result = parse_ai_response(response.text)
+
+    if not ai_result:
+        raise RuntimeError('AI parse failed')
+
+    parsed_data = {
+        'personalInfo': ai_result.get('personalInfo', {}) or {},
+        'workExps': ai_result.get('workExps', []) or [],
+        'educations': ai_result.get('educations', []) or [],
+        'projects': ai_result.get('projects', []) or [],
+        'skills': ai_result.get('skills', []) or [],
+        'gender': ''
+    }
+
+    logger.info("Resume parsed successfully with AI")
+    return parsed_data
 
 @app.route('/api/ai/parse-resume', methods=['POST'])
 def parse_resume():
@@ -954,210 +1075,195 @@ def parse_resume():
     try:
         data = request.get_json()
         resume_text = data.get('resumeText', '')
-        
-        if not resume_text.strip():
-            return jsonify({'error': '简历文本不能为空'}), 400
-        
-        logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
-        
-        # 配置 Gemini AI
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-3-flash-preview')
-        
-        # 构建解析提示词
-        prompt = f"""
-        请解析以下简历文本，提取出结构化的简历信息。请严格按照以下 JSON 格式返回结果：
-
-        {{
-            "personalInfo": {{
-                "name": "姓名",
-                "title": "职位标题",
-                "email": "邮箱地址",
-                "phone": "电话号码",
-                "location": "所在地"
-            }},
-            "workExps": [
-                {{
-                    "company": "公司名称",
-                    "position": "职位",
-                    "startDate": "开始时间",
-                    "endDate": "结束时间",
-                    "description": "工作描述"
-                }}
-            ],
-            "educations": [
-                {{
-                    "school": "学校名称",
-                    "degree": "学位",
-                    "major": "专业",
-                    "startDate": "开始时间",
-                    "endDate": "结束时间"
-                }}
-            ],
-            "projects": [
-                {{
-                    "title": "项目名称",
-                    "description": "项目描述",
-                    "date": "项目时间"
-                }}
-            ],
-            "skills": ["技能1", "技能2", "技能3"]
-        }}
-
-        注意事项：
-        1. 如果某个字段无法提取，请使用空字符串 ""
-        2. 工作经历、教育背景、项目经验可能是多个，请全部提取
-        3. 技能请拆分成单独的技能项
-        4. 请只返回 JSON 格式，不要添加其他说明文字
-
-        简历文本：
-        {resume_text}
-        """
-        
-        response = model.generate_content(prompt)
-        ai_result = parse_ai_response(response.text)
-        
-        if not ai_result:
-            return jsonify({'error': 'AI 解析失败'}), 500
-        
-        # 数据清理和验证
-        parsed_data = {
-            'personalInfo': ai_result.get('personalInfo', {}) or {},
-            'workExps': ai_result.get('workExps', []) or [],
-            'educations': ai_result.get('educations', []) or [],
-            'projects': ai_result.get('projects', []) or [],
-            'skills': ai_result.get('skills', []) or [],
-            'gender': ''
-        }
-        
-        logger.info("Resume parsed successfully with AI")
-        
-        return jsonify({
-            'success': True,
-            'data': parsed_data
-        })
-        
+        parsed_data = parse_resume_text_with_ai(resume_text)
+        return jsonify({'success': True, 'data': parsed_data})
     except Exception as e:
         logger.error(f"Resume parsing error: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
-        return jsonify({'error': f'简历解析失败: {str(e)}'}), 500
+        return jsonify({'error': '解析简历失败'}), 500
+
+@app.route('/api/parse-pdf', methods=['POST'])
+def parse_pdf():
+    """解析 PDF/DOCX 简历并返回结构化数据"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': '未上传文件'}), 400
+        file = request.files['file']
+        if not file or not file.filename:
+            return jsonify({'error': '文件名为空'}), 400
+        filename = file.filename.lower()
+        is_pdf = filename.endswith('.pdf')
+        is_docx = filename.endswith('.docx')
+        if not is_pdf and not is_docx:
+            return jsonify({'error': '仅支持 PDF 或 DOCX 文件'}), 400
+        file_bytes = file.read()
+        if not file_bytes:
+            return jsonify({'error': '文件内容为空'}), 400
+        if is_pdf:
+            resume_text = extract_text_from_pdf(file_bytes)
+        else:
+            resume_text = extract_text_from_docx(file_bytes)
+        if not resume_text:
+            return jsonify({'error': '未能提取文本，请上传可复制文本的 PDF/DOCX。'}), 400
+        parsed_data = parse_resume_text_with_ai(resume_text)
+        return jsonify({'success': True, 'data': parsed_data})
+    except Exception as e:
+        logger.error(f"PDF parsing error: {str(e)}")
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        return jsonify({'error': 'PDF 解析失败'}), 500
 
 @app.route('/api/ai/analyze', methods=['POST', 'OPTIONS'])
 @token_required
 def analyze_resume(current_user_id):
     try:
-        print(f"🔍 Current User ID: {current_user_id}")
-        
+        print(f"Current User ID: {current_user_id}")
+
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
-        
+
         if not resume_data:
-            return jsonify({'error': 'Resume data is required'}), 400
-        
-        # Use Gemini AI if available and quota permits, otherwise fall back to mock analysis
-        if model and job_description and check_gemini_quota():
+            return jsonify({'error': '需要提供简历数据'}), 400
+
+        if model and check_gemini_quota():
             try:
-                # Prepare prompt for Gemini
-                prompt = f"""
-                请分析以下简历与职位描述的匹配度，并提供详细的优化建议：
+                if job_description:
+                    prompt = f"""
+请分析以下简历与职位描述的匹配度，并提供详细优化建议。
+请使用中文输出，字段值必须为中文。
 
-                简历信息：
-                {format_resume_for_ai(resume_data)}
+简历：
+{format_resume_for_ai(resume_data)}
 
-                职位描述：
-                {job_description}
+职位描述：
+{job_description}
 
-                请提供以下信息：
-                1. 匹配度评分（0-100）
-                2. 优势分析
-                3. 不足之处
-                4. 具体优化建议
-                5. 缺失的关键词
+请仅返回 JSON（仅中文内容）：
+{{
+  "score": 85,
+  "summary": "匹配度分析完成。",
+  "strengths": ["优势1", "优势2"],
+  "weaknesses": ["不足1", "不足2"],
+  "suggestions": [
+    {{
+      "id": "suggestion-1",
+      "type": "optimization",
+      "title": "工作经历优化",
+      "reason": "优化原因说明",
+      "targetSection": "workExps",
+      "originalValue": "原内容",
+      "suggestedValue": "优化后的内容"
+    }}
+  ],
+  "missingKeywords": ["关键词1", "关键词2"]
+}}
+"""
+                else:
+                    prompt = f"""
+请分析简历并提供详细优化建议。
+请使用中文输出，字段值必须为中文。
 
-                请以JSON格式返回结果：
-                {{
-                    "score": 85,
-                    "strengths": ["优势1", "优势2"],
-                    "weaknesses": ["不足1", "不足2"],
-                    "suggestions": ["建议1", "建议2"],
-                    "missingKeywords": ["关键词1", "关键词2"]
-                }}
-                """
-                
+简历：
+{format_resume_for_ai(resume_data)}
+
+请仅返回 JSON（仅中文内容）：
+{{
+  "score": 75,
+  "summary": "简历分析完成。",
+  "strengths": ["优势1", "优势2"],
+  "weaknesses": ["不足1", "不足2"],
+  "suggestions": [
+    {{
+      "id": "suggestion-1",
+      "type": "optimization",
+      "title": "个人简介优化",
+      "reason": "优化原因说明",
+      "targetSection": "summary",
+      "originalValue": "原内容",
+      "suggestedValue": "优化后的内容"
+    }},
+    {{
+      "id": "suggestion-2",
+      "type": "optimization",
+      "title": "量化成果",
+      "reason": "补充可量化的数据",
+      "targetSection": "workExps",
+      "originalValue": "原描述",
+      "suggestedValue": "优化后的描述（含量化结果）"
+    }}
+  ],
+  "missingKeywords": []
+}}
+"""
+
                 response = model.generate_content(prompt)
                 ai_result = parse_ai_response(response.text)
-                
+
                 return jsonify({
                     'score': ai_result.get('score', 70),
-                    'summary': ai_result.get('summary', 'AI分析完成，简历整体评估已完成。'),
+                    'summary': ai_result.get('summary', '智能分析完成，简历整体评估已生成。'),
                     'suggestions': ai_result.get('suggestions', []),
                     'strengths': ai_result.get('strengths', []),
                     'weaknesses': ai_result.get('weaknesses', []),
                     'missingKeywords': ai_result.get('missingKeywords', [])
                 }), 200
-                
+
             except Exception as ai_error:
                 print(f"Gemini AI analysis failed: {ai_error}")
                 logger.error(f"Gemini AI analysis failed: {ai_error}")
                 logger.error(f"Full traceback: {traceback.format_exc()}")
-                
-                # 检查是否是配额超限错误
+
                 if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
                     print("Gemini API quota exceeded, falling back to enhanced mock analysis")
                     logger.warning("Gemini API quota exceeded, falling back to enhanced mock analysis")
-                
-                # Fall back to enhanced mock analysis
+
                 score = calculate_resume_score(resume_data)
                 suggestions = generate_enhanced_suggestions(resume_data, score, job_description)
-                
+
                 return jsonify({
                     'score': score,
-                    'summary': 'AI分析服务暂时不可用，已为您生成基础分析报告。建议稍后重试以获取更精准的AI分析。',
+                    'summary': '智能分析暂时不可用，已生成基础分析报告，建议稍后再试。',
                     'suggestions': suggestions,
-                    'strengths': ['简历结构清晰', '格式规范'],
-                    'weaknesses': ['AI分析服务暂时不可用', '建议稍后重试获取详细分析'],
-                    'missingKeywords': ['AI服务暂时不可用']
+                    'strengths': ['结构清晰', '格式规范'],
+                    'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
+                    'missingKeywords': [] if not job_description else ['智能分析暂不可用']
                 }), 200
-        
-        # Mock AI analysis - fallback
+
         score = calculate_resume_score(resume_data)
         suggestions = generate_suggestions(resume_data, score)
-        
+
         return jsonify({
             'score': score,
-            'summary': 'AI分析完成，正在通过 AI 提取关键词...',
+            'summary': '简历分析完成，请查看优化建议。',
             'suggestions': suggestions,
-            'strengths': ['简历结构清晰', '格式规范'],
-            'weaknesses': ['缺少量化数据', '技能描述不够具体'],
-            'missingKeywords': ['正在分析中...']
+            'strengths': ['结构清晰', '格式规范'],
+            'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
+            'missingKeywords': [] if not job_description else ['正在分析关键词...']
         }), 200
-    
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
+
 
 def format_resume_for_ai(resume_data):
-    """Format resume data for AI analysis"""
+    """用于 AI 的简历格式化文本"""
     formatted = []
-    
-    # Personal info
+
     personal = resume_data.get('personalInfo', {})
     if personal:
         formatted.append(f"姓名: {personal.get('name', '')}")
         formatted.append(f"职位: {personal.get('title', '')}")
         formatted.append(f"邮箱: {personal.get('email', '')}")
         formatted.append(f"电话: {personal.get('phone', '')}")
-    
-    # Work experience
+
     work_exps = resume_data.get('workExps', [])
     if work_exps:
-        formatted.append("\n工作经验:")
+        formatted.append("\n工作经历:")
         for exp in work_exps:
-            formatted.append(f"- {exp.get('position', '')} at {exp.get('company', '')}")
+            formatted.append(f"- {exp.get('position', '')} @ {exp.get('company', '')}")
             formatted.append(f"  {exp.get('startDate', '')} - {exp.get('endDate', '')}")
             formatted.append(f"  {exp.get('description', '')}")
-    
-    # Education
+
     educations = resume_data.get('educations', [])
     if educations:
         formatted.append("\n教育背景:")
@@ -1165,33 +1271,32 @@ def format_resume_for_ai(resume_data):
             formatted.append(f"- {edu.get('degree', '')} {edu.get('major', '')}")
             formatted.append(f"  {edu.get('school', '')}")
             formatted.append(f"  {edu.get('startDate', '')} - {edu.get('endDate', '')}")
-    
-    # Skills
+
     skills = resume_data.get('skills', [])
     if skills:
         formatted.append(f"\n技能: {', '.join(skills)}")
-    
+
     return '\n'.join(formatted)
 
+
 def parse_ai_response(response_text):
-    """Parse AI response to extract structured data"""
+    """解析 AI 回复中的结构化数据"""
     try:
         import json
-        # Try to extract JSON from response
         start = response_text.find('{')
         end = response_text.rfind('}') + 1
         if start != -1 and end != 0:
             json_str = response_text[start:end]
             return json.loads(json_str)
-    except:
+    except Exception:
         pass
-    
-    # Fallback to default values
+
+    # 兜底返回
     return {
         'score': 75,
         'strengths': ['简历结构清晰'],
         'weaknesses': ['需要更多细节'],
-        'suggestions': ['补充具体成就'],
+        'suggestions': ['补充具体成果'],
         'missingKeywords': []
     }
 
@@ -1199,287 +1304,235 @@ def parse_ai_response(response_text):
 @token_required
 def ai_chat(current_user_id):
     try:
-        print(f"🔍 Chat Current User ID: {current_user_id}")
-        
+        print(f"Chat Current User ID: {current_user_id}")
+
         data = request.get_json()
         message = data.get('message', '')
+        print(f"Received Chat Message: {message[:100]}...")
         resume_data = data.get('resumeData')
+        job_description = data.get('jobDescription', '')
         chat_history = data.get('chatHistory', [])
         score = data.get('score', 0)
         suggestions = data.get('suggestions', [])
-        
+
         if not message:
-            return jsonify({'error': 'Message is required'}), 400
-        
-        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+            return jsonify({'error': '消息内容不能为空'}), 400
+
+        clean_message = message.replace('[INTERVIEW_MODE]', '').strip()
+
         if model and check_gemini_quota():
             try:
-                # Format chat history for AI
                 formatted_chat = ""
                 for msg in chat_history:
-                    role = "用户" if msg.get('role') == 'user' else "顾问"
-                    formatted_chat += f"{role}: {msg.get('text', '')}\n"
-                
-                # Prepare prompt for Gemini
+                    role = "候选人" if msg.get('role') == 'user' else "面试官"
+                    msg_text = msg.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
+                    if msg_text and not msg_text.startswith('SYSTEM_'):
+                        formatted_chat += f"{role}: {msg_text}\n"
+
                 prompt = f"""
-你是一位专业的简历顾问，说话风格严肃、专业、温和，像一位经验丰富的职场导师。请遵循以下原则：
+【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
+禁止：
+- 提及任何评分或 X/100
+- 给出简历优化建议
+- 以猎头/顾问/优化师身份出现
+- 回复超过 100 字
+- 使用非中文回复
+你必须：
+1. 保持面试官角色。
+2. 基于 JD 提问。
+3. 结合简历经历进行追问。
+4. 给出 1-2 句点评。
+5. 立即提出下一题。
+6. 全程仅使用中文作答。
 
-📝 **风格要求**：严肃、专业、温和，符合日常对话，不要使用Markdown格式和emoji
-📏 **长度限制**：严格控制在50字以内，简洁明了
-🎯 **内容重点**：提供可执行的具体建议，直接但温和地指出问题所在
+职位描述：
+{job_description if job_description else '未提供 JD，请基于简历进行通用面试。'}
 
-**回复结构**：
-- 自然的开场，直接回应用户问题
-- 具体的建议和改进点，温和地指出简历中的问题
+简历信息：
+{format_resume_for_ai(resume_data) if resume_data else '未提供简历信息。'}
 
-**避免**：
-- 使用Markdown格式和emoji
-- 过于刻薄或严厉的语气
-- 过于克制和委婉
-- 长篇大论
-- 复杂术语
-- 重复内容
-- 使用姓氏称呼用户，只使用名字或通用称呼
-- 在每次回复中都带用户名字，只在第一次回复时带名字，后续回复直接开始内容
+对话历史：
+{formatted_chat if formatted_chat else '面试刚开始。'}
 
-**对话历史**：
-{formatted_chat if formatted_chat else '无对话历史'}
+候选人回答：
+{clean_message}
 
-**最新用户问题**：{message}
-
-**简历信息**：
-{format_resume_for_ai(resume_data) if resume_data else '无简历信息'}
-
-**当前评分**：{score}/100
-
-**待处理建议**：{len([s for s in suggestions if s.get('status') == 'pending'])} 条
-
-请基于对话历史和最新问题，生成一个连贯、自然的回复，不要重复之前已经说过的内容，也不要生成总结性的结论，而是直接回应用户的问题并提供具体的建议。严格控制回复长度在50字以内，不要使用姓氏称呼用户。
+请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
-                
+
                 response = model.generate_content(prompt)
                 ai_response = response.text
-                
-                return jsonify({
-                    'response': ai_response
-                })
-                
+
+                return jsonify({'response': ai_response})
+
             except Exception as ai_error:
-                print(f"AI chat failed: {ai_error}")
-                logger.error(f"AI chat failed: {ai_error}")
-                
-                # 检查是否是配额超限错误
+                print(f"AI 面试对话失败: {ai_error}")
+                logger.error(f"AI 面试对话失败: {ai_error}")
+
                 if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
-                    print("Gemini API quota exceeded, falling back to enhanced mock chat response")
-                    logger.warning("Gemini API quota exceeded, falling back to enhanced mock chat response")
-                
-                # Fall back to enhanced mock chat response
+                    print("Gemini 配额超限，使用本地模拟面试回复")
+                    logger.warning("Gemini 配额超限，使用本地模拟面试回复")
+
                 mock_response = generate_enhanced_mock_chat_response(message, score, suggestions)
-                
-                return jsonify({
-                    'response': mock_response
-                }), 200
-        
-        # Mock chat response - fallback
+                return jsonify({'response': mock_response}), 200
+
         mock_response = generate_mock_chat_response(message, score, suggestions)
-        
-        return jsonify({
-            'response': mock_response
-        }), 200
-    
+        return jsonify({'response': mock_response}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/ai/parse-screenshot', methods=['POST', 'OPTIONS'])
 @token_required
 def parse_screenshot(current_user_id):
     try:
-        print(f"🔍 Parse Screenshot Current User ID: {current_user_id}")
-        
+        print(f"Parse Screenshot Current User ID: {current_user_id}")
+
         data = request.get_json()
         image = data.get('image', '')
-        
+
         if not image:
-            return jsonify({'error': 'Image is required'}), 400
-        
-        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+            return jsonify({'error': '图片不能为空'}), 400
+
         if model and check_gemini_quota():
             try:
-                # Prepare prompt for Gemini
-                prompt = "请识别以下图片中的职位描述（JD）内容，提取所有文本信息，包括图片顶部和底部的内容，确保不要遗漏任何信息。不要添加任何解释或分析，只返回识别到的纯文本。"
-                
-                # Call Gemini with image
+                prompt = "请从图片中提取职位描述文本，只返回提取结果，不要解释。请仅使用中文输出。"
+
                 import base64
                 import re
-                
-                # Extract base64 image data
+
                 base64_data = re.sub('^data:image/.+;base64,', '', image)
                 image_data = base64.b64decode(base64_data)
-                
-                # Create image part for Gemini
-                from google.generativeai.types import ContentType
+
                 image_part = {
                     "mime_type": "image/png",
                     "data": image_data
                 }
-                
-                # Generate content with image
+
                 response = model.generate_content([prompt, image_part])
-                
-                # Extract text from response
                 extracted_text = response.text.strip()
-                
-                return jsonify({
-                    'text': extracted_text
-                })
-                
+
+                return jsonify({'text': extracted_text})
+
             except Exception as ai_error:
-                print(f"AI parse screenshot failed: {ai_error}")
-                logger.error(f"AI parse screenshot failed: {ai_error}")
-                
-                # 检查是否是配额超限错误
+                print(f"AI 截图解析失败: {ai_error}")
+                logger.error(f"AI 截图解析失败: {ai_error}")
+
                 if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
-                    print("Gemini API quota exceeded, falling back to mock response")
-                    logger.warning("Gemini API quota exceeded, falling back to mock response")
-                
-                # Fall back to mock response
-                return jsonify({
-                    'text': '职位描述识别失败，请手动输入JD内容'
-                }), 200
-        
-        # Mock response - fallback
-        return jsonify({
-            'text': '职位描述识别失败，请手动输入JD内容'
-        }), 200
-    
+                    print("Gemini 配额超限，使用本地结果")
+                    logger.warning("Gemini 配额超限，使用本地结果")
+
+                return jsonify({'text': '职位描述识别失败，请手动粘贴职位描述。'}), 200
+
+        return jsonify({'text': '职位描述识别失败，请手动粘贴职位描述。'}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
 @token_required
 def generate_resume(current_user_id):
     try:
-        print(f"🔍 Generate Resume Current User ID: {current_user_id}")
-        
+        print(f"Generate Resume Current User ID: {current_user_id}")
+
         data = request.get_json()
         message = data.get('message', '')
         resume_data = data.get('resumeData')
         chat_history = data.get('chatHistory', [])
         score = data.get('score', 0)
         suggestions = data.get('suggestions', [])
-        
+
         if not resume_data:
-            return jsonify({'error': 'Resume data is required'}), 400
-        
-        # Use Gemini AI if available and quota permits, otherwise fall back to mock responses
+            return jsonify({'error': '需要提供简历数据'}), 400
+
         if model and check_gemini_quota():
             try:
-                # Format chat history for AI
                 formatted_chat = ""
                 for msg in chat_history:
                     role = "用户" if msg.get('role') == 'user' else "顾问"
                     formatted_chat += f"{role}: {msg.get('text', '')}\n"
-                
-                # Prepare prompt for Gemini
-                # 简化 f-string 嵌套，避免语法错误
+
                 accepted_suggestions = []
                 for s in suggestions:
                     if s.get('status') == 'accepted':
                         accepted_suggestions.append(s.get('title', '建议'))
-                
+
                 accepted_suggestions_str = ', '.join(accepted_suggestions) if accepted_suggestions else '无'
-                
+
                 resume_info = format_resume_for_ai(resume_data)
                 chat_info = formatted_chat if formatted_chat else '无对话历史'
-                
-                prompt = """
-请根据以下信息生成一份完整的、优化后的简历。这份简历应该是完全可用的，不包含任何AI优化建议或标记。
 
-**输入信息：**
+                prompt = f"""
+请根据以下信息生成一份完整且优化后的简历。
+请仅使用中文输出，所有字段值必须为中文。
+不要包含任何 AI 优化说明或标记。
 
-1. **原始简历数据：**
-"""
-                prompt += resume_info
-                prompt += """
+**输入信息**
+1. 原始简历数据：
+{resume_info}
 
-2. **对话历史：**
-"""
-                prompt += chat_info
-                prompt += """
+2. 对话历史：
+{chat_info}
 
-3. **当前评分：**
-"""
-                prompt += f"{score}/100"
-                prompt += """
+3. 当前评分：
+{score}/100
 
-4. **优化建议：**
-"""
-                prompt += f"{accepted_suggestions_str} 已被接受"
-                prompt += """
+4. 已采纳建议：
+{accepted_suggestions_str}
 
-**生成要求：**
+**输出要求**
+1. 仅返回 JSON（不要附加额外文本）。
+2. 内容需结合原始数据、对话上下文和已采纳建议。
+3. 所有字段需完整合理，不得留空。
 
-1. **格式要求：** 请严格按照以下JSON格式返回结果，不要添加任何其他说明文字
-2. **内容要求：**
-   - 基于原始简历数据
-   - 融合对话中讨论的优化点
-   - 应用已接受的建议
-   - 生成一份完整的、专业的简历
-   - 不包含任何AI优化建议或标记
-   - 确保所有字段都填充完整，无空值
-
-**返回格式：**
-
-{
-  "resumeData": {
-    "personalInfo": {
+**输出格式**
+{{
+  "resumeData": {{
+    "personalInfo": {{
       "name": "姓名",
       "title": "职位标题",
       "email": "邮箱地址",
       "phone": "电话号码",
       "location": "所在地"
-    },
+    }},
     "workExps": [
-      {
+      {{
         "id": 1,
         "company": "公司名称",
         "position": "职位",
-        "startDate": "开始时间",
-        "endDate": "结束时间",
-        "description": "详细的工作描述，包含量化成果"
-      }
+        "startDate": "开始日期",
+        "endDate": "结束日期",
+        "description": "详细工作描述（包含量化结果）"
+      }}
     ],
     "educations": [
-      {
+      {{
         "id": 1,
         "school": "学校名称",
         "degree": "学位",
         "major": "专业",
-        "startDate": "开始时间",
-        "endDate": "结束时间"
-      }
+        "startDate": "开始日期",
+        "endDate": "结束日期"
+      }}
     ],
     "projects": [
-      {
+      {{
         "id": 1,
         "title": "项目名称",
-        "description": "详细的项目描述",
+        "description": "详细项目描述",
         "date": "项目时间"
-      }
+      }}
     ],
     "skills": ["技能1", "技能2", "技能3"],
-    "summary": "专业的个人简介"
-  }
-}
-
-请生成完整的JSON格式简历数据，确保所有字段都有合理的值。
+    "summary": "专业简介"
+  }}
+}}
 """
-                
+
                 response = model.generate_content(prompt)
                 ai_result = parse_ai_response(response.text)
-                
+
                 if ai_result and ai_result.get('resumeData'):
-                    # 数据清理和验证
                     generated_resume = {
                         'personalInfo': ai_result['resumeData'].get('personalInfo', {}) or {},
                         'workExps': ai_result['resumeData'].get('workExps', []) or [],
@@ -1488,12 +1541,9 @@ def generate_resume(current_user_id):
                         'skills': ai_result['resumeData'].get('skills', []) or [],
                         'summary': ai_result['resumeData'].get('summary', '') or ''
                     }
-                    
-                    return jsonify({
-                        'resumeData': generated_resume
-                    })
+
+                    return jsonify({'resumeData': generated_resume})
                 else:
-                    # Fallback to enhanced mock resume
                     enhanced_resume = {
                         'personalInfo': resume_data.get('personalInfo', {}) or {},
                         'workExps': resume_data.get('workExps', []) or [],
@@ -1502,21 +1552,17 @@ def generate_resume(current_user_id):
                         'skills': resume_data.get('skills', []) or [],
                         'summary': resume_data.get('summary', '') or ''
                     }
-                    
-                    return jsonify({
-                        'resumeData': enhanced_resume
-                    })
-                    
+
+                    return jsonify({'resumeData': enhanced_resume})
+
             except Exception as ai_error:
-                print(f"AI generate resume failed: {ai_error}")
-                logger.error(f"AI generate resume failed: {ai_error}")
-                
-                # 检查是否是配额超限错误
+                print(f"AI 生成简历失败: {ai_error}")
+                logger.error(f"AI 生成简历失败: {ai_error}")
+
                 if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
-                    print("Gemini API quota exceeded, falling back to enhanced mock resume")
-                    logger.warning("Gemini API quota exceeded, falling back to enhanced mock resume")
-                
-                # Fall back to enhanced mock resume
+                    print("Gemini 配额超限，回退为本地简历生成")
+                    logger.warning("Gemini 配额超限，回退为本地简历生成")
+
                 enhanced_resume = {
                     'personalInfo': resume_data.get('personalInfo', {}) or {},
                     'workExps': resume_data.get('workExps', []) or [],
@@ -1525,12 +1571,9 @@ def generate_resume(current_user_id):
                     'skills': resume_data.get('skills', []) or [],
                     'summary': resume_data.get('summary', '') or ''
                 }
-                
-                return jsonify({
-                    'resumeData': enhanced_resume
-                }), 200
-        
-        # Mock response - fallback
+
+                return jsonify({'resumeData': enhanced_resume}), 200
+
         mock_resume = {
             'personalInfo': resume_data.get('personalInfo', {}) or {},
             'workExps': resume_data.get('workExps', []) or [],
@@ -1539,54 +1582,32 @@ def generate_resume(current_user_id):
             'skills': resume_data.get('skills', []) or [],
             'summary': resume_data.get('summary', '') or ''
         }
-        
-        return jsonify({
-            'resumeData': mock_resume
-        }), 200
-    
+
+        return jsonify({'resumeData': mock_resume}), 200
+
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return jsonify({'error': '服务器内部错误'}), 500
+
 
 def generate_enhanced_mock_chat_response(message, score, suggestions):
-    """Generate enhanced mock chat response when AI is unavailable"""
-    lower_message = message.lower()
-    
-    # Check for pending suggestions
-    pending_suggestions = [s for s in suggestions if s.get('status') == 'pending']
-    
-    if pending_suggestions and ('好' in lower_message or '可以' in lower_message or '开始' in lower_message):
-        next_suggestion = pending_suggestions[0]
-        return f"好的！让我们从第一个建议开始：\n\n**{next_suggestion.get('title', '优化建议')}**\n{next_suggestion.get('reason', '根据分析结果')}\n\n您希望我帮您应用这个建议吗？"
-    
-    if '评分' in lower_message or '分数' in lower_message:
-        return f"您当前的简历评分是 {score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。"
-    
-    if '技能' in lower_message or 'skills' in lower_message:
-        return "关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？"
-    
-    if 'api' in lower_message or '配额' in lower_message or '错误' in lower_message:
-        return "抱歉，AI服务暂时遇到配额限制。我已经为您生成了基础分析报告，建议稍后重试以获取更精准的AI分析。现有建议仍然可以帮助您优化简历。"
-    
-    return "我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。由于AI服务暂时不可用，我已为您准备了基础优化建议。您想从哪个方面开始改进呢？"
+    """当 AI 不可用时的增强版面试回复"""
+    if 'SYSTEM_START_INTERVIEW' in message or 'INTERVIEW_MODE' in message:
+        return "我是你的智能面试官，现在开始：请用 1 分钟介绍自己，并说明目标岗位方向。"
+
+    return "点评：表达清晰，但缺少量化结果。改进：补充指标数据。参考：我在 X 项目中将 Y 提升 Z%。下一题：请举例说明你解决关键问题的项目及结果。"
+
 
 def generate_mock_chat_response(message, score, suggestions):
-    """Generate mock chat response when AI is unavailable"""
-    lower_message = message.lower()
-    
-    # Check for pending suggestions
-    pending_suggestions = [s for s in suggestions if s.get('status') == 'pending']
-    
-    if pending_suggestions and ('好' in lower_message or '可以' in lower_message or '开始' in lower_message):
-        next_suggestion = pending_suggestions[0]
-        return f"好的！让我们从第一个建议开始：\n\n**{next_suggestion.get('title', '优化建议')}**\n{next_suggestion.get('reason', '根据AI分析结果')}\n\n您希望我帮您应用这个建议吗？"
-    
-    if '评分' in lower_message or '分数' in lower_message:
-        return f"您当前的简历评分是 {score}/100 分。这个评分基于工作经验、技能匹配度和简历格式三个维度。要提升评分，我建议您重点关注技能关键词的补充和工作经历的量化描述。"
-    
-    if '技能' in lower_message or 'skills' in lower_message:
-        return "关于技能部分，我建议您：\n1. 添加与目标职位相关的硬技能\n2. 包含具体的工具和技术栈\n3. 量化您的技能水平\n\n您希望我帮您分析哪些技能需要补充吗？"
-    
-    return "我理解您的问题。基于您的简历情况，我建议您重点关注工作经历的量化描述和技能关键词的优化。您想从哪个方面开始改进呢？"
+    """当 AI 不可用时的基础面试回复"""
+    if 'SYSTEM_START_INTERVIEW' in message or 'INTERVIEW_MODE' in message:
+        return "我是你的智能面试官，现在开始：请简要介绍自己，并说明为何适合该岗位。"
+
+    return "点评：结构尚可，但缺少背景与结果。改进：补充场景和成果。参考：当时……我……最终达成……。下一题：描述一次你处理冲突或分歧的经历，以及你如何推动结果。"
 
 if __name__ == '__main__':
+
     app.run(debug=True, port=5000)
+
+
+
+
