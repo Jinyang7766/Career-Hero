@@ -269,19 +269,48 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   };
 
   // --- Helper: Extract Company Name from JD ---
+  // --- Helper: Extract Company Name from JD ---
   const getCompanyNameFromJd = (text: string) => {
     if (!text) return '';
+
+    // 预处理：移除常见的干扰字符
+    const cleanText = text.trim();
+    const lines = cleanText.split('\n').filter(l => l.trim().length > 0);
+
+    // 黑名单关键词：包含这些词的一定不是公司名
+    const invalidKeywords = ['职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利', '一、', '二、', '三、', '1.', '2.', '3.', '任职', '优先', '加分', '简历', '投递', '招聘'];
+
+    const isValid = (name: string) => {
+      const n = name.trim();
+      if (n.length < 2 || n.length > 50) return false;
+      return !invalidKeywords.some(kw => n.includes(kw));
+    };
+
+    // 1. 优先匹配明确的标签
     const patterns = [
-      /(?:公司|企业|Employer|Company)[:：]\s*([^\n]+)/,
+      /(?:公司|企业|Employer|Company)[:：]\s*([^\n]+)/i,
       /招聘单位[:：]\s*([^\n]+)/,
-      /^([^\n]+(?:公司|集团|有限责任公司|厂))/,
     ];
+
     for (const pattern of patterns) {
-      const match = text.match(pattern);
-      if (match && match[1]) return match[1].trim().replace(/[ \t]+$/, '');
+      const match = cleanText.match(pattern);
+      if (match && match[1]) {
+        const candidate = match[1].trim();
+        if (isValid(candidate)) return candidate;
+      }
     }
-    const firstLine = text.split('\n')[0].trim();
-    return firstLine.length < 20 ? firstLine : '';
+
+    // 2. 尝试从第一行判断（必须包含公司相关后缀）
+    if (lines.length > 0) {
+      const firstLine = lines[0].trim();
+      // 必须包含公司实体后缀，且不包含黑名单
+      if (/(?:公司|集团|工作室|科技|网络|技术|Consulting|Inc\.|Ltd\.|Co\.)/i.test(firstLine)) {
+        if (isValid(firstLine)) return firstLine;
+      }
+    }
+
+    // 不再鲁莽地返回第一行作为默认值，因为那往往是"职位描述"或"任职要求"
+    return '';
   };
 
   const makeJdKey = (text: string) => {
