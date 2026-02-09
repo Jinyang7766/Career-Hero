@@ -27,6 +27,26 @@ const formatDateRange = (item: any): string => {
   return '';
 };
 
+const resolveExperienceTitle = (item: any): string => {
+  if (!item) return '';
+  return (item.company || item.school || item.title || '').trim();
+};
+
+const resolveExperienceSubtitle = (item: any): string => {
+  if (!item) return '';
+  // Priority for job titles/positions
+  if (item.position && String(item.position).trim()) return String(item.position).trim();
+  if (item.jobTitle && String(item.jobTitle).trim()) return String(item.jobTitle).trim();
+
+  // Combine degree and major for education if available
+  const parts = [];
+  if (item.degree && String(item.degree).trim()) parts.push(String(item.degree).trim());
+  if (item.major && String(item.major).trim()) parts.push(String(item.major).trim());
+  if (parts.length > 0) return parts.join(' · ');
+
+  return (item.subtitle || '').trim();
+};
+
 const resolveJobTitle = (data: any): string => {
   if (!data) return '求职意向';
 
@@ -117,10 +137,10 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.workExps.map((exp: any, index: number) => (
           <div key={exp.id} className="mb-2 no-break">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{exp.company || exp.title}</span>
+              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(exp)}</span>
               <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(exp) || '工作时间'}</span>
             </div>
-            <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{exp.subtitle || '职位'}</p>
+            <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(exp) || '职位'}</p>
             <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{exp.description || '工作描述'}</p>
           </div>
         ))}
@@ -132,12 +152,12 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-1 mb-2" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>教育背景</h3>
         {data.educations.map((edu: any, index: number) => (
           <div key={edu.id} className="flex justify-between items-baseline mb-1 no-break">
-            <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{edu.school || edu.title}</span>
+            <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(edu)}</span>
             <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(edu) || '教育时间'}</span>
           </div>
         ))}
-        {data.educations[0]?.subtitle && (
-          <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{data.educations[0].degree || data.educations[0].subtitle}</p>
+        {data.educations.length > 0 && (
+          <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{resolveExperienceSubtitle(data.educations[0])}</p>
         )}
       </div>
     )}
@@ -148,10 +168,10 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.projects.map((proj: any, index: number) => (
           <div key={proj.id} className="mb-2 no-break">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{proj.title || '项目名称'}</span>
+              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(proj)}</span>
               <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(proj) || '项目时间'}</span>
             </div>
-            <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{proj.subtitle || '项目角色'}</p>
+            <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
             <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{proj.description || '项目描述'}</p>
           </div>
         ))}
@@ -204,10 +224,10 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.workExps.map((exp: any, index: number) => (
           <div key={exp.id} className="mb-4 no-break pl-2">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-sm font-bold text-black" style={{ fontSize: '12px', fontWeight: 'bold' }}>{exp.company || exp.title}</span>
+              <span className="text-sm font-bold text-black" style={{ fontSize: '12px', fontWeight: 'bold' }}>{resolveExperienceTitle(exp)}</span>
               <span className="text-xs text-gray-600 italic" style={{ fontSize: '10px' }}>{formatDateRange(exp) || '工作时间'}</span>
             </div>
-            <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '10px', fontWeight: 'bold' }}>{exp.subtitle || '职位'}</p>
+            <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '10px', fontWeight: 'bold' }}>{resolveExperienceSubtitle(exp) || '职位'}</p>
             <p className="text-xs text-gray-700 leading-relaxed text-justify" style={{ fontSize: '10px', lineHeight: '1.5' }}>{exp.description || '工作描述'}</p>
           </div>
         ))}
@@ -220,8 +240,8 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.educations.map((edu: any, index: number) => (
           <div key={edu.id} className="flex justify-between items-baseline mb-2 no-break pl-2">
             <div>
-              <span className="text-sm font-bold text-black block" style={{ fontSize: '12px', fontWeight: 'bold' }}>{edu.school || edu.title}</span>
-              {(edu.degree || edu.subtitle) && <span className="text-xs text-gray-800" style={{ fontSize: '10px' }}>{edu.degree || edu.subtitle}</span>}
+              <span className="text-sm font-bold text-black block" style={{ fontSize: '12px', fontWeight: 'bold' }}>{resolveExperienceTitle(edu)}</span>
+              <span className="text-xs text-gray-800" style={{ fontSize: '10px' }}>{resolveExperienceSubtitle(edu)}</span>
             </div>
             <span className="text-xs text-gray-600 italic" style={{ fontSize: '10px' }}>{formatDateRange(edu) || '教育时间'}</span>
           </div>
@@ -235,10 +255,10 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.projects.map((proj: any, index: number) => (
           <div key={proj.id} className="mb-4 no-break pl-2">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-sm font-bold text-black" style={{ fontSize: '12px', fontWeight: 'bold' }}>{proj.title || '项目名称'}</span>
+              <span className="text-sm font-bold text-black" style={{ fontSize: '12px', fontWeight: 'bold' }}>{resolveExperienceTitle(proj)}</span>
               <span className="text-xs text-gray-600 italic" style={{ fontSize: '10px' }}>{formatDateRange(proj) || '项目时间'}</span>
             </div>
-            <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '10px', fontWeight: 'bold' }}>{proj.subtitle || '项目角色'}</p>
+            <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '10px', fontWeight: 'bold' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
             <p className="text-xs text-gray-700 leading-relaxed text-justify" style={{ fontSize: '10px', lineHeight: '1.5' }}>{proj.description || '项目描述'}</p>
           </div>
         ))}
@@ -293,10 +313,10 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
             {data.workExps.map((exp: any) => (
               <div key={exp.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{exp.company || exp.title}</h4>
+                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{resolveExperienceTitle(exp)}</h4>
                   <span className="text-sm text-gray-600 font-mono" style={{ fontSize: '10px' }}>{formatDateRange(exp)}</span>
                 </div>
-                <p className="text-sm text-gray-700 mb-2 font-medium italic" style={{ fontSize: '10px' }}>{exp.subtitle}</p>
+                <p className="text-sm text-gray-700 mb-2 font-medium italic" style={{ fontSize: '10px' }}>{resolveExperienceSubtitle(exp)}</p>
                 <p className="text-sm text-gray-800 leading-relaxed text-justify" style={{ fontSize: '10px' }}>{exp.description}</p>
               </div>
             ))}
@@ -314,10 +334,10 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
             {data.educations.map((edu: any) => (
               <div key={edu.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{edu.school || edu.title}</h4>
+                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{resolveExperienceTitle(edu)}</h4>
                   <span className="text-sm text-gray-600 font-mono" style={{ fontSize: '10px' }}>{formatDateRange(edu)}</span>
                 </div>
-                {(edu.degree || edu.subtitle) && <p className="text-sm text-gray-700 italic" style={{ fontSize: '10px' }}>{edu.degree || edu.subtitle}</p>}
+                <p className="text-sm text-gray-700 italic" style={{ fontSize: '10px' }}>{resolveExperienceSubtitle(edu)}</p>
               </div>
             ))}
           </div>
@@ -332,10 +352,10 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
             {data.projects.map((proj: any) => (
               <div key={proj.id}>
                 <div className="flex justify-between items-baseline mb-1">
-                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{proj.title}</h4>
+                  <h4 className="font-bold text-black" style={{ fontSize: '12px' }}>{resolveExperienceTitle(proj)}</h4>
                   <span className="text-sm text-gray-600 font-mono" style={{ fontSize: '10px' }}>{formatDateRange(proj)}</span>
                 </div>
-                <p className="text-sm text-gray-700 mb-2 font-medium italic" style={{ fontSize: '10px' }}>{proj.subtitle}</p>
+                <p className="text-sm text-gray-700 mb-2 font-medium italic" style={{ fontSize: '10px' }}>{resolveExperienceSubtitle(proj)}</p>
                 <p className="text-sm text-gray-800 leading-relaxed text-justify" style={{ fontSize: '10px' }}>{proj.description}</p>
               </div>
             ))}

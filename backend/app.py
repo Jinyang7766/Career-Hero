@@ -1006,8 +1006,11 @@ def build_resume_context(resume_data):
 
     work_exps = []
     for exp in resume_data.get('workExps', []) or []:
-        title_text = exp.get('title') or exp.get('company') or '未填写公司'
-        subtitle_text = exp.get('subtitle') or exp.get('position') or '未填写职位'
+        # Robust title (Company)
+        title_text = exp.get('company') or exp.get('title') or exp.get('school') or '未填写单位'
+        # Robust subtitle (Job Title / Position)
+        subtitle_text = exp.get('position') or exp.get('jobTitle') or exp.get('subtitle') or '职位'
+        
         date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '时间不详'
         work_exps.append({
             'title': clean_text_for_pdf(title_text),
@@ -1018,13 +1021,17 @@ def build_resume_context(resume_data):
 
     educations = []
     for edu in resume_data.get('educations', []) or []:
-        title_text = edu.get('title') or edu.get('school') or '未填写学校'
-        subtitle_parts = []
-        if edu.get('degree'):
-            subtitle_parts.append(edu.get('degree'))
-        if edu.get('major'):
-            subtitle_parts.append(edu.get('major'))
-        subtitle_text = edu.get('subtitle') or ' '.join([p for p in subtitle_parts if p]) or '未说明学历/专业'
+        title_text = edu.get('school') or edu.get('title') or '未填写学校'
+        
+        # Combine degree and major
+        deg = edu.get('degree') or ''
+        maj = edu.get('major') or ''
+        sub = edu.get('subtitle') or ''
+        if deg and maj:
+            subtitle_text = f"{deg} · {maj}"
+        else:
+            subtitle_text = deg or maj or sub or '未说明'
+            
         date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or '时间不详'
         educations.append({
             'title': clean_text_for_pdf(title_text),
@@ -1035,7 +1042,7 @@ def build_resume_context(resume_data):
     projects = []
     for proj in resume_data.get('projects', []) or []:
         title_text = proj.get('title') or '未填写项目名称'
-        subtitle_text = proj.get('subtitle') or proj.get('role') or '未填写角色'
+        subtitle_text = proj.get('role') or proj.get('subtitle') or '项目角色'
         date_text = proj.get('date') or '时间不详'
         projects.append({
             'title': clean_text_for_pdf(title_text),
