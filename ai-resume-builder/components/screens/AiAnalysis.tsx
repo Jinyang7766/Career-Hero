@@ -1161,9 +1161,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
       });
 
-      if (currentStep === 'report' || currentStep === 'chat') {
-        setCurrentStep('report');
-      }
+      // 数据恢复完成后，保持当前步骤不变，由 localStorage 初始值或外部跳转逻辑决定步骤
+      // 移除原有的强制跳转到 report 的逻辑，以修复从预览页跳转 chat 却落到 report 的问题
 
       hasRestoredAnalysisRef.current = true;
     });
