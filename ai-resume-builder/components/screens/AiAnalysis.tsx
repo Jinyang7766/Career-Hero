@@ -1671,6 +1671,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                     <div className="h-full bg-purple-500 rounded-full" style={{ width: `${report.scoreBreakdown.skills}%` }}></div>
                   </div>
                 </div>
+                <div className="flex flex-col gap-1">
+                  <div className="flex justify-between text-xs font-medium">
+                    <span className="text-slate-600 dark:text-slate-300">格式规范</span>
+                    <span className="text-slate-900 dark:text-white">{report.scoreBreakdown.format}分</span>
+                  </div>
+                  <div className="h-1.5 w-full bg-slate-100 dark:bg-black/20 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${report.scoreBreakdown.format}%` }}></div>
+                  </div>
+                </div>
               </div>
             )}
           </div>
