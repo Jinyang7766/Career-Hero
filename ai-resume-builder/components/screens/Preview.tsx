@@ -51,7 +51,7 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.workExps.map((exp: any, index: number) => (
           <div key={exp.id} className="mb-2 no-break">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{exp.title || '公司名称'}</span>
+              <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{exp.company || exp.title}</span>
               <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{exp.date || '工作时间'}</span>
             </div>
             <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{exp.subtitle || '职位'}</p>
@@ -66,12 +66,12 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-1 mb-2" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>教育背景</h3>
         {data.educations.map((edu: any, index: number) => (
           <div key={edu.id} className="flex justify-between items-baseline mb-1 no-break">
-            <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{edu.title || '学校名称'}</span>
+            <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{edu.school || edu.title}</span>
             <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{edu.date || '教育时间'}</span>
           </div>
         ))}
         {data.educations[0]?.subtitle && (
-          <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{data.educations[0].subtitle}</p>
+          <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{data.educations[0].degree || data.educations[0].subtitle}</p>
         )}
       </div>
     )}
@@ -130,7 +130,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.workExps.map((exp: any, index: number) => (
           <div key={exp.id} className="mb-4 no-break pl-2">
             <div className="flex justify-between items-baseline mb-1">
-              <span className="text-sm font-bold text-black" style={{ fontSize: '14px', fontWeight: 'bold' }}>{exp.title || '公司名称'}</span>
+              <span className="text-sm font-bold text-black" style={{ fontSize: '14px', fontWeight: 'bold' }}>{exp.company || exp.title}</span>
               <span className="text-xs text-gray-600 italic" style={{ fontSize: '12px' }}>{exp.date || '工作时间'}</span>
             </div>
             <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '12px', fontWeight: 'bold' }}>{exp.subtitle || '职位'}</p>
@@ -146,8 +146,8 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data.educations.map((edu: any, index: number) => (
           <div key={edu.id} className="flex justify-between items-baseline mb-2 no-break pl-2">
             <div>
-              <span className="text-sm font-bold text-black block" style={{ fontSize: '14px', fontWeight: 'bold' }}>{edu.title || '学校名称'}</span>
-              {edu.subtitle && <span className="text-xs text-gray-800" style={{ fontSize: '12px' }}>{edu.subtitle}</span>}
+              <span className="text-sm font-bold text-black block" style={{ fontSize: '14px', fontWeight: 'bold' }}>{edu.school || edu.title}</span>
+              {(edu.degree || edu.subtitle) && <span className="text-xs text-gray-800" style={{ fontSize: '12px' }}>{edu.degree || edu.subtitle}</span>}
             </div>
             <span className="text-xs text-gray-600 italic" style={{ fontSize: '12px' }}>{edu.date || '教育时间'}</span>
           </div>
