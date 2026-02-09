@@ -263,6 +263,14 @@ function App() {
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
+    if (view === View.AI_ANALYSIS) {
+      // Only reset if user has not started any AI assistant flow yet
+      const hasActivity = localStorage.getItem('ai_analysis_has_activity') === '1';
+      if (!hasActivity) {
+        localStorage.removeItem('ai_analysis_step');
+        localStorage.removeItem('ai_analysis_in_progress');
+      }
+    }
     handleNavigate(view, true);
   };
 

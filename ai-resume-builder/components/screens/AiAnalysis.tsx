@@ -724,25 +724,73 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
       console.log('handleAcceptSuggestionInChat called with suggestion:', suggestion);
 
+      const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: string) => {
+        if (!field) return field;
+        const key = field.trim();
+        if (!key) return field;
+
+        if (section === 'personalInfo') {
+          if (['jobTitle', 'job_title', 'position', 'targetTitle', 'title'].includes(key)) {
+            return 'title';
+          }
+          return key;
+        }
+
+        if (section === 'workExps') {
+          if (['position', 'jobTitle', 'job_title', 'role', 'subtitle'].includes(key)) {
+            return 'subtitle';
+          }
+          if (['company', 'employer', 'organization', 'org', 'title'].includes(key)) {
+            return 'company';
+          }
+          return key;
+        }
+
+        if (section === 'projects') {
+          if (['role', 'position', 'jobTitle', 'job_title', 'subtitle'].includes(key)) {
+            return 'subtitle';
+          }
+          return key;
+        }
+
+        return key;
+      };
+
       const applySuggestionToResume = (base: ResumeData) => {
         console.log('Current resume data before update:', base);
         const newData = { ...base };
+        const normalizedField = normalizeFieldForSection(suggestion.targetSection, suggestion.targetField);
 
         // 1. 处理个人信息
         if (suggestion.targetSection === 'personalInfo') {
           newData.personalInfo = {
             ...newData.personalInfo,
-            [suggestion.targetField!]: suggestion.suggestedValue
+            [normalizedField!]: suggestion.suggestedValue
           };
+          // Keep alias field if AI uses a non-standard key
+          if (suggestion.targetField && suggestion.targetField !== normalizedField) {
+            (newData.personalInfo as any)[suggestion.targetField] = suggestion.suggestedValue;
+          }
         }
         // 2. 处理工作经历 (增加安全检查)
         else if (suggestion.targetSection === 'workExps') {
           if (Array.isArray(newData.workExps)) {
-            newData.workExps = newData.workExps.map(item =>
-              item.id === suggestion.targetId
-                ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue }
-                : item
-            );
+            newData.workExps = newData.workExps.map(item => {
+              if (item.id === suggestion.targetId) {
+                let value = suggestion.suggestedValue;
+                // Auto-clean job titles (only keep the first part before space/pipe/etc.)
+                if ((suggestion.targetField === 'position' || suggestion.targetField === 'jobTitle' || suggestion.targetField === 'subtitle') && typeof value === 'string') {
+                  const cleaned = value.split(/[|\/·-\s]/)[0].trim();
+                  if (cleaned.length >= 2) value = cleaned;
+                }
+                const nextItem = { ...item, [normalizedField!]: value };
+                if (suggestion.targetField && suggestion.targetField !== normalizedField) {
+                  (nextItem as any)[suggestion.targetField] = value;
+                }
+                return nextItem;
+              }
+              return item;
+            });
           }
         }
         // 3. 处理技能 (🔴 重点修复区)
@@ -769,7 +817,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           if (suggestion.targetId) {
             // 更新单个项目
             if (Array.isArray(newData.projects)) {
-              newData.projects = newData.projects.map(item => item.id === suggestion.targetId ? { ...item, [suggestion.targetField!]: suggestion.suggestedValue } : item);
+              newData.projects = newData.projects.map(item => {
+                if (item.id !== suggestion.targetId) return item;
+                const nextItem = { ...item, [normalizedField!]: suggestion.suggestedValue };
+                if (suggestion.targetField && suggestion.targetField !== normalizedField) {
+                  (nextItem as any)[suggestion.targetField] = suggestion.suggestedValue;
+                }
+                return nextItem;
+              });
             }
           } else {
             // 更新整个 projects 数组
@@ -1013,6 +1068,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   };
 
+  const handleAnalyzeOtherResume = () => {
+    setSelectedResumeId(null);
+    setResumeTitle('');
+    setJdText('');
+    setSuggestions([]);
+    setReport(null);
+    setScore(0);
+    setOriginalScore(0);
+    setChatMessages([]);
+    setPendingNextQuestion(null);
+    setIsFromCache(false);
+    setOptimizedResumeId(null);
+    setAnalysisInProgress(false);
+    setCurrentStep('resume_select');
+  };
+
   const hasJdInput = () => jdText.length > 0;
 
   // 处理JD截图上传
@@ -1138,6 +1209,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   // 记住用户所在步骤，切换回来可恢复
   useEffect(() => {
     localStorage.setItem('ai_analysis_step', currentStep);
+    if (currentStep !== 'resume_select') {
+      localStorage.setItem('ai_analysis_has_activity', '1');
+    }
   }, [currentStep]);
 
   // 恢复分析结果：从缓存中恢复分数/建议，避免切页后变成 0
@@ -1862,10 +1936,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
 
 
           {/* Export PDF Button - After suggestions */}
-          <div className="mb-52 space-y-3">
-            <button
-              onClick={handleExportPDF}
-              disabled={isExporting || !hasAcceptedSuggestion}
+            <div className="mb-52 space-y-3">
+              <button
+                onClick={handleExportPDF}
+                disabled={isExporting || !hasAcceptedSuggestion}
               className={`w-full flex items-center justify-center gap-3 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
                 ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                 : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
@@ -1881,10 +1955,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                   <span className="material-symbols-outlined text-[24px]">download</span>
                   <span className="text-base font-bold tracking-wide">导出优化后简历 PDF</span>
                 </>
-              )}
-            </button>
+                )}
+              </button>
+              <button
+                onClick={handleAnalyzeOtherResume}
+                className="w-full flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-outlined text-[20px]">restart_alt</span>
+                <span className="text-sm font-semibold tracking-wide">分析其他简历</span>
+              </button>
 
-          </div>
+            </div>
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}

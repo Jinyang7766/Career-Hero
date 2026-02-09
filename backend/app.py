@@ -1103,8 +1103,12 @@ def generate_resume_html(resume_data):
         color: #1f2937; 
         margin: 0;
         padding: 0;
+        width: 100%;
         word-break: break-all;
         word-wrap: break-word;
+      }
+      * {
+        box-sizing: border-box;
       }
       .container {
         width: 100%;
@@ -1112,14 +1116,16 @@ def generate_resume_html(resume_data):
       .page-table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
       .page-table td {
+        width: 100%;
         padding: 0;
       }
-      table {
-        width: 100%;
+      table { 
+        width: 100%; 
         border-collapse: collapse;
-        table-layout: fixed;
+        table-layout: auto;
       }
       .page-table {
         width: 100%;
@@ -1132,12 +1138,13 @@ def generate_resume_html(resume_data):
       vertical-align: top; 
       padding: 0;
     }
-    .header-table { 
-      width: 100%; 
-      border-bottom: 2px solid #e5e7eb; 
-      padding-bottom: 8px; 
-      margin-bottom: 12px; 
-    }
+      .header-table { 
+        width: 100%; 
+        table-layout: fixed;
+        border-bottom: 2px solid #e5e7eb; 
+        padding-bottom: 8px; 
+        margin-bottom: 12px; 
+      }
     .header-table td {
       padding: 4px;
     }
@@ -1327,8 +1334,12 @@ def generate_resume_html(resume_data):
         color: #111827;
         margin: 0;
         padding: 0;
+        width: 100%;
         word-break: break-all;
         word-wrap: break-word;
+      }
+      * {
+        box-sizing: border-box;
       }
       .header { 
         text-align: center; 
@@ -1339,8 +1350,10 @@ def generate_resume_html(resume_data):
       .page-table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: fixed;
       }
       .page-table td {
+        width: 100%;
         padding: 0;
       }
     .avatar { 
@@ -1499,18 +1512,31 @@ def generate_resume_html(resume_data):
         color: #111827;
         margin: 0;
         padding: 0;
+        width: 100%;
         word-break: break-all;
         word-wrap: break-word;
+      }
+      * {
+        box-sizing: border-box;
       }
       table {
         width: 100%;
         border-collapse: collapse;
+        table-layout: auto;
+      }
+      .page-table {
+        width: 100%;
+        border-collapse: collapse;
         table-layout: fixed;
       }
-    td {
-      vertical-align: top;
-      padding: 0;
-    }
+      .page-table td {
+        width: 100%;
+        padding: 0;
+      }
+      td {
+        vertical-align: top;
+        padding: 0;
+      }
     .header { 
       margin-bottom: 14px; 
     }
