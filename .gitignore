@@ -128,3 +128,4 @@ backend/Pipfile.lock
 *.bak
 *.backup
 *.old
+backup/
