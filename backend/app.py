@@ -1140,7 +1140,7 @@ def generate_resume_html(resume_data):
     }
       .header-table { 
         width: 100%; 
-        table-layout: fixed;
+        table-layout: auto;
         border-bottom: 2px solid #e5e7eb; 
         padding-bottom: 8px; 
         margin-bottom: 12px; 
@@ -1148,9 +1148,9 @@ def generate_resume_html(resume_data):
     .header-table td {
       padding: 4px;
     }
-    .avatar-cell { 
-      width: 65px; 
-    }
+      .avatar-cell { 
+        width: 70px; 
+      }
     .avatar { 
       width: 55px; 
       height: 72px; 
@@ -1239,21 +1239,25 @@ def generate_resume_html(resume_data):
   <table class="page-table"><tr><td>
   <div class="container">
   <table class="header-table">
-    <tr>
-      <td class="avatar-cell">
-        {% if avatar %}
-          <img class="avatar" src="{{ avatar }}" alt="avatar" />
-        {% else %}
-          <div class="avatar-placeholder">{{ avatar_initial }}</div>
-        {% endif %}
-      </td>
-      <td>
-        <h1 class="header-name">{{ name }}</h1>
-        <div class="header-title">{{ title }}</div>
-        <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
-      </td>
-    </tr>
-  </table>
+      <colgroup>
+        <col style="width:70px;" />
+        <col style="width:auto;" />
+      </colgroup>
+      <tr>
+        <td class="avatar-cell" style="width:70px;">
+          {% if avatar %}
+            <img class="avatar" src="{{ avatar }}" alt="avatar" />
+          {% else %}
+            <div class="avatar-placeholder">{{ avatar_initial }}</div>
+          {% endif %}
+        </td>
+        <td class="header-main">
+          <h1 class="header-name">{{ name }}</h1>
+          <div class="header-title">{{ title }}</div>
+          <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+        </td>
+      </tr>
+    </table>
 
   {% if summary %}
     <div class="section">
