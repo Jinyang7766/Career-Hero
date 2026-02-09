@@ -130,8 +130,8 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         {data?.personalInfo?.avatar ? (
           <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover" />
         ) : (
-          <div className="w-full h-full bg-slate-300 flex items-center justify-center text-white font-bold text-xl">
-            {data?.personalInfo?.name?.[0] || 'Me'}
+          <div className="w-full h-full bg-slate-200 border border-slate-300 rounded-sm flex items-center justify-center text-slate-400">
+            <span className="material-symbols-outlined text-[28px]">person</span>
           </div>
         )}
       </div>
@@ -224,7 +224,14 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     }}
   >
     {/* Classic Centered Header */}
-    <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
+      <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
+      <div className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 flex items-center justify-center text-gray-400">
+        {data?.personalInfo?.avatar ? (
+          <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+        ) : (
+          <span className="material-symbols-outlined text-[28px]">person</span>
+        )}
+      </div>
       <h1 className="text-2xl font-bold text-black uppercase tracking-wider mb-2" style={{ fontSize: '24px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-base text-gray-800 font-serif italic mb-2" style={{ fontSize: '16px' }}>{resolveJobTitle(data)}</p>
       <div className="flex justify-center gap-4 text-xs text-gray-600" style={{ fontSize: '12px', color: '#333' }}>
@@ -310,6 +317,13 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
   >
     {/* Minimal Header */}
     <div className="mb-10 no-break">
+      <div className="mb-4 w-14 h-14 rounded-full border border-slate-300 bg-slate-200 flex items-center justify-center text-slate-400">
+        {data?.personalInfo?.avatar ? (
+          <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+        ) : (
+          <span className="material-symbols-outlined text-[24px]">person</span>
+        )}
+      </div>
       <h1 className="text-4xl font-black text-black tracking-tight mb-2" style={{ fontSize: '36px', fontWeight: '900' }}>{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-lg text-gray-500 font-light mb-4" style={{ fontSize: '18px' }}>{resolveJobTitle(data)}</p>
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono" style={{ fontSize: '11px', fontFamily: 'monospace' }}>

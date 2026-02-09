@@ -1155,16 +1155,13 @@ def generate_resume_html(resume_data):
       width: 55px; 
       height: 72px; 
     }
-    .avatar-placeholder { 
-      width: 55px; 
-      height: 72px; 
-      background-color: #cbd5f5; 
-      color: #1e3a8a; 
-      text-align: center; 
-      font-size: 16pt; 
-      font-weight: bold; 
-      line-height: 72px;
-    }
+      .avatar-placeholder { 
+        width: 55px; 
+        height: 72px; 
+        background-color: #e5e7eb; 
+        border: 1px solid #d1d5db;
+        border-radius: 8px;
+      }
     .header-name { 
       font-size: 16pt; 
       font-weight: bold; 
@@ -1236,9 +1233,9 @@ def generate_resume_html(resume_data):
   </style>
 </head>
 <body>
-  <table class="page-table"><tr><td>
+  <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
   <div class="container">
-  <table class="header-table">
+    <table class="header-table" width="100%" cellpadding="0" cellspacing="0" border="0">
       <colgroup>
         <col style="width:70px;" />
         <col style="width:auto;" />
@@ -1248,7 +1245,7 @@ def generate_resume_html(resume_data):
           {% if avatar %}
             <img class="avatar" src="{{ avatar }}" alt="avatar" />
           {% else %}
-            <div class="avatar-placeholder">{{ avatar_initial }}</div>
+            <div class="avatar-placeholder"></div>
           {% endif %}
         </td>
         <td class="header-main">
@@ -1364,14 +1361,13 @@ def generate_resume_html(resume_data):
       width: 60px; 
       height: 60px; 
     }
-    .avatar-placeholder { 
-      width: 60px; 
-      height: 60px; 
-      text-align: center;
-      font-size: 18pt; 
-      font-weight: bold; 
-      line-height: 60px;
-    }
+      .avatar-placeholder { 
+        width: 60px; 
+        height: 60px; 
+        background-color: #e5e7eb;
+        border: 1px solid #111827;
+        border-radius: 9999px;
+      }
     .name { 
       font-size: 18pt; 
       font-weight: bold; 
@@ -1428,12 +1424,12 @@ def generate_resume_html(resume_data):
   </style>
 </head>
   <body>
-    <table class="page-table"><tr><td>
+  <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
     <div class="header">
     {% if avatar %}
       <img class="avatar" src="{{ avatar }}" alt="avatar" />
     {% else %}
-      <div class="avatar-placeholder">{{ avatar_initial }}</div>
+        <div class="avatar-placeholder"></div>
     {% endif %}
     <div class="name">{{ name }}</div>
     <div class="title">{{ title }}</div>
@@ -1554,14 +1550,13 @@ def generate_resume_html(resume_data):
       width: 50px; 
       height: 50px; 
     }
-    .avatar-placeholder { 
-      width: 50px; 
-      height: 50px; 
-      text-align: center; 
-      font-size: 16pt; 
-      font-weight: bold; 
-      line-height: 50px;
-    }
+      .avatar-placeholder { 
+        width: 50px; 
+        height: 50px; 
+        background-color: #e5e7eb;
+        border: 1px solid #cbd5f5;
+        border-radius: 9999px;
+      }
     .name { 
       font-size: 20pt; 
       font-weight: bold; 
@@ -1617,15 +1612,15 @@ def generate_resume_html(resume_data):
   </style>
 </head>
   <body>
-    <table class="page-table"><tr><td>
+    <table class="page-table" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td width="100%">
     <div class="header">
-    <table class="header-top">
+      <table class="header-top" width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>
         <td style="width:70px;">
           {% if avatar %}
             <img class="avatar" src="{{ avatar }}" alt="avatar" />
           {% else %}
-            <div class="avatar-placeholder">{{ avatar_initial }}</div>
+              <div class="avatar-placeholder"></div>
           {% endif %}
         </td>
         <td>
