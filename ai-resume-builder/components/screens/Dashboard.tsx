@@ -96,7 +96,25 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
         const fullResume = result.data;
         if (fullResume && fullResume.resume_data) {
           if (setResumeData) {
-            setResumeData({ id: fullResume.id, ...fullResume.resume_data });
+            // Ensure all required fields exist by merging with defaults
+            const defaultData = {
+              personalInfo: { name: '', title: '', email: '', phone: '' },
+              workExps: [],
+              educations: [],
+              projects: [],
+              skills: [],
+              gender: '',
+            };
+
+            setResumeData({
+              ...defaultData,
+              ...fullResume.resume_data,
+              id: fullResume.id,
+              personalInfo: {
+                ...defaultData.personalInfo,
+                ...(fullResume.resume_data?.personalInfo || {})
+              }
+            });
           }
           setCurrentView(View.PREVIEW);
         } else {

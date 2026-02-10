@@ -124,9 +124,24 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
           // Set the resume data with ID for editing
           if (setResumeData) {
+            // Define default structure to ensure all fields exist
+            const defaultData = {
+              personalInfo: { name: '', title: '', email: '', phone: '' },
+              workExps: [],
+              educations: [],
+              projects: [],
+              skills: [],
+              gender: '',
+            };
+
             const finalResumeData = {
+              ...defaultData,
+              ...resume.resume_data,
               id: resume.id,
-              ...resume.resume_data
+              personalInfo: {
+                ...defaultData.personalInfo,
+                ...(resume.resume_data?.personalInfo || {})
+              }
             };
 
             console.log('Setting resume data:', {
