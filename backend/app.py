@@ -95,9 +95,19 @@ try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("Supabase connected successfully")
 except Exception as e:
-    print(f"Supabase connection failed: {e}")
-    print("Using mock data storage for development")
-    supabase = None
+    # Compatibility fallback for older supabase-py versions that don't accept proxy kw
+    if "proxy" in str(e):
+        try:
+            supabase = Client(SUPABASE_URL, SUPABASE_KEY)
+            print("Supabase connected successfully (proxy fallback)")
+        except Exception as e2:
+            print(f"Supabase connection failed: {e2}")
+            print("Using mock data storage for development")
+            supabase = None
+    else:
+        print(f"Supabase connection failed: {e}")
+        print("Using mock data storage for development")
+        supabase = None
 
 # Mock helper functions
 def is_mock_mode():
@@ -1093,12 +1103,16 @@ def build_resume_context(resume_data):
     for edu in resume_data.get('educations', []) or []:
         title_text = edu.get('school') or edu.get('title') or '未填写学校'
         
-        # Combine degree and major
-        deg = edu.get('degree') or ''
-        maj = edu.get('major') or ''
-        sub = edu.get('subtitle') or ''
+        # Combine degree and major (avoid duplication)
+        deg = (edu.get('degree') or '').strip()
+        maj = (edu.get('major') or '').strip()
+        sub = (edu.get('subtitle') or '').strip()
+        
         if deg and maj:
-            subtitle_text = f"{deg} · {maj}"
+            if deg == maj:
+                subtitle_text = deg
+            else:
+                subtitle_text = f"{deg} · {maj}"
         else:
             subtitle_text = deg or maj or sub or '未说明'
             
@@ -1928,6 +1942,7 @@ def parse_resume_text_with_ai(resume_text):
     2. 如有多条工作/教育/项目经历，全部提取。
     3. 技能拆分为单项数组。
     4. 仅返回 JSON，不要额外文字。
+    5. **重要**：在教育背景中，`degree` 字段仅用于填写学历（如：本科、硕士），`major` 字段用于填写专业（如：计算机科学）。严禁将专业名称填入 `degree` 字段。
 
     简历文本：
     {resume_text}

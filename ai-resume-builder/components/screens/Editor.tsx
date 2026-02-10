@@ -122,10 +122,10 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       ...edu,
       ...mergeDateFields(edu),
       title: edu?.title || edu?.school || '',
-      subtitle: edu?.subtitle || edu?.degree || edu?.major || '',
+      subtitle: edu?.subtitle || '',
       date: edu?.date || normalizeDateRange(edu?.startDate, edu?.endDate),
       school: edu?.school || edu?.title || '',
-      degree: edu?.degree || edu?.subtitle || '',
+      degree: edu?.degree || '',
       major: edu?.major || '',
     });
 
@@ -549,17 +549,17 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
       console.log('Save result:', result);
 
-        if (result.success) {
-          // Update the resume data with the returned ID if it's a new resume
-          if (!resumeData.id && result.data) {
-            setResumeData(prev => ({ ...prev, id: result.data.id }));
-          }
-          setResumeData(prev => ({ ...prev, resumeTitle: title }));
+      if (result.success) {
+        // Update the resume data with the returned ID if it's a new resume
+        if (!resumeData.id && result.data) {
+          setResumeData(prev => ({ ...prev, id: result.data.id }));
+        }
+        setResumeData(prev => ({ ...prev, resumeTitle: title }));
 
-          // Reload resumes to get the latest list
-          if (loadUserResumes) {
-            await loadUserResumes();
-          }
+        // Reload resumes to get the latest list
+        if (loadUserResumes) {
+          await loadUserResumes();
+        }
 
         const now = new Date();
         const timeLabel = now.toLocaleTimeString('zh-CN', {
@@ -682,42 +682,40 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             <div className="h-1.5 w-full bg-slate-200 dark:bg-[#324d67] rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
             </div>
-              <div className="flex justify-between mt-3 px-1">
-                {WIZARD_STEPS.map((step, idx) => {
-                  const stepComplete = isStepComplete(step.key);
-                  const isActive = idx === currentStepIndex;
-                  const canClick = hasImportedResume
-                    ? true
-                    : (step.key === 'projects'
-                      ? (isActive || hasTouchedProjects)
-                      : (isActive || stepComplete));
-                  const isMissing = isStepMissing(step.key);
-                  return (
-                    <button
-                      key={step.key}
-                      onClick={() => {
-                        if (canClick) setCurrentStep(step.key);
-                      }}
-                      disabled={!canClick}
-                      className={`flex flex-col items-center transition-all ${
-                        isMissing
-                          ? 'text-red-500'
-                          : (canClick ? 'text-primary' : 'text-slate-300 dark:text-slate-600')
+            <div className="flex justify-between mt-3 px-1">
+              {WIZARD_STEPS.map((step, idx) => {
+                const stepComplete = isStepComplete(step.key);
+                const isActive = idx === currentStepIndex;
+                const canClick = hasImportedResume
+                  ? true
+                  : (step.key === 'projects'
+                    ? (isActive || hasTouchedProjects)
+                    : (isActive || stepComplete));
+                const isMissing = isStepMissing(step.key);
+                return (
+                  <button
+                    key={step.key}
+                    onClick={() => {
+                      if (canClick) setCurrentStep(step.key);
+                    }}
+                    disabled={!canClick}
+                    className={`flex flex-col items-center transition-all ${isMissing
+                        ? 'text-red-500'
+                        : (canClick ? 'text-primary' : 'text-slate-300 dark:text-slate-600')
                       } ${!canClick ? 'cursor-not-allowed opacity-60' : ''}`}
-                    >
-                      <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
-                        isMissing
-                          ? 'bg-red-50 dark:bg-red-900/20'
-                          : (isActive ? 'bg-primary/10 scale-110' : '')
+                  >
+                    <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${isMissing
+                        ? 'bg-red-50 dark:bg-red-900/20'
+                        : (isActive ? 'bg-primary/10 scale-110' : '')
                       }`}>
-                        <span className={`material-symbols-outlined text-[20px] ${isActive ? 'font-bold' : ''}`}>{step.icon}</span>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
+                      <span className={`material-symbols-outlined text-[20px] ${isActive ? 'font-bold' : ''}`}>{step.icon}</span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
+        )}
       </header>
 
       {/* Completeness (only in free edit mode) */}

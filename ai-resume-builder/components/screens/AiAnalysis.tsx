@@ -80,22 +80,63 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     };
   };
   const sanitizeSuggestedValue = (value: any, targetSection?: Suggestion['targetSection']) => {
-    if (targetSection === 'skills') return value;
-    if (typeof value !== 'string') return value;
+      if (targetSection === 'skills') return value;
+      if (typeof value !== 'string') return value;
 
-    let text = value.trim();
-    if (!text) return value;
+      let text = value.trim();
+      if (!text) return value;
 
-    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    if (lines.length > 1 && /(建议|原因|说明|修改|优化|请)/.test(lines[0])) {
-      return lines.slice(1).join('\n').trim();
-    }
+      // Remove leading advisory/prefix phrases so the result is directly usable in resume
+      const prefixPatterns = [
+        /^精炼描述为[:：]\s*/i,
+        /^修改建议[:：]\s*/i,
+        /^优化建议[:：]\s*/i,
+        /^建议[:：]\s*/i,
+        /^修改原因[:：]\s*/i,
+        /^原因[:：]\s*/i,
+        /^说明[:：]\s*/i,
+        /^请将[:：]?\s*/i,
+        /^请把[:：]?\s*/i,
+        /^请删除[:：]?\s*/i,
+        /^请去掉[:：]?\s*/i
+      ];
+      prefixPatterns.forEach((pattern) => {
+        text = text.replace(pattern, '');
+      });
 
-    if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
-      return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
-    }
+      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      if (lines.length > 1 && /(建议|原因|说明|修改|优化|请)/.test(lines[0])) {
+        return lines.slice(1).join('\n').trim();
+      }
+
+      if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
+        return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
+      }
 
     return text;
+  };
+
+  const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
+    const field = (raw?.targetField || '').toString().toLowerCase();
+    if (['email', 'phone', 'name', 'title', 'jobtitle', 'job_title', 'position', 'gender', 'location'].includes(field)) {
+      return 'personalInfo';
+    }
+    if (['company', 'employer', 'organization', 'org', 'subtitle', 'role', 'description', 'startdate', 'enddate'].includes(field)) {
+      return 'workExps';
+    }
+    if (['project', 'projects', 'link'].includes(field)) {
+      return 'projects';
+    }
+    if (['degree', 'major', 'school', 'education', 'educations'].includes(field)) {
+      return 'projects';
+    }
+    if (['skills', 'skill'].includes(field)) {
+      return 'skills';
+    }
+    if (['summary', 'profile'].includes(field)) {
+      return 'summary';
+    }
+    return 'workExps';
   };
   // --- Privacy masking helpers ---
   const createMasker = () => {
@@ -275,7 +316,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Optimized Resume Tracking
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
-  const hasRestoredAnalysisRef = useRef(false);
+  const setAnalysisResumeId = (id: number | null) => {
+    if (id === null || id === undefined) {
+      localStorage.removeItem('ai_analysis_resume_id');
+      return;
+    }
+    localStorage.setItem('ai_analysis_resume_id', String(id));
+  };
+  const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
+  const saveLastAnalysis = (payload: {
+    resumeId: number;
+    jdText: string;
+    targetCompany?: string;
+    snapshot: any;
+    updatedAt: string;
+  }) => {
+    try {
+      localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn('Failed to save last analysis snapshot:', error);
+    }
+  };
+  const loadLastAnalysis = () => {
+    try {
+      const raw = localStorage.getItem(LAST_ANALYSIS_KEY);
+      if (!raw) return null;
+      return JSON.parse(raw);
+    } catch (error) {
+      console.warn('Failed to parse last analysis snapshot:', error);
+      return null;
+    }
+  };
+  const clearLastAnalysis = () => {
+    localStorage.removeItem(LAST_ANALYSIS_KEY);
+  };
 
   const setAnalysisInProgress = (value: boolean) => {
     if (value) {
@@ -298,7 +372,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (!snapshot) return false;
     setOriginalScore(snapshot.score || 0);
     setScore(snapshot.score || 0);
-    setSuggestions([]);
+    setSuggestions(applySuggestionFeedback(snapshot.suggestions || []));
     setReport({
       summary: snapshot.summary || '',
       strengths: snapshot.strengths || [],
@@ -310,9 +384,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     return true;
   };
 
-  const persistAnalysisSnapshot = async (data: ResumeData, reportData: AnalysisReport, scoreValue: number) => {
+  const persistAnalysisSnapshot = async (data: ResumeData, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => {
     if (!data?.id) return;
-    if (data.optimizationStatus !== 'optimized') return;
     const snapshot = {
       score: scoreValue,
       summary: reportData.summary || '',
@@ -320,6 +393,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       weaknesses: reportData.weaknesses || [],
       missingKeywords: reportData.missingKeywords || [],
       scoreBreakdown: reportData.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+      suggestions: suggestionItems || [],
       updatedAt: new Date().toISOString(),
       jdText: jdText || data.lastJdText || '',
       targetCompany: targetCompany || data.targetCompany || ''
@@ -332,6 +406,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       resume_data: updatedResumeData,
       updated_at: new Date().toISOString()
     });
+    return updatedResumeData;
   };
 
   const maskSuggestionPayload = (suggestion: Suggestion) => {
@@ -374,9 +449,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     if (!resumeData.id) return;
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError || !user) return;
 
       const masked = rating === 'down' ? maskSuggestionPayload(suggestion) : {};
 
@@ -554,6 +629,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const handleResumeSelect = async (id: number, preferReport: boolean = false) => {
     setSelectedResumeId(id);
+    setAnalysisResumeId(id);
 
     // 立即切换到下一步，提高用户体验
     // 避免优先进入 report 导致 0 分闪屏，再进入 JD
@@ -622,47 +698,42 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       console.log('Resume loaded successfully:', resume);
 
-      if (setResumeData) {
-        const finalResumeData = {
-          id: resume.id,
-          ...resume.resume_data,
-          resumeTitle: resume.title
-        };
+        if (setResumeData) {
+          const finalResumeData = {
+            id: resume.id,
+            ...resume.resume_data,
+            resumeTitle: resume.title
+          };
 
-        console.log('Setting resume data:', finalResumeData);
-        setResumeData(finalResumeData);
-        if (finalResumeData.targetCompany) {
-          setTargetCompany(finalResumeData.targetCompany);
-        }
+          console.log('Setting resume data:', finalResumeData);
+          setResumeData(finalResumeData);
+          setOptimizedResumeId(
+            finalResumeData.optimizedResumeId ||
+            (finalResumeData.optimizationStatus === 'optimized' ? resume.id : null)
+          );
+          if (finalResumeData.targetCompany) {
+            setTargetCompany(finalResumeData.targetCompany);
+          }
 
-        if (preferReport) {
-          const restoredJdText = (finalResumeData.lastJdText || '').trim();
-          if (restoredJdText) {
-            setJdText(restoredJdText);
-          }
-          const snapshotApplied = applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
-          if (snapshotApplied) {
-            navigateToStep('report', true);
-            return;
-          }
-          AICacheService.get(finalResumeData, restoredJdText).then((cached) => {
-            if (cached) {
-              setOriginalScore(cached.score || 0);
-              setScore(cached.score || 0);
-              setSuggestions(applySuggestionFeedback(cached.suggestions || []));
-              setReport({
-                summary: cached.summary || '',
-                strengths: cached.strengths || [],
-                weaknesses: cached.weaknesses || [],
-                missingKeywords: cached.missingKeywords || [],
-                scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
+          if (preferReport) {
+            const restoredJdText = (finalResumeData.lastJdText || '').trim();
+            if (restoredJdText) {
+              setJdText(restoredJdText);
+            }
+            applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+            if (finalResumeData.analysisSnapshot) {
+              saveLastAnalysis({
+                resumeId: resume.id,
+                jdText: restoredJdText,
+                targetCompany: finalResumeData.targetCompany || '',
+                snapshot: finalResumeData.analysisSnapshot,
+                updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
               });
-              setIsFromCache(true);
+              setAnalysisResumeId(resume.id);
             }
             navigateToStep('report', true);
-          });
+          }
         }
-      }
     } catch (error) {
       console.error('Error loading resume:', error);
       alert('加载简历失败，请检查网络连接');
@@ -780,16 +851,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   };
 
-  const startAnalysis = async () => {
-    // 检查 resumeData 是否存在
-    if (!resumeData) {
-      console.error('startAnalysis - resumeData is null or undefined');
-      alert('无法进行 AI 分析：没有找到简历数据');
-      return;
-    }
+    const startAnalysis = async () => {
+      // 检查 resumeData 是否存在
+      if (!resumeData) {
+        console.error('startAnalysis - resumeData is null or undefined');
+        alert('无法进行 AI 分析：没有找到简历数据');
+        return;
+      }
 
-    // 记录当前 resumeData 的内容
-    console.log('startAnalysis - Resume data:', resumeData);
+      // 记录当前 resumeData 的内容
+      console.log('startAnalysis - Resume data:', resumeData);
 
     // Reset Chat State for new analysis
     setChatMessages([]);
@@ -828,34 +899,35 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         backendSuggestions.forEach((suggestion: any, index: number) => {
           // 如果是字符串，转换为对象
-          if (typeof suggestion === 'string') {
-            newSuggestions.push({
-              id: `ai-suggestion-${index}`,
-              type: 'optimization',
-              title: '优化建议',
-              reason: suggestion,
-              targetSection: 'skills',
-              targetId: undefined,
-              targetField: undefined,
-              suggestedValue: undefined,
-              originalValue: undefined,
-              status: 'pending' as const
-            });
-          } else {
-            // 如果是对象，直接使用
-            newSuggestions.push({
-              id: suggestion.id || `ai-suggestion-${index}`,
-              type: suggestion.type || 'optimization',
-              title: suggestion.title || '优化建议',
-              reason: suggestion.reason || '根据AI分析结果',
-              targetSection: suggestion.targetSection || 'skills',
-              targetId: suggestion.targetId,
-              targetField: suggestion.targetField,
-              suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection),
-              originalValue: suggestion.originalValue,
-              status: 'pending' as const
-            });
-          }
+            if (typeof suggestion === 'string') {
+              newSuggestions.push({
+                id: `ai-suggestion-${index}`,
+                type: 'optimization',
+                title: '优化建议',
+                reason: suggestion,
+                targetSection: 'skills',
+                targetId: undefined,
+                targetField: undefined,
+                suggestedValue: undefined,
+                originalValue: undefined,
+                status: 'pending' as const
+              });
+            } else {
+              const inferredSection = suggestion.targetSection || inferTargetSection(suggestion);
+              // 如果是对象，直接使用
+              newSuggestions.push({
+                id: suggestion.id || `ai-suggestion-${index}`,
+                type: suggestion.type || 'optimization',
+                title: suggestion.title || '优化建议',
+                reason: suggestion.reason || '根据AI分析结果',
+                targetSection: inferredSection,
+                targetId: suggestion.targetId,
+                targetField: suggestion.targetField,
+                suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
+                originalValue: suggestion.originalValue,
+                status: 'pending' as const
+              });
+            }
         });
 
         const normalizedBreakdown = normalizeScoreBreakdown(
@@ -867,13 +939,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           aiAnalysisResult.score || 0
         );
 
-        const newReport: AnalysisReport = {
-          summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
-          strengths: aiAnalysisResult.strengths || ['结构清晰'],
-          weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
-          missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
-          scoreBreakdown: normalizedBreakdown
-        };
+          const newReport: AnalysisReport = {
+            summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
+            strengths: aiAnalysisResult.strengths || ['结构清晰'],
+            weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
+            missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
+            scoreBreakdown: normalizedBreakdown
+          };
 
         // 使用后端返回的实际分数
         const totalScore = aiAnalysisResult.score || Math.round(
@@ -881,12 +953,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         );
 
         // 保存原始分数
-        setOriginalScore(totalScore);
-        // 初始化当前分数为原始分数
-        setScore(totalScore);
-        setSuggestions(applySuggestionFeedback(newSuggestions));
-        setReport(newReport);
-        await persistAnalysisSnapshot(resumeData, newReport, totalScore);
+          setOriginalScore(totalScore);
+          // 初始化当前分数为原始分数
+          setScore(totalScore);
+            const appliedSuggestions = applySuggestionFeedback(newSuggestions);
+            setSuggestions(appliedSuggestions);
+            setReport(newReport);
+          const snapshotForPersist = {
+            score: totalScore,
+            summary: newReport.summary,
+            strengths: newReport.strengths,
+            weaknesses: newReport.weaknesses,
+            missingKeywords: newReport.missingKeywords,
+            scoreBreakdown: newReport.scoreBreakdown,
+            suggestions: appliedSuggestions,
+            updatedAt: new Date().toISOString(),
+            jdText: jdText || resumeData.lastJdText || '',
+            targetCompany: targetCompany || resumeData.targetCompany || ''
+          };
+          await persistAnalysisSnapshot(
+            resumeData?.optimizedResumeId ? { ...resumeData, id: resumeData.optimizedResumeId } : resumeData,
+            newReport,
+            totalScore,
+            appliedSuggestions
+          );
+          if (resumeData?.id) {
+            saveLastAnalysis({
+              resumeId: resumeData.id,
+              jdText: jdText || resumeData.lastJdText || '',
+              targetCompany: targetCompany || resumeData.targetCompany || '',
+              snapshot: snapshotForPersist,
+              updatedAt: snapshotForPersist.updatedAt
+            });
+            setAnalysisResumeId(resumeData.id);
+          }
 
 
 
@@ -911,20 +1011,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try {
       if (!setResumeData || !resumeData) return;
 
-      console.log('handleAcceptSuggestionInChat called with suggestion:', suggestion);
-
       const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: string) => {
         if (!field) return field;
         const key = field.trim();
         if (!key) return field;
-
         if (section === 'personalInfo') {
           if (['jobTitle', 'job_title', 'position', 'targetTitle', 'title'].includes(key)) {
             return 'title';
           }
           return key;
         }
-
         if (section === 'workExps') {
           if (['position', 'jobTitle', 'job_title', 'role', 'subtitle'].includes(key)) {
             return 'subtitle';
@@ -934,228 +1030,162 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           }
           return key;
         }
-
         if (section === 'projects') {
           if (['role', 'position', 'jobTitle', 'job_title', 'subtitle'].includes(key)) {
             return 'subtitle';
           }
           return key;
         }
-
         return key;
       };
 
       const applySuggestionToResume = (base: ResumeData) => {
-        console.log('Current resume data before update:', base);
         const newData = { ...base };
-        const normalizedField = normalizeFieldForSection(suggestion.targetSection, suggestion.targetField);
+        const effectiveSection =
+          suggestion.targetSection && ['personalInfo', 'workExps', 'skills', 'projects', 'summary'].includes(suggestion.targetSection)
+            ? suggestion.targetSection
+            : inferTargetSection(suggestion);
+        const normalizedField = normalizeFieldForSection(effectiveSection, suggestion.targetField);
 
-        // 1. 处理个人信息
-        if (suggestion.targetSection === 'personalInfo') {
+        if (effectiveSection === 'personalInfo') {
+          if (!normalizedField) return newData;
           newData.personalInfo = {
             ...newData.personalInfo,
             [normalizedField!]: suggestion.suggestedValue
           };
-          // Keep alias field if AI uses a non-standard key
-          if (suggestion.targetField && suggestion.targetField !== normalizedField) {
-            (newData.personalInfo as any)[suggestion.targetField] = suggestion.suggestedValue;
-          }
+          return newData;
         }
-        // 2. 处理工作经历 (增加安全检查)
-        else if (suggestion.targetSection === 'workExps') {
-          if (Array.isArray(newData.workExps)) {
-            newData.workExps = newData.workExps.map(item => {
-              if (item.id === suggestion.targetId) {
-                let value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
-                // Auto-clean job titles (only keep the first part before space/pipe/etc.)
-                if ((suggestion.targetField === 'position' || suggestion.targetField === 'jobTitle' || suggestion.targetField === 'subtitle') && typeof value === 'string') {
-                  const cleaned = value.split(/[|\/·-\s]/)[0].trim();
-                  if (cleaned.length >= 2) value = cleaned;
-                }
-                const nextItem = { ...item, [normalizedField!]: value };
-                if (suggestion.targetField && suggestion.targetField !== normalizedField) {
-                  (nextItem as any)[suggestion.targetField] = value;
-                }
-                return nextItem;
-              }
-              return item;
-            });
-          }
+
+        if (effectiveSection === 'workExps' && Array.isArray(newData.workExps)) {
+          const targetId = suggestion.targetId;
+          const hasIdMatch = typeof targetId === 'number' && newData.workExps.some(item => item.id === targetId);
+          newData.workExps = newData.workExps.map((item, index) => {
+            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
+            if (!shouldApply) return item;
+            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+            const field = normalizedField || 'description';
+            return { ...item, [field]: value };
+          });
+          return newData;
         }
-        // 3. 处理技能 (🔴 重点修复区)
-        else if (suggestion.targetSection === 'skills') {
+
+        if (effectiveSection === 'projects' && Array.isArray(newData.projects)) {
+          const targetId = suggestion.targetId;
+          const hasIdMatch = typeof targetId === 'number' && newData.projects.some(item => item.id === targetId);
+          newData.projects = newData.projects.map((item, index) => {
+            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
+            if (!shouldApply) return item;
+            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+            const field = normalizedField || 'description';
+            return { ...item, [field]: value };
+          });
+          return newData;
+        }
+
+        if (effectiveSection === 'skills') {
           let safeSkills = suggestion.suggestedValue;
-
-          // 强制转换为数组：如果 AI 给的是字符串 "A, B, C"，转为 ["A", "B", "C"]
           if (typeof safeSkills === 'string') {
-            safeSkills = safeSkills.split(/[,，]\s*/).filter(Boolean); // 支持中英文逗号
+            safeSkills = safeSkills.split(/[,，]\s*/).filter(Boolean);
           }
-
-          // 最后的防线：确保它是数组
           if (Array.isArray(safeSkills)) {
             newData.skills = safeSkills;
-          } else {
-            console.warn("AI returned invalid skills format:", safeSkills);
-            // 如果格式完全不对，保持原样，不崩溃
-            return base;
           }
+          return newData;
         }
-        // 4. 处理项目经历 (增加安全检查)
-        else if (suggestion.targetSection === 'projects') {
-          // 处理 projects 数组更新
-          if (suggestion.targetId) {
-            // 更新单个项目
-            if (Array.isArray(newData.projects)) {
-              newData.projects = newData.projects.map(item => {
-                if (item.id !== suggestion.targetId) return item;
-                const nextItem = { ...item, [normalizedField!]: sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection) };
-                if (suggestion.targetField && suggestion.targetField !== normalizedField) {
-                  (nextItem as any)[suggestion.targetField] = suggestion.suggestedValue;
-                }
-                return nextItem;
-              });
-            }
-          } else {
-            // 更新整个 projects 数组
-            let safeProjects = suggestion.suggestedValue;
-            // 确保它是数组
-            if (Array.isArray(safeProjects)) {
-              newData.projects = safeProjects;
-            } else {
-              console.warn("AI returned invalid projects format:", safeProjects);
-              // 如果格式完全不对，保持原样，不崩溃
-              return base;
-            }
-          }
-        }
-        // 5. 处理个人简介
-        else if (suggestion.targetSection === 'summary') {
-          // 处理 summary 字符串更新
+
+        if (effectiveSection === 'summary') {
           newData.summary = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+          return newData;
         }
-        console.log('Updated resume data:', newData);
+
         return newData;
       };
 
-      const nextResumeData = applySuggestionToResume(resumeData);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      let targetOptimizedId =
+        (resumeData.optimizationStatus === 'optimized' && resumeData.id) ? resumeData.id :
+        (optimizedResumeId || resumeData.optimizedResumeId || null);
+
+      let baseResume = resumeData;
+      if (targetOptimizedId) {
+        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
+        if (optimizedResult.success && optimizedResult.data?.resume_data) {
+          baseResume = {
+            id: optimizedResult.data.id,
+            ...optimizedResult.data.resume_data,
+            resumeTitle: optimizedResult.data.title
+          } as ResumeData;
+        }
+      }
+
+      if (!targetOptimizedId) {
+        const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
+        const newTitle = buildResumeTitle(baseTitle, resumeData, jdText, true);
+        const createResult = await DatabaseService.createResume(user.id, newTitle, {
+          ...resumeData,
+          optimizationStatus: 'optimized' as const,
+          lastJdText: jdText,
+          targetCompany,
+          optimizedFromId: resumeData.id
+        });
+        if (!createResult.success || !createResult.data) return;
+        targetOptimizedId = createResult.data.id;
+        baseResume = {
+          id: createResult.data.id,
+          ...createResult.data.resume_data,
+          resumeTitle: createResult.data.title
+        } as ResumeData;
+        setOptimizedResumeId(targetOptimizedId);
+        setAnalysisResumeId(targetOptimizedId);
+      }
+
+      const nextResumeData = applySuggestionToResume(baseResume);
+      const updatedSuggestions = suggestions.map(s =>
+        s.id === suggestion.id ? { ...s, status: 'accepted' as const } : s
+      );
+
       setResumeData(nextResumeData);
+      setSuggestions(updatedSuggestions);
+      setChatMessages(prev => prev.map(msg =>
+        msg.suggestion?.id === suggestion.id
+          ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' as const } }
+          : msg
+      ));
 
-      // Update suggestions state
-      setSuggestions(prev => {
-        const updatedSuggestions = prev.map(s => s.id === suggestion.id ? { ...s, status: 'accepted' as const } : s);
-        console.log('Updated suggestions:', updatedSuggestions);
-        return updatedSuggestions;
-      });
+      const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
+      const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true);
+      let updatedOptimized: ResumeData = {
+        ...nextResumeData,
+        optimizationStatus: 'optimized' as const,
+        lastJdText: jdText,
+        targetCompany
+      };
 
-      // Update chat message to show accepted state
-      setChatMessages(prev => {
-        const updatedMessages = prev.map(msg =>
-          msg.suggestion?.id === suggestion.id
-            ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' as const } }
-            : msg
-        );
-        console.log('Updated chat messages:', updatedMessages);
-        return updatedMessages;
+      if (report && score > 0) {
+        const withSnapshot = await persistAnalysisSnapshot(updatedOptimized, report, score, updatedSuggestions);
+        if (withSnapshot) {
+          updatedOptimized = withSnapshot;
+          saveLastAnalysis({
+            resumeId: targetOptimizedId,
+            jdText: jdText || resumeData.lastJdText || '',
+            targetCompany: targetCompany || resumeData.targetCompany || '',
+            snapshot: withSnapshot.analysisSnapshot,
+            updatedAt: withSnapshot.analysisSnapshot?.updatedAt || new Date().toISOString()
+          });
+        }
+      }
+
+      await DatabaseService.updateResume(String(targetOptimizedId), {
+        resume_data: updatedOptimized,
+        title: newTitle,
+        updated_at: new Date().toISOString()
       });
 
       updateScore(5);
-
-      // 数据持久化：将最新数据同步到 Supabase 数据库
-      try {
-        const { data: { user }, error: userError } = await supabase.auth.getUser();
-        if (userError || !user) return;
-
-        // 确保数据带有“已优化”标记
-        const updatedDataWithStatus = {
-          ...nextResumeData,
-          optimizationStatus: 'optimized' as const,
-          lastJdText: jdText,
-          targetCompany
-        };
-        if (report && score > 0) {
-          await persistAnalysisSnapshot(updatedDataWithStatus, report, score);
-        }
-
-        const originalTitle = allResumes?.find(r => r.id === selectedResumeId)?.title || '简历';
-        const newTitle = buildResumeTitle(originalTitle, updatedDataWithStatus, jdText, true);
-
-        if (optimizedResumeId) {
-          // 1. 如果本会话已创建过优化副本，则更新它
-          await DatabaseService.updateResume(String(optimizedResumeId), {
-            resume_data: updatedDataWithStatus,
-            title: newTitle,
-            updated_at: new Date().toISOString()
-          });
-          console.log('✅ Real-time update synced to record:', optimizedResumeId);
-        } else {
-          // 2. 第一次采纳建议，创建全新的“优化版”记录
-          const createResult = await DatabaseService.createResume(user.id, newTitle, updatedDataWithStatus);
-
-          if (createResult.success && createResult.data) {
-            const newId = createResult.data.id;
-            setOptimizedResumeId(newId);
-            console.log('🚀 Created new optimized resume record:', newTitle, 'ID:', newId);
-
-            // 关键修改：此时需要更新 resumeData 的 ID 为新创建的 ID
-            // 这样确保后续的操作（如再次采纳建议）都是基于新建立的副本，而不是覆盖原简历
-            if (setResumeData) {
-              setResumeData(prev => ({
-                ...prev,
-                id: newId,
-                optimizationStatus: 'optimized' as const,
-                lastJdText: jdText
-              }));
-            }
-
-            // 可选：触发外部刷新列表
-            if (loadUserResumes) loadUserResumes();
-          }
-        }
-
-        if (optimizedResumeId && loadUserResumes) {
-          loadUserResumes();
-        }
-      } catch (dbError) {
-        console.error('Database error in real-time sync:', dbError);
-      }
-
-      // AI Follow up with conversation instead of automatic suggestion
-      setTimeout(() => {
-        console.log('Executing follow-up logic after acceptance');
-        // 使用函数式更新来获取最新的 suggestions 状态
-        setSuggestions(prevSuggestions => {
-          // 计算剩余待处理建议
-          const remaining = prevSuggestions.filter(s => s.id !== suggestion.id && s.status === 'pending');
-          console.log('Remaining pending suggestions:', remaining);
-          if (remaining.length > 0) {
-            const followUpMsg: ChatMessage = {
-              id: `ai-follow-${Date.now()}`,
-              role: 'model',
-              text: '收到。我们继续下一题。'
-            };
-            console.log('Adding follow-up message:', followUpMsg);
-            setChatMessages(prev => [...prev, followUpMsg]);
-          } else {
-            const doneMsg = {
-              id: 'ai-done',
-              role: 'model' as const,
-              text: '好的，我们继续面试。'
-            };
-            console.log('Adding done message:', doneMsg);
-            setChatMessages(prev => [...prev, doneMsg]);
-          }
-          return prevSuggestions; // 不改变suggestions状态，只是使用它来计算
-        });
-      }, 800);
     } catch (error) {
       console.error('Error in handleAcceptSuggestionInChat:', error);
-      // 不使用 alert，避免中断用户操作
-      console.log('Error handled, continuing execution');
-      // 确保界面仍然保留在对话框中
-      if (currentStep !== 'chat') {
-        console.log('Current step is not chat, setting to chat');
-        // 这里不应该发生，因为函数只在聊天步骤中调用
-      }
     }
   };
 
@@ -1184,6 +1214,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const handleAnalyzeOtherResume = () => {
     setSelectedResumeId(null);
+    setAnalysisResumeId(null);
+    clearLastAnalysis();
     setJdText('');
     setSuggestions([]);
     setReport(null);
@@ -1332,11 +1364,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep, chatInitialized, chatMessages.length]);
 
-  useEffect(() => {
-    if (currentStep !== 'chat') return;
+    useEffect(() => {
+      if (currentStep !== 'chat') return;
 
-    const entrySource = localStorage.getItem('ai_analysis_entry_source');
-    if (entrySource !== 'bottom_nav') return;
+      if (chatEntrySource === 'internal') return;
+
+      const entrySource = localStorage.getItem('ai_analysis_entry_source');
+      if (entrySource !== 'bottom_nav') return;
 
     localStorage.removeItem('ai_analysis_entry_source');
 
@@ -1362,85 +1396,37 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep]);
 
-  // 恢复分析结果：从缓存中恢复分数/建议，避免切页后变成 0
-  useEffect(() => {
-    if (!resumeData) return;
-    if (hasRestoredAnalysisRef.current) return;
+    // 统一恢复逻辑：优先使用最近一次分析快照（切换页面再回来时）
+    useEffect(() => {
+      if (currentStep !== 'report') return;
+      if (score > 0 || suggestions.length > 0 || report) return;
+      const last = loadLastAnalysis();
+      if (!last || !last.resumeId) return;
 
-    const restoredJdText = (jdText || resumeData.lastJdText || '').trim();
-    if (!jdText && restoredJdText) {
-      setJdText(restoredJdText);
-    }
-    if (!targetCompany && resumeData.targetCompany) {
-      setTargetCompany(resumeData.targetCompany);
-    }
-
-    const shouldRestore = score === 0 && suggestions.length === 0;
-    if (!shouldRestore) {
-      hasRestoredAnalysisRef.current = true;
-      return;
-    }
-
-    AICacheService.get(resumeData, restoredJdText).then((cached) => {
-      // 无论是否找到缓存，都标记为已尝试恢复，避免重复查询
-      hasRestoredAnalysisRef.current = true;
-
-      if (!cached) {
-        // 如果没有缓存数据，且处于需要数据的步骤（排除 resume_select, jd_input, 和 analyzing），则重置回第一步
-        // 关键修复：排除 'analyzing' 状态，防止正在分析时被强制跳回
-        const savedStep = (localStorage.getItem('ai_analysis_step') as Step | null) || null;
-        if (currentStep !== 'resume_select' && currentStep !== 'jd_input' && currentStep !== 'analyzing') {
-          if (forceReportEntry) {
-            return;
-          }
-          if (savedStep && savedStep !== 'resume_select') {
-            return;
-          }
-          console.log('No cached analysis data found, resetting step to resume_select');
-          setCurrentStep('resume_select');
+      const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
+      if (snapshotApplied) {
+        setJdText(last.jdText || '');
+        if (last.targetCompany) {
+          setTargetCompany(last.targetCompany);
         }
-        return;
+        setAnalysisResumeId(last.resumeId);
+        if (!resumeData || String(resumeData.id) !== String(last.resumeId)) {
+          DatabaseService.getResume(Number(last.resumeId)).then((result) => {
+            if (!result.success || !result.data) return;
+            const finalResumeData = {
+              id: result.data.id,
+              ...result.data.resume_data,
+              resumeTitle: result.data.title
+            };
+            if (setResumeData) {
+              setResumeData(finalResumeData);
+            }
+          });
+        }
       }
+    }, [currentStep, score, suggestions.length, report, resumeData]);
 
-      setOriginalScore(cached.score || 0);
-      setScore(cached.score || 0);
-      setSuggestions(applySuggestionFeedback(cached.suggestions || []));
-      const normalizedBreakdown = normalizeScoreBreakdown(
-        cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
-        cached.score || 0
-      );
-      setReport({
-        summary: cached.summary || '',
-        strengths: cached.strengths || [],
-        weaknesses: cached.weaknesses || [],
-        missingKeywords: cached.missingKeywords || [],
-        scoreBreakdown: normalizedBreakdown
-      });
-
-      // 数据恢复完成后，保持当前步骤不变，由 localStorage 初始值或外部跳转逻辑决定步骤
-      // 移除原有的强制跳转到 report 的逻辑，以修复从预览页跳转 chat 却落到 report 的问题
-
-      hasRestoredAnalysisRef.current = true;
-    });
-  }, [resumeData, jdText, score, suggestions.length, currentStep]);
-
-  // 如果处于分析或聊天步骤但没有分数数据，强制返回第一步（兜底策略）
-  useEffect(() => {
-    if ((currentStep === 'report' || currentStep === 'chat') && score === 0 && suggestions.length === 0 && !isFromCache && hasRestoredAnalysisRef.current) {
-      if (currentStep === 'chat' && isInterviewEntry) {
-        return;
-      }
-      if (currentStep === 'report' && forceReportEntry) {
-        return;
-      }
-      const savedStep = (localStorage.getItem('ai_analysis_step') as Step | null) || null;
-      if (savedStep && savedStep !== 'resume_select') {
-        return;
-      }
-      console.log('Detected detailed step without data, resetting to resume_select');
-      setCurrentStep('resume_select');
-    }
-  }, [currentStep, score, suggestions.length, isFromCache, isInterviewEntry, forceReportEntry]);
+  // 仅保留“最近一次分析快照”的恢复逻辑，移除其它兜底恢复
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
@@ -1462,18 +1448,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     (async () => {
       const resumeId = Number(targetId);
       const result = await DatabaseService.getResume(resumeId);
-      if (result.success && result.data) {
-        const finalResumeData = {
-          id: result.data.id,
-          ...result.data.resume_data,
-          resumeTitle: result.data.title
-        };
-        if (setResumeData) {
-          setResumeData(finalResumeData);
-        }
-        if (finalResumeData.targetCompany) {
-          setTargetCompany(finalResumeData.targetCompany);
-        }
+        if (result.success && result.data) {
+          const finalResumeData = {
+            id: result.data.id,
+            ...result.data.resume_data,
+            resumeTitle: result.data.title
+          };
+          if (setResumeData) {
+            setResumeData(finalResumeData);
+          }
+          setAnalysisResumeId(result.data.id);
+        setOptimizedResumeId(
+          finalResumeData.optimizedResumeId ||
+          (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
+        );
+          if (finalResumeData.targetCompany) {
+            setTargetCompany(finalResumeData.targetCompany);
+          }
         const savedJdText = (finalResumeData.lastJdText || '').trim();
         if (savedJdText) {
           setJdText(savedJdText);
@@ -1499,30 +1490,46 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   }, []);
 
   // 从预览页跳转到分数页
-  useEffect(() => {
-    const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
-    const targetId = localStorage.getItem('ai_report_resume_id');
-    if (!shouldOpenReport || !targetId) return;
+    useEffect(() => {
+      const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
+      const targetId = localStorage.getItem('ai_report_resume_id');
+      if (!shouldOpenReport || !targetId) return;
 
-    localStorage.removeItem('ai_report_open');
-    localStorage.removeItem('ai_report_resume_id');
-    localStorage.setItem('ai_analysis_step', 'report');
-    setStepHistory([]);
-    setCurrentStep('report');
-    setForceReportEntry(true);
+      const payloadRaw = localStorage.getItem('ai_report_resume_payload');
+      localStorage.removeItem('ai_report_resume_payload');
+      let payload: any = null;
+      if (payloadRaw) {
+        try {
+          payload = JSON.parse(payloadRaw);
+        } catch (error) {
+          console.warn('Failed to parse ai_report_resume_payload:', error);
+          payload = null;
+        }
+      }
 
-    (async () => {
-      const resumeId = Number(targetId);
-      const result = await DatabaseService.getResume(resumeId);
-      if (result.success && result.data) {
+      localStorage.removeItem('ai_report_open');
+      localStorage.removeItem('ai_report_resume_id');
+      localStorage.setItem('ai_analysis_step', 'report');
+      setStepHistory([]);
+      setCurrentStep('report');
+      setForceReportEntry(true);
+
+      if (payload && String(payload.id) === String(targetId) && payload.resume_data) {
         const finalResumeData = {
-          id: result.data.id,
-          ...result.data.resume_data,
-          resumeTitle: result.data.title
+          id: payload.id,
+          ...payload.resume_data,
+          resumeTitle: payload.title || payload.resume_data.resumeTitle || '简历'
         };
         if (setResumeData) {
           setResumeData(finalResumeData);
         }
+        setSelectedResumeId(payload.id);
+        setAnalysisResumeId(payload.id);
+          setOptimizedResumeId(
+            finalResumeData.optimizedResumeId ||
+            (finalResumeData.optimizationStatus === 'optimized' ? payload.id : null)
+          );
+        setOriginalResumeData(JSON.parse(JSON.stringify(finalResumeData)));
         if (finalResumeData.targetCompany) {
           setTargetCompany(finalResumeData.targetCompany);
         }
@@ -1530,14 +1537,60 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         if (restoredJdText) {
           setJdText(restoredJdText);
         }
-        const snapshotApplied = applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
-        if (!snapshotApplied) {
-          navigateToStep('report', true);
+        applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+        if (finalResumeData.analysisSnapshot) {
+          saveLastAnalysis({
+            resumeId: payload.id,
+            jdText: restoredJdText,
+            targetCompany: finalResumeData.targetCompany || '',
+            snapshot: finalResumeData.analysisSnapshot,
+            updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
+          });
+          setAnalysisResumeId(payload.id);
         }
-      } else {
-        handleResumeSelect(resumeId, true);
+        navigateToStep('report', true);
+        return;
       }
-    })();
+
+      (async () => {
+        const resumeId = Number(targetId);
+        const result = await DatabaseService.getResume(resumeId);
+        if (result.success && result.data) {
+          const finalResumeData = {
+            id: result.data.id,
+            ...result.data.resume_data,
+            resumeTitle: result.data.title
+          };
+          if (setResumeData) {
+            setResumeData(finalResumeData);
+          }
+          setOptimizedResumeId(
+            finalResumeData.optimizedResumeId ||
+            (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
+          );
+          if (finalResumeData.targetCompany) {
+            setTargetCompany(finalResumeData.targetCompany);
+          }
+        const restoredJdText = (finalResumeData.lastJdText || '').trim();
+        if (restoredJdText) {
+          setJdText(restoredJdText);
+        }
+          applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+          if (finalResumeData.analysisSnapshot) {
+            saveLastAnalysis({
+              resumeId: result.data.id,
+              jdText: restoredJdText,
+              targetCompany: finalResumeData.targetCompany || '',
+              snapshot: finalResumeData.analysisSnapshot,
+              updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
+            });
+            setAnalysisResumeId(result.data.id);
+          }
+          navigateToStep('report', true);
+        } else {
+          handleResumeSelect(resumeId, true);
+        }
+      })();
   }, []);
 
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
@@ -2386,3 +2439,4 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 };
 
 export default AiAnalysis;
+

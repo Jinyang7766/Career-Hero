@@ -53,6 +53,7 @@ export interface Project extends ExperienceItem {
 export interface Education extends ExperienceItem {
   school?: string;
   degree?: string;
+  major?: string;
 }
 
 export interface ResumeData {
@@ -67,6 +68,8 @@ export interface ResumeData {
   gender?: string;
   templateId?: string;
   optimizationStatus?: 'optimized' | 'unoptimized';
+  optimizedResumeId?: number;
+  optimizedFromId?: number;
   lastJdText?: string;
   targetCompany?: string;
   analysisSnapshot?: {
@@ -80,6 +83,7 @@ export interface ResumeData {
       skills: number;
       format: number;
     };
+    suggestions?: any[];
     updatedAt: string;
     jdText?: string;
     targetCompany?: string;

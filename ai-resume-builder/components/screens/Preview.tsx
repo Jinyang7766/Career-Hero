@@ -39,9 +39,18 @@ const resolveExperienceSubtitle = (item: any): string => {
   // Check if it has school or degree-related fields
   const isEdu = !!(item.school || item.degree || item.major);
   if (isEdu) {
-    const parts = [];
-    if (item.degree && String(item.degree).trim()) parts.push(String(item.degree).trim());
-    if (item.major && String(item.major).trim()) parts.push(String(item.major).trim());
+    const parts: string[] = [];
+    const d = String(item.degree || '').trim();
+    const m = String(item.major || '').trim();
+    if (d && m) {
+      if (d === m) parts.push(d);
+      else {
+        parts.push(d);
+        parts.push(m);
+      }
+    } else if (d || m) {
+      parts.push(d || m);
+    }
     if (parts.length > 0) return parts.join(' · ');
     return (item.subtitle || item.position || item.jobTitle || item.role || item.title || '').trim();
   }
@@ -693,14 +702,20 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           </div>
           {isOptimized && (
             <button
-                onClick={() => {
+              onClick={() => {
                   if (resumeData?.id) {
                     localStorage.setItem('ai_report_open', '1');
                     localStorage.setItem('ai_report_resume_id', String(resumeData.id));
                     localStorage.setItem('ai_analysis_step', 'report');
-                  }
-                  setCurrentView(View.AI_ANALYSIS);
-                }}
+                    localStorage.setItem('ai_analysis_resume_id', String(resumeData.id));
+                    localStorage.setItem('ai_report_resume_payload', JSON.stringify({
+                      id: resumeData.id,
+                      title: resumeData.resumeTitle || '简历',
+                      resume_data: resumeData
+                    }));
+                }
+                setCurrentView(View.AI_ANALYSIS);
+              }}
               className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-br from-primary via-blue-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-500/25 active:scale-[0.98] transition-all group overflow-hidden relative"
             >
               {/* Decorative background elements */}
