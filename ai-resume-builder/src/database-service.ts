@@ -179,7 +179,7 @@ export class DatabaseService {
   }
 
   // 获取单个简历
-  static async getResume(resumeId: string) {
+  static async getResume(resumeId: string | number) {
     try {
       const { data, error } = await supabase
         .from('resumes')

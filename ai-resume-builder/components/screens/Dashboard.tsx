@@ -77,21 +77,21 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       .slice(0, 3);
   }, [allResumes]);
 
-  const [isLoadingResume, setIsLoadingResume] = React.useState(false);
+  const [isLoadingResume, setIsLoadingResume] = React.useState<number | null>(null);
 
   const handleResumeClick = async (resumeId: number) => {
     if (isLoadingResume) return;
 
     try {
-      setIsLoadingResume(true);
+      setIsLoadingResume(resumeId);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        setIsLoadingResume(false);
+        setIsLoadingResume(null);
         return;
       }
 
-      const result = await DatabaseService.getResume(String(resumeId));
+      const result = await DatabaseService.getResume(resumeId);
       if (result.success && result.data) {
         const fullResume = result.data;
         if (fullResume && fullResume.resume_data) {
@@ -111,7 +111,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       console.error('Failed to load recent resume for preview:', err);
       alert('加载简历出错，请检查网络');
     } finally {
-      setIsLoadingResume(false);
+      setIsLoadingResume(null);
     }
   };
 
@@ -202,12 +202,12 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                 <div
                   key={resume.id}
                   onClick={() => handleResumeClick(resume.id)}
-                  className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume ? 'opacity-50 pointer-events-none' : ''}`}
+                  className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   <div className="shrink-0 relative">
                     <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                       {resume.thumbnail}
-                      {isLoadingResume && (
+                      {isLoadingResume === resume.id && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10">
                           <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
                         </div>

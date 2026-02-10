@@ -7,7 +7,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
-  const [isLoadingResume, setIsLoadingResume] = useState(false);
+  const [isLoadingResume, setIsLoadingResume] = useState<number | null>(null);
   const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
   const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
   const [isRenamingId, setIsRenamingId] = useState<number | null>(null);
@@ -74,7 +74,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     }
 
     try {
-      setIsLoadingResume(true);
+      setIsLoadingResume(resumeId);
 
       console.log('=== 简历加载调试信息 ===');
       console.log('Loading resume:', resumeId);
@@ -155,7 +155,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
       console.error('❌ 加载简历时出错:', error);
       alert('加载简历失败，请检查网络连接');
     } finally {
-      setIsLoadingResume(false);
+      setIsLoadingResume(null);
       setActiveMenuId(null);
     }
   };
@@ -179,13 +179,13 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     }
 
     try {
-      setIsLoadingResume(true);
+      setIsLoadingResume(resumeId);
       console.log('=== 简历预览调试信息 ===');
       console.log('Previewing resume:', resumeId);
       console.log('Current user:', user.id);
 
       // Get single resume details
-      const result = await DatabaseService.getResume(String(resumeId));
+      const result = await DatabaseService.getResume(resumeId);
 
       console.log('Database result:', result);
 
@@ -244,7 +244,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
       console.error('Preview error:', error);
       alert('预览失败，请重试');
     } finally {
-      setIsLoadingResume(false);
+      setIsLoadingResume(null);
       setActiveMenuId(null);
     }
   };
@@ -305,12 +305,17 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
         <div
           key={resume.id}
           onClick={() => handlePreview(resume.id)}
-          className="group relative flex items-center gap-4 px-4 py-4 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5"
+          className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <div className="shrink-0 relative">
             <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
               {resume.thumbnail}
             </div>
+            {isLoadingResume === resume.id && (
+              <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
+                <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+              </div>
+            )}
             {resume.hasDot && (
               <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
             )}
@@ -340,10 +345,10 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
               <div className="absolute right-0 top-10 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 <button
                   onClick={(e) => handleEdit(resume.id, e)}
-                  disabled={isLoadingResume}
+                  disabled={isLoadingResume !== null}
                   className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isLoadingResume ? (
+                  {isLoadingResume === resume.id ? (
                     <>
                       <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
                       加载中...
