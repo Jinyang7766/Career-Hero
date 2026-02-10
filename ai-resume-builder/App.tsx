@@ -104,7 +104,7 @@ function App() {
         };
 
         const resumes: ResumeSummary[] = result.data.map((resume: any) => {
-          const formattedDate = formatDateTime(resume.created_at);
+          const formattedDate = formatDateTime(resume.updated_at || resume.created_at);
           // 清理日期字符串，确保只包含纯数字和分隔符
           const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
 

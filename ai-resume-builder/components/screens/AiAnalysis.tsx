@@ -244,6 +244,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
   const [jdText, setJdText] = useState('');
+  const [targetCompany, setTargetCompany] = useState('');
 
   // Analysis Result State
   const [originalScore, setOriginalScore] = useState(0);
@@ -420,6 +421,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const buildResumeTitle = (baseTitle: string | undefined, data: ResumeData, jd: string, includeCompany: boolean) => {
     const direction = data?.personalInfo?.title?.trim();
     const personName = data?.personalInfo?.name?.trim();
+    const manualCompany = (data?.targetCompany || targetCompany || '').trim();
     const parts: string[] = [];
 
     if (direction) {
@@ -431,7 +433,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     if (includeCompany) {
-      const companyName = getCompanyNameFromJd(jd);
+      const companyName = manualCompany || getCompanyNameFromJd(jd);
       if (companyName) {
         parts.push(companyName);
       }
@@ -449,6 +451,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     if (!jdText && sessionJdText) {
       setJdText(sessionJdText);
+    }
+    if (!targetCompany && resumeData.targetCompany) {
+      setTargetCompany(resumeData.targetCompany);
     }
 
     const sessions = resumeData.interviewSessions || {};
@@ -481,7 +486,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const updatedResumeData = {
       ...resumeData,
       interviewSessions: updatedSessions,
-      lastJdText: sessionJdText
+      lastJdText: sessionJdText,
+      targetCompany: targetCompany || resumeData.targetCompany || ''
     };
 
     if (setResumeData) {
@@ -556,8 +562,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 resumeTitle: resume.title
               };
 
-            console.log('Setting resume data:', finalResumeData);
-            setResumeData(finalResumeData);
+              console.log('Setting resume data:', finalResumeData);
+              setResumeData(finalResumeData);
+              if (finalResumeData.targetCompany) {
+                setTargetCompany(finalResumeData.targetCompany);
+              }
 
             if (preferReport) {
               const restoredJdText = (finalResumeData.lastJdText || '').trim();
@@ -729,14 +738,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
     // 🔴 标记原始简历为“未优化”
-    if (resumeData.id) {
-      const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-      const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
-      DatabaseService.updateResume(String(resumeData.id), {
-        title: updatedTitle,
-        resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText }
-      }).then(res => console.log('Original resume marked as unoptimized:', res.success));
-    }
+      if (resumeData.id) {
+        const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
+        const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
+        DatabaseService.updateResume(String(resumeData.id), {
+          title: updatedTitle,
+          resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText, targetCompany }
+        }).then(res => console.log('Original resume marked as unoptimized:', res.success));
+      }
 
     setAnalysisInProgress(true);
     navigateToStep('analyzing');
@@ -994,11 +1003,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         if (userError || !user) return;
 
         // 确保数据带有“已优化”标记
-        const updatedDataWithStatus = {
-          ...nextResumeData,
-          optimizationStatus: 'optimized' as const,
-          lastJdText: jdText
-        };
+          const updatedDataWithStatus = {
+            ...nextResumeData,
+            optimizationStatus: 'optimized' as const,
+            lastJdText: jdText,
+            targetCompany
+          };
 
         const originalTitle = allResumes?.find(r => r.id === selectedResumeId)?.title || '简历';
         const newTitle = buildResumeTitle(originalTitle, updatedDataWithStatus, jdText, true);
@@ -1292,6 +1302,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (!jdText && restoredJdText) {
       setJdText(restoredJdText);
     }
+    if (!targetCompany && resumeData.targetCompany) {
+      setTargetCompany(resumeData.targetCompany);
+    }
 
     const shouldRestore = score === 0 && suggestions.length === 0;
     if (!shouldRestore) {
@@ -1363,6 +1376,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const savedJdText = resumeData.lastJdText || '';
       if (savedJdText) {
         setJdText(savedJdText);
+      }
+      if (resumeData.targetCompany) {
+        setTargetCompany(resumeData.targetCompany);
       }
 
       const sessions = resumeData.interviewSessions || {};
@@ -1700,18 +1716,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           </div>
         </header>
         <main className="p-4 flex flex-col gap-6">
-          <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-primary">description</span>
-              <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
-            </div>
-            <textarea
-              value={jdText}
-              onChange={(e) => setJdText(e.target.value)}
-              placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
-              className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
-              maxLength={1000}
-            ></textarea>
+            <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="material-symbols-outlined text-primary">description</span>
+                <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
+              </div>
+              <div className="mb-3">
+                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
+                <input
+                  value={targetCompany}
+                  onChange={(e) => setTargetCompany(e.target.value)}
+                  placeholder="例如：字节跳动 / 腾讯"
+                  className="mt-2 w-full rounded-xl bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm"
+                  type="text"
+                />
+              </div>
+              <textarea
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+                placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
+                className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
+                maxLength={1000}
+              ></textarea>
 
             {/* 截图上传按钮 */}
             <div className="mt-3">

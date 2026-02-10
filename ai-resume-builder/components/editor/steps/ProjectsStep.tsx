@@ -17,7 +17,7 @@ const ProjectsStep: React.FC<ProjectsStepProps> = ({ resumeData, isComplete, wiz
         <div className={`flex items-center justify-center size-8 rounded-full ${isComplete ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
           <span className="material-symbols-outlined text-[18px]">{isComplete ? 'check' : 'rocket_launch'}</span>
         </div>
-        <span className="font-semibold text-slate-900 dark:text-white">项目经历</span>
+        <span className="font-semibold text-slate-900 dark:text-white">项目经历（可选）</span>
       </div>
       <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
     </summary>
@@ -38,32 +38,51 @@ const ProjectsStep: React.FC<ProjectsStepProps> = ({ resumeData, isComplete, wiz
             </button>
           </div>
           <div className="grid gap-4">
-            <input
-              className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-              placeholder="项目名称"
-              type="text"
-              value={proj.title}
-              onChange={(e) => onUpdate(proj.id, 'title', e.target.value)}
-            />
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">项目名称（可选）</label>
+              <input
+                className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                placeholder="项目名称"
+                type="text"
+                value={proj.title}
+                onChange={(e) => onUpdate(proj.id, 'title', e.target.value)}
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
-              <input
-                className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                placeholder="担任角色"
-                type="text"
-                value={proj.subtitle}
-                onChange={(e) => onUpdate(proj.id, 'subtitle', e.target.value)}
-              />
-              <input
-                className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-                placeholder="项目时间"
-                type="text"
-                value={proj.date}
-                onChange={(e) => onUpdate(proj.id, 'date', e.target.value)}
-              />
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">担任角色（可选）</label>
+                <input
+                  className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                  placeholder="担任角色"
+                  type="text"
+                  value={proj.subtitle}
+                  onChange={(e) => onUpdate(proj.id, 'subtitle', e.target.value)}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">项目时间（可选）</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    placeholder="开始时间"
+                    type="text"
+                    value={proj.startDate || ''}
+                    onChange={(e) => onUpdate(proj.id, 'startDate', e.target.value)}
+                  />
+                  <span className="text-slate-400">-</span>
+                  <input
+                    className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
+                    placeholder="结束时间"
+                    type="text"
+                    value={proj.endDate || ''}
+                    onChange={(e) => onUpdate(proj.id, 'endDate', e.target.value)}
+                  />
+                </div>
+              </div>
             </div>
             <div className="relative">
               <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">项目描述</label>
+                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">项目描述（可选）</label>
               </div>
               <textarea
                 className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed"

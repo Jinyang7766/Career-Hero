@@ -9,6 +9,7 @@ type SkillsStepProps = {
   onNewSkillChange: (value: string) => void;
   onAddSkill: () => void;
   onRemoveSkill: (index: number) => void;
+  showValidation?: boolean;
 };
 
 const SkillsStep: React.FC<SkillsStepProps> = ({
@@ -19,6 +20,7 @@ const SkillsStep: React.FC<SkillsStepProps> = ({
   onNewSkillChange,
   onAddSkill,
   onRemoveSkill,
+  showValidation,
 }) => (
   <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open={wizardMode}>
     <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
@@ -26,7 +28,7 @@ const SkillsStep: React.FC<SkillsStepProps> = ({
         <div className={`flex items-center justify-center size-8 rounded-full ${isComplete ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
           <span className="material-symbols-outlined text-[18px]">{isComplete ? 'check' : 'extension'}</span>
         </div>
-        <span className="font-semibold text-slate-900 dark:text-white">专业技能</span>
+        <span className="font-semibold text-slate-900 dark:text-white">专业技能 *</span>
       </div>
       <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
     </summary>
@@ -44,25 +46,36 @@ const SkillsStep: React.FC<SkillsStepProps> = ({
           </span>
         ))}
       </div>
-      <div className="relative">
-        <input
-          value={newSkill}
-          onChange={(e) => onNewSkillChange(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              onAddSkill();
-            }
-          }}
-          className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 pr-10 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all"
-          placeholder="添加技能 (例如: 领导力)"
-          type="text"
-        />
-        <button
-          onClick={onAddSkill}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:bg-primary/10 p-1 rounded-md transition-colors"
-        >
-          <span className="material-symbols-outlined text-[20px]">add_circle</span>
-        </button>
+      <div>
+        <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider block mb-2">技能 *</label>
+        <div className="relative">
+          <input
+            value={newSkill}
+            onChange={(e) => onNewSkillChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                onAddSkill();
+              }
+            }}
+            className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 pr-10 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${
+              showValidation && resumeData.skills.length === 0
+                ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
+                : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+            } text-slate-900 dark:text-white`}
+            placeholder="添加技能 (例如: 领导力)"
+            type="text"
+            maxLength={10}
+          />
+          <button
+            onClick={onAddSkill}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-primary hover:bg-primary/10 p-1 rounded-md transition-colors"
+          >
+            <span className="material-symbols-outlined text-[20px]">add_circle</span>
+          </button>
+        </div>
+        {showValidation && resumeData.skills.length === 0 && (
+          <p className="text-xs text-red-500 mt-2">请至少添加一项技能</p>
+        )}
       </div>
     </div>
   </details>

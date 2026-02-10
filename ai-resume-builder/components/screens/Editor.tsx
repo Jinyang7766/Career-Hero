@@ -24,7 +24,7 @@ const WIZARD_STEPS: { key: WizardStep; label: string; icon: string }[] = [
   { key: 'summary', label: '个人总结', icon: 'auto_awesome' },
 ];
 
-const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentView, goBack, resumeData, setResumeData, completeness = 0, createResume, loadUserResumes, wizardMode: initialWizardMode = false, hasBottomNav = false }) => {
+const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentView, goBack, resumeData, setResumeData, setAllResumes, completeness = 0, createResume, loadUserResumes, wizardMode: initialWizardMode = false, hasBottomNav = false }) => {
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
@@ -37,6 +37,12 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const lastAutosavedRef = useRef<string>('');
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
+  const [hasTouchedProjects, setHasTouchedProjects] = useState(false);
+  const [hasImportedResume, setHasImportedResume] = useState(false);
+  const [showImportSuccess, setShowImportSuccess] = useState(false);
+  const [showValidationModal, setShowValidationModal] = useState(false);
+  const [validationStep, setValidationStep] = useState<WizardStep | null>(null);
+  const lastNormalizedResumeIdRef = useRef<number | null>(null);
 
   // Always use wizard mode (no free edit mode)
   const wizardMode = true;
@@ -57,6 +63,88 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       setSummary(resumeData.summary);
     }
   }, [resumeData?.summary]);
+
+  useEffect(() => {
+    if (resumeData?.id) {
+      setCurrentStep('personal');
+      setHasImportedResume(true);
+      setShowImportSuccess(false);
+      if ((resumeData.projects || []).length > 0) {
+        setHasTouchedProjects(true);
+      }
+    }
+  }, [resumeData?.id]);
+
+  useEffect(() => {
+    if (!resumeData?.id || !setResumeData) return;
+    if (lastNormalizedResumeIdRef.current === resumeData.id) return;
+
+    const normalizeDateRange = (start?: string, end?: string) => {
+      const s = (start || '').trim();
+      const e = (end || '').trim();
+      if (s && e) return `${s} - ${e}`;
+      return s || e || '';
+    };
+
+    const parseDateRange = (date?: string) => {
+      const raw = (date || '').trim();
+      if (!raw) return { startDate: '', endDate: '' };
+      const parts = raw.split(/\s*[-–—]\s*/);
+      if (parts.length >= 2) {
+        return { startDate: parts[0], endDate: parts.slice(1).join(' - ') };
+      }
+      return { startDate: raw, endDate: '' };
+    };
+
+    const mergeDateFields = (item: any) => {
+      const existingStart = (item?.startDate || '').trim();
+      const existingEnd = (item?.endDate || '').trim();
+      const parsed = parseDateRange(item?.date);
+      return {
+        startDate: existingStart || parsed.startDate,
+        endDate: existingEnd || parsed.endDate,
+      };
+    };
+
+    const normalizeWork = (exp: any) => ({
+      ...exp,
+      ...mergeDateFields(exp),
+      title: exp?.title || exp?.company || '',
+      subtitle: exp?.subtitle || exp?.position || '',
+      date: exp?.date || normalizeDateRange(exp?.startDate, exp?.endDate),
+      company: exp?.company || exp?.title || '',
+      position: exp?.position || exp?.subtitle || '',
+    });
+
+    const normalizeEdu = (edu: any) => ({
+      ...edu,
+      ...mergeDateFields(edu),
+      title: edu?.title || edu?.school || '',
+      subtitle: edu?.subtitle || edu?.degree || edu?.major || '',
+      date: edu?.date || normalizeDateRange(edu?.startDate, edu?.endDate),
+      school: edu?.school || edu?.title || '',
+      degree: edu?.degree || edu?.subtitle || '',
+      major: edu?.major || '',
+    });
+
+    const normalizeProjects = (proj: any) => ({
+      ...proj,
+      ...mergeDateFields(proj),
+      title: proj?.title || '',
+      subtitle: proj?.subtitle || proj?.role || '',
+      date: proj?.date || '',
+      role: proj?.role || proj?.subtitle || '',
+    });
+
+    setResumeData(prev => ({
+      ...prev,
+      workExps: (prev.workExps || []).map(normalizeWork),
+      educations: (prev.educations || []).map(normalizeEdu),
+      projects: (prev.projects || []).map(normalizeProjects),
+    }));
+
+    lastNormalizedResumeIdRef.current = resumeData.id;
+  }, [resumeData?.id]);
 
   useEffect(() => {
     if (!resumeData?.id) return;
@@ -81,6 +169,25 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           minute: '2-digit'
         });
         setLastSavedAt(timeLabel);
+        if (setAllResumes) {
+          const formatDateTime = (dateString: string) => {
+            if (!dateString) return '时间未知';
+            const date = new Date(dateString);
+            if (isNaN(date.getTime())) return '时间格式错误';
+            const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
+            const year = beijingTime.getFullYear();
+            const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
+            const day = String(beijingTime.getDate()).padStart(2, '0');
+            const hours = String(beijingTime.getHours()).padStart(2, '0');
+            const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
+            const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+          };
+          const formatted = formatDateTime(now.toISOString()).replace(/[^0-9\-:\s]/g, '');
+          setAllResumes((prev: any) => (prev || []).map((r: any) =>
+            r.id === resumeData.id ? { ...r, date: formatted } : r
+          ));
+        }
       } catch (error) {
         console.error('Auto-save failed:', error);
       } finally {
@@ -165,6 +272,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
     setTextResume('');
     setTextError('');
     setCurrentStep('personal');
+    setHasImportedResume(true);
+    setShowImportSuccess(true);
   };
 
   const handleTextImport = async () => {
@@ -287,22 +396,74 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
     return Boolean(personalInfo.name && personalInfo.title && personalInfo.email && personalInfo.phone && resumeData.gender);
   };
 
+  const isOngoingValue = (value?: string) => {
+    return (value || '').trim() === '至今';
+  };
+
+  const hasValidDateRange = (item: { startDate?: string; endDate?: string; date?: string }) => {
+    if (item?.date) return true;
+    const start = (item?.startDate || '').trim();
+    const end = (item?.endDate || '').trim();
+    if (!start) return false;
+    return Boolean(end) || isOngoingValue(end);
+  };
+
   const isWorkExperienceComplete = () => {
-    return resumeData.workExps.length > 0 && resumeData.workExps.some(exp => Boolean(exp.title && exp.subtitle && exp.date));
+    return resumeData.workExps.length > 0 && resumeData.workExps.some(exp =>
+      Boolean(exp.title && exp.subtitle && hasValidDateRange(exp))
+    );
   };
 
   const isEducationComplete = () => {
-    return resumeData.educations.length > 0 && resumeData.educations.some(edu => Boolean(edu.title && edu.subtitle && edu.date));
+    return resumeData.educations.length > 0 && resumeData.educations.some(edu =>
+      Boolean(edu.title && edu.subtitle && hasValidDateRange(edu))
+    );
   };
 
   const isSkillsComplete = () => {
-    // Skills are optional, only show check if user has added skills
     return resumeData.skills.length > 0;
   };
 
   const isProjectsComplete = () => {
     // Projects are optional, only show check if user has added projects
-    return resumeData.projects.length > 0 && resumeData.projects.some(proj => Boolean(proj.title && proj.description));
+    return resumeData.projects.length > 0 && resumeData.projects.some(proj =>
+      Boolean(proj.title && proj.description && hasValidDateRange(proj))
+    );
+  };
+
+  const isSummaryComplete = () => {
+    return Boolean((summary || '').trim());
+  };
+
+  const isStepComplete = (step: WizardStep) => {
+    switch (step) {
+      case 'import':
+        return true;
+      case 'personal':
+        return isPersonalInfoComplete();
+      case 'work':
+        return isWorkExperienceComplete();
+      case 'education':
+        return isEducationComplete();
+      case 'projects':
+        return isProjectsComplete() || hasTouchedProjects;
+      case 'skills':
+        return isSkillsComplete();
+      case 'summary':
+        return isSummaryComplete();
+      default:
+        return false;
+    }
+  };
+
+  const isStepRequired = (step: WizardStep) => {
+    return step !== 'import' && step !== 'projects';
+  };
+
+  const isStepMissing = (step: WizardStep) => {
+    if (!hasImportedResume) return false;
+    if (!isStepRequired(step)) return false;
+    return !isStepComplete(step);
   };
 
   const handleAddSkill = () => {
@@ -401,8 +562,17 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   // --- Wizard Navigation ---
   const currentStepIndex = WIZARD_STEPS.findIndex(s => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / WIZARD_STEPS.length) * 100;
+  const isCurrentStepComplete = isStepComplete(currentStep);
 
   const handleNextStep = () => {
+    if (isStepRequired(currentStep) && !isCurrentStepComplete) {
+      setValidationStep(currentStep);
+      setShowValidationModal(true);
+      return;
+    }
+    if (currentStep === 'projects') {
+      setHasTouchedProjects(true);
+    }
     if (currentStepIndex < WIZARD_STEPS.length - 1) {
       setCurrentStep(WIZARD_STEPS[currentStepIndex + 1].key);
     } else {
@@ -422,7 +592,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   return (
     <div className="flex flex-col pb-12 bg-background-light dark:bg-background-dark min-h-screen animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-[#324d67] transition-colors duration-300">
-        <div className="grid grid-cols-[auto,1fr,auto] items-center px-4 py-3">
+        <div className="relative grid grid-cols-[auto,1fr,auto] items-center px-4 py-3">
           <button
             onClick={() => {
               if (currentStepIndex === 0 && goBack) {
@@ -435,13 +605,15 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           >
             <span className="material-symbols-outlined text-[28px]">arrow_back</span>
           </button>
-          <div className="flex-1 text-center">
-            <h1 className="text-lg font-bold leading-tight">
-              {WIZARD_STEPS[currentStepIndex].label}
-            </h1>
-            <p className="text-xs text-slate-500 dark:text-text-secondary">
-              步骤 {currentStepIndex + 1} / {WIZARD_STEPS.length}
-            </p>
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center">
+              <h1 className="text-lg font-bold leading-tight">
+                {WIZARD_STEPS[currentStepIndex].label}
+              </h1>
+              <p className="text-xs text-slate-500 dark:text-text-secondary">
+                步骤 {currentStepIndex + 1} / {WIZARD_STEPS.length}
+              </p>
+            </div>
           </div>
           <div className="text-right flex flex-col items-end min-w-[96px]">
             <span className="text-sm text-slate-500 dark:text-slate-400">
@@ -461,21 +633,42 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             <div className="h-1.5 w-full bg-slate-200 dark:bg-[#324d67] rounded-full overflow-hidden">
               <div className="h-full bg-primary rounded-full transition-all duration-500 ease-out" style={{ width: `${progress}%` }}></div>
             </div>
-            <div className="flex justify-between mt-3 px-1">
-              {WIZARD_STEPS.map((step, idx) => (
-                <button
-                  key={step.key}
-                  onClick={() => setCurrentStep(step.key)}
-                  className={`flex flex-col items-center transition-all ${idx <= currentStepIndex ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}
-                >
-                  <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${idx === currentStepIndex ? 'bg-primary/10 scale-110' : ''}`}>
-                    <span className={`material-symbols-outlined text-[20px] ${idx === currentStepIndex ? 'font-bold' : ''}`}>{step.icon}</span>
-                  </div>
-                </button>
-              ))}
+              <div className="flex justify-between mt-3 px-1">
+                {WIZARD_STEPS.map((step, idx) => {
+                  const stepComplete = isStepComplete(step.key);
+                  const isActive = idx === currentStepIndex;
+                  const canClick = hasImportedResume
+                    ? true
+                    : (step.key === 'projects'
+                      ? (isActive || hasTouchedProjects)
+                      : (isActive || stepComplete));
+                  const isMissing = isStepMissing(step.key);
+                  return (
+                    <button
+                      key={step.key}
+                      onClick={() => {
+                        if (canClick) setCurrentStep(step.key);
+                      }}
+                      disabled={!canClick}
+                      className={`flex flex-col items-center transition-all ${
+                        isMissing
+                          ? 'text-red-500'
+                          : (canClick ? 'text-primary' : 'text-slate-300 dark:text-slate-600')
+                      } ${!canClick ? 'cursor-not-allowed opacity-60' : ''}`}
+                    >
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${
+                        isMissing
+                          ? 'bg-red-50 dark:bg-red-900/20'
+                          : (isActive ? 'bg-primary/10 scale-110' : '')
+                      }`}>
+                        <span className={`material-symbols-outlined text-[20px] ${isActive ? 'font-bold' : ''}`}>{step.icon}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
       </header>
 
       {/* Completeness (only in free edit mode) */}
@@ -519,6 +712,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             resumeData={resumeData}
             isComplete={isPersonalInfoComplete()}
             onInfoChange={handleInfoChange}
+            showValidation={validationStep === 'personal'}
           />
         )}
 
@@ -533,6 +727,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             onAdd={() => addItem('workExps')}
             onRemove={(id) => removeItem('workExps', id)}
             onUpdate={(id, field, value) => updateItem('workExps', id, field, value)}
+            showValidation={validationStep === 'work'}
           />
         )}
 
@@ -545,6 +740,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             onAdd={() => addItem('educations')}
             onRemove={(id) => removeItem('educations', id)}
             onUpdate={(id, field, value) => updateItem('educations', id, field, value)}
+            showValidation={validationStep === 'education'}
           />
         )}
 
@@ -554,9 +750,18 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             resumeData={resumeData}
             isComplete={isProjectsComplete()}
             wizardMode={wizardMode}
-            onAdd={() => addItem('projects')}
-            onRemove={(id) => removeItem('projects', id)}
-            onUpdate={(id, field, value) => updateItem('projects', id, field, value)}
+            onAdd={() => {
+              setHasTouchedProjects(true);
+              addItem('projects');
+            }}
+            onRemove={(id) => {
+              setHasTouchedProjects(true);
+              removeItem('projects', id);
+            }}
+            onUpdate={(id, field, value) => {
+              setHasTouchedProjects(true);
+              updateItem('projects', id, field, value);
+            }}
           />
         )}
 
@@ -570,12 +775,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             onNewSkillChange={setNewSkill}
             onAddSkill={handleAddSkill}
             onRemoveSkill={handleRemoveSkill}
+            showValidation={validationStep === 'skills'}
           />
         )}
 
         {/* Wizard Mode: Summary Step */}
         {wizardMode && currentStep === 'summary' && (
-          <SummaryStep summary={summary} onSummaryChange={setSummary} />
+          <SummaryStep summary={summary} onSummaryChange={setSummary} showValidation={validationStep === 'summary'} />
         )}
       </main>
 
@@ -594,7 +800,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             <button
               onClick={handleNextStep}
               disabled={isSaving}
-              className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70"
+              className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
             >
               {currentStepIndex === WIZARD_STEPS.length - 1 ? (isSaving ? '保存中...' : '完成并预览') : '下一步'}
             </button>
@@ -625,6 +831,42 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           </div>
         )
       }
+
+      {showImportSuccess && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-[#324d67] shadow-xl p-6 text-center">
+            <div className="mx-auto mb-3 size-12 rounded-full bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[22px]">check_circle</span>
+            </div>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">导入成功</h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">请检查各信息是否完整</p>
+            <button
+              onClick={() => setShowImportSuccess(false)}
+              className="mt-5 w-full rounded-xl bg-primary text-white py-2.5 font-semibold hover:bg-blue-600 active:scale-[0.98] transition-all"
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showValidationModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-[#324d67] shadow-xl p-6 text-center">
+            <div className="mx-auto mb-3 size-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[22px]">error</span>
+            </div>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">未填完必填字段</h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">请补充标红内容后再继续</p>
+            <button
+              onClick={() => setShowValidationModal(false)}
+              className="mt-5 w-full rounded-xl bg-primary text-white py-2.5 font-semibold hover:bg-blue-600 active:scale-[0.98] transition-all"
+            >
+              我知道了
+            </button>
+          </div>
+        </div>
+      )}
 
     </div >
   );

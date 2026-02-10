@@ -86,6 +86,31 @@
     details>summary::-webkit-details-marker {
       display: none;
     }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: #101922;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: #324d67;
+      border-radius: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: #137fec;
+    }
+
+    /* For Firefox */
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: #324d67 #101922;
+    }
   </style>
   <script type="importmap">
 {

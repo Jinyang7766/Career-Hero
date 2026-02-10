@@ -26,6 +26,8 @@ export interface ExperienceItem {
   subtitle: string;
   date: string;
   description: string;
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface PersonalInfo {
@@ -66,6 +68,7 @@ export interface ResumeData {
   templateId?: string;
   optimizationStatus?: 'optimized' | 'unoptimized';
   lastJdText?: string;
+  targetCompany?: string;
   aiSuggestionFeedback?: Record<string, {
     rating: 'up' | 'down';
     ratedAt: string;
