@@ -1158,6 +1158,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true);
       let updatedOptimized: ResumeData = {
         ...nextResumeData,
+        interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || resumeData.interviewSessions,
+        aiSuggestionFeedback: nextResumeData.aiSuggestionFeedback || baseResume.aiSuggestionFeedback || resumeData.aiSuggestionFeedback,
         optimizationStatus: 'optimized' as const,
         lastJdText: jdText,
         targetCompany
