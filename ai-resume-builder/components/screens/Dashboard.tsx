@@ -237,7 +237,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                   </div>
                   <div className="flex flex-col flex-1 justify-center min-w-0">
                     <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                    <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                    <p className="text-slate-500 dark:text-text-secondary text-[11px] font-normal leading-normal line-clamp-1">
                       上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                     </p>
                   </div>
