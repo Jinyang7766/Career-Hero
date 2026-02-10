@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ScreenProps, ResumeData } from '../../types';
+import { ScreenProps, ResumeData, View } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { AICacheService } from '../../src/ai-cache-service';
@@ -41,7 +41,7 @@ interface AnalysisReport {
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
-const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
+const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
   const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
 
   const normalizeScoreBreakdown = (raw: ScoreBreakdown, totalScore?: number): ScoreBreakdown => {
@@ -175,8 +175,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     return saved || 'resume_select';
   });
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
-  const [resumeTitle, setResumeTitle] = useState('');
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
+  const [chatEntrySource, setChatEntrySource] = useState<'internal' | 'preview' | null>(() => {
+    const stored = localStorage.getItem('ai_chat_entry_source');
+    return stored === 'internal' || stored === 'preview' ? stored : null;
+  });
+  const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
+    const stored = localStorage.getItem('ai_chat_prev_step');
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'comparison'];
+    return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
+  });
 
   // Wrapper for setCurrentStep that records history
   const navigateToStep = (nextStep: Step, replace: boolean = false) => {
@@ -188,8 +196,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   };
 
+  const openChat = (source: 'internal' | 'preview') => {
+    if (source === 'internal') {
+      const prevStep = currentStep !== 'chat' ? currentStep : lastChatStep;
+      if (prevStep && prevStep !== 'chat') {
+        setLastChatStep(prevStep);
+        localStorage.setItem('ai_chat_prev_step', prevStep);
+      }
+      setChatEntrySource('internal');
+      localStorage.setItem('ai_chat_entry_source', 'internal');
+      navigateToStep('chat');
+      return;
+    }
+
+    setChatEntrySource('preview');
+    localStorage.setItem('ai_chat_entry_source', 'preview');
+    localStorage.removeItem('ai_chat_prev_step');
+    setLastChatStep(null);
+    navigateToStep('chat', true);
+  };
+
   // Improved back logic
   const handleStepBack = () => {
+    if (currentStep === 'chat') {
+      if (chatEntrySource === 'preview') {
+        if (goBack) {
+          goBack();
+        }
+        return;
+      }
+      if (stepHistory.length === 0 && lastChatStep && lastChatStep !== 'chat') {
+        setCurrentStep(lastChatStep);
+        return;
+      }
+    }
     if (stepHistory.length > 0) {
       const prev = [...stepHistory];
       const lastStep = prev.pop()!;
@@ -207,7 +247,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [score, setScore] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [report, setReport] = useState<AnalysisReport | null>(null);
-  const [isExporting, setIsExporting] = useState(false);
+  const isExporting = false;
 
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
@@ -216,6 +256,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const CHAT_PREFILL_TEXT = '准备好了';
+  const [isChatPrefill, setIsChatPrefill] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
@@ -234,38 +276,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
       localStorage.setItem('ai_analysis_in_progress', '1');
     } else {
       localStorage.removeItem('ai_analysis_in_progress');
-    }
-  };
-
-  const recordExportHistory = async (filename: string, size: number) => {
-    if (!resumeData?.id) return;
-
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const currentHistory = resumeData.exportHistory || [];
-      const entry = {
-        filename,
-        size,
-        type: 'PDF' as const,
-        exportedAt: new Date().toISOString()
-      };
-      const updatedResumeData: ResumeData = {
-        ...resumeData,
-        exportHistory: [entry, ...currentHistory].slice(0, 200)
-      };
-
-      if (setResumeData) {
-        setResumeData(updatedResumeData);
-      }
-
-      await DatabaseService.updateResume(String(resumeData.id), {
-        resume_data: updatedResumeData,
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Failed to record export history:', err);
     }
   };
 
@@ -499,7 +509,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         if (resume) {
           console.log('Target resume found:', resume);
           // Set resume title
-          setResumeTitle(resume.title);
 
           // 检查resume_data是否为空
           if (!resume.resume_data) {
@@ -1070,142 +1079,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }, 600);
   };
 
-  const handleExportPDF = async () => {
-    setIsExporting(true);
-    try {
-      // 清理简历数据，删除不需要的字段
-      const sanitizeData = (data: any) => {
-        if (!data) return data;
-        const sanitized = { ...data };
-        // 删除可能导致问题的字段
-        const fieldsToRemove = ['id', 'suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText'];
-        fieldsToRemove.forEach((field) => {
-          if (field in sanitized) delete sanitized[field];
-        });
-        return sanitized;
-      };
-
-      const sanitizedResumeData = sanitizeData(resumeData);
-
-      const buildExportHtml = (): string | null => {
-        const templateId = resumeData?.templateId || 'modern';
-        const resumeEl = document.getElementById(`resume-content-${templateId}`);
-        if (!resumeEl) return null;
-
-        const resumeHtml = resumeEl.outerHTML;
-        return `
-<!doctype html>
-<html lang="zh">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=794, initial-scale=1" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      html, body {
-        margin: 0;
-        padding: 0;
-        width: 794px;
-        background: #ffffff;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      #resume-root {
-        width: 794px;
-        min-height: 1123px;
-      }
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-      }
-      .no-break { break-inside: avoid; page-break-inside: avoid; }
-      h1, h2, h3, h4, h5, h6 { break-after: avoid; page-break-after: avoid; }
-      @page { size: A4; margin: 0; }
-    </style>
-  </head>
-  <body>
-    <div id="resume-root">
-      ${resumeHtml}
-    </div>
-  </body>
-</html>
-        `.trim();
-      };
-
-      // 确保使用正确的简历标题作为文件名
-      // 优先使用 resumeTitle，如果为空则使用 buildResumeTitle 生成，最后 fallback 到姓名
-      const effectiveFilename = resumeTitle
-        || buildResumeTitle(undefined, resumeData, jdText, true)
-        || resumeData?.personalInfo?.name
-        || '简历';
-
-      // 调用后端 PDF 导出接口
-      const htmlContent = buildExportHtml();
-      const payload: Record<string, unknown> = {
-        resumeData: sanitizedResumeData,
-        jdText: jdText,
-        filename: effectiveFilename // Pass the title as filename
-      };
-      if (htmlContent) payload.htmlContent = htmlContent;
-
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'PDF 生成失败');
-      }
-
-      // 获取 PDF 文件流并下载
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-
-      // 从响应头获取文件名，如果没有则使用默认名称
-      const contentDisposition = response.headers.get('content-disposition');
-      let filename = '简历.pdf';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (filenameMatch) {
-          filename = filenameMatch[1];
-        }
-      } else {
-        // 使用用户姓名生成文件名
-        const name = resumeData?.personalInfo?.name || '简历';
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        filename = `${name}_优化简历_${date}.pdf`;
-      }
-
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      await recordExportHistory(filename, blob.size);
-
-      console.log('✅ PDF 导出成功');
-      alert("优化后的简历 PDF 已下载！");
-
-    } catch (error) {
-      console.error('❌ PDF 导出失败:', error);
-      alert(`PDF 导出失败: ${error.message}`);
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExportPDF = () => {
+    setCurrentView(View.PREVIEW);
   };
 
   const handleAnalyzeOtherResume = () => {
     setSelectedResumeId(null);
-    setResumeTitle('');
     setJdText('');
     setSuggestions([]);
     setReport(null);
@@ -1340,6 +1219,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [currentStep]);
 
+  useEffect(() => {
+    if (currentStep === 'chat') {
+      if (!inputMessage) {
+        setInputMessage(CHAT_PREFILL_TEXT);
+        setIsChatPrefill(true);
+      }
+    } else if (isChatPrefill) {
+      setIsChatPrefill(false);
+    }
+  }, [currentStep]);
+
 
   // 记住用户所在步骤，切换回来可恢复
   useEffect(() => {
@@ -1443,7 +1333,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         setChatInitialized(false);
       }
 
-      setCurrentStep('chat');
+      openChat('preview');
     }
   }, [resumeData?.id]);
 
@@ -1504,16 +1394,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
     }
   }, [currentStep, suggestions, score, resumeData, chatInitialized, jdText, chatMessages.length]);
 
-  // 进入对话框时预填“准备好了”
-  useEffect(() => {
-    if (currentStep === 'chat' && !inputMessage) {
-      setInputMessage('准备好了');
-    }
-  }, [currentStep]);
-
   const handleSendMessage = async (textOverride?: string) => {
     const textToSend = textOverride || inputMessage;
     if (!textToSend.trim()) return;
+
+    if (isChatPrefill && textToSend === CHAT_PREFILL_TEXT) {
+      setIsChatPrefill(false);
+    }
 
     // Add user message
     const userMessage: ChatMessage = {
@@ -2139,23 +2026,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
             <div className="mb-52 space-y-3">
               <button
                 onClick={handleExportPDF}
-                disabled={isExporting || !hasAcceptedSuggestion}
+                disabled={!hasAcceptedSuggestion}
               className={`w-full flex items-center justify-center gap-3 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
                 ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                 : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
                 }`}
             >
-              {isExporting ? (
-                <>
-                  <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span className="text-base font-bold tracking-wide">生成 PDF 中...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[24px]">download</span>
-                  <span className="text-base font-bold tracking-wide">导出优化后简历 PDF</span>
-                </>
-                )}
+              <>
+                <span className="material-symbols-outlined text-[24px]">download</span>
+                <span className="text-base font-bold tracking-wide">前往预览导出</span>
+              </>
               </button>
               <button
                 onClick={handleAnalyzeOtherResume}
@@ -2171,7 +2051,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
         {/* Fixed AI Advisor Button - Above Navigation Bar */}
         <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
           <button
-            onClick={() => setCurrentStep('chat')}
+            onClick={() => openChat('internal')}
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
           >
             <div className="flex items-center gap-3">
@@ -2293,7 +2173,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
           <div className="flex gap-2 items-end max-w-md mx-auto">
             <textarea
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
+              onChange={(e) => {
+                if (isChatPrefill) setIsChatPrefill(false);
+                setInputMessage(e.target.value);
+              }}
+              onFocus={() => {
+                if (isChatPrefill) {
+                  setIsChatPrefill(false);
+                  setInputMessage('');
+                }
+              }}
+              onBlur={() => {
+                if (!inputMessage.trim()) {
+                  setInputMessage(CHAT_PREFILL_TEXT);
+                  setIsChatPrefill(true);
+                }
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
@@ -2301,7 +2196,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ resumeData, setResumeData, allResum
                 }
               }}
               placeholder="输入您的问题..."
-              className="flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none"
+              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-400 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}
               rows={1}
               style={{ minHeight: '48px', maxHeight: '120px' }}
             />
