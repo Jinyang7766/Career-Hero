@@ -9,7 +9,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
 
   const getButtonClass = (view: View) => {
     const isActive = currentView === view ||
-      (view === View.DASHBOARD && [View.ALL_RESUMES, View.PREVIEW, View.EDITOR, View.HISTORY].includes(currentView)) ||
+      (view === View.ALL_RESUMES && [View.ALL_RESUMES, View.TEMPLATES].includes(currentView)) ||
       (view === View.PROFILE && [View.SETTINGS, View.HELP].includes(currentView));
 
     return `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors group ${isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
@@ -28,10 +28,10 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
         </button>
 
         <button
-          onClick={() => setCurrentView(View.TEMPLATES)}
-          className={getButtonClass(View.TEMPLATES)}
+          onClick={() => setCurrentView(View.ALL_RESUMES)}
+          className={getButtonClass(View.ALL_RESUMES)}
         >
-          <span className={getIconClass(View.TEMPLATES, 'edit_document')}>edit_document</span>
+          <span className={getIconClass(View.ALL_RESUMES, 'edit_document')}>edit_document</span>
           <span className="text-[10px] font-medium">简历</span>
         </button>
 

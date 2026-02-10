@@ -33,6 +33,10 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const [isProcessing, setIsProcessing] = useState(false);
   const [textError, setTextError] = useState('');
   const pdfInputRef = useRef<HTMLInputElement>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const lastAutosavedRef = useRef<string>('');
+  const [isAutosaving, setIsAutosaving] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   // Always use wizard mode (no free edit mode)
   const wizardMode = true;
@@ -53,6 +57,44 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       setSummary(resumeData.summary);
     }
   }, [resumeData?.summary]);
+
+  useEffect(() => {
+    if (!resumeData?.id) return;
+
+    const serialized = JSON.stringify(resumeData);
+    if (serialized === lastAutosavedRef.current) return;
+
+    if (autosaveTimerRef.current) {
+      window.clearTimeout(autosaveTimerRef.current);
+    }
+
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      try {
+        setIsAutosaving(true);
+        await DatabaseService.updateResume(String(resumeData.id), {
+          resume_data: resumeData,
+          updated_at: new Date().toISOString()
+        });
+        lastAutosavedRef.current = serialized;
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        setLastSavedAt(timeLabel);
+      } catch (error) {
+        console.error('Auto-save failed:', error);
+      } finally {
+        setIsAutosaving(false);
+      }
+    }, 1200);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+      }
+    };
+  }, [resumeData]);
 
 
 
@@ -276,6 +318,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
   const handleSaveAndPreview = async () => {
     setIsSaving(true);
+    setIsAutosaving(true);
     try {
       console.log('Saving resume with data:', resumeData);
 
@@ -320,6 +363,14 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           await loadUserResumes();
         }
 
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString('zh-CN', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+        setLastSavedAt(timeLabel);
+        lastAutosavedRef.current = JSON.stringify(resumeData);
+
         console.log('Resume saved successfully, navigating to preview');
         // Navigate to preview
         setCurrentView(View.PREVIEW);
@@ -336,6 +387,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       alert('保存失败，请检查网络连接');
     } finally {
       setIsSaving(false);
+      setIsAutosaving(false);
     }
   };
 
@@ -391,7 +443,14 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
               步骤 {currentStepIndex + 1} / {WIZARD_STEPS.length}
             </p>
           </div>
-          <div className="w-12" />
+          <div className="text-right flex flex-col items-end min-w-[88px]">
+            <span className="text-[11px] text-slate-500 dark:text-slate-400">
+              {isAutosaving ? '保存中...' : '已自动保存'}
+            </span>
+            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+              {lastSavedAt ? `时间 ${lastSavedAt}` : `完整度 ${completeness}%`}
+            </span>
+          </div>
         </div>
 
         {/* Wizard Progress Bar */}

@@ -270,8 +270,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Optimized Resume Tracking
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
-  const [isSelectOptimizedOpen, setIsSelectOptimizedOpen] = useState(true);
-  const [isSelectUnoptimizedOpen, setIsSelectUnoptimizedOpen] = useState(true);
   const hasRestoredAnalysisRef = useRef(false);
 
   const setAnalysisInProgress = (value: boolean) => {
@@ -502,7 +500,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setSelectedResumeId(id);
 
     // 立即切换到下一步，提高用户体验
-    navigateToStep(preferReport ? 'report' : 'jd_input');
+    // 避免优先进入 report 导致 0 分闪屏，再进入 JD
+    navigateToStep('jd_input');
 
     // 记录当前 resumeData 和 allResumes 的状态
     console.log('handleResumeSelect - Current resumeData:', resumeData);
@@ -1652,72 +1651,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         <main className="flex-1 overflow-y-auto p-4 pb-32">
           <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">第一步：选择简历</h2>
           <div className="grid gap-4">
-            <button
-              onClick={() => setIsSelectOptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between text-lg font-bold text-white"
-            >
-              <span>已优化</span>
-              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
-                {isSelectOptimizedOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </button>
-            {isSelectOptimizedOpen && (
-              (allResumes || []).filter(r => r.optimizationStatus === 'optimized').length > 0 ? (
-                (allResumes || []).filter(r => r.optimizationStatus === 'optimized').map((resume) => (
-                    <div
-                      key={resume.id}
-                      onClick={() => handleResumeSelect(resume.id, true)}
-                      className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
-                    >
-                    <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
-                      {resume.thumbnail}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
-                    </div>
-                    <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
+            {(allResumes || []).filter(r => r.optimizationStatus !== 'optimized').length > 0 ? (
+              (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').map((resume) => (
+                <div
+                  key={resume.id}
+                  onClick={() => handleResumeSelect(resume.id, false)}
+                  className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
+                >
+                  <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
+                    {resume.thumbnail}
                   </div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  暂无已优化简历
-                </div>
-              )
-            )}
-
-            <button
-              onClick={() => setIsSelectUnoptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between text-lg font-bold text-white"
-            >
-              <span>未优化</span>
-              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
-                {isSelectUnoptimizedOpen ? 'expand_less' : 'expand_more'}
-              </span>
-            </button>
-            {isSelectUnoptimizedOpen && (
-              (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').length > 0 ? (
-                (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').map((resume) => (
-                    <div
-                      key={resume.id}
-                      onClick={() => handleResumeSelect(resume.id, false)}
-                      className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
-                    >
-                    <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
-                      {resume.thumbnail}
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
-                    </div>
-                    <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
                   </div>
-                ))
-              ) : (
-                <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-                  暂无未优化简历
+                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
                 </div>
-              )
+              ))
+            ) : (
+              <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                暂无可用简历
+              </div>
             )}
           </div>
         </main>

@@ -91,21 +91,6 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
         {/* Menu Group 1 */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5">
           <button 
-            onClick={() => setCurrentView(View.ALL_RESUMES)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <span className="material-symbols-outlined">description</span>
-              </div>
-              <span className="text-base font-medium">全部简历</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-          <div className="h-px bg-gray-100 dark:bg-white/5 mx-16"></div>
-          <button 
             onClick={() => setCurrentView(View.HISTORY)}
             className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
           >

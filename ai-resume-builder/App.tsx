@@ -25,7 +25,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Show bottom nav on main tabs only (Editor has its own navigation)
-  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE].includes(currentView);
+  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView);
 
   // Load user resumes when authenticated
   useEffect(() => {
@@ -263,6 +263,16 @@ function App() {
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
+    if (view === View.ALL_RESUMES) {
+      setResumeData({
+        personalInfo: { name: '', title: '', email: '', phone: '' },
+        workExps: [],
+        educations: [],
+        projects: [],
+        skills: [],
+        gender: ''
+      });
+    }
     if (view === View.AI_ANALYSIS) {
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
       // Only reset if user has not started any AI assistant flow yet

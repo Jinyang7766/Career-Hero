@@ -611,10 +611,13 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           <span className="material-symbols-outlined text-[24px]">arrow_back</span>
         </button>
         <h2 className="text-white text-lg font-bold tracking-tight opacity-90">简历预览</h2>
-
-
-
-        <div className="size-10" />
+        <button
+          onClick={() => setCurrentView(View.EDITOR)}
+          className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 transition-all text-white text-xs font-semibold"
+        >
+          <span className="material-symbols-outlined text-[18px]">edit</span>
+          编辑
+        </button>
       </header>
 
       <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">
