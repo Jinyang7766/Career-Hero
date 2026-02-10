@@ -417,19 +417,26 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
 );
 
 
-const sanitizeData = (data: any): any => {
-  const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
-  if (Array.isArray(data)) return data.map(item => sanitizeData(item));
-  if (typeof data === 'object' && data !== null) {
-    const sanitized: any = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (fieldsToRemove.includes(key)) continue;
-      sanitized[key] = sanitizeData(value);
+  const sanitizeData = (data: any): any => {
+    const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
+    if (Array.isArray(data)) return data.map(item => sanitizeData(item));
+    if (typeof data === 'object' && data !== null) {
+      const sanitized: any = {};
+      for (const [key, value] of Object.entries(data)) {
+        if (fieldsToRemove.includes(key)) continue;
+        sanitized[key] = sanitizeData(value);
+      }
+      return sanitized;
     }
-    return sanitized;
-  }
-  return data;
-};
+    return data;
+  };
+
+  const buildExportFilename = (title?: string) => {
+    const rawTitle = (title || '').trim();
+    const cleaned = rawTitle.replace(/[\\/:*?"<>|]+/g, '').trim();
+    const base = cleaned || '简历';
+    return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
+  };
 
 const buildExportHtml = (templateId: string): string | null => {
   const resumeEl = document.getElementById(`resume-content-${templateId}`);
@@ -490,7 +497,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
       if (userError || !user) return;
 
       const entry = {
-        filename,
+        filename: buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name),
         size,
         type: 'PDF' as const,
         exportedAt: new Date().toISOString()
@@ -514,18 +521,21 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
     if (isGenerating || !resumeData) return;
     setIsGenerating(true);
 
-    try {
-      const sanitizedResumeData = sanitizeData(resumeData);
-      const htmlContent = buildExportHtml(currentTemplateId);
-      const payload: Record<string, unknown> = {
-        resumeData: sanitizedResumeData,
-        jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : ''
-      };
-      if (htmlContent) payload.htmlContent = htmlContent;
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+      try {
+        const sanitizedResumeData = sanitizeData(resumeData);
+        const htmlContent = buildExportHtml(currentTemplateId);
+        const resumeTitle = resumeData?.resumeTitle || '';
+        const payload: Record<string, unknown> = {
+          resumeData: sanitizedResumeData,
+          jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : '',
+          resumeTitle,
+          filename: resumeTitle
+        };
+        if (htmlContent) payload.htmlContent = htmlContent;
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -535,20 +545,18 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
 
-      const contentDisposition = response.headers.get('content-disposition');
-      let filename = '简历.pdf';
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (filenameMatch) filename = filenameMatch[1];
-      } else {
-        const name = resumeData?.personalInfo?.name || '简历';
-        const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        filename = `${name}_简历_${date}.pdf`;
-      }
+        const contentDisposition = response.headers.get('content-disposition');
+        let filename = buildExportFilename(resumeData?.resumeTitle);
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+          if (filenameMatch) filename = filenameMatch[1];
+        } else {
+          filename = buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name);
+        }
 
       a.download = filename;
       document.body.appendChild(a);

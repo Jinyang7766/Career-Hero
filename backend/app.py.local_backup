@@ -79,17 +79,6 @@ SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'your-supabase-key')
 JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 
-# Google Gemini AI configuration
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
-GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
-gemini_request_count = 0  # Track daily usage
-
-if GEMINI_API_KEY != 'your-gemini-api-key':
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-3-flash-preview')
-else:
-    model = None
-
 # Initialize Supabase with error handling
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -98,6 +87,40 @@ except Exception as e:
     print(f"Supabase connection failed: {e}")
     print("Using mock data storage for development")
     supabase = None
+
+# Google Gemini AI configuration
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
+GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
+gemini_request_count = 0  # Track daily usage
+
+if GEMINI_API_KEY != 'your-gemini-api-key':
+    genai.configure(api_key=GEMINI_API_KEY)
+    primary_model = genai.GenerativeModel('gemini-2.0-flash')
+    fallback_model = genai.GenerativeModel('gemini-1.5-flash')
+    model = primary_model
+else:
+    model = None
+    primary_model = None
+    fallback_model = None
+
+def call_gemini_with_fallback(prompt, image_parts=None):
+    """Call Gemini API with automatic fallback on quota exceeded."""
+    if not primary_model:
+        raise Exception("Gemini API not configured")
+
+    try:
+        if image_parts:
+            return primary_model.generate_content([prompt, image_parts])
+        return primary_model.generate_content(prompt)
+    except Exception as e:
+        error_str = str(e).lower()
+        if "429" in error_str or "quota" in error_str or "exceeded" in error_str:
+            print(f"⚠️ Primary model quota exceeded. Falling back to gemini-1.5-flash. Error: {e}")
+            logger.warning(f"Primary model quota exceeded. Falling back to gemini-1.5-flash. Error: {e}")
+            if image_parts:
+                return fallback_model.generate_content([prompt, image_parts])
+            return fallback_model.generate_content(prompt)
+        raise e
 
 # Mock helper functions
 def is_mock_mode():
@@ -817,13 +840,9 @@ def export_pdf():
             return jsonify({'error': 'PDF 生成失败'}), 500
 
         # 处理自定义文件名（来自前端的简历标题）
-        custom_title = data.get('resumeTitle') or data.get('filename') or ''
-        custom_title = str(custom_title).strip()
-        if custom_title.lower().endswith('.pdf'):
-            custom_title = custom_title[:-4].strip()
-        safe_title = sanitize_filename_part(custom_title)
-        if safe_title:
-            filename = safe_title
+        custom_filename = data.get('filename', '').strip() if data.get('filename') else ''
+        if custom_filename:
+            filename = custom_filename
             if not filename.lower().endswith('.pdf'):
                 filename += '.pdf'
         else:
@@ -1882,8 +1901,11 @@ def parse_resume_text_with_ai(resume_text):
 
     logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    ai_model = genai.GenerativeModel('gemini-3-flash-preview')
+    if GEMINI_API_KEY != 'your-gemini-api-key':
+         genai.configure(api_key=GEMINI_API_KEY)
+    
+    # Removed local model init to use the global helper which handles fallback
+    # ai_model = genai.GenerativeModel('gemini-3-flash-preview') 
 
     prompt = f"""
     请解析以下简历文本，并按如下 JSON 格式返回结构化数据：
@@ -1933,7 +1955,13 @@ def parse_resume_text_with_ai(resume_text):
     {resume_text}
     """
 
-    response = ai_model.generate_content(prompt)
+    # Use the helper function effectively handles the configuration and fallback
+    # We no longer need to locally configure inside this function if global config is set, 
+    # but for safety we can keep the config if this function is used in isolation (though usually it's not).
+    # However, the previous code re-configured genai every time.
+    # Let's use the efficient global helper if available.
+    
+    response = call_gemini_with_fallback(prompt)
     ai_result = parse_ai_response(response.text)
 
     if not ai_result:
@@ -2117,7 +2145,7 @@ def analyze_resume(current_user_id):
 4. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 """
 
-                response = model.generate_content(prompt)
+                response = call_gemini_with_fallback(prompt)
                 ai_result = parse_ai_response(response.text)
 
                 return jsonify({
@@ -2310,7 +2338,7 @@ def ai_chat(current_user_id):
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
 
-                response = model.generate_content(prompt)
+                response = call_gemini_with_fallback(prompt)
                 ai_response = response.text
 
                 return jsonify({'response': ai_response})
@@ -2359,7 +2387,7 @@ def parse_screenshot(current_user_id):
                     "data": image_data
                 }
 
-                response = model.generate_content([prompt, image_part])
+                response = call_gemini_with_fallback(prompt, image_parts=image_part)
                 extracted_text = response.text.strip()
 
                 return jsonify({'text': extracted_text})
@@ -2479,7 +2507,7 @@ def generate_resume(current_user_id):
 }}
 """
 
-                response = model.generate_content(prompt)
+                response = call_gemini_with_fallback(prompt)
                 ai_result = parse_ai_response(response.text)
 
                 if ai_result and ai_result.get('resumeData'):

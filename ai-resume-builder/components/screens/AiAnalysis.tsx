@@ -548,12 +548,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
           console.log('Resume loaded successfully:', resume);
 
-          // Set the resume data with ID
-          if (setResumeData) {
-            const finalResumeData = {
-              id: resume.id,
-              ...resume.resume_data
-            };
+            // Set the resume data with ID
+            if (setResumeData) {
+              const finalResumeData = {
+                id: resume.id,
+                ...resume.resume_data,
+                resumeTitle: resume.title
+              };
 
             console.log('Setting resume data:', finalResumeData);
             setResumeData(finalResumeData);

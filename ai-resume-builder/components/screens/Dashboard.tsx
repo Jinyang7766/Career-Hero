@@ -110,6 +110,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               ...defaultData,
               ...fullResume.resume_data,
               id: fullResume.id,
+              resumeTitle: fullResume.title,
               personalInfo: {
                 ...defaultData.personalInfo,
                 ...(fullResume.resume_data?.personalInfo || {})

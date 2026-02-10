@@ -138,6 +138,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
               ...defaultData,
               ...resume.resume_data,
               id: resume.id,
+              resumeTitle: resume.title,
               personalInfo: {
                 ...defaultData.personalInfo,
                 ...(resume.resume_data?.personalInfo || {})
@@ -235,7 +236,8 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
         if (setResumeData) {
           const finalResumeData = {
             id: resume.id,
-            ...resume.resume_data
+            ...resume.resume_data,
+            resumeTitle: resume.title
           };
 
           console.log('Setting resume data for preview:', {

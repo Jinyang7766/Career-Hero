@@ -87,7 +87,7 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
       const resume = result.data.find((r: any) => r.id === resumeId);
       if (!resume?.resume_data) return;
       if (setResumeData) {
-        setResumeData({ id: resume.id, ...resume.resume_data });
+        setResumeData({ id: resume.id, ...resume.resume_data, resumeTitle: resume.title });
       }
       setCurrentView(View.PREVIEW);
     } catch (err) {

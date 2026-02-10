@@ -351,16 +351,17 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
       console.log('Save result:', result);
 
-      if (result.success) {
-        // Update the resume data with the returned ID if it's a new resume
-        if (!resumeData.id && result.data) {
-          setResumeData(prev => ({ ...prev, id: result.data.id }));
-        }
+        if (result.success) {
+          // Update the resume data with the returned ID if it's a new resume
+          if (!resumeData.id && result.data) {
+            setResumeData(prev => ({ ...prev, id: result.data.id }));
+          }
+          setResumeData(prev => ({ ...prev, resumeTitle: title }));
 
-        // Reload resumes to get the latest list
-        if (loadUserResumes) {
-          await loadUserResumes();
-        }
+          // Reload resumes to get the latest list
+          if (loadUserResumes) {
+            await loadUserResumes();
+          }
 
         const now = new Date();
         const timeLabel = now.toLocaleTimeString('zh-CN', {

@@ -97,7 +97,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
           <div className="mt-5 grid grid-cols-2 gap-4">
             <div className="bg-slate-50 dark:bg-[#1c1c1e] rounded-xl p-3 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold text-primary">{allResumes?.length ?? 0}</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">我的简历</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">简历总数</span>
             </div>
             <div className="bg-slate-50 dark:bg-[#1c1c1e] rounded-xl p-3 flex flex-col items-center justify-center">
               <span className="text-2xl font-bold text-emerald-500">
@@ -223,7 +223,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
         </div>
 
         <div className="flex justify-center mt-2">
-          <p className="text-xs text-gray-400 dark:text-gray-600">版本 2.1.0 (Build 302)</p>
+          <p className="text-xs text-gray-400 dark:text-gray-600">版本 1.1.0 (Build 302)</p>
         </div>
       </main>
     </div>
