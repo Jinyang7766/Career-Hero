@@ -179,81 +179,76 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     }
 
     try {
+      setIsLoadingResume(true);
       console.log('=== 简历预览调试信息 ===');
       console.log('Previewing resume:', resumeId);
       console.log('Current user:', user.id);
 
-      // Get all user resumes and find the specific one
-      const result = await DatabaseService.getUserResumes(user.id);
+      // Get single resume details
+      const result = await DatabaseService.getResume(String(resumeId));
 
       console.log('Database result:', result);
 
-      if (result.success) {
-        console.log('All resumes found:', result.data);
-
-        const resume = result.data.find(r => r.id === resumeId);
-
+      if (result.success && result.data) {
+        const resume = result.data;
         console.log('Target resume found:', resume);
 
-        if (resume) {
-          console.log('Resume data structure:', {
+        console.log('Resume data structure:', {
+          id: resume.id,
+          title: resume.title,
+          resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
+          resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
+        });
+
+        // Check if resume_data is empty
+        if (!resume.resume_data) {
+          console.error('❌ 简历数据为空: resume_data is null/undefined');
+          alert('简历数据为空，请重新创建简历');
+          return;
+        }
+
+        // Check if resume_data is empty object
+        if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+          console.error('❌ 简历数据为空对象: resume_data is empty object');
+          alert('简历数据为空，请重新创建简历');
+          return;
+        }
+
+        console.log('✅ Resume loaded for preview:', resume);
+
+        // Set the resume data with ID for preview
+        if (setResumeData) {
+          const finalResumeData = {
             id: resume.id,
-            title: resume.title,
-            resumeDataKeys: resume.resume_data ? Object.keys(resume.resume_data) : 'null',
-            resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
+            ...resume.resume_data
+          };
+
+          console.log('Setting resume data for preview:', {
+            id: finalResumeData.id,
+            hasPersonalInfo: !!finalResumeData.personalInfo,
+            hasWorkExps: Array.isArray(finalResumeData.workExps) && finalResumeData.workExps.length > 0,
+            hasEducations: Array.isArray(finalResumeData.educations) && finalResumeData.educations.length > 0,
+            hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
+            dataKeys: Object.keys(finalResumeData)
           });
 
-          // 检查resume_data是否为空
-          if (!resume.resume_data) {
-            console.error('❌ 简历数据为空: resume_data is null/undefined');
-            alert('简历数据为空，请重新创建简历');
-            return;
-          }
-
-          // 检查resume_data是否为空对象
-          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
-            console.error('❌ 简历数据为空对象: resume_data is empty object');
-            alert('简历数据为空，请重新创建简历');
-            return;
-          }
-
-          console.log('✅ Resume loaded for preview:', resume);
-
-          // Set the resume data with ID for preview
-          if (setResumeData) {
-            const finalResumeData = {
-              id: resume.id,
-              ...resume.resume_data
-            };
-
-            console.log('Setting resume data for preview:', {
-              id: finalResumeData.id,
-              hasPersonalInfo: !!finalResumeData.personalInfo,
-              hasWorkExps: Array.isArray(finalResumeData.workExps) && finalResumeData.workExps.length > 0,
-              hasEducations: Array.isArray(finalResumeData.educations) && finalResumeData.educations.length > 0,
-              hasSkills: Array.isArray(finalResumeData.skills) && finalResumeData.skills.length > 0,
-              dataKeys: Object.keys(finalResumeData)
-            });
-
-            setResumeData(finalResumeData);
-          }
-
-          setCurrentView(View.PREVIEW);
-        } else {
-          console.error('❌ Resume not found for preview');
-          alert(`简历不存在 (ID: ${resumeId})`);
+          setResumeData(finalResumeData);
         }
+
+        setCurrentView(View.PREVIEW);
       } else {
-        console.error('❌ 加载简历失败:', result.error);
-        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+        console.error('❌ Resume not found for preview');
+        alert(`简历不存在 (ID: ${resumeId})`);
       }
     } catch (error) {
-      console.error('❌ 预览简历时出错:', error);
-      alert('预览简历失败，请检查网络连接');
+      console.error('Preview error:', error);
+      alert('预览失败，请重试');
     } finally {
+      setIsLoadingResume(false);
       setActiveMenuId(null);
     }
   };
+
 
   const handleRenameClick = (id: number, currentTitle: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -329,7 +324,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             <div className="flex items-center gap-2 min-w-0">
               <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1">{resume.title}</p>
             </div>
-            <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1 mt-0.5">上次修改: {resume.date}</p>
+            <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1 mt-0.5">上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}</p>
           </div>
 
           <div className="relative">
@@ -343,13 +338,6 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             {/* Popover Menu */}
             {activeMenuId === resume.id && (
               <div className="absolute right-0 top-10 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                <button
-                  onClick={(e) => handlePreview(resume.id, e)}
-                  className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-[18px]">visibility</span>
-                  预览
-                </button>
                 <button
                   onClick={(e) => handleEdit(resume.id, e)}
                   disabled={isLoadingResume}

@@ -1,73 +1,92 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
-    <title>AI Resume Builder</title>
-    <!-- Google Fonts -->
-    <link href="https://fonts.googleapis.com" rel="preconnect" />
-    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <!-- Material Symbols -->
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        darkMode: 'class',
-        theme: {
-          extend: {
-            colors: {
-              primary: "#137fec",
-              "background-light": "#f6f7f8",
-              "background-dark": "#101922",
-              "surface-dark": "#1a2632",
-              "card-dark": "#192633",
-              "card-light": "#ffffff",
-              "text-secondary": "#92adc9",
-            },
-            fontFamily: {
-              sans: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
-              display: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
-            },
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+  <title>AI Resume Builder</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com" rel="preconnect" />
+  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet" />
+  <!-- Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+    rel="stylesheet" />
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: "#137fec",
+            "background-light": "#f6f7f8",
+            "background-dark": "#101922",
+            "surface-dark": "#1a2632",
+            "card-dark": "#192633",
+            "card-light": "#ffffff",
+            "text-secondary": "#92adc9",
+          },
+          fontFamily: {
+            sans: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
+            display: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
           },
         },
-      }
-    </script>
-    <style>
-      @font-face {
-        font-family: 'CustomFont';
-        src: url('/font.ttf') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      body {
-        margin: 0;
-        min-height: 100vh;
-        background-color: #101922; /* Default to dark match */
-        font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
-      }
-      .no-scrollbar::-webkit-scrollbar {
-        display: none;
-      }
-      .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-      }
-      .material-symbols-outlined {
-        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-      }
-      .fill-1 {
-        font-variation-settings: 'FILL' 1;
-      }
-      /* Accordion utility */
-      details > summary {
-        list-style: none;
-      }
-      details > summary::-webkit-details-marker {
-        display: none;
-      }
-    </style>
+      },
+    }
+  </script>
+  <style>
+    @font-face {
+      font-family: 'CustomFont';
+      src: url('/font.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background-color: #101922;
+      /* Default to dark match */
+      font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
+    }
+
+    input,
+    button,
+    select,
+    textarea {
+      font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    .material-symbols-outlined {
+      font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    }
+
+    .fill-1 {
+      font-variation-settings: 'FILL' 1;
+    }
+
+    /* Accordion utility */
+    details>summary {
+      list-style: none;
+    }
+
+    details>summary::-webkit-details-marker {
+      display: none;
+    }
+  </style>
   <script type="importmap">
 {
   "imports": {
@@ -79,8 +98,10 @@
 }
 </script>
 </head>
-  <body>
-    <div id="root"></div>
+
+<body>
+  <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
 </body>
+
 </html>

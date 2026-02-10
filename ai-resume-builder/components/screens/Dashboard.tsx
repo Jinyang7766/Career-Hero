@@ -1,12 +1,26 @@
 import React, { useState, useEffect } from 'react';
-import { ScreenProps } from '../../types';
+import { ScreenProps, View } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
+import { DatabaseService } from '../../src/database-service';
+import { supabase } from '../../src/supabase-client';
 
-const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ currentUser, createNewResume }) => {
+const CAREER_TIPS = [
+  "简历中的数字比形容词更有说服力。",
+  "针对每一份工作调整你的简历关键词。",
+  "保持简历简洁，重点突出最近的工作经历。",
+  "使用动词开头来描述你的成就。",
+  "检查拼写和语法错误是发布前的必要步骤。",
+  "展示你的软技能，如团队合作和沟通能力。",
+  "量化你的成果，例如：'提升了20%的效率'。",
+  "不要忽视你的业余项目，它们也能展示能力。",
+];
+
+const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ currentUser, createNewResume, allResumes, setCurrentView, setResumeData }) => {
   const [greeting, setGreeting] = useState('');
+  const [dailyTip, setDailyTip] = useState('');
 
   // Get user profile with real name
-  const { userProfile, loading, error } = useUserProfile();
+  const { userProfile } = useUserProfile();
   const displayName =
     userProfile?.name ||
     currentUser?.user_metadata?.name ||
@@ -31,7 +45,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     }
   };
 
-  // Update greeting every minute
+  // Update greeting every minute and set daily tip
   useEffect(() => {
     const updateGreeting = () => {
       setGreeting(getBeijingGreeting());
@@ -40,13 +54,71 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     updateGreeting();
     const interval = setInterval(updateGreeting, 60000); // Update every minute
 
+    // Set random tip
+    const randomTip = CAREER_TIPS[Math.floor(Math.random() * CAREER_TIPS.length)];
+    setDailyTip(randomTip);
+
     return () => clearInterval(interval);
   }, []);
+
+  const stats = React.useMemo(() => {
+    if (!allResumes) return { total: 0, optimized: 0 };
+    return {
+      total: allResumes.length,
+      optimized: allResumes.filter(r => r.optimizationStatus === 'optimized').length
+    };
+  }, [allResumes]);
+
+  const recentResumes = React.useMemo(() => {
+    if (!allResumes) return [];
+    // Sort by date descending and take top 3
+    return [...allResumes]
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      .slice(0, 3);
+  }, [allResumes]);
+
+  const [isLoadingResume, setIsLoadingResume] = React.useState(false);
+
+  const handleResumeClick = async (resumeId: number) => {
+    if (isLoadingResume) return;
+
+    try {
+      setIsLoadingResume(true);
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setIsLoadingResume(false);
+        return;
+      }
+
+      const result = await DatabaseService.getResume(String(resumeId));
+      if (result.success && result.data) {
+        const fullResume = result.data;
+        if (fullResume && fullResume.resume_data) {
+          if (setResumeData) {
+            setResumeData({ id: fullResume.id, ...fullResume.resume_data });
+          }
+          setCurrentView(View.PREVIEW);
+        } else {
+          console.error('Resume data is empty');
+          alert('简历数据为空');
+        }
+      } else {
+        console.error('Failed to load resume:', result.error);
+        alert('加载简历失败');
+      }
+    } catch (err) {
+      console.error('Failed to load recent resume for preview:', err);
+      alert('加载简历出错，请检查网络');
+    } finally {
+      setIsLoadingResume(false);
+    }
+  };
 
   return (
     <div className="flex flex-col pb-24 animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md">
+      <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5">
         <div className="flex flex-col">
           <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
             {greeting}{displayName ? `，${displayName}` : ''}
@@ -56,47 +128,121 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               weekday: 'long',
               year: 'numeric',
               month: 'long',
-              day: 'numeric',
-              timeZone: 'Asia/Shanghai'
+              day: 'numeric'
             })}
           </p>
         </div>
       </div>
 
-      {/* Create New Card */}
-      <div className="px-4 pb-6 pt-4">
-        <div
-          onClick={createNewResume}
-          className="group relative overflow-hidden rounded-xl bg-gradient-to-br from-primary to-[#0d5cb0] p-6 shadow-lg shadow-primary/20 cursor-pointer active:scale-[0.98] transition-all"
-        >
-          <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-          <div className="absolute -left-10 -bottom-10 h-40 w-40 rounded-full bg-white/10 blur-3xl"></div>
-          <div className="relative flex flex-col items-start gap-4">
-            <div className="flex items-center justify-center h-12 w-12 rounded-full bg-white/20 backdrop-blur-sm">
-              <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>add</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xl font-bold text-white">新建简历</h3>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-white text-primary uppercase tracking-wide">AI 向导</span>
-              </div>
-              <p className="text-blue-100 text-sm max-w-[90%]">通过智能向导，轻松几步创建专业简历。</p>
-            </div>
+      <div className="px-4 space-y-6 pt-2">
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                createNewResume?.();
-              }}
-              className="mt-2 flex items-center gap-2 rounded-lg bg-white px-4 py-2 text-sm font-semibold text-primary shadow-sm hover:bg-blue-50 transition-colors"
-            >
-              <span>立即开始</span>
-              <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
-            </button>
+        {/* Stats Overview */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-full -mr-6 -mt-6"></div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">简历总数</p>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</p>
+          </div>
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-full -mr-6 -mt-6"></div>
+            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">已优化</p>
+            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{stats.optimized}</p>
           </div>
         </div>
-      </div>
 
+        {/* Quick Actions - Simplified and Enlarged */}
+        <div>
+          <div
+            onClick={createNewResume}
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-8 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[200px] flex flex-col justify-center"
+          >
+            <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
+            <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+            <div className="relative z-10 flex flex-col items-start gap-5">
+              <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
+                <span className="material-symbols-outlined text-white" style={{ fontSize: '36px' }}>add</span>
+              </div>
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-2xl font-black text-white tracking-tight">新建简历</h3>
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
+                </div>
+                <p className="text-blue-100 text-sm font-medium opacity-90 max-w-[85%] leading-relaxed">
+                  通过智能 AI 向导，轻松定制专属于你的高光简历，几步操作即可开启职场新篇章。
+                </p>
+              </div>
+
+              <div className="mt-2 flex items-center gap-3 rounded-xl bg-white px-6 py-3 text-base font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
+                <span>立即开始</span>
+                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Resumes */}
+        {recentResumes.length > 0 && (
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <span className="w-1 h-4 bg-orange-500 rounded-full"></span>
+                最近编辑
+              </h3>
+              <button
+                onClick={() => setCurrentView(View.ALL_RESUMES)}
+                className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-0.5 hover:text-slate-700 dark:hover:text-slate-200"
+              >
+                全部
+                <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+              </button>
+            </div>
+
+            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-white/5 overflow-hidden flex flex-col">
+              {recentResumes.map(resume => (
+                <div
+                  key={resume.id}
+                  onClick={() => handleResumeClick(resume.id)}
+                  className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <div className="shrink-0 relative">
+                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                      {resume.thumbnail}
+                      {isLoadingResume && (
+                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10">
+                          <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex flex-col flex-1 justify-center min-w-0">
+                    <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                    <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                      上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                    </p>
+                  </div>
+                  {resume.optimizationStatus === 'optimized' && (
+                    <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded text-xs font-medium shrink-0">
+                      已优化
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Daily Tip */}
+        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl p-4 border border-indigo-100 dark:border-indigo-500/10 relative overflow-hidden">
+          <div className="absolute top-0 right-0 text-indigo-200 dark:text-indigo-800/10 transform translate-x-1/4 -translate-y-1/4">
+            <span className="material-symbols-outlined text-[80px]">format_quote</span>
+          </div>
+          <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 mb-1 uppercase tracking-wider">每日职场建议</p>
+          <p className="text-sm text-slate-700 dark:text-indigo-100 font-medium italic relative z-10 leading-relaxed">
+            "{dailyTip}"
+          </p>
+        </div>
+
+      </div>
     </div>
   );
 };

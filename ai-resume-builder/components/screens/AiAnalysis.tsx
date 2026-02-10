@@ -92,7 +92,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
-      return text.replace(/^[^:：]{0,20}[:：]\s*/,'').trim();
+      return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
     }
 
     return text;
@@ -680,19 +680,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const backendScore = unmaskedResult.score || 0;
 
       // 转换后端返回的数据格式为前端需要的格式
-        const analysisResult = {
-          summary: unmaskedResult.summary || 'AI分析完成',
-          strengths: unmaskedResult.strengths || [],
-          weaknesses: unmaskedResult.weaknesses || [],
-          missingKeywords: unmaskedResult.missingKeywords, // 直接使用后端返回的数据
-          score: backendScore, // 保存原始分数
-          scoreBreakdown: {
-            experience: Math.round(backendScore * 0.4), // 假设经验占40%
-            skills: Math.round(backendScore * 0.4),     // 技能占40%
-            format: Math.round(backendScore * 0.2)      // 格式占20%
-          },
-          suggestions: unmaskedResult.suggestions // 直接使用后端返回的建议
-        };
+      const analysisResult = {
+        summary: unmaskedResult.summary || 'AI分析完成',
+        strengths: unmaskedResult.strengths || [],
+        weaknesses: unmaskedResult.weaknesses || [],
+        missingKeywords: unmaskedResult.missingKeywords, // 直接使用后端返回的数据
+        score: backendScore, // 保存原始分数
+        scoreBreakdown: {
+          experience: Math.round(backendScore * 0.4), // 假设经验占40%
+          skills: Math.round(backendScore * 0.4),     // 技能占40%
+          format: Math.round(backendScore * 0.2)      // 格式占20%
+        },
+        suggestions: unmaskedResult.suggestions // 直接使用后端返回的建议
+      };
 
       // ========== 缓存存储 ==========
       // 将新的分析结果存入缓存
@@ -1298,7 +1298,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       return;
     }
 
-      AICacheService.get(resumeData, restoredJdText).then((cached) => {
+    AICacheService.get(resumeData, restoredJdText).then((cached) => {
       // 无论是否找到缓存，都标记为已尝试恢复，避免重复查询
       hasRestoredAnalysisRef.current = true;
 
@@ -1315,17 +1315,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setOriginalScore(cached.score || 0);
       setScore(cached.score || 0);
       setSuggestions(applySuggestionFeedback(cached.suggestions || []));
-        const normalizedBreakdown = normalizeScoreBreakdown(
-          cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
-          cached.score || 0
-        );
-        setReport({
-          summary: cached.summary || '',
-          strengths: cached.strengths || [],
-          weaknesses: cached.weaknesses || [],
-          missingKeywords: cached.missingKeywords || [],
-          scoreBreakdown: normalizedBreakdown
-        });
+      const normalizedBreakdown = normalizeScoreBreakdown(
+        cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+        cached.score || 0
+      );
+      setReport({
+        summary: cached.summary || '',
+        strengths: cached.strengths || [],
+        weaknesses: cached.weaknesses || [],
+        missingKeywords: cached.missingKeywords || [],
+        scoreBreakdown: normalizedBreakdown
+      });
 
       // 数据恢复完成后，保持当前步骤不变，由 localStorage 初始值或外部跳转逻辑决定步骤
       // 移除原有的强制跳转到 report 的逻辑，以修复从预览页跳转 chat 却落到 report 的问题
@@ -1648,28 +1648,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <div className="w-8"></div>
           </div>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 pb-32">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-4">第一步：选择简历</h2>
-          <div className="grid gap-4">
+        <main className="flex-1 overflow-y-auto pb-32">
+          <div className="px-4 pt-4 pb-2">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white">第一步：选择简历</h2>
+          </div>
+          <div className="flex flex-col">
             {(allResumes || []).filter(r => r.optimizationStatus !== 'optimized').length > 0 ? (
               (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').map((resume) => (
                 <div
                   key={resume.id}
                   onClick={() => handleResumeSelect(resume.id, false)}
-                  className="flex items-center gap-4 p-4 bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer hover:border-primary transition-all active:scale-[0.99]"
+                  className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
                 >
-                  <div className="shrink-0 w-12 h-16 bg-slate-100 dark:bg-slate-700 rounded overflow-hidden relative border border-slate-200 dark:border-slate-600">
-                    {resume.thumbnail}
+                  <div className="shrink-0 relative">
+                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                      {resume.thumbnail}
+                    </div>
                   </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-slate-900 dark:text-white">{resume.title}</h3>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{resume.date}</p>
+                  <div className="flex flex-col flex-1 justify-center min-w-0">
+                    <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                    <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                      上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                    </p>
                   </div>
-                  <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">arrow_forward_ios</span>
+                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">arrow_forward_ios</span>
                 </div>
               ))
             ) : (
-              <div className="p-4 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+              <div className="p-8 text-center text-slate-500 text-sm">
                 暂无可用简历
               </div>
             )}
@@ -1908,79 +1914,79 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                             {suggestion.targetSection === 'skills' ? 'extension' : 'edit'}
                           </span>
                         </p>
-                          {suggestion.targetSection === 'skills' ? (
-                            <div className="p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
-                              <div className="flex flex-wrap gap-2 min-h-[44px]">
-                                {(Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue : suggestion.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []).map((skill: string, idx: number) => (
-                                  <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20">
-                                    {skill}
-                                    <button
-                                      onClick={() => {
-                                        setSuggestions(prev => prev.map(s => {
-                                          if (s.id !== suggestion.id) return s;
-                                          const list = Array.isArray(s.suggestedValue)
-                                            ? [...s.suggestedValue]
-                                            : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
-                                          list.splice(idx, 1);
-                                          return { ...s, suggestedValue: list };
-                                        }));
-                                      }}
-                                      className="text-primary/70 hover:text-primary"
-                                      aria-label="remove-skill"
-                                      type="button"
-                                    >
-                                      <span className="material-symbols-outlined text-[12px]">close</span>
-                                    </button>
-                                  </span>
-                                ))}
-                                {(!suggestion.suggestedValue || (Array.isArray(suggestion.suggestedValue) && suggestion.suggestedValue.length === 0)) && (
-                                  <span className="text-slate-400 italic text-xs">建议补充相关技能</span>
-                                )}
-                              </div>
-                              <div className="mt-3 flex items-center gap-2">
-                                <input
-                                  type="text"
-                                  placeholder="新增技能，回车添加"
-                                  className="flex-1 text-xs text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-black/30 px-3 py-2 rounded-md border border-slate-200 dark:border-white/10 focus:ring-2 focus:ring-green-500/30 outline-none"
-                                  onKeyDown={(e) => {
-                                    if (e.key !== 'Enter') return;
-                                    const value = e.currentTarget.value.trim();
-                                    if (!value) return;
-                                    setSuggestions(prev => prev.map(s => {
-                                      if (s.id !== suggestion.id) return s;
-                                      const list = Array.isArray(s.suggestedValue)
-                                        ? [...s.suggestedValue]
-                                        : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
-                                      if (!list.includes(value)) list.push(value);
-                                      return { ...s, suggestedValue: list };
-                                    }));
-                                    e.currentTarget.value = '';
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="px-3 py-2 text-xs font-semibold text-white bg-primary rounded-md hover:bg-primary/90"
-                                  onClick={(e) => {
-                                    const input = (e.currentTarget.previousElementSibling as HTMLInputElement | null);
-                                    if (!input) return;
-                                    const value = input.value.trim();
-                                    if (!value) return;
-                                    setSuggestions(prev => prev.map(s => {
-                                      if (s.id !== suggestion.id) return s;
-                                      const list = Array.isArray(s.suggestedValue)
-                                        ? [...s.suggestedValue]
-                                        : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
-                                      if (!list.includes(value)) list.push(value);
-                                      return { ...s, suggestedValue: list };
-                                    }));
-                                    input.value = '';
-                                  }}
-                                >
-                                  添加
-                                </button>
-                              </div>
+                        {suggestion.targetSection === 'skills' ? (
+                          <div className="p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
+                            <div className="flex flex-wrap gap-2 min-h-[44px]">
+                              {(Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue : suggestion.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []).map((skill: string, idx: number) => (
+                                <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20">
+                                  {skill}
+                                  <button
+                                    onClick={() => {
+                                      setSuggestions(prev => prev.map(s => {
+                                        if (s.id !== suggestion.id) return s;
+                                        const list = Array.isArray(s.suggestedValue)
+                                          ? [...s.suggestedValue]
+                                          : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                        list.splice(idx, 1);
+                                        return { ...s, suggestedValue: list };
+                                      }));
+                                    }}
+                                    className="text-primary/70 hover:text-primary"
+                                    aria-label="remove-skill"
+                                    type="button"
+                                  >
+                                    <span className="material-symbols-outlined text-[12px]">close</span>
+                                  </button>
+                                </span>
+                              ))}
+                              {(!suggestion.suggestedValue || (Array.isArray(suggestion.suggestedValue) && suggestion.suggestedValue.length === 0)) && (
+                                <span className="text-slate-400 italic text-xs">建议补充相关技能</span>
+                              )}
                             </div>
-                          ) : (
+                            <div className="mt-3 flex items-center gap-2">
+                              <input
+                                type="text"
+                                placeholder="新增技能，回车添加"
+                                className="flex-1 text-xs text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-black/30 px-3 py-2 rounded-md border border-slate-200 dark:border-white/10 focus:ring-2 focus:ring-green-500/30 outline-none"
+                                onKeyDown={(e) => {
+                                  if (e.key !== 'Enter') return;
+                                  const value = e.currentTarget.value.trim();
+                                  if (!value) return;
+                                  setSuggestions(prev => prev.map(s => {
+                                    if (s.id !== suggestion.id) return s;
+                                    const list = Array.isArray(s.suggestedValue)
+                                      ? [...s.suggestedValue]
+                                      : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                    if (!list.includes(value)) list.push(value);
+                                    return { ...s, suggestedValue: list };
+                                  }));
+                                  e.currentTarget.value = '';
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="px-3 py-2 text-xs font-semibold text-white bg-primary rounded-md hover:bg-primary/90"
+                                onClick={(e) => {
+                                  const input = (e.currentTarget.previousElementSibling as HTMLInputElement | null);
+                                  if (!input) return;
+                                  const value = input.value.trim();
+                                  if (!value) return;
+                                  setSuggestions(prev => prev.map(s => {
+                                    if (s.id !== suggestion.id) return s;
+                                    const list = Array.isArray(s.suggestedValue)
+                                      ? [...s.suggestedValue]
+                                      : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                    if (!list.includes(value)) list.push(value);
+                                    return { ...s, suggestedValue: list };
+                                  }));
+                                  input.value = '';
+                                }}
+                              >
+                                添加
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
                           <textarea
                             value={Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue.join(', ') : suggestion.suggestedValue}
                             onChange={(e) => {
@@ -2021,10 +2027,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
           {/* Export PDF Button - After suggestions */}
-            <div className="mb-52 space-y-3">
-              <button
-                onClick={handleExportPDF}
-                disabled={!hasAcceptedSuggestion}
+          <div className="mb-52 space-y-3">
+            <button
+              onClick={handleExportPDF}
+              disabled={!hasAcceptedSuggestion}
               className={`w-full flex items-center justify-center gap-3 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
                 ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                 : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
@@ -2034,16 +2040,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 <span className="material-symbols-outlined text-[24px]">download</span>
                 <span className="text-base font-bold tracking-wide">前往预览导出</span>
               </>
-              </button>
-              <button
-                onClick={handleAnalyzeOtherResume}
-                className="w-full flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-[0.98]"
-              >
-                <span className="material-symbols-outlined text-[20px]">restart_alt</span>
-                <span className="text-sm font-semibold tracking-wide">分析其他简历</span>
-              </button>
+            </button>
+            <button
+              onClick={handleAnalyzeOtherResume}
+              className="w-full flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-[0.98]"
+            >
+              <span className="material-symbols-outlined text-[20px]">restart_alt</span>
+              <span className="text-sm font-semibold tracking-wide">分析其他简历</span>
+            </button>
 
-            </div>
+          </div>
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}

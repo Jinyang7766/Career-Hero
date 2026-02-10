@@ -33,7 +33,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const [isProcessing, setIsProcessing] = useState(false);
   const [textError, setTextError] = useState('');
   const pdfInputRef = useRef<HTMLInputElement>(null);
-  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveIntervalRef = useRef<number | null>(null);
   const lastAutosavedRef = useRef<string>('');
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
@@ -61,15 +61,14 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   useEffect(() => {
     if (!resumeData?.id) return;
 
-    const serialized = JSON.stringify(resumeData);
-    if (serialized === lastAutosavedRef.current) return;
-
-    if (autosaveTimerRef.current) {
-      window.clearTimeout(autosaveTimerRef.current);
+    if (autosaveIntervalRef.current) {
+      window.clearInterval(autosaveIntervalRef.current);
     }
 
-    autosaveTimerRef.current = window.setTimeout(async () => {
+    autosaveIntervalRef.current = window.setInterval(async () => {
       try {
+        const serialized = JSON.stringify(resumeData);
+        if (serialized === lastAutosavedRef.current) return;
         setIsAutosaving(true);
         await DatabaseService.updateResume(String(resumeData.id), {
           resume_data: resumeData,
@@ -87,14 +86,14 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       } finally {
         setIsAutosaving(false);
       }
-    }, 1200);
+    }, 30000);
 
     return () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
+      if (autosaveIntervalRef.current) {
+        window.clearInterval(autosaveIntervalRef.current);
       }
     };
-  }, [resumeData]);
+  }, [resumeData?.id]);
 
 
 
@@ -436,20 +435,22 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             <span className="material-symbols-outlined text-[28px]">arrow_back</span>
           </button>
           <div className="flex-1 text-center">
-            <h1 className="text-base font-bold leading-tight">
+            <h1 className="text-lg font-bold leading-tight">
               {WIZARD_STEPS[currentStepIndex].label}
             </h1>
             <p className="text-xs text-slate-500 dark:text-text-secondary">
               步骤 {currentStepIndex + 1} / {WIZARD_STEPS.length}
             </p>
           </div>
-          <div className="text-right flex flex-col items-end min-w-[88px]">
-            <span className="text-[11px] text-slate-500 dark:text-slate-400">
-              {isAutosaving ? '保存中...' : '已自动保存'}
+          <div className="text-right flex flex-col items-end min-w-[96px]">
+            <span className="text-sm text-slate-500 dark:text-slate-400">
+              {isAutosaving ? '保存中...' : (lastSavedAt ? '已自动保存' : '未保存')}
             </span>
-            <span className="text-[10px] text-slate-400 dark:text-slate-500">
-              {lastSavedAt ? `时间 ${lastSavedAt}` : `完整度 ${completeness}%`}
-            </span>
+            {lastSavedAt && (
+              <span className="text-xs text-slate-400 dark:text-slate-500">
+                时间 {lastSavedAt}
+              </span>
+            )}
           </div>
         </div>
 

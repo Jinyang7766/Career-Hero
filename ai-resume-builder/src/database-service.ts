@@ -13,12 +13,12 @@ export class DatabaseService {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
         });
-      
+
       if (error) {
         console.error('Error creating user record:', error);
         return { success: false, error };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Database operation failed:', err);
@@ -34,12 +34,12 @@ export class DatabaseService {
         .select('*')
         .eq('id', userId)
         .single();
-      
+
       if (error) {
         console.error('Error fetching user:', error);
         return { success: false, error, data: null };
       }
-      
+
       return { success: true, data };
     } catch (err) {
       console.error('Database operation failed:', err);
@@ -57,12 +57,12 @@ export class DatabaseService {
           updated_at: new Date().toISOString()
         })
         .eq('id', userId);
-      
+
       if (error) {
         console.error('Error updating user:', error);
         return { success: false, error };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Database operation failed:', err);
@@ -86,18 +86,18 @@ export class DatabaseService {
         hasEducations: resumeData?.educations,
         hasSkills: resumeData?.skills
       });
-      
+
       // 验证简历数据
       if (!resumeData || typeof resumeData !== 'object') {
         console.error('❌ Invalid resume data: not an object');
         return { success: false, error: new Error('简历数据无效'), data: null };
       }
-      
+
       if (Object.keys(resumeData).length === 0) {
         console.error('❌ Invalid resume data: empty object');
         return { success: false, error: new Error('简历数据为空'), data: null };
       }
-      
+
       const { data, error } = await supabase
         .from('resumes')
         .insert({
@@ -111,9 +111,9 @@ export class DatabaseService {
         })
         .select()
         .single();
-      
+
       console.log('Supabase insert result:', { data, error });
-      
+
       if (error) {
         console.error('❌ Error creating resume:', error);
         console.error('Error details:', {
@@ -124,7 +124,7 @@ export class DatabaseService {
         });
         return { success: false, error, data: null };
       }
-      
+
       console.log('✅ Resume created successfully:', data);
       return { success: true, data };
     } catch (err) {
@@ -138,15 +138,15 @@ export class DatabaseService {
     try {
       console.log('=== DatabaseService.getUserResumes 调试信息 ===');
       console.log('Querying resumes for user:', userId);
-      
+
       const { data, error } = await supabase
         .from('resumes')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
-      
+
       console.log('Supabase query result:', { data, error });
-      
+
       if (error) {
         console.error('❌ Error fetching resumes:', error);
         console.error('Error details:', {
@@ -157,7 +157,7 @@ export class DatabaseService {
         });
         return { success: false, error, data: [] };
       }
-      
+
       console.log('✅ Successfully fetched resumes:', {
         count: data?.length || 0,
         resumeIds: data?.map(r => r.id) || [],
@@ -170,11 +170,32 @@ export class DatabaseService {
           resumeDataSize: r.resume_data ? JSON.stringify(r.resume_data).length : 0
         })) || []
       });
-      
+
       return { success: true, data: data || [] };
     } catch (err) {
       console.error('❌ Database operation failed:', err);
       return { success: false, error: err, data: [] };
+    }
+  }
+
+  // 获取单个简历
+  static async getResume(resumeId: string) {
+    try {
+      const { data, error } = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('id', resumeId)
+        .single();
+
+      if (error) {
+        console.error('Error fetching resume:', error);
+        return { success: false, error, data: null };
+      }
+
+      return { success: true, data };
+    } catch (err) {
+      console.error('Database operation failed:', err);
+      return { success: false, error: err, data: null };
     }
   }
 
@@ -190,12 +211,12 @@ export class DatabaseService {
         .eq('id', resumeId)
         .select()
         .single();
-      
+
       if (error) {
         console.error('Error updating resume:', error);
         return { success: false, error, data: null };
       }
-      
+
       return { success: true, data };
     } catch (err) {
       console.error('Database operation failed:', err);
@@ -210,12 +231,12 @@ export class DatabaseService {
         .from('resumes')
         .delete()
         .eq('id', resumeId);
-      
+
       if (error) {
         console.error('Error deleting resume:', error);
         return { success: false, error };
       }
-      
+
       return { success: true };
     } catch (err) {
       console.error('Database operation failed:', err);

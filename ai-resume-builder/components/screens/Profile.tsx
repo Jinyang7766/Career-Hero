@@ -100,8 +100,10 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
               <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">我的简历</span>
             </div>
             <div className="bg-slate-50 dark:bg-[#1c1c1e] rounded-xl p-3 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold text-emerald-500">{completeness}%</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">完善度</span>
+              <span className="text-2xl font-bold text-emerald-500">
+                {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">已优化</span>
             </div>
           </div>
         </div>
@@ -148,7 +150,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
               <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
                 <span className="material-symbols-outlined">description</span>
               </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">我的简历管理</span>
+              <span className="text-base font-medium text-slate-900 dark:text-white">我的简历</span>
             </div>
             <div className="text-gray-400">
               <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
