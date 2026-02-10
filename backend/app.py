@@ -60,6 +60,11 @@ app = Flask(__name__)
 # 这确保了在 Railway、Render 等平台上能正常监听正确的端口
 PORT = int(os.environ.get('PORT', 5000))
 
+# Debug: Log environment variable keys (NOT values) to verify injection
+logger = logging.getLogger(__name__)
+env_keys = list(os.environ.keys())
+logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
+
 # Ensure Render environment variables are loaded
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET') or os.environ.get('SECRET_KEY')
 
