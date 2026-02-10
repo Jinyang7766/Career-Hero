@@ -42,6 +42,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const [showImportSuccess, setShowImportSuccess] = useState(false);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationStep, setValidationStep] = useState<WizardStep | null>(null);
+  const [validationReason, setValidationReason] = useState<'missing' | 'format'>('missing');
+  const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
   const lastNormalizedResumeIdRef = useRef<number | null>(null);
 
   // Always use wizard mode (no free edit mode)
@@ -351,6 +353,28 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
     }
   };
 
+  const validatePersonalFormats = (data: ResumeData) => {
+    const errors: Record<string, string> = {};
+    const name = (data.personalInfo.name || '').trim();
+    const title = (data.personalInfo.title || '').trim();
+    const email = (data.personalInfo.email || '').trim();
+    const phone = (data.personalInfo.phone || '').trim();
+
+    if (name && /^\d+$/.test(name)) {
+      errors.name = '姓名格式不正确';
+    }
+    if (title && /^\d+$/.test(title)) {
+      errors.title = '求职意向格式不正确';
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      errors.email = '邮箱格式不正确';
+    }
+    if (phone && !/^\+?[\d\s\-()]{7,20}$/.test(phone)) {
+      errors.phone = '电话号码格式不正确';
+    }
+    return errors;
+  };
+
   const handleInfoChange = (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => {
     if (field === 'gender') {
       setResumeData(prev => ({
@@ -362,6 +386,19 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
         ...prev,
         personalInfo: { ...prev.personalInfo, [field]: value }
       }));
+    }
+    if (validationStep === 'personal') {
+      setFormatErrors(prev => {
+        const next = { ...prev };
+        if (field !== 'gender') {
+          const updated: ResumeData = {
+            ...resumeData,
+            personalInfo: { ...resumeData.personalInfo, [field]: value }
+          };
+          return validatePersonalFormats(updated);
+        }
+        return next;
+      });
     }
   };
 
@@ -566,9 +603,21 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
   const handleNextStep = () => {
     if (isStepRequired(currentStep) && !isCurrentStepComplete) {
+      setValidationReason('missing');
       setValidationStep(currentStep);
       setShowValidationModal(true);
       return;
+    }
+    if (currentStep === 'personal') {
+      const errors = validatePersonalFormats(resumeData);
+      if (Object.keys(errors).length > 0) {
+        setValidationReason('format');
+        setFormatErrors(errors);
+        setValidationStep('personal');
+        setShowValidationModal(true);
+        return;
+      }
+      setFormatErrors({});
     }
     if (currentStep === 'projects') {
       setHasTouchedProjects(true);
@@ -713,6 +762,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             isComplete={isPersonalInfoComplete()}
             onInfoChange={handleInfoChange}
             showValidation={validationStep === 'personal'}
+            formatErrors={formatErrors}
           />
         )}
 
@@ -856,8 +906,12 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             <div className="mx-auto mb-3 size-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center">
               <span className="material-symbols-outlined text-[22px]">error</span>
             </div>
-            <h3 className="text-base font-semibold text-slate-900 dark:text-white">未填完必填字段</h3>
-            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">请补充标红内容后再继续</p>
+            <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+              {validationReason === 'format' ? '字段格式有误' : '未填完必填字段'}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              {validationReason === 'format' ? '请修正标红内容后再继续' : '请补充标红内容后再继续'}
+            </p>
             <button
               onClick={() => setShowValidationModal(false)}
               className="mt-5 w-full rounded-xl bg-primary text-white py-2.5 font-semibold hover:bg-blue-600 active:scale-[0.98] transition-all"
