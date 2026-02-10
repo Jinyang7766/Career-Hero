@@ -5,6 +5,7 @@ type ImportStepProps = {
   onTextResumeChange: (value: string) => void;
   onTextImport: () => void;
   isProcessing: boolean;
+  isPdfProcessing?: boolean;
   textError: string;
   pdfError: string;
   onPdfImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
@@ -17,6 +18,7 @@ const ImportStep: React.FC<ImportStepProps> = ({
   onTextResumeChange,
   onTextImport,
   isProcessing,
+  isPdfProcessing = false,
   textError,
   pdfError,
   onPdfImport,
@@ -36,10 +38,20 @@ const ImportStep: React.FC<ImportStepProps> = ({
       <div className="space-y-3">
         <button
           onClick={() => pdfInputRef.current?.click()}
-          className="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 active:scale-[0.98] transition-all shadow-lg shadow-blue-500/20"
+          disabled={isPdfProcessing}
+          className="w-full py-3 px-4 bg-primary text-white font-semibold rounded-xl flex items-center justify-center gap-2 hover:bg-blue-600 active:scale-[0.98] transition-all shadow-lg shadow-blue-500/20 disabled:opacity-70 disabled:cursor-not-allowed"
         >
-          <span className="material-symbols-outlined">description</span>
-          上传 PDF / Word 文件
+          {isPdfProcessing ? (
+            <>
+              <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              正在读取您的简历...
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined">description</span>
+              上传 PDF / Word 文件
+            </>
+          )}
         </button>
         <input
           ref={pdfInputRef}
@@ -69,7 +81,7 @@ const ImportStep: React.FC<ImportStepProps> = ({
           {isProcessing ? (
             <>
               <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-              处理中...
+              正在读取您的简历...
             </>
           ) : (
             <>

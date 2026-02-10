@@ -138,6 +138,39 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
     return 'workExps';
   };
+
+  const getSuggestionModuleLabel = (suggestion: Suggestion) => {
+    const section = suggestion.targetSection;
+    if (section === 'personalInfo') return '个人信息';
+    if (section === 'skills') return '技能';
+    if (section === 'projects') {
+      const projects = resumeData?.projects || [];
+      if (projects.length > 1 && typeof suggestion.targetId === 'number') {
+        const match = projects.find(item => item.id === suggestion.targetId);
+        const label = match?.title || match?.subtitle;
+        if (label) return `项目经历 - ${label}`;
+      }
+      return '项目经历';
+    }
+    if (section === 'summary') return '个人简介';
+    if (section === 'workExps') {
+      const exps = resumeData?.workExps || [];
+      if (exps.length > 1 && typeof suggestion.targetId === 'number') {
+        const match = exps.find(item => item.id === suggestion.targetId);
+        if (match?.company) return `工作经历 - ${match.company}`;
+      }
+      return '工作经历';
+    }
+    if (section === 'educations') {
+      const edus = resumeData?.educations || [];
+      if (edus.length > 1 && typeof suggestion.targetId === 'number') {
+        const match = edus.find(item => item.id === suggestion.targetId);
+        if (match?.school) return `教育背景 - ${match.school}`;
+      }
+      return '教育背景';
+    }
+    return '简历';
+  };
   // --- Privacy masking helpers ---
   const createMasker = () => {
     const mapping = new Map<string, string>();
@@ -2100,6 +2133,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     <div className="px-4 py-3 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5">
                       <div className="flex justify-between items-start mb-1">
                         <span className="text-xs font-bold text-primary uppercase tracking-wider">{suggestion.title}</span>
+                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                          {getSuggestionModuleLabel(suggestion)}
+                        </span>
                       </div>
                       <p className="text-sm text-slate-600 dark:text-slate-300">{suggestion.reason}</p>
                       <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">

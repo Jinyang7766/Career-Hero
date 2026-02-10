@@ -700,13 +700,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
                     }}
                     disabled={!canClick}
                     className={`flex flex-col items-center transition-all ${isMissing
-                        ? 'text-red-500'
-                        : (canClick ? 'text-primary' : 'text-slate-300 dark:text-slate-600')
+                      ? 'text-red-500'
+                      : (canClick ? 'text-primary' : 'text-slate-300 dark:text-slate-600')
                       } ${!canClick ? 'cursor-not-allowed opacity-60' : ''}`}
                   >
                     <div className={`flex items-center justify-center w-8 h-8 rounded-full transition-all ${isMissing
-                        ? 'bg-red-50 dark:bg-red-900/20'
-                        : (isActive ? 'bg-primary/10 scale-110' : '')
+                      ? 'bg-red-50 dark:bg-red-900/20'
+                      : (isActive ? 'bg-primary/10 scale-110' : '')
                       }`}>
                       <span className={`material-symbols-outlined text-[20px] ${isActive ? 'font-bold' : ''}`}>{step.icon}</span>
                     </div>
@@ -745,6 +745,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
             onTextResumeChange={setTextResume}
             onTextImport={handleTextImport}
             isProcessing={isProcessing}
+            isPdfProcessing={isPdfProcessing}
             textError={textError}
             pdfError={pdfError}
             onPdfImport={handlePDFImport}
