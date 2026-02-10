@@ -264,6 +264,7 @@ function App() {
   const handleBottomNavClick = (view: View) => {
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
     if (view === View.AI_ANALYSIS) {
+      localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
       // Only reset if user has not started any AI assistant flow yet
       const hasActivity = localStorage.getItem('ai_analysis_has_activity') === '1';
       if (!hasActivity) {

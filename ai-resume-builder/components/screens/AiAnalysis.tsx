@@ -205,6 +205,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
       setChatEntrySource('internal');
       localStorage.setItem('ai_chat_entry_source', 'internal');
+      if (chatMessages.length === 0) {
+        restoreInterviewSession();
+      }
       navigateToStep('chat');
       return;
     }
@@ -441,6 +444,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     return parts.join(' - ');
+  };
+
+  const restoreInterviewSession = (overrideJdText?: string) => {
+    if (!resumeData) return;
+    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
+    if (!jdText && sessionJdText) {
+      setJdText(sessionJdText);
+    }
+
+    const sessions = resumeData.interviewSessions || {};
+    const sessionKey = sessionJdText ? makeJdKey(sessionJdText) : null;
+    const session = sessionKey ? sessions[sessionKey] : getLatestInterviewSession(sessions);
+
+    if (session && session.messages?.length) {
+      setChatMessages(session.messages as ChatMessage[]);
+      setChatInitialized(true);
+    } else {
+      setChatMessages([]);
+      setChatInitialized(false);
+    }
   };
 
   const persistInterviewSession = async (messages: ChatMessage[], overrideJdText?: string) => {
@@ -1229,6 +1252,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setIsChatPrefill(false);
     }
   }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+
+    const entrySource = localStorage.getItem('ai_analysis_entry_source');
+    if (entrySource !== 'bottom_nav') return;
+
+    localStorage.removeItem('ai_analysis_entry_source');
+
+    if (localStorage.getItem('ai_interview_open') === '1') {
+      return;
+    }
+
+    const nextStep: Step = score > 0 || suggestions.length > 0 ? 'report' : 'resume_select';
+    setChatEntrySource('internal');
+    setLastChatStep(nextStep);
+    localStorage.setItem('ai_chat_entry_source', 'internal');
+    localStorage.setItem('ai_chat_prev_step', nextStep);
+    setStepHistory([]);
+    setCurrentStep(nextStep);
+  }, [currentStep, score, suggestions.length]);
 
 
   // 记住用户所在步骤，切换回来可恢复
