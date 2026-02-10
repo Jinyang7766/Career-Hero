@@ -98,8 +98,20 @@ if GEMINI_API_KEY != 'your-gemini-api-key':
 else:
     model = None
 
-# Initialize Supabase with error handling
-try:
+  # Initialize Supabase with error handling
+  def _clear_proxy_env():
+      proxy_keys = ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']
+      removed = {}
+      for key in proxy_keys:
+          if key in os.environ:
+              removed[key] = os.environ.pop(key)
+      return removed
+
+  def _restore_proxy_env(removed):
+      for key, value in removed.items():
+          os.environ[key] = value
+
+  try:
     # Explicitly check for URL validity before connecting
     if not SUPABASE_URL or SUPABASE_URL == 'your-supabase-url' or not SUPABASE_URL.startswith('http'):
         print(f"WARNING: Invalid SUPABASE_URL detected: {SUPABASE_URL}")
@@ -107,17 +119,22 @@ try:
     else:
         # Supabase SDK sometimes tries to use proxy env vars (HTTP_PROXY) incorrectly in some versions.
         # If create_client fails with 'proxy' error, we attempt a clean init.
-        try:
-            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-            print("Supabase connected successfully")
-        except TypeError as e:
-            if "proxy" in str(e):
-                print("Detected proxy argument mismatch, attempting simple Client initialization...")
-                # Fallback to direct Client instantiation if create_client has issues
-                supabase = Client(supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY)
-                print("Supabase connected successfully (manual fallback)")
-            else:
-                raise e
+          try:
+              removed_proxy_env = _clear_proxy_env()
+              supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+              _restore_proxy_env(removed_proxy_env)
+              print("Supabase connected successfully")
+          except TypeError as e:
+              _restore_proxy_env(removed_proxy_env)
+              if "proxy" in str(e):
+                  print("Detected proxy argument mismatch, attempting simple Client initialization...")
+                  # Fallback to direct Client instantiation if create_client has issues
+                  removed_proxy_env = _clear_proxy_env()
+                  supabase = Client(supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY)
+                  _restore_proxy_env(removed_proxy_env)
+                  print("Supabase connected successfully (manual fallback)")
+              else:
+                  raise e
 except Exception as e:
     print(f"Supabase connection failed: {e}")
     print("Using mock data storage for development")
