@@ -3,8 +3,11 @@ from dotenv import load_dotenv
 load_dotenv()  # 加载 .env 文件
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
-from supabase import create_client, Client
 import os
+# Clear proxy env vars before importing supabase to avoid proxy kw mismatch in some versions
+for _key in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']:
+    os.environ.pop(_key, None)
+from supabase import create_client, Client
 import uuid
 from datetime import datetime
 from functools import wraps
