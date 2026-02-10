@@ -9,7 +9,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
 
   const getButtonClass = (view: View) => {
     const isActive = currentView === view ||
-      (view === View.ALL_RESUMES && [View.ALL_RESUMES, View.TEMPLATES].includes(currentView)) ||
+      (view === View.ALL_RESUMES && [View.ALL_RESUMES, View.TEMPLATES, View.PREVIEW].includes(currentView)) ||
       (view === View.PROFILE && [View.SETTINGS, View.HELP].includes(currentView));
 
     return `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors group ${isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'

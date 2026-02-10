@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import { DatabaseService } from '../../src/database-service';
+import BottomNav from '../BottomNav';
 
 // --- Helper Functions ---
 
@@ -703,16 +704,16 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           {isOptimized && (
             <button
               onClick={() => {
-                  if (resumeData?.id) {
-                    localStorage.setItem('ai_report_open', '1');
-                    localStorage.setItem('ai_report_resume_id', String(resumeData.id));
-                    localStorage.setItem('ai_analysis_step', 'report');
-                    localStorage.setItem('ai_analysis_resume_id', String(resumeData.id));
-                    localStorage.setItem('ai_report_resume_payload', JSON.stringify({
-                      id: resumeData.id,
-                      title: resumeData.resumeTitle || '简历',
-                      resume_data: resumeData
-                    }));
+                if (resumeData?.id) {
+                  localStorage.setItem('ai_report_open', '1');
+                  localStorage.setItem('ai_report_resume_id', String(resumeData.id));
+                  localStorage.setItem('ai_analysis_step', 'report');
+                  localStorage.setItem('ai_analysis_resume_id', String(resumeData.id));
+                  localStorage.setItem('ai_report_resume_payload', JSON.stringify({
+                    id: resumeData.id,
+                    title: resumeData.resumeTitle || '简历',
+                    resume_data: resumeData
+                  }));
                 }
                 setCurrentView(View.AI_ANALYSIS);
               }}
@@ -760,6 +761,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           </p>
         </div>
       </main>
+      <BottomNav currentView={View.PREVIEW} setCurrentView={setCurrentView} />
     </div>
   );
 };
