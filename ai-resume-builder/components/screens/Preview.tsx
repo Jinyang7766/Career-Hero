@@ -693,13 +693,14 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           </div>
           {isOptimized && (
             <button
-              onClick={() => {
-                if (resumeData?.id) {
-                  localStorage.setItem('ai_report_open', '1');
-                  localStorage.setItem('ai_report_resume_id', String(resumeData.id));
-                }
-                setCurrentView(View.AI_ANALYSIS);
-              }}
+                onClick={() => {
+                  if (resumeData?.id) {
+                    localStorage.setItem('ai_report_open', '1');
+                    localStorage.setItem('ai_report_resume_id', String(resumeData.id));
+                    localStorage.setItem('ai_analysis_step', 'report');
+                  }
+                  setCurrentView(View.AI_ANALYSIS);
+                }}
               className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-br from-primary via-blue-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-500/25 active:scale-[0.98] transition-all group overflow-hidden relative"
             >
               {/* Decorative background elements */}

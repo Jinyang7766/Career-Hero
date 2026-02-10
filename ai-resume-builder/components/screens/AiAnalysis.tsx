@@ -265,6 +265,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const CHAT_PREFILL_TEXT = '准备好了';
   const [isChatPrefill, setIsChatPrefill] = useState(false);
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
+  const [forceReportEntry, setForceReportEntry] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
@@ -290,6 +291,46 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     return items.map(item => {
       const entry = feedback[item.id];
       return entry?.rating ? { ...item, rating: entry.rating } : item;
+    });
+  };
+
+  const applyAnalysisSnapshot = (snapshot: any) => {
+    if (!snapshot) return false;
+    setOriginalScore(snapshot.score || 0);
+    setScore(snapshot.score || 0);
+    setSuggestions([]);
+    setReport({
+      summary: snapshot.summary || '',
+      strengths: snapshot.strengths || [],
+      weaknesses: snapshot.weaknesses || [],
+      missingKeywords: snapshot.missingKeywords || [],
+      scoreBreakdown: snapshot.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
+    });
+    setIsFromCache(true);
+    return true;
+  };
+
+  const persistAnalysisSnapshot = async (data: ResumeData, reportData: AnalysisReport, scoreValue: number) => {
+    if (!data?.id) return;
+    if (data.optimizationStatus !== 'optimized') return;
+    const snapshot = {
+      score: scoreValue,
+      summary: reportData.summary || '',
+      strengths: reportData.strengths || [],
+      weaknesses: reportData.weaknesses || [],
+      missingKeywords: reportData.missingKeywords || [],
+      scoreBreakdown: reportData.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+      updatedAt: new Date().toISOString(),
+      jdText: jdText || data.lastJdText || '',
+      targetCompany: targetCompany || data.targetCompany || ''
+    };
+    const updatedResumeData = { ...data, analysisSnapshot: snapshot };
+    if (setResumeData) {
+      setResumeData(updatedResumeData);
+    }
+    await DatabaseService.updateResume(String(data.id), {
+      resume_data: updatedResumeData,
+      updated_at: new Date().toISOString()
     });
   };
 
@@ -459,9 +500,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setTargetCompany(resumeData.targetCompany);
     }
 
+    if (!sessionJdText) {
+      setChatMessages([]);
+      setChatInitialized(false);
+      return;
+    }
+
     const sessions = resumeData.interviewSessions || {};
-    const sessionKey = sessionJdText ? makeJdKey(sessionJdText) : null;
-    const session = sessionKey ? sessions[sessionKey] : getLatestInterviewSession(sessions);
+    const sessionKey = makeJdKey(sessionJdText);
+    const session = sessions[sessionKey];
 
     if (session && session.messages?.length) {
       setChatMessages(session.messages as ChatMessage[]);
@@ -510,7 +557,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     // 立即切换到下一步，提高用户体验
     // 避免优先进入 report 导致 0 分闪屏，再进入 JD
-    navigateToStep('jd_input');
+    if (!preferReport) {
+      navigateToStep('jd_input');
+    }
 
     // 记录当前 resumeData 和 allResumes 的状态
     console.log('handleResumeSelect - Current resumeData:', resumeData);
@@ -529,80 +578,90 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         return;
       }
 
-      // Get all user resumes and find the specific one
-      const result = await DatabaseService.getUserResumes(user.id);
-
-      if (result.success) {
-        console.log('All resumes found:', result.data);
-
-        const resume = result.data.find(r => r.id === id);
-
-        if (resume) {
-          console.log('Target resume found:', resume);
-          // Set resume title
-
-          // 检查resume_data是否为空
-          if (!resume.resume_data) {
-            console.error('Resume data is empty: resume_data is null/undefined');
-            alert('简历数据为空，请重新创建简历');
-            return;
-          }
-
-          // 检查resume_data是否为空对象
-          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
-            console.error('Resume data is empty object: resume_data is empty object');
-            alert('简历数据为空，请重新创建简历');
-            return;
-          }
-
-          console.log('Resume loaded successfully:', resume);
-
-          // Set the resume data with ID
-          if (setResumeData) {
-            const finalResumeData = {
-              id: resume.id,
-              ...resume.resume_data,
-              resumeTitle: resume.title
-            };
-
-            console.log('Setting resume data:', finalResumeData);
-            setResumeData(finalResumeData);
-            if (finalResumeData.targetCompany) {
-              setTargetCompany(finalResumeData.targetCompany);
-            }
-
-            if (preferReport) {
-              const restoredJdText = (finalResumeData.lastJdText || '').trim();
-              if (restoredJdText) {
-                setJdText(restoredJdText);
-              }
-              AICacheService.get(finalResumeData, restoredJdText).then((cached) => {
-                if (cached) {
-                  setOriginalScore(cached.score || 0);
-                  setScore(cached.score || 0);
-                  setSuggestions(applySuggestionFeedback(cached.suggestions || []));
-                  setReport({
-                    summary: cached.summary || '',
-                    strengths: cached.strengths || [],
-                    weaknesses: cached.weaknesses || [],
-                    missingKeywords: cached.missingKeywords || [],
-                    scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
-                  });
-                  setIsFromCache(true);
-                  navigateToStep('report', true);
-                } else {
-                  navigateToStep('jd_input', true);
-                }
-              });
-            }
-          }
-        } else {
-          console.error('Resume not found');
-          alert(`简历不存在 (ID: ${id})`);
-        }
+      let resume: any = null;
+      const single = await DatabaseService.getResume(id);
+      if (single.success && single.data) {
+        resume = single.data;
       } else {
-        console.error('Failed to load resumes:', result.error);
-        alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+        const result = await DatabaseService.getUserResumes(user.id);
+        if (!result.success) {
+          console.error('Failed to load resumes:', result.error);
+          alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+          return;
+        }
+        resume = result.data.find((r: any) => String(r.id) === String(id));
+      }
+
+      if (!resume && resumeData?.id && String(resumeData.id) === String(id)) {
+        resume = {
+          id: resumeData.id,
+          title: allResumes?.find(r => String(r.id) === String(id))?.title || '简历',
+          resume_data: resumeData
+        };
+      }
+
+      if (!resume) {
+        console.error('Resume not found');
+        alert(`简历不存在 (ID: ${id})`);
+        return;
+      }
+
+      console.log('Target resume found:', resume);
+
+      if (!resume.resume_data) {
+        console.error('Resume data is empty: resume_data is null/undefined');
+        alert('简历数据为空，请重新创建简历');
+        return;
+      }
+
+      if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+        console.error('Resume data is empty object: resume_data is empty object');
+        alert('简历数据为空，请重新创建简历');
+        return;
+      }
+
+      console.log('Resume loaded successfully:', resume);
+
+      if (setResumeData) {
+        const finalResumeData = {
+          id: resume.id,
+          ...resume.resume_data,
+          resumeTitle: resume.title
+        };
+
+        console.log('Setting resume data:', finalResumeData);
+        setResumeData(finalResumeData);
+        if (finalResumeData.targetCompany) {
+          setTargetCompany(finalResumeData.targetCompany);
+        }
+
+        if (preferReport) {
+          const restoredJdText = (finalResumeData.lastJdText || '').trim();
+          if (restoredJdText) {
+            setJdText(restoredJdText);
+          }
+          const snapshotApplied = applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+          if (snapshotApplied) {
+            navigateToStep('report', true);
+            return;
+          }
+          AICacheService.get(finalResumeData, restoredJdText).then((cached) => {
+            if (cached) {
+              setOriginalScore(cached.score || 0);
+              setScore(cached.score || 0);
+              setSuggestions(applySuggestionFeedback(cached.suggestions || []));
+              setReport({
+                summary: cached.summary || '',
+                strengths: cached.strengths || [],
+                weaknesses: cached.weaknesses || [],
+                missingKeywords: cached.missingKeywords || [],
+                scoreBreakdown: cached.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
+              });
+              setIsFromCache(true);
+            }
+            navigateToStep('report', true);
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading resume:', error);
@@ -827,6 +886,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         setScore(totalScore);
         setSuggestions(applySuggestionFeedback(newSuggestions));
         setReport(newReport);
+        await persistAnalysisSnapshot(resumeData, newReport, totalScore);
 
 
 
@@ -1012,6 +1072,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           lastJdText: jdText,
           targetCompany
         };
+        if (report && score > 0) {
+          await persistAnalysisSnapshot(updatedDataWithStatus, report, score);
+        }
 
         const originalTitle = allResumes?.find(r => r.id === selectedResumeId)?.title || '简历';
         const newTitle = buildResumeTitle(originalTitle, updatedDataWithStatus, jdText, true);
@@ -1255,19 +1318,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep]);
 
-    useEffect(() => {
-      if (currentStep === 'chat') {
-        const isNewInterview = !chatInitialized && chatMessages.length === 0;
-        if (isNewInterview && !inputMessage) {
-          setInputMessage(CHAT_PREFILL_TEXT);
-          setIsChatPrefill(true);
-        } else if (!isNewInterview && isChatPrefill) {
-          setIsChatPrefill(false);
-        }
-      } else if (isChatPrefill) {
+  useEffect(() => {
+    if (currentStep === 'chat') {
+      const isNewInterview = !chatInitialized && chatMessages.length === 0;
+      if (isNewInterview && !inputMessage) {
+        setInputMessage(CHAT_PREFILL_TEXT);
+        setIsChatPrefill(true);
+      } else if (!isNewInterview && isChatPrefill) {
         setIsChatPrefill(false);
       }
-    }, [currentStep, chatInitialized, chatMessages.length]);
+    } else if (isChatPrefill) {
+      setIsChatPrefill(false);
+    }
+  }, [currentStep, chatInitialized, chatMessages.length]);
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -1325,7 +1388,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       if (!cached) {
         // 如果没有缓存数据，且处于需要数据的步骤（排除 resume_select, jd_input, 和 analyzing），则重置回第一步
         // 关键修复：排除 'analyzing' 状态，防止正在分析时被强制跳回
+        const savedStep = (localStorage.getItem('ai_analysis_step') as Step | null) || null;
         if (currentStep !== 'resume_select' && currentStep !== 'jd_input' && currentStep !== 'analyzing') {
+          if (forceReportEntry) {
+            return;
+          }
+          if (savedStep && savedStep !== 'resume_select') {
+            return;
+          }
           console.log('No cached analysis data found, resetting step to resume_select');
           setCurrentStep('resume_select');
         }
@@ -1360,10 +1430,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       if (currentStep === 'chat' && isInterviewEntry) {
         return;
       }
+      if (currentStep === 'report' && forceReportEntry) {
+        return;
+      }
+      const savedStep = (localStorage.getItem('ai_analysis_step') as Step | null) || null;
+      if (savedStep && savedStep !== 'resume_select') {
+        return;
+      }
       console.log('Detected detailed step without data, resetting to resume_select');
       setCurrentStep('resume_select');
     }
-  }, [currentStep, score, suggestions.length, isFromCache, isInterviewEntry]);
+  }, [currentStep, score, suggestions.length, isFromCache, isInterviewEntry, forceReportEntry]);
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
@@ -1377,46 +1454,91 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   useEffect(() => {
     const shouldOpen = localStorage.getItem('ai_interview_open') === '1';
     const targetId = localStorage.getItem('ai_interview_resume_id');
+    if (!shouldOpen || !targetId) return;
 
-    if (shouldOpen && resumeData?.id && targetId === String(resumeData.id)) {
-      localStorage.removeItem('ai_interview_open');
-      localStorage.removeItem('ai_interview_resume_id');
+    localStorage.removeItem('ai_interview_open');
+    localStorage.removeItem('ai_interview_resume_id');
 
-      const savedJdText = resumeData.lastJdText || '';
-      if (savedJdText) {
-        setJdText(savedJdText);
+    (async () => {
+      const resumeId = Number(targetId);
+      const result = await DatabaseService.getResume(resumeId);
+      if (result.success && result.data) {
+        const finalResumeData = {
+          id: result.data.id,
+          ...result.data.resume_data,
+          resumeTitle: result.data.title
+        };
+        if (setResumeData) {
+          setResumeData(finalResumeData);
+        }
+        if (finalResumeData.targetCompany) {
+          setTargetCompany(finalResumeData.targetCompany);
+        }
+        const savedJdText = (finalResumeData.lastJdText || '').trim();
+        if (savedJdText) {
+          setJdText(savedJdText);
+        }
+        if (savedJdText) {
+          const sessions = finalResumeData.interviewSessions || {};
+          const sessionKey = makeJdKey(savedJdText);
+          const session = sessions[sessionKey];
+          if (session && session.messages?.length) {
+            setChatMessages(session.messages as ChatMessage[]);
+            setChatInitialized(true);
+          } else {
+            setChatMessages([]);
+            setChatInitialized(false);
+          }
+        } else {
+          setChatMessages([]);
+          setChatInitialized(false);
+        }
+        openChat('preview');
       }
-      if (resumeData.targetCompany) {
-        setTargetCompany(resumeData.targetCompany);
-      }
-
-      const sessions = resumeData.interviewSessions || {};
-      const sessionKey = savedJdText ? makeJdKey(savedJdText) : null;
-      const session = sessionKey ? sessions[sessionKey] : getLatestInterviewSession(sessions);
-
-      if (session && session.messages?.length) {
-        setChatMessages(session.messages as ChatMessage[]);
-        setChatInitialized(true);
-      } else {
-        setChatMessages([]);
-        setChatInitialized(false);
-      }
-
-      openChat('preview');
-    }
-  }, [resumeData?.id]);
+    })();
+  }, []);
 
   // 从预览页跳转到分数页
   useEffect(() => {
     const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
     const targetId = localStorage.getItem('ai_report_resume_id');
-    if (!shouldOpenReport) return;
-    if (!resumeData?.id || targetId !== String(resumeData.id)) return;
+    if (!shouldOpenReport || !targetId) return;
 
     localStorage.removeItem('ai_report_open');
     localStorage.removeItem('ai_report_resume_id');
-    handleResumeSelect(resumeData.id, true);
-  }, [resumeData?.id]);
+    localStorage.setItem('ai_analysis_step', 'report');
+    setStepHistory([]);
+    setCurrentStep('report');
+    setForceReportEntry(true);
+
+    (async () => {
+      const resumeId = Number(targetId);
+      const result = await DatabaseService.getResume(resumeId);
+      if (result.success && result.data) {
+        const finalResumeData = {
+          id: result.data.id,
+          ...result.data.resume_data,
+          resumeTitle: result.data.title
+        };
+        if (setResumeData) {
+          setResumeData(finalResumeData);
+        }
+        if (finalResumeData.targetCompany) {
+          setTargetCompany(finalResumeData.targetCompany);
+        }
+        const restoredJdText = (finalResumeData.lastJdText || '').trim();
+        if (restoredJdText) {
+          setJdText(restoredJdText);
+        }
+        const snapshotApplied = applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+        if (!snapshotApplied) {
+          navigateToStep('report', true);
+        }
+      } else {
+        handleResumeSelect(resumeId, true);
+      }
+    })();
+  }, []);
 
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
   useEffect(() => {
@@ -2102,7 +2224,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}
-        <div className="fixed bottom-[calc(76px+env(safe-area-inset-bottom))] left-0 right-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
+        <div className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-0 right-0 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
           <button
             onClick={() => openChat('internal')}
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
@@ -2226,15 +2348,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           <div className="flex gap-2 items-end max-w-md mx-auto">
             <textarea
               value={inputMessage}
-                onChange={(e) => {
-                  if (isChatPrefill) setIsChatPrefill(false);
-                  setInputMessage(e.target.value);
-                }}
-                onBlur={() => {
-                  if (!inputMessage.trim()) {
-                    setInputMessage(CHAT_PREFILL_TEXT);
-                    setIsChatPrefill(true);
-                  }
+              onChange={(e) => {
+                if (isChatPrefill) setIsChatPrefill(false);
+                setInputMessage(e.target.value);
+              }}
+              onBlur={() => {
+                if (!inputMessage.trim()) {
+                  setInputMessage(CHAT_PREFILL_TEXT);
+                  setIsChatPrefill(true);
+                }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

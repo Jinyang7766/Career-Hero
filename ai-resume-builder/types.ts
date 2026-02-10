@@ -69,6 +69,21 @@ export interface ResumeData {
   optimizationStatus?: 'optimized' | 'unoptimized';
   lastJdText?: string;
   targetCompany?: string;
+  analysisSnapshot?: {
+    score: number;
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    missingKeywords: string[];
+    scoreBreakdown: {
+      experience: number;
+      skills: number;
+      format: number;
+    };
+    updatedAt: string;
+    jdText?: string;
+    targetCompany?: string;
+  };
   aiSuggestionFeedback?: Record<string, {
     rating: 'up' | 'down';
     ratedAt: string;
