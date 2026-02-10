@@ -23,6 +23,31 @@ import ipaddress
 import socket
 import os
 from playwright.sync_api import sync_playwright
+# -*- coding: utf-8 -*-
+from dotenv import load_dotenv
+load_dotenv()  # 加载 .env 文件
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+from supabase import create_client, Client
+import os
+import uuid
+from datetime import datetime
+from functools import wraps
+import jwt
+from werkzeug.security import generate_password_hash, check_password_hash
+import re
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from pypdf import PdfReader
+from docx import Document
+import io
+import base64
+import urllib.request
+import ipaddress
+import socket
+import os
+from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
@@ -30,6 +55,10 @@ import traceback
 import google.generativeai as genai
 
 app = Flask(__name__)
+
+# 获取端口配置，优先使用环境变量中的 PORT
+# 这确保了在 Railway、Render 等平台上能正常监听正确的端口
+PORT = int(os.environ.get('PORT', 5000))
 
 # Ensure Render environment variables are loaded
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET') or os.environ.get('SECRET_KEY')
@@ -2570,9 +2599,5 @@ def generate_mock_chat_response(message, score, suggestions):
     return "点评：结构尚可，但缺少背景与结果。改进：补充场景和成果。参考：当时……我……最终达成……。下一题：描述一次你处理冲突或分歧的经历，以及你如何推动结果。"
 
 if __name__ == '__main__':
-
-    app.run(debug=True, port=5000)
-
-
-
-
+    # 使用配置的端口
+    app.run(host='0.0.0.0', port=PORT)
