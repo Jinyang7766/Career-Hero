@@ -80,38 +80,38 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     };
   };
   const sanitizeSuggestedValue = (value: any, targetSection?: Suggestion['targetSection']) => {
-      if (targetSection === 'skills') return value;
-      if (typeof value !== 'string') return value;
+    if (targetSection === 'skills') return value;
+    if (typeof value !== 'string') return value;
 
-      let text = value.trim();
-      if (!text) return value;
+    let text = value.trim();
+    if (!text) return value;
 
-      // Remove leading advisory/prefix phrases so the result is directly usable in resume
-      const prefixPatterns = [
-        /^精炼描述为[:：]\s*/i,
-        /^修改建议[:：]\s*/i,
-        /^优化建议[:：]\s*/i,
-        /^建议[:：]\s*/i,
-        /^修改原因[:：]\s*/i,
-        /^原因[:：]\s*/i,
-        /^说明[:：]\s*/i,
-        /^请将[:：]?\s*/i,
-        /^请把[:：]?\s*/i,
-        /^请删除[:：]?\s*/i,
-        /^请去掉[:：]?\s*/i
-      ];
-      prefixPatterns.forEach((pattern) => {
-        text = text.replace(pattern, '');
-      });
+    // Remove leading advisory/prefix phrases so the result is directly usable in resume
+    const prefixPatterns = [
+      /^精炼描述为[:：]\s*/i,
+      /^修改建议[:：]\s*/i,
+      /^优化建议[:：]\s*/i,
+      /^建议[:：]\s*/i,
+      /^修改原因[:：]\s*/i,
+      /^原因[:：]\s*/i,
+      /^说明[:：]\s*/i,
+      /^请将[:：]?\s*/i,
+      /^请把[:：]?\s*/i,
+      /^请删除[:：]?\s*/i,
+      /^请去掉[:：]?\s*/i
+    ];
+    prefixPatterns.forEach((pattern) => {
+      text = text.replace(pattern, '');
+    });
 
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      if (lines.length > 1 && /(建议|原因|说明|修改|优化|请)/.test(lines[0])) {
-        return lines.slice(1).join('\n').trim();
-      }
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && /(建议|原因|说明|修改|优化|请)/.test(lines[0])) {
+      return lines.slice(1).join('\n').trim();
+    }
 
-      if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
-        return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
-      }
+    if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
+      return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
+    }
 
     return text;
   };
@@ -449,9 +449,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     if (!resumeData.id) return;
-        try {
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (userError || !user) return;
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
 
       const masked = rating === 'down' ? maskSuggestionPayload(suggestion) : {};
 
@@ -698,42 +698,42 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       console.log('Resume loaded successfully:', resume);
 
-        if (setResumeData) {
-          const finalResumeData = {
-            id: resume.id,
-            ...resume.resume_data,
-            resumeTitle: resume.title
-          };
+      if (setResumeData) {
+        const finalResumeData = {
+          id: resume.id,
+          ...resume.resume_data,
+          resumeTitle: resume.title
+        };
 
-          console.log('Setting resume data:', finalResumeData);
-          setResumeData(finalResumeData);
-          setOptimizedResumeId(
-            finalResumeData.optimizedResumeId ||
-            (finalResumeData.optimizationStatus === 'optimized' ? resume.id : null)
-          );
-          if (finalResumeData.targetCompany) {
-            setTargetCompany(finalResumeData.targetCompany);
-          }
-
-          if (preferReport) {
-            const restoredJdText = (finalResumeData.lastJdText || '').trim();
-            if (restoredJdText) {
-              setJdText(restoredJdText);
-            }
-            applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
-            if (finalResumeData.analysisSnapshot) {
-              saveLastAnalysis({
-                resumeId: resume.id,
-                jdText: restoredJdText,
-                targetCompany: finalResumeData.targetCompany || '',
-                snapshot: finalResumeData.analysisSnapshot,
-                updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
-              });
-              setAnalysisResumeId(resume.id);
-            }
-            navigateToStep('report', true);
-          }
+        console.log('Setting resume data:', finalResumeData);
+        setResumeData(finalResumeData);
+        setOptimizedResumeId(
+          finalResumeData.optimizedResumeId ||
+          (finalResumeData.optimizationStatus === 'optimized' ? resume.id : null)
+        );
+        if (finalResumeData.targetCompany) {
+          setTargetCompany(finalResumeData.targetCompany);
         }
+
+        if (preferReport) {
+          const restoredJdText = (finalResumeData.lastJdText || '').trim();
+          if (restoredJdText) {
+            setJdText(restoredJdText);
+          }
+          applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+          if (finalResumeData.analysisSnapshot) {
+            saveLastAnalysis({
+              resumeId: resume.id,
+              jdText: restoredJdText,
+              targetCompany: finalResumeData.targetCompany || '',
+              snapshot: finalResumeData.analysisSnapshot,
+              updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
+            });
+            setAnalysisResumeId(resume.id);
+          }
+          navigateToStep('report', true);
+        }
+      }
     } catch (error) {
       console.error('Error loading resume:', error);
       alert('加载简历失败，请检查网络连接');
@@ -851,16 +851,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   };
 
-    const startAnalysis = async () => {
-      // 检查 resumeData 是否存在
-      if (!resumeData) {
-        console.error('startAnalysis - resumeData is null or undefined');
-        alert('无法进行 AI 分析：没有找到简历数据');
-        return;
-      }
+  const startAnalysis = async () => {
+    // 检查 resumeData 是否存在
+    if (!resumeData) {
+      console.error('startAnalysis - resumeData is null or undefined');
+      alert('无法进行 AI 分析：没有找到简历数据');
+      return;
+    }
 
-      // 记录当前 resumeData 的内容
-      console.log('startAnalysis - Resume data:', resumeData);
+    // 记录当前 resumeData 的内容
+    console.log('startAnalysis - Resume data:', resumeData);
 
     // Reset Chat State for new analysis
     setChatMessages([]);
@@ -899,35 +899,35 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         backendSuggestions.forEach((suggestion: any, index: number) => {
           // 如果是字符串，转换为对象
-            if (typeof suggestion === 'string') {
-              newSuggestions.push({
-                id: `ai-suggestion-${index}`,
-                type: 'optimization',
-                title: '优化建议',
-                reason: suggestion,
-                targetSection: 'skills',
-                targetId: undefined,
-                targetField: undefined,
-                suggestedValue: undefined,
-                originalValue: undefined,
-                status: 'pending' as const
-              });
-            } else {
-              const inferredSection = suggestion.targetSection || inferTargetSection(suggestion);
-              // 如果是对象，直接使用
-              newSuggestions.push({
-                id: suggestion.id || `ai-suggestion-${index}`,
-                type: suggestion.type || 'optimization',
-                title: suggestion.title || '优化建议',
-                reason: suggestion.reason || '根据AI分析结果',
-                targetSection: inferredSection,
-                targetId: suggestion.targetId,
-                targetField: suggestion.targetField,
-                suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
-                originalValue: suggestion.originalValue,
-                status: 'pending' as const
-              });
-            }
+          if (typeof suggestion === 'string') {
+            newSuggestions.push({
+              id: `ai-suggestion-${index}`,
+              type: 'optimization',
+              title: '优化建议',
+              reason: suggestion,
+              targetSection: 'skills',
+              targetId: undefined,
+              targetField: undefined,
+              suggestedValue: undefined,
+              originalValue: undefined,
+              status: 'pending' as const
+            });
+          } else {
+            const inferredSection = suggestion.targetSection || inferTargetSection(suggestion);
+            // 如果是对象，直接使用
+            newSuggestions.push({
+              id: suggestion.id || `ai-suggestion-${index}`,
+              type: suggestion.type || 'optimization',
+              title: suggestion.title || '优化建议',
+              reason: suggestion.reason || '根据AI分析结果',
+              targetSection: inferredSection,
+              targetId: suggestion.targetId,
+              targetField: suggestion.targetField,
+              suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
+              originalValue: suggestion.originalValue,
+              status: 'pending' as const
+            });
+          }
         });
 
         const normalizedBreakdown = normalizeScoreBreakdown(
@@ -939,13 +939,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           aiAnalysisResult.score || 0
         );
 
-          const newReport: AnalysisReport = {
-            summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
-            strengths: aiAnalysisResult.strengths || ['结构清晰'],
-            weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
-            missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
-            scoreBreakdown: normalizedBreakdown
-          };
+        const newReport: AnalysisReport = {
+          summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
+          strengths: aiAnalysisResult.strengths || ['结构清晰'],
+          weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
+          missingKeywords: aiAnalysisResult.missingKeywords, // 直接使用后端返回的数据
+          scoreBreakdown: normalizedBreakdown
+        };
 
         // 使用后端返回的实际分数
         const totalScore = aiAnalysisResult.score || Math.round(
@@ -953,40 +953,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         );
 
         // 保存原始分数
-          setOriginalScore(totalScore);
-          // 初始化当前分数为原始分数
-          setScore(totalScore);
-            const appliedSuggestions = applySuggestionFeedback(newSuggestions);
-            setSuggestions(appliedSuggestions);
-            setReport(newReport);
-          const snapshotForPersist = {
-            score: totalScore,
-            summary: newReport.summary,
-            strengths: newReport.strengths,
-            weaknesses: newReport.weaknesses,
-            missingKeywords: newReport.missingKeywords,
-            scoreBreakdown: newReport.scoreBreakdown,
-            suggestions: appliedSuggestions,
-            updatedAt: new Date().toISOString(),
+        setOriginalScore(totalScore);
+        // 初始化当前分数为原始分数
+        setScore(totalScore);
+        const appliedSuggestions = applySuggestionFeedback(newSuggestions);
+        setSuggestions(appliedSuggestions);
+        setReport(newReport);
+        const snapshotForPersist = {
+          score: totalScore,
+          summary: newReport.summary,
+          strengths: newReport.strengths,
+          weaknesses: newReport.weaknesses,
+          missingKeywords: newReport.missingKeywords,
+          scoreBreakdown: newReport.scoreBreakdown,
+          suggestions: appliedSuggestions,
+          updatedAt: new Date().toISOString(),
+          jdText: jdText || resumeData.lastJdText || '',
+          targetCompany: targetCompany || resumeData.targetCompany || ''
+        };
+        await persistAnalysisSnapshot(
+          resumeData?.optimizedResumeId ? { ...resumeData, id: resumeData.optimizedResumeId } : resumeData,
+          newReport,
+          totalScore,
+          appliedSuggestions
+        );
+        if (resumeData?.id) {
+          saveLastAnalysis({
+            resumeId: resumeData.id,
             jdText: jdText || resumeData.lastJdText || '',
-            targetCompany: targetCompany || resumeData.targetCompany || ''
-          };
-          await persistAnalysisSnapshot(
-            resumeData?.optimizedResumeId ? { ...resumeData, id: resumeData.optimizedResumeId } : resumeData,
-            newReport,
-            totalScore,
-            appliedSuggestions
-          );
-          if (resumeData?.id) {
-            saveLastAnalysis({
-              resumeId: resumeData.id,
-              jdText: jdText || resumeData.lastJdText || '',
-              targetCompany: targetCompany || resumeData.targetCompany || '',
-              snapshot: snapshotForPersist,
-              updatedAt: snapshotForPersist.updatedAt
-            });
-            setAnalysisResumeId(resumeData.id);
-          }
+            targetCompany: targetCompany || resumeData.targetCompany || '',
+            snapshot: snapshotForPersist,
+            updatedAt: snapshotForPersist.updatedAt
+          });
+          setAnalysisResumeId(resumeData.id);
+        }
 
 
 
@@ -1106,7 +1106,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       let targetOptimizedId =
         (resumeData.optimizationStatus === 'optimized' && resumeData.id) ? resumeData.id :
-        (optimizedResumeId || resumeData.optimizedResumeId || null);
+          (optimizedResumeId || resumeData.optimizedResumeId || null);
 
       let baseResume = resumeData;
       if (targetOptimizedId) {
@@ -1132,10 +1132,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         });
         if (!createResult.success || !createResult.data) return;
         targetOptimizedId = createResult.data.id;
+        // Always use current resume data as base to avoid empty resume_data from backend
         baseResume = {
           id: createResult.data.id,
-          ...createResult.data.resume_data,
-          resumeTitle: createResult.data.title
+          ...resumeData,
+          optimizationStatus: 'optimized' as const,
+          lastJdText: jdText,
+          targetCompany,
+          optimizedFromId: resumeData.id,
+          resumeTitle: createResult.data.title || resumeData.resumeTitle
         } as ResumeData;
         setOptimizedResumeId(targetOptimizedId);
         setAnalysisResumeId(targetOptimizedId);
@@ -1366,13 +1371,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep, chatInitialized, chatMessages.length]);
 
-    useEffect(() => {
-      if (currentStep !== 'chat') return;
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
 
-      if (chatEntrySource === 'internal') return;
+    if (chatEntrySource === 'internal') return;
 
-      const entrySource = localStorage.getItem('ai_analysis_entry_source');
-      if (entrySource !== 'bottom_nav') return;
+    const entrySource = localStorage.getItem('ai_analysis_entry_source');
+    if (entrySource !== 'bottom_nav') return;
 
     localStorage.removeItem('ai_analysis_entry_source');
 
@@ -1398,35 +1403,35 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep]);
 
-    // 统一恢复逻辑：优先使用最近一次分析快照（切换页面再回来时）
-    useEffect(() => {
-      if (currentStep !== 'report') return;
-      if (score > 0 || suggestions.length > 0 || report) return;
-      const last = loadLastAnalysis();
-      if (!last || !last.resumeId) return;
+  // 统一恢复逻辑：优先使用最近一次分析快照（切换页面再回来时）
+  useEffect(() => {
+    if (currentStep !== 'report') return;
+    if (score > 0 || suggestions.length > 0 || report) return;
+    const last = loadLastAnalysis();
+    if (!last || !last.resumeId) return;
 
-      const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
-      if (snapshotApplied) {
-        setJdText(last.jdText || '');
-        if (last.targetCompany) {
-          setTargetCompany(last.targetCompany);
-        }
-        setAnalysisResumeId(last.resumeId);
-        if (!resumeData || String(resumeData.id) !== String(last.resumeId)) {
-          DatabaseService.getResume(Number(last.resumeId)).then((result) => {
-            if (!result.success || !result.data) return;
-            const finalResumeData = {
-              id: result.data.id,
-              ...result.data.resume_data,
-              resumeTitle: result.data.title
-            };
-            if (setResumeData) {
-              setResumeData(finalResumeData);
-            }
-          });
-        }
+    const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
+    if (snapshotApplied) {
+      setJdText(last.jdText || '');
+      if (last.targetCompany) {
+        setTargetCompany(last.targetCompany);
       }
-    }, [currentStep, score, suggestions.length, report, resumeData]);
+      setAnalysisResumeId(last.resumeId);
+      if (!resumeData || String(resumeData.id) !== String(last.resumeId)) {
+        DatabaseService.getResume(Number(last.resumeId)).then((result) => {
+          if (!result.success || !result.data) return;
+          const finalResumeData = {
+            id: result.data.id,
+            ...result.data.resume_data,
+            resumeTitle: result.data.title
+          };
+          if (setResumeData) {
+            setResumeData(finalResumeData);
+          }
+        });
+      }
+    }
+  }, [currentStep, score, suggestions.length, report, resumeData]);
 
   // 仅保留“最近一次分析快照”的恢复逻辑，移除其它兜底恢复
 
@@ -1450,23 +1455,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     (async () => {
       const resumeId = Number(targetId);
       const result = await DatabaseService.getResume(resumeId);
-        if (result.success && result.data) {
-          const finalResumeData = {
-            id: result.data.id,
-            ...result.data.resume_data,
-            resumeTitle: result.data.title
-          };
-          if (setResumeData) {
-            setResumeData(finalResumeData);
-          }
-          setAnalysisResumeId(result.data.id);
+      if (result.success && result.data) {
+        const finalResumeData = {
+          id: result.data.id,
+          ...result.data.resume_data,
+          resumeTitle: result.data.title
+        };
+        if (setResumeData) {
+          setResumeData(finalResumeData);
+        }
+        setAnalysisResumeId(result.data.id);
         setOptimizedResumeId(
           finalResumeData.optimizedResumeId ||
           (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
         );
-          if (finalResumeData.targetCompany) {
-            setTargetCompany(finalResumeData.targetCompany);
-          }
+        if (finalResumeData.targetCompany) {
+          setTargetCompany(finalResumeData.targetCompany);
+        }
         const savedJdText = (finalResumeData.lastJdText || '').trim();
         if (savedJdText) {
           setJdText(savedJdText);
@@ -1492,46 +1497,84 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   }, []);
 
   // 从预览页跳转到分数页
-    useEffect(() => {
-      const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
-      const targetId = localStorage.getItem('ai_report_resume_id');
-      if (!shouldOpenReport || !targetId) return;
+  useEffect(() => {
+    const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
+    const targetId = localStorage.getItem('ai_report_resume_id');
+    if (!shouldOpenReport || !targetId) return;
 
-      const payloadRaw = localStorage.getItem('ai_report_resume_payload');
-      localStorage.removeItem('ai_report_resume_payload');
-      let payload: any = null;
-      if (payloadRaw) {
-        try {
-          payload = JSON.parse(payloadRaw);
-        } catch (error) {
-          console.warn('Failed to parse ai_report_resume_payload:', error);
-          payload = null;
-        }
+    const payloadRaw = localStorage.getItem('ai_report_resume_payload');
+    localStorage.removeItem('ai_report_resume_payload');
+    let payload: any = null;
+    if (payloadRaw) {
+      try {
+        payload = JSON.parse(payloadRaw);
+      } catch (error) {
+        console.warn('Failed to parse ai_report_resume_payload:', error);
+        payload = null;
       }
+    }
 
-      localStorage.removeItem('ai_report_open');
-      localStorage.removeItem('ai_report_resume_id');
-      localStorage.setItem('ai_analysis_step', 'report');
-      setStepHistory([]);
-      setCurrentStep('report');
-      setForceReportEntry(true);
+    localStorage.removeItem('ai_report_open');
+    localStorage.removeItem('ai_report_resume_id');
+    localStorage.setItem('ai_analysis_step', 'report');
+    setStepHistory([]);
+    setCurrentStep('report');
+    setForceReportEntry(true);
 
-      if (payload && String(payload.id) === String(targetId) && payload.resume_data) {
+    if (payload && String(payload.id) === String(targetId) && payload.resume_data) {
+      const finalResumeData = {
+        id: payload.id,
+        ...payload.resume_data,
+        resumeTitle: payload.title || payload.resume_data.resumeTitle || '简历'
+      };
+      if (setResumeData) {
+        setResumeData(finalResumeData);
+      }
+      setSelectedResumeId(payload.id);
+      setAnalysisResumeId(payload.id);
+      setOptimizedResumeId(
+        finalResumeData.optimizedResumeId ||
+        (finalResumeData.optimizationStatus === 'optimized' ? payload.id : null)
+      );
+      setOriginalResumeData(JSON.parse(JSON.stringify(finalResumeData)));
+      if (finalResumeData.targetCompany) {
+        setTargetCompany(finalResumeData.targetCompany);
+      }
+      const restoredJdText = (finalResumeData.lastJdText || '').trim();
+      if (restoredJdText) {
+        setJdText(restoredJdText);
+      }
+      applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
+      if (finalResumeData.analysisSnapshot) {
+        saveLastAnalysis({
+          resumeId: payload.id,
+          jdText: restoredJdText,
+          targetCompany: finalResumeData.targetCompany || '',
+          snapshot: finalResumeData.analysisSnapshot,
+          updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
+        });
+        setAnalysisResumeId(payload.id);
+      }
+      navigateToStep('report', true);
+      return;
+    }
+
+    (async () => {
+      const resumeId = Number(targetId);
+      const result = await DatabaseService.getResume(resumeId);
+      if (result.success && result.data) {
         const finalResumeData = {
-          id: payload.id,
-          ...payload.resume_data,
-          resumeTitle: payload.title || payload.resume_data.resumeTitle || '简历'
+          id: result.data.id,
+          ...result.data.resume_data,
+          resumeTitle: result.data.title
         };
         if (setResumeData) {
           setResumeData(finalResumeData);
         }
-        setSelectedResumeId(payload.id);
-        setAnalysisResumeId(payload.id);
-          setOptimizedResumeId(
-            finalResumeData.optimizedResumeId ||
-            (finalResumeData.optimizationStatus === 'optimized' ? payload.id : null)
-          );
-        setOriginalResumeData(JSON.parse(JSON.stringify(finalResumeData)));
+        setOptimizedResumeId(
+          finalResumeData.optimizedResumeId ||
+          (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
+        );
         if (finalResumeData.targetCompany) {
           setTargetCompany(finalResumeData.targetCompany);
         }
@@ -1542,57 +1585,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
         if (finalResumeData.analysisSnapshot) {
           saveLastAnalysis({
-            resumeId: payload.id,
+            resumeId: result.data.id,
             jdText: restoredJdText,
             targetCompany: finalResumeData.targetCompany || '',
             snapshot: finalResumeData.analysisSnapshot,
             updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
           });
-          setAnalysisResumeId(payload.id);
+          setAnalysisResumeId(result.data.id);
         }
         navigateToStep('report', true);
-        return;
+      } else {
+        handleResumeSelect(resumeId, true);
       }
-
-      (async () => {
-        const resumeId = Number(targetId);
-        const result = await DatabaseService.getResume(resumeId);
-        if (result.success && result.data) {
-          const finalResumeData = {
-            id: result.data.id,
-            ...result.data.resume_data,
-            resumeTitle: result.data.title
-          };
-          if (setResumeData) {
-            setResumeData(finalResumeData);
-          }
-          setOptimizedResumeId(
-            finalResumeData.optimizedResumeId ||
-            (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
-          );
-          if (finalResumeData.targetCompany) {
-            setTargetCompany(finalResumeData.targetCompany);
-          }
-        const restoredJdText = (finalResumeData.lastJdText || '').trim();
-        if (restoredJdText) {
-          setJdText(restoredJdText);
-        }
-          applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
-          if (finalResumeData.analysisSnapshot) {
-            saveLastAnalysis({
-              resumeId: result.data.id,
-              jdText: restoredJdText,
-              targetCompany: finalResumeData.targetCompany || '',
-              snapshot: finalResumeData.analysisSnapshot,
-              updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
-            });
-            setAnalysisResumeId(result.data.id);
-          }
-          navigateToStep('report', true);
-        } else {
-          handleResumeSelect(resumeId, true);
-        }
-      })();
+    })();
   }, []);
 
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
@@ -2279,7 +2284,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}
-        <div className="fixed bottom-[calc(72px+env(safe-area-inset-bottom))] left-0 right-0 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
+        <div className="fixed bottom-[64px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
           <button
             onClick={() => openChat('internal')}
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
@@ -2420,7 +2425,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 }
               }}
               placeholder="输入您的问题..."
-              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-400 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}
+              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}
               rows={1}
               style={{ minHeight: '48px', maxHeight: '120px' }}
             />

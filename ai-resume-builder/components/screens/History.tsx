@@ -99,6 +99,76 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
     loadHistory();
   }, []);
 
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
+  const toggleSection = (label: string) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [label]: !prev[label]
+    }));
+  };
+
+  const handleDeleteExport = async (item: ExportItem) => {
+    if (!window.confirm('确定要删除这条导出记录吗？')) return;
+
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const result = await DatabaseService.getResume(item.resumeId);
+      if (!result.success || !result.data?.resume_data) return;
+
+      const currentHistory = result.data.resume_data.exportHistory || [];
+      // Use exportedAt as a unique identifier for the specific entry
+      const updatedHistory = currentHistory.filter((h: any) => h.exportedAt !== item.exportedAt);
+
+      const updateResult = await DatabaseService.updateResume(item.resumeId.toString(), {
+        resume_data: {
+          ...result.data.resume_data,
+          exportHistory: updatedHistory
+        }
+      });
+
+      if (updateResult.success) {
+        loadHistory();
+      }
+    } catch (err) {
+      console.error('Failed to delete export record:', err);
+    }
+  };
+
+  const handleDeleteAllExports = async () => {
+    if (!window.confirm('确定要清空所有导出记录吗？此操作无法撤销。')) return;
+
+    try {
+      setLoading(true);
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) return;
+
+      const result = await DatabaseService.getUserResumes(user.id);
+      if (!result.success) return;
+
+      const updatePromises = result.data.map((resume: any) => {
+        if (resume.resume_data?.exportHistory && resume.resume_data.exportHistory.length > 0) {
+          return DatabaseService.updateResume(resume.id.toString(), {
+            resume_data: {
+              ...resume.resume_data,
+              exportHistory: []
+            }
+          });
+        }
+        return Promise.resolve({ success: true });
+      });
+
+      await Promise.all(updatePromises);
+      loadHistory();
+    } catch (err) {
+      console.error('Failed to clear export history:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const grouped = items.reduce<Record<string, ExportItem[]>>((acc, item) => {
     const label = formatDateLabel(item.exportedAt);
     acc[label] = acc[label] || [];
@@ -109,19 +179,26 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-50 bg-background-light dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
-        <div className="flex items-center px-4 h-14 justify-between">
-          <button 
+        <div className="flex items-center px-4 h-14 relative">
+          <button
             onClick={goBack}
-            className="flex items-center justify-center size-10 -ml-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white"
+            className="flex items-center justify-center size-10 -ml-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white z-10"
           >
             <span className="material-symbols-outlined text-2xl">arrow_back_ios_new</span>
           </button>
-          <h1 className="text-lg font-bold leading-tight tracking-tight flex-1 text-center pr-8">导出历史</h1>
-          {/* Top Right Icon Removed */}
-          <div className="size-8"></div>
+          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-tight text-slate-900 dark:text-white pointer-events-none">
+            导出历史
+          </h1>
+          <button
+            onClick={handleDeleteAllExports}
+            disabled={items.length === 0}
+            className="ml-auto text-base font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 disabled:opacity-30 z-10"
+          >
+            全部清空
+          </button>
         </div>
       </header>
-      
+
       {/* Search Bar Removed */}
 
       <main className="flex flex-col w-full mt-4">
@@ -140,26 +217,51 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
           </div>
         )}
 
-        {!loading && items.length > 0 && Object.entries(grouped).map(([label, group]) => (
-          <div key={label} className="flex flex-col">
-            <h3 className="text-slate-500 dark:text-text-secondary text-sm font-semibold px-4 pb-2 pt-2">{label}</h3>
-            {group.map((item) => (
-              <div key={item.id} className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
-                <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
-                  <span className="material-symbols-outlined">picture_as_pdf</span>
+        {!loading && items.length > 0 && Object.entries(grouped).map(([label, group]) => {
+          const isCollapsed = !!collapsedSections[label];
+          return (
+            <div key={label} className="flex flex-col pt-2">
+              <button
+                onClick={() => toggleSection(label)}
+                className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-slate-900 dark:text-white"
+              >
+                <span>{label}</span>
+                <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
+                  {isCollapsed ? 'expand_more' : 'expand_less'}
+                </span>
+              </button>
+
+              {!isCollapsed && (
+                <div className="animate-in fade-in slide-in-from-top-1 duration-200 mt-2">
+                  {group.map((item) => (
+                    <div key={item.id} className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
+                      <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
+                        <span className="material-symbols-outlined">picture_as_pdf</span>
+                      </div>
+                      <div className="flex flex-col flex-1 min-w-0" onClick={() => handleReExport(item.resumeId)}>
+                        <p className="text-slate-900 dark:text-white text-base font-medium truncate">{item.filename}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-slate-500 dark:text-text-secondary text-sm">
+                            {formatTime(item.exportedAt)} • {formatSize(item.size)}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteExport(item);
+                        }}
+                        className="p-2 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[22px]">delete</span>
+                      </button>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <p className="text-slate-900 dark:text-white text-base font-medium truncate">{item.filename}</p>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    <span className="text-slate-500 dark:text-text-secondary text-sm">
-                      {formatDateLabel(item.exportedAt)} {formatTime(item.exportedAt)} • {formatSize(item.size)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ))}
+              )}
+            </div>
+          );
+        })}
       </main>
     </div>
   );

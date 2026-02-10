@@ -2110,8 +2110,11 @@ def analyze_resume(current_user_id):
 重要格式要求（必须严格遵守）：
 1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
 2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
-3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组，禁止写成长段文字或列举。如：["React", "Node.js"] 而不是 "熟练掌握React和Node.js"。
-4. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
+3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组。
+4. **核心要求**：所有优化建议的 suggestedValue 必须是**直接可用的简历原文**，禁止包含“建议修改为”、“比如”、“示例”、“描述示例”等指导性词语。用户会直接复制此内容。
+   - 错误："建议描述：负责后端开发..."
+   - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
+5. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 """
                 else:
                     prompt = f"""
@@ -2145,7 +2148,7 @@ def analyze_resume(current_user_id):
       "reason": "建议突出核心竞争力，让招聘方一眼看到你的价值。",
       "targetSection": "summary",
       "originalValue": "原内容",
-      "suggestedValue": "优化后的个人简介描述..."
+      "suggestedValue": "具有5年Java开发经验，精通Spring Boot框架，曾主导千万级高并发系统设计..."
     }},
     {{
       "id": "suggestion-skills",
@@ -2162,8 +2165,11 @@ def analyze_resume(current_user_id):
 重要格式要求（必须严格遵守）：
 1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
 2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
-3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组，禁止写成长段文字或列举。如：["React", "Node.js"] 而不是 "熟练掌握React和Node.js"。
-4. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
+3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组。
+4. **核心要求**：所有优化建议的 suggestedValue 必须是**直接可用的简历原文**，禁止包含“建议修改为”、“比如”、“示例”、“描述示例”等指导性词语。用户会直接复制此内容。
+   - 错误："建议描述：负责后端开发..."
+   - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
+5. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 """
 
                 response = model.generate_content(prompt)
