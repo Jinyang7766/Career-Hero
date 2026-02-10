@@ -198,6 +198,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const openChat = (source: 'internal' | 'preview') => {
     if (source === 'internal') {
+      setIsInterviewEntry(false);
       const prevStep = currentStep !== 'chat' ? currentStep : lastChatStep;
       if (prevStep && prevStep !== 'chat') {
         setLastChatStep(prevStep);
@@ -212,6 +213,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       return;
     }
 
+    setIsInterviewEntry(true);
     setChatEntrySource('preview');
     localStorage.setItem('ai_chat_entry_source', 'preview');
     localStorage.removeItem('ai_chat_prev_step');
@@ -262,6 +264,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [isSending, setIsSending] = useState(false);
   const CHAT_PREFILL_TEXT = '准备好了';
   const [isChatPrefill, setIsChatPrefill] = useState(false);
+  const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
@@ -554,19 +557,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
           console.log('Resume loaded successfully:', resume);
 
-            // Set the resume data with ID
-            if (setResumeData) {
-              const finalResumeData = {
-                id: resume.id,
-                ...resume.resume_data,
-                resumeTitle: resume.title
-              };
+          // Set the resume data with ID
+          if (setResumeData) {
+            const finalResumeData = {
+              id: resume.id,
+              ...resume.resume_data,
+              resumeTitle: resume.title
+            };
 
-              console.log('Setting resume data:', finalResumeData);
-              setResumeData(finalResumeData);
-              if (finalResumeData.targetCompany) {
-                setTargetCompany(finalResumeData.targetCompany);
-              }
+            console.log('Setting resume data:', finalResumeData);
+            setResumeData(finalResumeData);
+            if (finalResumeData.targetCompany) {
+              setTargetCompany(finalResumeData.targetCompany);
+            }
 
             if (preferReport) {
               const restoredJdText = (finalResumeData.lastJdText || '').trim();
@@ -738,14 +741,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
     // 🔴 标记原始简历为“未优化”
-      if (resumeData.id) {
-        const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-        const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
-        DatabaseService.updateResume(String(resumeData.id), {
-          title: updatedTitle,
-          resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText, targetCompany }
-        }).then(res => console.log('Original resume marked as unoptimized:', res.success));
-      }
+    if (resumeData.id) {
+      const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
+      const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
+      DatabaseService.updateResume(String(resumeData.id), {
+        title: updatedTitle,
+        resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText, targetCompany }
+      }).then(res => console.log('Original resume marked as unoptimized:', res.success));
+    }
 
     setAnalysisInProgress(true);
     navigateToStep('analyzing');
@@ -1003,12 +1006,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         if (userError || !user) return;
 
         // 确保数据带有“已优化”标记
-          const updatedDataWithStatus = {
-            ...nextResumeData,
-            optimizationStatus: 'optimized' as const,
-            lastJdText: jdText,
-            targetCompany
-          };
+        const updatedDataWithStatus = {
+          ...nextResumeData,
+          optimizationStatus: 'optimized' as const,
+          lastJdText: jdText,
+          targetCompany
+        };
 
         const originalTitle = allResumes?.find(r => r.id === selectedResumeId)?.title || '简历';
         const newTitle = buildResumeTitle(originalTitle, updatedDataWithStatus, jdText, true);
@@ -1252,16 +1255,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep]);
 
-  useEffect(() => {
-    if (currentStep === 'chat') {
-      if (!inputMessage) {
-        setInputMessage(CHAT_PREFILL_TEXT);
-        setIsChatPrefill(true);
+    useEffect(() => {
+      if (currentStep === 'chat') {
+        const isNewInterview = !chatInitialized && chatMessages.length === 0;
+        if (isNewInterview && !inputMessage) {
+          setInputMessage(CHAT_PREFILL_TEXT);
+          setIsChatPrefill(true);
+        } else if (!isNewInterview && isChatPrefill) {
+          setIsChatPrefill(false);
+        }
+      } else if (isChatPrefill) {
+        setIsChatPrefill(false);
       }
-    } else if (isChatPrefill) {
-      setIsChatPrefill(false);
-    }
-  }, [currentStep]);
+    }, [currentStep, chatInitialized, chatMessages.length]);
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -1351,10 +1357,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   // 如果处于分析或聊天步骤但没有分数数据，强制返回第一步（兜底策略）
   useEffect(() => {
     if ((currentStep === 'report' || currentStep === 'chat') && score === 0 && suggestions.length === 0 && !isFromCache && hasRestoredAnalysisRef.current) {
+      if (currentStep === 'chat' && isInterviewEntry) {
+        return;
+      }
       console.log('Detected detailed step without data, resetting to resume_select');
       setCurrentStep('resume_select');
     }
-  }, [currentStep, score, suggestions.length, isFromCache]);
+  }, [currentStep, score, suggestions.length, isFromCache, isInterviewEntry]);
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
@@ -1397,6 +1406,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [resumeData?.id]);
 
+  // 从预览页跳转到分数页
+  useEffect(() => {
+    const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
+    const targetId = localStorage.getItem('ai_report_resume_id');
+    if (!shouldOpenReport) return;
+    if (!resumeData?.id || targetId !== String(resumeData.id)) return;
+
+    localStorage.removeItem('ai_report_open');
+    localStorage.removeItem('ai_report_resume_id');
+    handleResumeSelect(resumeData.id, true);
+  }, [resumeData?.id]);
+
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
   useEffect(() => {
     if (currentStep === 'chat' && !chatInitialized && chatMessages.length === 0) {
@@ -1413,7 +1434,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setChatInitialized(true);
 
       // 获取用户名字，只使用名字部分，不带姓氏
-      let userName = '您好';
+      let userName = '';
       if (resumeData?.personalInfo?.name) {
         // 提取名字部分，移除姓氏
         const fullName = resumeData.personalInfo.name;
@@ -1421,7 +1442,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         if (fullName.includes(' ')) {
           // 英文名字，取最后一个单词
           userName = fullName.split(' ').pop() || fullName;
-        } else if (fullName.length > 2) {
+        } else if (fullName.length >= 2) {
           // 中文名字，取后两个字（假设姓氏为单字）
           userName = fullName.slice(-2);
         } else {
@@ -1432,10 +1453,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       // 先显示问候和面试介绍消息
       setTimeout(() => {
+        const greeting = userName ? `${userName}，您好！` : '您好！';
         const summaryMessage = {
           id: 'ai-summary',
           role: 'model' as const,
-          text: `${userName}，您好！我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`
+          text: `${greeting}我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`
         };
         console.log('Adding summary message:', summaryMessage);
         setChatMessages(prev => (prev.some(m => m.id === summaryMessage.id) ? prev : [...prev, summaryMessage]));
@@ -1716,28 +1738,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           </div>
         </header>
         <main className="p-4 flex flex-col gap-6">
-            <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="material-symbols-outlined text-primary">description</span>
-                <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
-              </div>
-              <div className="mb-3">
-                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
-                <input
-                  value={targetCompany}
-                  onChange={(e) => setTargetCompany(e.target.value)}
-                  placeholder="例如：字节跳动 / 腾讯"
-                  className="mt-2 w-full rounded-xl bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm"
-                  type="text"
-                />
-              </div>
-              <textarea
-                value={jdText}
-                onChange={(e) => setJdText(e.target.value)}
-                placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
-                className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
-                maxLength={1000}
-              ></textarea>
+          <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="material-symbols-outlined text-primary">description</span>
+              <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
+            </div>
+            <div className="mb-3">
+              <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
+              <input
+                value={targetCompany}
+                onChange={(e) => setTargetCompany(e.target.value)}
+                placeholder="例如：字节跳动 / 腾讯"
+                className="mt-2 w-full rounded-xl bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm"
+                type="text"
+              />
+            </div>
+            <textarea
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+              placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
+              className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
+              maxLength={1000}
+            ></textarea>
 
             {/* 截图上传按钮 */}
             <div className="mt-3">
@@ -2204,21 +2226,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           <div className="flex gap-2 items-end max-w-md mx-auto">
             <textarea
               value={inputMessage}
-              onChange={(e) => {
-                if (isChatPrefill) setIsChatPrefill(false);
-                setInputMessage(e.target.value);
-              }}
-              onFocus={() => {
-                if (isChatPrefill) {
-                  setIsChatPrefill(false);
-                  setInputMessage('');
-                }
-              }}
-              onBlur={() => {
-                if (!inputMessage.trim()) {
-                  setInputMessage(CHAT_PREFILL_TEXT);
-                  setIsChatPrefill(true);
-                }
+                onChange={(e) => {
+                  if (isChatPrefill) setIsChatPrefill(false);
+                  setInputMessage(e.target.value);
+                }}
+                onBlur={() => {
+                  if (!inputMessage.trim()) {
+                    setInputMessage(CHAT_PREFILL_TEXT);
+                    setIsChatPrefill(true);
+                  }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {

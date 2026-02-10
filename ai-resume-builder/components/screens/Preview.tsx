@@ -224,7 +224,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     }}
   >
     {/* Classic Centered Header */}
-      <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
+    <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
       <div className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 flex items-center justify-center text-gray-400">
         {data?.personalInfo?.avatar ? (
           <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" />
@@ -417,26 +417,26 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
 );
 
 
-  const sanitizeData = (data: any): any => {
-    const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
-    if (Array.isArray(data)) return data.map(item => sanitizeData(item));
-    if (typeof data === 'object' && data !== null) {
-      const sanitized: any = {};
-      for (const [key, value] of Object.entries(data)) {
-        if (fieldsToRemove.includes(key)) continue;
-        sanitized[key] = sanitizeData(value);
-      }
-      return sanitized;
+const sanitizeData = (data: any): any => {
+  const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
+  if (Array.isArray(data)) return data.map(item => sanitizeData(item));
+  if (typeof data === 'object' && data !== null) {
+    const sanitized: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (fieldsToRemove.includes(key)) continue;
+      sanitized[key] = sanitizeData(value);
     }
-    return data;
-  };
+    return sanitized;
+  }
+  return data;
+};
 
-  const buildExportFilename = (title?: string) => {
-    const rawTitle = (title || '').trim();
-    const cleaned = rawTitle.replace(/[\\/:*?"<>|]+/g, '').trim();
-    const base = cleaned || '简历';
-    return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
-  };
+const buildExportFilename = (title?: string) => {
+  const rawTitle = (title || '').trim();
+  const cleaned = rawTitle.replace(/[\\/:*?"<>|]+/g, '').trim();
+  const base = cleaned || '简历';
+  return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
+};
 
 const buildExportHtml = (templateId: string): string | null => {
   const resumeEl = document.getElementById(`resume-content-${templateId}`);
@@ -521,21 +521,21 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
     if (isGenerating || !resumeData) return;
     setIsGenerating(true);
 
-      try {
-        const sanitizedResumeData = sanitizeData(resumeData);
-        const htmlContent = buildExportHtml(currentTemplateId);
-        const resumeTitle = resumeData?.resumeTitle || '';
-        const payload: Record<string, unknown> = {
-          resumeData: sanitizedResumeData,
-          jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : '',
-          resumeTitle,
-          filename: resumeTitle
-        };
-        if (htmlContent) payload.htmlContent = htmlContent;
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
+    try {
+      const sanitizedResumeData = sanitizeData(resumeData);
+      const htmlContent = buildExportHtml(currentTemplateId);
+      const resumeTitle = resumeData?.resumeTitle || '';
+      const payload: Record<string, unknown> = {
+        resumeData: sanitizedResumeData,
+        jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : '',
+        resumeTitle,
+        filename: resumeTitle
+      };
+      if (htmlContent) payload.htmlContent = htmlContent;
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
       if (!response.ok) {
@@ -545,18 +545,18 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.style.display = 'none';
-        a.href = url;
+      const a = document.createElement('a');
+      a.style.display = 'none';
+      a.href = url;
 
-        const contentDisposition = response.headers.get('content-disposition');
-        let filename = buildExportFilename(resumeData?.resumeTitle);
-        if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-          if (filenameMatch) filename = filenameMatch[1];
-        } else {
-          filename = buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name);
-        }
+      const contentDisposition = response.headers.get('content-disposition');
+      let filename = buildExportFilename(resumeData?.resumeTitle);
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (filenameMatch) filename = filenameMatch[1];
+      } else {
+        filename = buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name);
+      }
 
       a.download = filename;
       document.body.appendChild(a);
@@ -695,24 +695,29 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
             <button
               onClick={() => {
                 if (resumeData?.id) {
-                  localStorage.setItem('ai_interview_open', '1');
-                  localStorage.setItem('ai_interview_resume_id', String(resumeData.id));
+                  localStorage.setItem('ai_report_open', '1');
+                  localStorage.setItem('ai_report_resume_id', String(resumeData.id));
                 }
                 setCurrentView(View.AI_ANALYSIS);
               }}
-              className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
+              className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-br from-primary via-blue-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-500/25 active:scale-[0.98] transition-all group overflow-hidden relative"
             >
-              <div className="flex items-center gap-3">
-                <div className="relative size-10 rounded-full overflow-hidden border-2 border-white/30 bg-white">
+              {/* Decorative background elements */}
+              <div className="absolute -right-4 -top-4 size-24 bg-white/10 rounded-full blur-2xl group-hover:scale-110 transition-transform duration-500"></div>
+              <div className="absolute -left-4 -bottom-4 size-20 bg-blue-400/10 rounded-full blur-2xl"></div>
+
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/40 bg-white shadow-md">
                   <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Interviewer" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-0 right-0 size-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+                  <span className="absolute bottom-0.5 right-0.5 size-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
                 </div>
-                <div className="text-left">
-                  <p className="text-sm font-bold">AI 模拟面试官</p>
-                  <p className="text-xs text-blue-100">继续上次面试对话</p>
+                <div className="text-left space-y-0.5">
+                  <p className="text-base font-extrabold tracking-tight">查看AI评分</p>
+                  <p className="text-[11px] text-blue-50/90 font-medium">查看评分 & 参加模拟面试</p>
                 </div>
               </div>
-              <div className="size-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
+
+              <div className="size-10 rounded-full bg-white/15 flex items-center justify-center border border-white/20 shadow-sm group-hover:bg-white/25 transition-all relative z-10 group-hover:translate-x-1 duration-300">
                 <span className="material-symbols-outlined text-xl">arrow_forward</span>
               </div>
             </button>
