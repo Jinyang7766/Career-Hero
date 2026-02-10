@@ -34,10 +34,12 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
     const hour = beijingTime.getHours();
 
-    if (hour >= 5 && hour < 12) {
+    if (hour >= 5 && hour < 11) {
       return '早上好';
-    } else if (hour >= 12 && hour < 18) {
+    } else if (hour >= 11 && hour < 13) {
       return '中午好';
+    } else if (hour >= 13 && hour < 18) {
+      return '下午好';
     } else if (hour >= 18 && hour < 23) {
       return '晚上好';
     } else {
