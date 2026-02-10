@@ -21,32 +21,6 @@ import base64
 import urllib.request
 import ipaddress
 import socket
-import os
-from playwright.sync_api import sync_playwright
-# -*- coding: utf-8 -*-
-from dotenv import load_dotenv
-load_dotenv()  # 加载 .env 文件
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from supabase import create_client, Client
-import os
-import uuid
-from datetime import datetime
-from functools import wraps
-import jwt
-from werkzeug.security import generate_password_hash, check_password_hash
-import re
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from pypdf import PdfReader
-from docx import Document
-import io
-import base64
-import urllib.request
-import ipaddress
-import socket
-import os
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
@@ -126,22 +100,28 @@ else:
 
 # Initialize Supabase with error handling
 try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    print("Supabase connected successfully")
-except Exception as e:
-    # Compatibility fallback for older supabase-py versions that don't accept proxy kw
-    if "proxy" in str(e):
-        try:
-            supabase = Client(SUPABASE_URL, SUPABASE_KEY)
-            print("Supabase connected successfully (proxy fallback)")
-        except Exception as e2:
-            print(f"Supabase connection failed: {e2}")
-            print("Using mock data storage for development")
-            supabase = None
-    else:
-        print(f"Supabase connection failed: {e}")
-        print("Using mock data storage for development")
+    # Explicitly check for URL validity before connecting
+    if not SUPABASE_URL or SUPABASE_URL == 'your-supabase-url' or not SUPABASE_URL.startswith('http'):
+        print(f"WARNING: Invalid SUPABASE_URL detected: {SUPABASE_URL}")
         supabase = None
+    else:
+        # Supabase SDK sometimes tries to use proxy env vars (HTTP_PROXY) incorrectly in some versions.
+        # If create_client fails with 'proxy' error, we attempt a clean init.
+        try:
+            supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+            print("Supabase connected successfully")
+        except TypeError as e:
+            if "proxy" in str(e):
+                print("Detected proxy argument mismatch, attempting simple Client initialization...")
+                # Fallback to direct Client instantiation if create_client has issues
+                supabase = Client(supabase_url=SUPABASE_URL, supabase_key=SUPABASE_KEY)
+                print("Supabase connected successfully (manual fallback)")
+            else:
+                raise e
+except Exception as e:
+    print(f"Supabase connection failed: {e}")
+    print("Using mock data storage for development")
+    supabase = None
 
 # Mock helper functions
 def is_mock_mode():
