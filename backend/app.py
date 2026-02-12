@@ -2276,27 +2276,83 @@ def _is_missing_resume_core_fields(parsed_data):
 def _normalize_parsed_resume_result(ai_result):
     """Map potential alias keys to canonical fields used by frontend."""
     ai_result = ai_result or {}
-    personal = ai_result.get('personalInfo') or ai_result.get('personal') or {}
-    work_exps = ai_result.get('workExps') or ai_result.get('workExperience') or ai_result.get('experiences') or []
-    educations = ai_result.get('educations') or ai_result.get('education') or []
-    projects = ai_result.get('projects') or ai_result.get('projectExperience') or []
-    skills = ai_result.get('skills') or ai_result.get('skillSet') or []
+    personal = ai_result.get('personalInfo') or ai_result.get('personal') or ai_result.get('个人信息') or {}
+    work_exps = (
+        ai_result.get('workExps')
+        or ai_result.get('workExperience')
+        or ai_result.get('experiences')
+        or ai_result.get('work_experience')
+        or ai_result.get('工作经历')
+        or []
+    )
+    educations = (
+        ai_result.get('educations')
+        or ai_result.get('education')
+        or ai_result.get('educationExps')
+        or ai_result.get('教育经历')
+        or []
+    )
+    projects = ai_result.get('projects') or ai_result.get('projectExperience') or ai_result.get('项目经历') or []
+    skills = ai_result.get('skills') or ai_result.get('skillSet') or ai_result.get('技能') or []
 
     if isinstance(skills, str):
         skills = [s.strip() for s in re.split(r"[，,、/\n]", skills) if s.strip()]
 
+    def _pick(d, keys, default=''):
+        if not isinstance(d, dict):
+            return default
+        for k in keys:
+            v = d.get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+        return default
+
+    def _ensure_list(value):
+        if isinstance(value, list):
+            return value
+        if isinstance(value, dict):
+            return [value]
+        return []
+
+    normalized_work = []
+    for item in _ensure_list(work_exps):
+        if not isinstance(item, dict):
+            continue
+        normalized_work.append({
+            'company': _pick(item, ['company', 'employer', 'organization', 'org', '单位', '公司', 'title']),
+            'position': _pick(item, ['position', 'jobTitle', 'role', '岗位', '职位', 'subtitle']),
+            'startDate': _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期']),
+            'endDate': _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期']),
+            'description': _pick(item, ['description', 'content', 'summary', '职责', '工作内容']),
+        })
+
+    normalized_edu = []
+    for item in _ensure_list(educations):
+        if not isinstance(item, dict):
+            continue
+        normalized_edu.append({
+            'school': _pick(item, ['school', 'university', 'college', '学校', 'title']),
+            'degree': _pick(item, ['degree', '学历', '学位']),
+            'major': _pick(item, ['major', 'speciality', '专业', 'subtitle']),
+            'startDate': _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期']),
+            'endDate': _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期']),
+        })
+
     return {
         'personalInfo': {
-            'name': personal.get('name', '') or '',
-            'title': personal.get('title') or personal.get('jobTitle') or '',
-            'email': personal.get('email', '') or '',
-            'phone': personal.get('phone') or personal.get('mobile') or '',
-            'location': personal.get('location') or personal.get('city') or '',
-            'summary': personal.get('summary') or personal.get('profile') or personal.get('selfIntro') or ''
+            'name': _pick(personal, ['name', '姓名']) or '',
+            'title': _pick(personal, ['title', 'jobTitle', '求职意向', '职位']) or '',
+            'email': _pick(personal, ['email', '邮箱']) or '',
+            'phone': _pick(personal, ['phone', 'mobile', '手机号', '电话']) or '',
+            'location': _pick(personal, ['location', 'city', '地址', '所在地']) or '',
+            'summary': (
+                _pick(personal, ['summary', 'profile', 'selfIntro', '自我评价', '个人总结', '个人简介'])
+                or (ai_result.get('summary', '') if isinstance(ai_result.get('summary', ''), str) else '')
+            )
         },
-        'workExps': work_exps if isinstance(work_exps, list) else [],
-        'educations': educations if isinstance(educations, list) else [],
-        'projects': projects if isinstance(projects, list) else [],
+        'workExps': normalized_work,
+        'educations': normalized_edu,
+        'projects': _ensure_list(projects),
         'skills': skills if isinstance(skills, list) else []
     }
 
