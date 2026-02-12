@@ -350,6 +350,35 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Optimized Resume Tracking
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
+  const isLikelyJwt = (token?: string | null) => {
+    const raw = (token || '').trim();
+    if (!raw) return false;
+    return raw.split('.').length === 3;
+  };
+  const getBackendAuthToken = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const sessionToken = session?.access_token?.trim();
+      if (isLikelyJwt(sessionToken)) return sessionToken as string;
+    } catch (error) {
+      console.warn('Failed to get Supabase session token:', error);
+    }
+
+    try {
+      const sessionStr = localStorage.getItem('supabase_session');
+      if (sessionStr) {
+        const parsed = JSON.parse(sessionStr);
+        const token = (parsed?.access_token || parsed?.token || '').trim();
+        if (isLikelyJwt(token)) return token;
+      }
+    } catch (error) {
+      console.warn('Failed to parse supabase_session:', error);
+    }
+
+    const legacyToken = (localStorage.getItem('token') || '').trim();
+    if (isLikelyJwt(legacyToken)) return legacyToken;
+    return '';
+  };
   const setAnalysisResumeId = (id: number | null) => {
     if (id === null || id === undefined) {
       localStorage.removeItem('ai_analysis_resume_id');
@@ -792,31 +821,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setIsFromCache(false);
       // ========== 缓存检查结束 ==========
 
-      // --- 终极 Token 获取逻辑 ---
-      // 1. 优先获取自定义登录的 token
-      let token = localStorage.getItem('token');
-
-      // 2. 如果没有，解析 supabase_session
-      if (!token) {
-        const sessionStr = localStorage.getItem('supabase_session');
-        if (sessionStr) {
-          try {
-            const session = JSON.parse(sessionStr);
-            token = session.access_token || session.token; // 兼容不同字段名
-          } catch (e) {
-            console.error('Failed to parse supabase_session');
-          }
-        }
-      }
-
+      const token = await getBackendAuthToken();
       if (!token) {
         alert('登录已过期，请重新登录');
         window.location.href = '/login'; // 或者你的登录路由
         return null;
       }
-      // --- End ---
 
-      console.log("🚀 发送到后端的 Token 是:", token);
+      console.log('Using authenticated token for AI analyze request');
 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 60000); // Increase timeout to 60s
@@ -1299,17 +1311,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       reader.onload = async (event) => {
         const base64Image = event.target?.result as string;
 
-        // 获取token
-        let token = localStorage.getItem('token');
-        if (!token) {
-          const supabaseSession = localStorage.getItem('supabase_session');
-          if (supabaseSession) {
-            try {
-              const session = JSON.parse(supabaseSession);
-              token = session.access_token;
-            } catch (e) { }
-          }
-        }
+        const token = await getBackendAuthToken();
 
         if (!token) {
           alert('登录已过期，请重新登录');
@@ -1742,25 +1744,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
 
-      // --- 🔴 修改开始 ---
-      let token = localStorage.getItem('token');
-
-      if (!token) {
-        const supabaseSession = localStorage.getItem('supabase_session');
-        if (supabaseSession) {
-          try {
-            const session = JSON.parse(supabaseSession);
-            token = session.access_token;
-          } catch (e) { }
-        }
-      }
-
+      const token = await getBackendAuthToken();
       if (!token) {
         throw new Error('请先登录以使用 AI 功能');
       }
-      // --- 🟢 修改结束 ---
-
-
 
       const apiEndpoint = buildApiUrl('/api/ai/chat');
 
@@ -2003,13 +1990,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             )}
           </div>
 
-          <button
-            onClick={startAnalysis}
-            disabled={!jdText}
-            className="w-full py-3.5 rounded-xl bg-primary text-white font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
-          >
-            开始匹配分析
-          </button>
+          <div className="flex gap-4 mt-2">
+            <button
+              onClick={handleStepBack}
+              className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
+            >
+              上一步
+            </button>
+            <button
+              onClick={startAnalysis}
+              disabled={!jdText}
+              className="flex-[2] py-3.5 rounded-xl bg-primary text-white font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
+            >
+              开始分析
+            </button>
+          </div>
         </main>
       </div>
     );
