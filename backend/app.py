@@ -30,7 +30,8 @@ from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
 import traceback
-import google.generativeai as genai
+import google.genai as genai
+from google.genai import types
 
 app = Flask(__name__)
 
@@ -97,11 +98,9 @@ GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
 gemini_request_count = 0  # Track daily usage
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
-    genai.configure(api_key=GEMINI_API_KEY)
-    # Use Gemini 2.0 Flash as default model - fast & capable
-    model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 else:
-    model = None
+    gemini_client = None
 
 # Initialize Supabase with error handling
 def _clear_proxy_env():
@@ -171,15 +170,15 @@ def get_mock_resumes_for_user(user_id: str):
 def generate_embedding(text):
     """使用 Gemini 生成文本向量"""
     try:
-        if not GEMINI_API_KEY or GEMINI_API_KEY == 'your-gemini-api-key':
+        if not gemini_client:
             return None
         
-        result = genai.embed_content(
+        result = gemini_client.models.embed_content(
             model="models/gemini-embedding-001",
-            content=text,
-            task_type="retrieval_query"
+            contents=text,
+            config=types.EmbedContentConfig(task_type="RETRIEVAL_QUERY")
         )
-        return result['embedding']
+        return result.embeddings[0].values
     except Exception as e:
         logger.error(f"Generate embedding failed: {e}")
         return None
@@ -2121,18 +2120,25 @@ def extract_text_multimodal(file_bytes):
         if not images:
             return ""
 
-        genai.configure(api_key=GEMINI_API_KEY)
-        # 使用 Gemini 2.0 Flash 模型，视觉能力强且速度快
-        vision_model = genai.GenerativeModel('gemini-2.0-flash-exp')
-        
+        if not gemini_client:
+            return ""
+
         prompt = "你是一位专业的简历解析专家。请阅读这张简历图片，并将其中所有的文字内容完整、准确地提取出来，保持原有的段落和逻辑结构。不需要返回 JSON，只需要提取出的原始文本。"
         
         # 构造内容列表 [prompt, img1, img2, ...]
-        content = [prompt]
+        contents = [prompt]
         for img in images:
-            content.append(img)
+             # Convert base64 data back to bytes (or pass specific structure if sdk supports)
+             # The new SDK supports types.Part.from_bytes
+             img_bytes_decoded = base64.b64decode(img['data'])
+             contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
             
-        response = vision_model.generate_content(content)
+        print(f"DEBUG: Calling Gemini vision model with {len(contents)} parts")
+        response = gemini_client.models.generate_content(
+            model='gemini-3-pro-preview',
+            contents=contents
+        )
+        print(f"DEBUG: Gemini Vision response received. Text length: {len(response.text)}")
         return response.text.strip()
     except Exception as e:
         logger.error(f"Multimodal extraction failed: {e}")
@@ -2152,8 +2158,8 @@ def parse_resume_text_with_ai(resume_text):
 
     logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
 
-    genai.configure(api_key=GEMINI_API_KEY)
-    ai_model = genai.GenerativeModel('gemini-2.0-flash-exp')
+    if not gemini_client:
+        raise ValueError('AI 服务未配置')
 
     prompt = f"""
     你是一位顶尖的简历解析专家。请分析以下简历文本，并将其转换为精确的结构化 JSON。
@@ -2214,7 +2220,17 @@ def parse_resume_text_with_ai(resume_text):
     ---
     """
 
-    response = ai_model.generate_content(prompt)
+    try:
+        response = gemini_client.models.generate_content(
+            model='gemini-3-pro-preview',
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
+        )
+    except Exception as e:
+        logger.error(f"AI parse failed: {e}")
+        raise RuntimeError('AI parse failed')
     ai_result = parse_ai_response(response.text)
 
     if not ai_result:
@@ -2293,7 +2309,7 @@ def analyze_resume(current_user_id):
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
 
-        if model and check_gemini_quota():
+        if gemini_client and check_gemini_quota():
             try:
                 # --- RAG 检索逻辑开始 ---
                 relevant_cases = find_relevant_cases_vector(resume_data)
@@ -2426,7 +2442,13 @@ def analyze_resume(current_user_id):
 {format_requirements}
 """
 
-                response = model.generate_content(prompt)
+                response = gemini_client.models.generate_content(
+                    model='gemini-3-pro-preview',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
+                )
                 ai_result = parse_ai_response(response.text)
 
                 return jsonify({
@@ -2485,15 +2507,23 @@ def parse_screenshot(current_user_id):
         if not image:
             return jsonify({'error': '图片不能为空'}), 400
 
-        if model and check_gemini_quota():
+        if gemini_client and check_gemini_quota():
             try:
                 prompt = "请从图片中提取职位描述文本，只返回提取结果，不要解释。请仅使用中文输出。"
                 from base64 import b64decode
                 import re
                 base64_data = re.sub('^data:image/.+;base64,', '', image)
                 image_data = b64decode(base64_data)
-                image_part = {"mime_type": "image/png", "data": image_data}
-                response = model.generate_content([prompt, image_part])
+                
+                contents = [
+                    prompt,
+                    types.Part.from_bytes(data=image_data, mime_type="image/png")
+                ]
+                
+                response = gemini_client.models.generate_content(
+                    model='gemini-3-pro-preview',
+                    contents=contents
+                )
                 return jsonify({'text': response.text.strip()})
             except Exception as ai_error:
                 logger.error(f"AI 截图解析失败: {ai_error}")
@@ -2519,7 +2549,7 @@ def ai_chat(current_user_id):
 
         clean_message = message.replace('[INTERVIEW_MODE]', '').strip()
 
-        if model and check_gemini_quota():
+        if gemini_client and check_gemini_quota():
             try:
                 formatted_chat = ""
                 for msg in chat_history:
@@ -2537,8 +2567,17 @@ def ai_chat(current_user_id):
 候选人回答：{clean_message}
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
-                response = model.generate_content(prompt)
-                return jsonify({'response': response.text})
+                response = gemini_client.models.generate_content(
+                    model='gemini-3-pro-preview',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
+                )
+                
+                # Parse JSON
+                parsed_json = json.loads(response.text)
+                return jsonify({'response': parsed_json})
             except Exception as ai_error:
                 logger.error(f"AI 面试失败: {ai_error}")
                 return jsonify({'response': '面试官暂时开小差了，请稍后再试。'}), 200
@@ -2600,7 +2639,7 @@ def generate_resume(current_user_id):
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
 
-        if model and check_gemini_quota():
+        if gemini_client and check_gemini_quota():
             try:
                 formatted_chat = ""
                 for msg in chat_history:
@@ -2684,7 +2723,13 @@ def generate_resume(current_user_id):
 }}
 """
 
-                response = model.generate_content(prompt)
+                response = gemini_client.models.generate_content(
+                    model='gemini-3-pro-preview',
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_mime_type="application/json"
+                    )
+                )
                 ai_result = parse_ai_response(response.text)
 
                 if ai_result and ai_result.get('resumeData'):
