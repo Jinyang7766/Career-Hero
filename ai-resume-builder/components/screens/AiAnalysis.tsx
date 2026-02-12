@@ -130,6 +130,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     return text;
   };
+  const sanitizeReasonText = (value: any) => {
+    let text = String(value ?? '').trim();
+    if (!text) return '';
+    text = text
+      .replace(/;/g, '；')
+      .replace(/([。！？；，])\s*[；，。！？]+/g, '$1')
+      .replace(/([。！？；，]){2,}/g, '$1')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text;
+  };
   const normalizeSkillToken = (raw: any) => {
     const text = String(raw ?? '')
       .replace(/[•·]/g, ' ')
@@ -238,6 +249,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       return 'summary';
     }
     return 'workExps';
+  };
+  const getDisplayOriginalValue = (suggestion: Suggestion) => {
+    const section = normalizeTargetSection(suggestion.targetSection) || inferTargetSection(suggestion);
+    const raw = suggestion.originalValue;
+    if (raw === null || raw === undefined) return '';
+
+    if (section === 'educations') {
+      const text = String(raw).trim();
+      const edu = (resumeData?.educations || []).find((e: any) =>
+        typeof suggestion.targetId === 'number' ? e.id === suggestion.targetId : true
+      );
+      if (edu) {
+        const school = (edu.school || edu.title || '').trim();
+        const degree = (edu.degree || '').trim();
+        const major = (edu.major || edu.subtitle || '').trim();
+        const composed = [school, degree, major].filter(Boolean).join(' | ');
+        if (composed) return composed;
+      }
+
+      const leftRight = text.split('@').map(s => s.trim()).filter(Boolean);
+      if (leftRight.length === 2) {
+        const left = Array.from(new Set(leftRight[0].split(/\s+/).filter(Boolean))).join(' ');
+        return [left, leftRight[1]].filter(Boolean).join(' @ ');
+      }
+
+      const tokens = text.split(/\s+/).filter(Boolean);
+      if (tokens.length > 1) {
+        return Array.from(new Set(tokens)).join(' ');
+      }
+      return text;
+    }
+
+    if (Array.isArray(raw)) return raw.join('、');
+    return String(raw);
   };
 
   const normalizeTargetSection = (section: any): Suggestion['targetSection'] | '' => {
@@ -401,7 +446,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       if (!text) return text;
       let result = text;
       for (const [token, value] of mapping.entries()) {
+        const bareToken = token.replace(/^\[\[/, '').replace(/\]\]$/, '');
         result = result.split(token).join(value);
+        result = result.split(bareToken).join(value);
       }
       return result;
     };
@@ -639,6 +686,52 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       return entry?.rating ? { ...item, rating: entry.rating } : item;
     });
   };
+  const consolidateSkillSuggestions = (items: Suggestion[]) => {
+    if (!Array.isArray(items) || items.length <= 1) return items;
+    const skillIndices = items
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => normalizeTargetSection(item.targetSection) === 'skills');
+    if (skillIndices.length <= 1) return items;
+
+    const mergedSkills = toSkillList(
+      skillIndices.flatMap(({ item }) =>
+        Array.isArray(item.suggestedValue) ? item.suggestedValue : [item.suggestedValue]
+      )
+    );
+    const firstSkill = skillIndices[0].item;
+    const mergedReason = Array.from(
+      new Set(skillIndices.map(({ item }) => String(item.reason || '').trim()).filter(Boolean))
+    ).join('；');
+    const mergedOriginal = skillIndices.find(({ item }) => item.originalValue)?.item.originalValue;
+    const mergedRating = skillIndices.find(({ item }) => item.rating)?.item.rating;
+    const mergedStatus = skillIndices.some(({ item }) => item.status === 'accepted')
+      ? 'accepted'
+      : (skillIndices.some(({ item }) => item.status === 'ignored') ? 'ignored' : 'pending');
+
+    const mergedSkillSuggestion: Suggestion = {
+      ...firstSkill,
+      title: firstSkill.title || '技能补全',
+      reason: sanitizeReasonText(mergedReason || firstSkill.reason),
+      targetSection: 'skills',
+      suggestedValue: mergedSkills,
+      originalValue: mergedOriginal ?? firstSkill.originalValue,
+      status: mergedStatus as any,
+      rating: mergedRating
+    };
+
+    const firstIdx = skillIndices[0].idx;
+    const skillIndexSet = new Set(skillIndices.map(({ idx }) => idx));
+    const result: Suggestion[] = [];
+    items.forEach((item, idx) => {
+      if (idx === firstIdx) {
+        result.push(mergedSkillSuggestion);
+        return;
+      }
+      if (skillIndexSet.has(idx)) return;
+      result.push(item);
+    });
+    return result;
+  };
 
   const applyAnalysisSnapshot = (snapshot: any) => {
     if (!snapshot) return false;
@@ -649,7 +742,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const displayScore = resolveDisplayScore(snapshot.score || 0, normalizedBreakdown);
     setOriginalScore(displayScore);
     setScore(displayScore);
-    setSuggestions(applySuggestionFeedback(snapshot.suggestions || []));
+    setSuggestions(applySuggestionFeedback(consolidateSkillSuggestions(snapshot.suggestions || [])));
     setReport({
       summary: snapshot.summary || '',
       strengths: snapshot.strengths || [],
@@ -1315,7 +1408,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               id: `ai-suggestion-${index}`,
               type: 'optimization',
               title: '优化建议',
-              reason: suggestion,
+              reason: sanitizeReasonText(suggestion),
               targetSection: 'skills',
               targetId: undefined,
               targetField: undefined,
@@ -1333,7 +1426,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               id: suggestion.id || `ai-suggestion-${index}`,
               type: suggestion.type || 'optimization',
               title: suggestion.title || '优化建议',
-              reason: suggestion.reason || '根据AI分析结果',
+              reason: sanitizeReasonText(suggestion.reason || '根据AI分析结果'),
               targetSection: inferredSection,
               targetId: suggestion.targetId,
               targetField: suggestion.targetField,
@@ -1370,7 +1463,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         setOriginalScore(totalScore);
         // 初始化当前分数为原始分数
         setScore(totalScore);
-        const appliedSuggestions = applySuggestionFeedback(newSuggestions);
+        const appliedSuggestions = applySuggestionFeedback(consolidateSkillSuggestions(newSuggestions));
         setSuggestions(appliedSuggestions);
         setReport(newReport);
         const snapshotForPersist = {
@@ -2886,7 +2979,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       <div className="p-4 bg-red-50/30 dark:bg-red-900/5">
                         <p className="text-xs font-bold text-red-400 mb-2 uppercase">修改前</p>
                         <div className="text-sm text-slate-500 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[80px]">
-                          {suggestion.originalValue || <span className="italic text-slate-400">无内容</span>}
+                          {getDisplayOriginalValue(suggestion) || <span className="italic text-slate-400">无内容</span>}
                         </div>
                       </div>
 
