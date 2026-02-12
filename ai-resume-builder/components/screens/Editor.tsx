@@ -218,6 +218,69 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
   const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
     console.log('导入简历数据:', importedData);
+    const toText = (value: any) => (typeof value === 'string' ? value.trim() : '');
+    const normalizeDateRange = (start?: string, end?: string) => {
+      const s = toText(start);
+      const e = toText(end);
+      if (s && e) return `${s} - ${e}`;
+      return s || e || '';
+    };
+    const importedSummary = toText(importedData.summary || importedData.personalInfo?.summary);
+    const normalizeWorkItems = (items: any[] = []) =>
+      items.map((item, index) => {
+        const startDate = toText(item?.startDate);
+        const endDate = toText(item?.endDate);
+        const title = toText(item?.title || item?.company);
+        const subtitle = toText(item?.subtitle || item?.position);
+        return {
+          ...item,
+          id: typeof item?.id === 'number' ? item.id : Date.now() + index,
+          title,
+          subtitle,
+          startDate,
+          endDate,
+          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          company: toText(item?.company || title),
+          position: toText(item?.position || subtitle),
+          description: toText(item?.description),
+        };
+      });
+    const normalizeEducationItems = (items: any[] = []) =>
+      items.map((item, index) => {
+        const startDate = toText(item?.startDate);
+        const endDate = toText(item?.endDate);
+        const title = toText(item?.title || item?.school);
+        const subtitle = toText(item?.subtitle || item?.major);
+        return {
+          ...item,
+          id: typeof item?.id === 'number' ? item.id : Date.now() + 1000 + index,
+          title,
+          subtitle,
+          startDate,
+          endDate,
+          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          school: toText(item?.school || title),
+          major: toText(item?.major || subtitle),
+          degree: toText(item?.degree),
+          description: toText(item?.description),
+        };
+      });
+    const normalizeProjectItems = (items: any[] = []) =>
+      items.map((item, index) => {
+        const startDate = toText(item?.startDate);
+        const endDate = toText(item?.endDate);
+        return {
+          ...item,
+          id: typeof item?.id === 'number' ? item.id : Date.now() + 2000 + index,
+          title: toText(item?.title),
+          subtitle: toText(item?.subtitle || item?.role),
+          role: toText(item?.role || item?.subtitle),
+          startDate,
+          endDate,
+          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          description: toText(item?.description),
+        };
+      });
 
     // 合并导入的数据到当前简历
     setResumeData(prev => {
@@ -232,23 +295,23 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           phone: importedData.personalInfo.phone || prev.personalInfo.phone,
           avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           location: importedData.personalInfo.location || prev.personalInfo.location,
-          summary: importedData.personalInfo.summary || prev.personalInfo.summary
+          summary: importedSummary || prev.personalInfo.summary
         };
       }
 
       // 合并工作经历（添加到现有列表）
       if (importedData.workExps && importedData.workExps.length > 0) {
-        mergedData.workExps = [...prev.workExps, ...importedData.workExps];
+        mergedData.workExps = [...prev.workExps, ...normalizeWorkItems(importedData.workExps as any[])];
       }
 
       // 合并教育经历（添加到现有列表）
       if (importedData.educations && importedData.educations.length > 0) {
-        mergedData.educations = [...prev.educations, ...importedData.educations];
+        mergedData.educations = [...prev.educations, ...normalizeEducationItems(importedData.educations as any[])];
       }
 
       // 合并项目经历（添加到现有列表）
       if (importedData.projects && importedData.projects.length > 0) {
-        mergedData.projects = [...prev.projects, ...importedData.projects];
+        mergedData.projects = [...prev.projects, ...normalizeProjectItems(importedData.projects as any[])];
       }
 
       // 合并技能（去重）
@@ -259,8 +322,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       }
 
       // Merge summary (top-level)
-      if (importedData.summary) {
-        mergedData.summary = importedData.summary;
+      if (importedSummary) {
+        mergedData.summary = importedSummary;
       }
 
       // Merge gender if provided
@@ -270,6 +333,9 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
       return mergedData;
     });
+    if (importedSummary) {
+      setSummary(importedSummary);
+    }
 
     console.log('简历导入完成');
     setTextResume('');
@@ -927,4 +993,3 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 };
 
 export default Editor;
-
