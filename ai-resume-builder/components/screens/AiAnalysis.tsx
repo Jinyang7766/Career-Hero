@@ -10,7 +10,7 @@ interface Suggestion {
   type: 'optimization' | 'grammar' | 'missing';
   title: string;
   reason: string;
-  targetSection: 'personalInfo' | 'workExps' | 'skills' | 'projects' | 'summary';
+  targetSection: 'personalInfo' | 'workExps' | 'skills' | 'projects' | 'educations' | 'summary';
   targetId?: number;
   targetField?: string;
   suggestedValue: any;
@@ -84,6 +84,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       format: toDimScore(raw.format || 0, SCORE_WEIGHTS.format),
     };
   };
+  const clampScore = (value: number) => Math.min(100, Math.max(0, Math.round(value || 0)));
+  const calcTotalFromBreakdown = (b: ScoreBreakdown) =>
+    clampScore((b.experience || 0) * SCORE_WEIGHTS.experience + (b.skills || 0) * SCORE_WEIGHTS.skills + (b.format || 0) * SCORE_WEIGHTS.format);
+  const resolveDisplayScore = (rawScore: number, breakdown: ScoreBreakdown) => {
+    const hasBreakdown =
+      (breakdown?.experience || 0) > 0 ||
+      (breakdown?.skills || 0) > 0 ||
+      (breakdown?.format || 0) > 0;
+    return hasBreakdown ? calcTotalFromBreakdown(breakdown) : clampScore(rawScore);
+  };
   const sanitizeSuggestedValue = (value: any, targetSection?: Suggestion['targetSection']) => {
     if (targetSection === 'skills') return value;
     if (typeof value !== 'string') return value;
@@ -133,7 +143,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       return 'projects';
     }
     if (['degree', 'major', 'school', 'education', 'educations'].includes(field)) {
-      return 'projects';
+      return 'educations' as any;
     }
     if (['skills', 'skill'].includes(field)) {
       return 'skills';
@@ -144,36 +154,114 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     return 'workExps';
   };
 
+  const normalizeTargetSection = (section: any): Suggestion['targetSection'] | '' => {
+    const value = String(section || '').trim().toLowerCase();
+    if (!value) return '';
+    if (value === 'personalinfo' || value === 'personal_info' || value === 'personal') return 'personalInfo';
+    if (value === 'workexps' || value === 'work_exp' || value === 'work' || value === 'experience') return 'workExps';
+    if (value === 'skills' || value === 'skill') return 'skills';
+    if (value === 'projects' || value === 'project') return 'projects';
+    if (value === 'educations' || value === 'education' || value === 'edu') return 'educations';
+    if (value === 'summary' || value === 'profile') return 'summary';
+    return '';
+  };
+
   const getSuggestionModuleLabel = (suggestion: Suggestion) => {
-    const section = suggestion.targetSection;
+    const normalizeText = (value: any) =>
+      String(value || '')
+        .replace(/\s+/g, '')
+        .trim();
+    const buildNeedle = () =>
+      normalizeText(
+        [
+          suggestion.originalValue,
+          suggestion.reason,
+          suggestion.title,
+          typeof suggestion.suggestedValue === 'string' ? suggestion.suggestedValue : ''
+        ].join(' ')
+      );
+    const scoreMatch = (needle: string, haystack: string) => {
+      if (!needle || !haystack) return 0;
+      let score = 0;
+      const chunks = needle
+        .split(/[，。；、,.;:\-_/|()\[\]{}]+/)
+        .map(s => s.trim())
+        .filter(s => s.length >= 4)
+        .slice(0, 8);
+      for (const c of chunks) {
+        if (haystack.includes(c)) score += c.length;
+      }
+      if (needle.length >= 8 && haystack.includes(needle.slice(0, 8))) score += 8;
+      return score;
+    };
+
+    const section = normalizeTargetSection(suggestion.targetSection) || suggestion.targetSection;
     if (section === 'personalInfo') return '个人信息';
     if (section === 'skills') return '技能';
     if (section === 'projects') {
       const projects = resumeData?.projects || [];
-      if (projects.length > 1 && typeof suggestion.targetId === 'number') {
-        const match = projects.find(item => item.id === suggestion.targetId);
-        const label = match?.title || match?.subtitle;
-        if (label) return `项目经历 - ${label}`;
-      }
+      const directMatch = typeof suggestion.targetId === 'number'
+        ? projects.find(item => item.id === suggestion.targetId)
+        : null;
+      const smartMatch = (() => {
+        const needle = buildNeedle();
+        if (!needle) return null;
+        let best: any = null;
+        let bestScore = 0;
+        for (const item of projects) {
+          const haystack = normalizeText(`${item.title || ''}${item.subtitle || ''}${item.description || ''}`);
+          const s = scoreMatch(needle, haystack);
+          if (s > bestScore) {
+            bestScore = s;
+            best = item;
+          }
+        }
+        return bestScore > 0 ? best : null;
+      })();
+      const match = directMatch || smartMatch || projects.find(item => (item.title || item.subtitle || '').trim());
+      const label = (match?.title || match?.subtitle || '').trim();
+      if (label) return label;
       return '项目经历';
     }
     if (section === 'summary') return '个人简介';
     if (section === 'workExps') {
       const exps = resumeData?.workExps || [];
-      if (exps.length > 1 && typeof suggestion.targetId === 'number') {
-        const match = exps.find(item => item.id === suggestion.targetId);
-        if (match?.company) return `工作经历 - ${match.company}`;
-      }
+      const directMatch = typeof suggestion.targetId === 'number'
+        ? exps.find(item => item.id === suggestion.targetId)
+        : null;
+      const smartMatch = (() => {
+        const needle = buildNeedle();
+        if (!needle) return null;
+        let best: any = null;
+        let bestScore = 0;
+        for (const item of exps) {
+          const haystack = normalizeText(`${item.company || ''}${item.title || ''}${(item as any).position || ''}${item.subtitle || ''}${item.description || ''}`);
+          const s = scoreMatch(needle, haystack);
+          if (s > bestScore) {
+            bestScore = s;
+            best = item;
+          }
+        }
+        return bestScore > 0 ? best : null;
+      })();
+      const match = directMatch || smartMatch || exps.find(item => (item.company || item.title || '').trim());
+      const companyName = (match?.company || match?.title || '').trim();
+      if (companyName) return companyName;
       return '工作经历';
     }
     if (section === 'educations') {
       const edus = resumeData?.educations || [];
-      if (edus.length > 1 && typeof suggestion.targetId === 'number') {
-        const match = edus.find(item => item.id === suggestion.targetId);
-        if (match?.school) return `教育背景 - ${match.school}`;
-      }
+      const match = typeof suggestion.targetId === 'number'
+        ? edus.find(item => item.id === suggestion.targetId)
+        : edus.find(item => (item.major || item.subtitle || item.school || item.title || '').trim());
+      const majorLabel = (match?.major || match?.subtitle || '').trim();
+      if (majorLabel) return majorLabel;
+      const schoolLabel = (match?.school || match?.title || '').trim();
+      if (schoolLabel) return schoolLabel;
       return '教育背景';
     }
+    const eduHint = `${suggestion.title || ''}${suggestion.reason || ''}${suggestion.originalValue || ''}`;
+    if (/(教育|专业|学历|学位|本科|硕士|博士)/.test(eduHint)) return '专业';
     return '简历';
   };
   // --- Privacy masking helpers ---
@@ -336,6 +424,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Upload State
   const [isUploading, setIsUploading] = useState(false);
+  const [showJdEmptyModal, setShowJdEmptyModal] = useState(false);
 
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -354,6 +443,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Optimized Resume Tracking
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
+  const optimizedResumeIdRef = useRef<number | null>(null);
+  const creatingOptimizedResumeRef = useRef<Promise<number | null> | null>(null);
+  const acceptSuggestionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
     status: 'idle',
     message: '尚未读取简历，请先选择简历'
@@ -395,6 +487,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     localStorage.setItem('ai_analysis_resume_id', String(id));
   };
   const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
+  const ANALYSIS_COMPLETED_KEY = 'ai_analysis_completed_once';
   const saveLastAnalysis = (payload: {
     resumeId: number;
     jdText: string;
@@ -430,6 +523,24 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   };
 
+  useEffect(() => {
+    const entrySource = localStorage.getItem('ai_analysis_entry_source');
+    if (entrySource !== 'bottom_nav') return;
+
+    const hasCompletedAnalysis = localStorage.getItem(ANALYSIS_COMPLETED_KEY) === '1';
+    const hasSnapshot = !!loadLastAnalysis();
+    if (hasCompletedAnalysis || hasSnapshot) return;
+
+    setStepHistory([]);
+    setCurrentStep('resume_select');
+    setChatEntrySource(null);
+    setLastChatStep(null);
+    localStorage.setItem('ai_analysis_step', 'resume_select');
+    localStorage.removeItem('ai_analysis_in_progress');
+    localStorage.removeItem('ai_chat_prev_step');
+    localStorage.removeItem('ai_chat_entry_source');
+  }, []);
+
   const applySuggestionFeedback = (items: Suggestion[]) => {
     const feedback = resumeData?.aiSuggestionFeedback || {};
     if (!feedback || Object.keys(feedback).length === 0) return items;
@@ -441,19 +552,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const applyAnalysisSnapshot = (snapshot: any) => {
     if (!snapshot) return false;
-    setOriginalScore(snapshot.score || 0);
-    setScore(snapshot.score || 0);
+    const normalizedBreakdown = normalizeScoreBreakdown(
+      snapshot.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+      snapshot.score || 0
+    );
+    const displayScore = resolveDisplayScore(snapshot.score || 0, normalizedBreakdown);
+    setOriginalScore(displayScore);
+    setScore(displayScore);
     setSuggestions(applySuggestionFeedback(snapshot.suggestions || []));
     setReport({
       summary: snapshot.summary || '',
       strengths: snapshot.strengths || [],
       weaknesses: snapshot.weaknesses || [],
       missingKeywords: snapshot.missingKeywords || [],
-      scoreBreakdown: snapshot.scoreBreakdown || { experience: 0, skills: 0, format: 0 }
+      scoreBreakdown: normalizedBreakdown
     });
     setIsFromCache(true);
     return true;
   };
+
+  useEffect(() => {
+    optimizedResumeIdRef.current = optimizedResumeId || resumeData?.optimizedResumeId || null;
+  }, [optimizedResumeId, resumeData?.optimizedResumeId]);
 
   const persistAnalysisSnapshot = async (data: ResumeData, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => {
     if (!data?.id) return;
@@ -854,10 +974,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       // 检查是否有缓存的分析结果
       const cachedResult = await AICacheService.get(resumeData, jdText);
       if (cachedResult) {
+        const cachedSummary = String(cachedResult.summary || '').trim();
+        if (cachedSummary.length < 80) {
+          console.log('Cached summary too short, bypassing cache and requesting fresh analysis');
+        } else {
         console.log('🎯 Using cached AI analysis result');
         console.log(`📊 Cache stats: ${AICacheService.getHitRate()}% hit rate`);
         setIsFromCache(true);
         return cachedResult;
+        }
       }
       setIsFromCache(false);
       // ========== 缓存检查结束 ==========
@@ -957,16 +1082,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     // Snapshot original data for comparison later
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
 
-    // 🔴 标记原始简历为“未优化”
-    if (resumeData.id) {
-      const originalTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-      const updatedTitle = buildResumeTitle(originalTitle, resumeData, jdText, false);
-      DatabaseService.updateResume(String(resumeData.id), {
-        title: updatedTitle,
-        resume_data: { ...resumeData, optimizationStatus: 'unoptimized' as const, lastJdText: jdText, targetCompany }
-      }).then(res => console.log('Original resume marked as unoptimized:', res.success));
-    }
-
     setAnalysisInProgress(true);
     navigateToStep('analyzing');
 
@@ -983,6 +1098,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         // 处理后端返回的建议
         const backendSuggestions = aiAnalysisResult.suggestions || [];
+        const currentSkillsText = Array.isArray(resumeData?.skills) && resumeData.skills.length > 0
+          ? resumeData.skills.filter(Boolean).join('、')
+          : '';
 
         backendSuggestions.forEach((suggestion: any, index: number) => {
           // 如果是字符串，转换为对象
@@ -996,11 +1114,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               targetId: undefined,
               targetField: undefined,
               suggestedValue: undefined,
-              originalValue: undefined,
+              originalValue: currentSkillsText || undefined,
               status: 'pending' as const
             });
           } else {
-            const inferredSection = suggestion.targetSection || inferTargetSection(suggestion);
+            const inferredSection = normalizeTargetSection(suggestion.targetSection) || inferTargetSection(suggestion);
+            const originalValue =
+              suggestion.originalValue ||
+              (inferredSection === 'skills' ? (currentSkillsText || undefined) : undefined);
             // 如果是对象，直接使用
             newSuggestions.push({
               id: suggestion.id || `ai-suggestion-${index}`,
@@ -1011,7 +1132,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               targetId: suggestion.targetId,
               targetField: suggestion.targetField,
               suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
-              originalValue: suggestion.originalValue,
+              originalValue,
               status: 'pending' as const
             });
           }
@@ -1034,10 +1155,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           scoreBreakdown: normalizedBreakdown
         };
 
-        // 使用后端返回的实际分数
-        const totalScore = aiAnalysisResult.score || Math.round(
-          (newReport.scoreBreakdown.experience + newReport.scoreBreakdown.skills + newReport.scoreBreakdown.format) / 3
-        );
+        // 总分与分项统一：有分项时按权重从分项推导总分，避免展示不一致
+        const totalScore = resolveDisplayScore(aiAnalysisResult.score || 0, newReport.scoreBreakdown);
 
         // 保存原始分数
         setOriginalScore(totalScore);
@@ -1058,12 +1177,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: targetCompany || resumeData.targetCompany || ''
         };
-        await persistAnalysisSnapshot(
-          resumeData?.optimizedResumeId ? { ...resumeData, id: resumeData.optimizedResumeId } : resumeData,
-          newReport,
-          totalScore,
-          appliedSuggestions
-        );
+        // 仅在“已优化简历”上持久化分析快照，避免污染原简历内容
+        const persistTargetId =
+          (resumeData.optimizationStatus === 'optimized' && resumeData.id)
+            ? resumeData.id
+            : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
+        if (persistTargetId) {
+          await persistAnalysisSnapshot(
+            { ...resumeData, id: persistTargetId },
+            newReport,
+            totalScore,
+            appliedSuggestions
+          );
+        }
         if (resumeData?.id) {
           saveLastAnalysis({
             resumeId: resumeData.id,
@@ -1074,6 +1200,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           });
           setAnalysisResumeId(resumeData.id);
         }
+        localStorage.setItem(ANALYSIS_COMPLETED_KEY, '1');
 
 
 
@@ -1090,12 +1217,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   };
 
+  const handleStartAnalysisClick = () => {
+    if (!jdText.trim()) {
+      setShowJdEmptyModal(true);
+      return;
+    }
+    startAnalysis();
+  };
+
   const updateScore = (points: number) => {
     setScore(prev => Math.min(prev + points, 100));
   };
 
   const handleAcceptSuggestionInChat = async (suggestion: Suggestion) => {
-    try {
+    acceptSuggestionQueueRef.current = acceptSuggestionQueueRef.current.then(async () => {
+      try {
       if (!setResumeData || !resumeData) return;
 
       const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: string) => {
@@ -1123,15 +1259,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           }
           return key;
         }
+        if (section === 'educations') {
+          if (['school', 'university', 'college', 'title'].includes(key)) {
+            return 'school';
+          }
+          if (['major', 'specialty', 'discipline', 'subtitle'].includes(key)) {
+            return 'major';
+          }
+          if (['degree', 'educationLevel'].includes(key)) {
+            return 'degree';
+          }
+          return key;
+        }
         return key;
       };
 
       const applySuggestionToResume = (base: ResumeData) => {
         const newData = { ...base };
         const effectiveSection =
-          suggestion.targetSection && ['personalInfo', 'workExps', 'skills', 'projects', 'summary'].includes(suggestion.targetSection)
-            ? suggestion.targetSection
-            : inferTargetSection(suggestion);
+          normalizeTargetSection(suggestion.targetSection) ||
+          inferTargetSection(suggestion);
         const normalizedField = normalizeFieldForSection(effectiveSection, suggestion.targetField);
 
         if (effectiveSection === 'personalInfo') {
@@ -1151,7 +1298,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             if (!shouldApply) return item;
             const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
             const field = normalizedField || 'description';
-            return { ...item, [field]: value };
+            const next: any = { ...item, [field]: value };
+            if (field === 'company' || field === 'title') {
+              next.company = value;
+              next.title = value;
+            }
+            if (field === 'position' || field === 'subtitle') {
+              next.position = value;
+              next.subtitle = value;
+            }
+            return next;
           });
           return newData;
         }
@@ -1164,7 +1320,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             if (!shouldApply) return item;
             const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
             const field = normalizedField || 'description';
-            return { ...item, [field]: value };
+            const next: any = { ...item, [field]: value };
+            if (field === 'role' || field === 'subtitle') {
+              next.role = value;
+              next.subtitle = value;
+            }
+            return next;
+          });
+          return newData;
+        }
+
+        if (effectiveSection === 'educations' && Array.isArray(newData.educations)) {
+          const targetId = suggestion.targetId;
+          const hasIdMatch = typeof targetId === 'number' && newData.educations.some(item => item.id === targetId);
+          newData.educations = newData.educations.map((item, index) => {
+            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
+            if (!shouldApply) return item;
+            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+            const field = normalizedField || 'major';
+            const next: any = { ...item, [field]: value };
+            if (field === 'school' || field === 'title') {
+              next.school = value;
+              next.title = value;
+            }
+            if (field === 'major' || field === 'subtitle') {
+              next.major = value;
+              next.subtitle = value;
+            }
+            return next;
           });
           return newData;
         }
@@ -1181,7 +1364,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         }
 
         if (effectiveSection === 'summary') {
-          newData.summary = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+          const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+          newData.summary = value;
+          newData.personalInfo = {
+            ...newData.personalInfo,
+            summary: value
+          };
           return newData;
         }
 
@@ -1193,7 +1381,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       let targetOptimizedId =
         (resumeData.optimizationStatus === 'optimized' && resumeData.id) ? resumeData.id :
-          (optimizedResumeId || resumeData.optimizedResumeId || null);
+          (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
 
       let baseResume = resumeData;
       if (targetOptimizedId) {
@@ -1208,29 +1396,49 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
 
       if (!targetOptimizedId) {
-        const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-        const newTitle = buildResumeTitle(baseTitle, resumeData, jdText, true);
-        const createResult = await DatabaseService.createResume(user.id, newTitle, {
-          ...resumeData,
-          optimizationStatus: 'optimized' as const,
-          lastJdText: jdText,
-          targetCompany,
-          optimizedFromId: resumeData.id
-        });
-        if (!createResult.success || !createResult.data) return;
-        targetOptimizedId = createResult.data.id;
-        // Always use current resume data as base to avoid empty resume_data from backend
-        baseResume = {
-          id: createResult.data.id,
-          ...resumeData,
-          optimizationStatus: 'optimized' as const,
-          lastJdText: jdText,
-          targetCompany,
-          optimizedFromId: resumeData.id,
-          resumeTitle: createResult.data.title || resumeData.resumeTitle
-        } as ResumeData;
+        if (!creatingOptimizedResumeRef.current) {
+          creatingOptimizedResumeRef.current = (async () => {
+            const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
+            const newTitle = buildResumeTitle(baseTitle, resumeData, jdText, true);
+            const createResult = await DatabaseService.createResume(user.id, newTitle, {
+              ...resumeData,
+              optimizationStatus: 'optimized' as const,
+              lastJdText: jdText,
+              targetCompany,
+              optimizedFromId: resumeData.id
+            });
+            if (!createResult.success || !createResult.data) return null;
+            return createResult.data.id as number;
+          })().finally(() => {
+            creatingOptimizedResumeRef.current = null;
+          });
+        }
+
+        targetOptimizedId = await creatingOptimizedResumeRef.current;
+        if (!targetOptimizedId) return;
+
+        optimizedResumeIdRef.current = targetOptimizedId;
         setOptimizedResumeId(targetOptimizedId);
         setAnalysisResumeId(targetOptimizedId);
+
+        // Always use the latest optimized resume as base to avoid split updates.
+        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
+        if (optimizedResult.success && optimizedResult.data?.resume_data) {
+          baseResume = {
+            id: optimizedResult.data.id,
+            ...optimizedResult.data.resume_data,
+            resumeTitle: optimizedResult.data.title
+          } as ResumeData;
+        } else {
+          baseResume = {
+            id: targetOptimizedId,
+            ...resumeData,
+            optimizationStatus: 'optimized' as const,
+            lastJdText: jdText,
+            targetCompany,
+            optimizedFromId: resumeData.id
+          } as ResumeData;
+        }
       }
 
       const nextResumeData = applySuggestionToResume(baseResume);
@@ -1278,9 +1486,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       });
 
       updateScore(5);
-    } catch (error) {
-      console.error('Error in handleAcceptSuggestionInChat:', error);
-    }
+      } catch (error) {
+        console.error('Error in handleAcceptSuggestionInChat:', error);
+      }
+    }).catch((error) => {
+      console.error('Error in accept suggestion queue:', error);
+    });
+
+    await acceptSuggestionQueueRef.current;
   };
 
   const handleIgnoreSuggestionInChat = (suggestionId: string) => {
@@ -1374,11 +1587,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         if (response.ok) {
           const result = await response.json();
-          if (result.text) {
+          if (result?.success && result?.text) {
             setJdText(result.text);
             alert('截图识别成功，已填充到文本框');
           } else {
-            alert('截图识别失败，请重试');
+            alert(result?.error || '截图识别失败，请重试');
           }
         } else {
           alert('截图识别失败，请重试');
@@ -2040,7 +2253,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
             <h1 className="text-lg font-bold tracking-tight">第二步：添加职位描述</h1>
-            <button onClick={startAnalysis} className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-primary">跳过</button>
+            <div className="w-8"></div>
           </div>
         </header>
         <main className="p-4 flex flex-col gap-6">
@@ -2124,13 +2337,43 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               上一步
             </button>
             <button
-              onClick={startAnalysis}
-              disabled={!jdText}
-              className="flex-[2] py-3.5 rounded-xl bg-primary text-white font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-50 disabled:shadow-none"
+              onClick={handleStartAnalysisClick}
+              className="flex-[2] py-3.5 rounded-xl bg-primary text-white font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             >
               开始分析
             </button>
           </div>
+
+          {showJdEmptyModal && (
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-6">
+              <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-[#324d67] shadow-xl p-6">
+                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
+                  <span className="material-symbols-outlined">warning</span>
+                  <h3 className="text-base font-semibold">未填写职位描述</h3>
+                </div>
+                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  当前未填写 JD，分析结果将基于通用简历优化逻辑，无法进行岗位定向匹配。是否继续？
+                </p>
+                <div className="mt-5 flex gap-3">
+                  <button
+                    onClick={() => setShowJdEmptyModal(false)}
+                    className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 py-2.5 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
+                  >
+                    去填写JD
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowJdEmptyModal(false);
+                      startAnalysis();
+                    }}
+                    className="flex-1 rounded-xl bg-primary text-white py-2.5 font-semibold hover:bg-blue-600 transition-all"
+                  >
+                    继续分析
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
         </main>
       </div>
     );
