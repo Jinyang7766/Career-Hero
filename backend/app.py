@@ -800,7 +800,14 @@ def get_profile(current_user_id):
             # Mock mode: find user in mock_users
             user = mock_users.get(current_user_id)
             if not user:
-                return jsonify({'error': '用户不存在'}), 404
+                # auto-create mock user if token is valid but ID not in memory (e.g. server restart)
+                user = {
+                    'id': current_user_id,
+                    'email': 'mock_user@example.com',
+                    'name': 'Mock User',
+                    'deletion_pending_until': None
+                }
+                mock_users[current_user_id] = user
             
             # Return only selected fields
             return jsonify({
@@ -827,7 +834,14 @@ def request_deletion(current_user_id):
         
         if is_mock_mode():
             user = mock_users.get(current_user_id)
-            if not user: return jsonify({'error': '用户不存在'}), 404
+            if not user:
+                user = {
+                    'id': current_user_id,
+                    'email': 'mock_user@example.com',
+                    'name': 'Mock User',
+                    'deletion_pending_until': None
+                }
+                mock_users[current_user_id] = user
             user['deletion_pending_until'] = deletion_until
             result = mock_supabase_response(data=[user])
         else:
@@ -845,7 +859,14 @@ def cancel_deletion(current_user_id):
     try:
         if is_mock_mode():
             user = mock_users.get(current_user_id)
-            if not user: return jsonify({'error': '用户不存在'}), 404
+            if not user:
+                user = {
+                    'id': current_user_id,
+                    'email': 'mock_user@example.com',
+                    'name': 'Mock User',
+                    'deletion_pending_until': None
+                }
+                mock_users[current_user_id] = user
             user['deletion_pending_until'] = None
             result = mock_supabase_response(data=[user])
         else:
