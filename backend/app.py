@@ -100,6 +100,23 @@ def handle_options_request():
         response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
 
+
+@app.after_request
+def apply_cors_headers(response):
+    """
+    Ensure CORS headers are present on actual responses as well (not only OPTIONS),
+    otherwise browser may show `Failed to fetch` even when backend returns 200.
+    """
+    request_origin = request.headers.get('Origin', '')
+    normalized_request_origin = _normalize_origin(request_origin)
+    if normalized_request_origin in CORS_ALLOWED_ORIGINS:
+        response.headers['Access-Control-Allow-Origin'] = normalized_request_origin
+        response.headers['Vary'] = 'Origin'
+        response.headers['Access-Control-Allow-Credentials'] = 'true'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
+    return response
+
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', 'your-supabase-key')
