@@ -25,6 +25,7 @@ import base64
 import traceback
 import ipaddress
 import socket
+from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
@@ -69,6 +70,26 @@ DEFAULT_CORS_ORIGINS = [
 def _normalize_origin(origin: str) -> str:
     return (origin or "").strip().rstrip("/")
 
+
+def _resolve_request_origin() -> str:
+    """
+    Prefer Origin header. Fallback to Referer-derived origin for browsers that
+    may not expose Origin consistently in devtools/provisional header cases.
+    """
+    origin = _normalize_origin(request.headers.get('Origin', ''))
+    if origin:
+        return origin
+    referer = (request.headers.get('Referer', '') or '').strip()
+    if not referer:
+        return ''
+    try:
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc:
+            return _normalize_origin(f"{parsed.scheme}://{parsed.netloc}")
+    except Exception:
+        return ''
+    return ''
+
 ENV_CORS_ORIGINS = [_normalize_origin(o) for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if _normalize_origin(o)]
 CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or [_normalize_origin(o) for o in DEFAULT_CORS_ORIGINS]
 
@@ -88,8 +109,7 @@ CORS(app,
 @app.before_request
 def handle_options_request():
     if request.method == 'OPTIONS':
-        request_origin = request.headers.get('Origin', '')
-        normalized_request_origin = _normalize_origin(request_origin)
+        normalized_request_origin = _resolve_request_origin()
         allow_origin = normalized_request_origin if normalized_request_origin in CORS_ALLOWED_ORIGINS else ''
         response = jsonify({'status': '成功'})
         if allow_origin:
@@ -107,8 +127,7 @@ def apply_cors_headers(response):
     Ensure CORS headers are present on actual responses as well (not only OPTIONS),
     otherwise browser may show `Failed to fetch` even when backend returns 200.
     """
-    request_origin = request.headers.get('Origin', '')
-    normalized_request_origin = _normalize_origin(request_origin)
+    normalized_request_origin = _resolve_request_origin()
     if normalized_request_origin in CORS_ALLOWED_ORIGINS:
         response.headers['Access-Control-Allow-Origin'] = normalized_request_origin
         response.headers['Vary'] = 'Origin'
