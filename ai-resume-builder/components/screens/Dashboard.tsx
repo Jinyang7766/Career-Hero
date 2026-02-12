@@ -251,7 +251,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
         {/* Daily Tip */}
         <div className="bg-slate-50 dark:bg-surface-dark rounded-xl p-5 border border-slate-100 dark:border-white/5 relative overflow-hidden">
-          <p className="text-[10px] font-bold text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
+          <p className="text-sm font-bold text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
           <p className="text-sm text-slate-700 dark:text-slate-200 font-medium relative z-10 leading-relaxed italic">
             "{dailyTip}"
           </p>
