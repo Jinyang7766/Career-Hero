@@ -54,7 +54,7 @@ REACT_APP_API_URL=https://your-backend-url.onrender.com
 ### Gemini API 不工作
 - 确认 API Key 有效且有配额
 - 检查是否启用了 Gemini API
-- 确认使用正确的模型名称：`gemini-3-flash-preview`
+- 确认使用正确的模型名称：`gemini-3-pro-preview`
 
 ## 📋 部署检查清单
 

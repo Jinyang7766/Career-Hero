@@ -97,7 +97,7 @@ gemini_request_count = 0  # Track daily usage
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-3-flash-preview')
+    model = genai.GenerativeModel('gemini-3-pro-preview')
 else:
     model = None
 
@@ -165,6 +165,95 @@ def get_mock_resumes_for_user(user_id: str):
     if user_id not in mock_resumes:
         mock_resumes[user_id] = {}
     return mock_resumes[user_id]
+
+def generate_embedding(text):
+    """使用 Gemini 生成文本向量"""
+    try:
+        if not GEMINI_API_KEY or GEMINI_API_KEY == 'your-gemini-api-key':
+            return None
+        
+        result = genai.embed_content(
+            model="models/gemini-embedding-001",
+            content=text,
+            task_type="retrieval_query"
+        )
+        return result['embedding']
+    except Exception as e:
+        logger.error(f"Generate embedding failed: {e}")
+        return None
+
+def parse_seniority_refined(years, job_title=""):
+    """多维职级判定逻辑"""
+    senior_keywords = ['Director', 'VP', 'Head', 'Manager', 'Architect', 'Lead', '专家', '总监', '架构师', '主管']
+    title_lower = job_title.lower()
+    if any(kw.lower() in title_lower for kw in senior_keywords):
+        return 'senior'
+    
+    try:
+        y = float(years)
+        if y < 3: return 'junior'
+        if y <= 8: return 'mid'
+        return 'senior'
+    except:
+        return 'mid'
+
+def find_relevant_cases_vector(resume_data, limit=3):
+    """三层降级向量检索调度逻辑"""
+    try:
+        personal = resume_data.get('personalInfo', {})
+        job_role = personal.get('jobTitle', '') or (resume_data.get('workExps', [{}])[0].get('jobTitle', '') if resume_data.get('workExps') else '')
+        industry = resume_data.get('industry', '其他')
+        skills = resume_data.get('skills', [])
+        summary = personal.get('summary', '')
+        
+        # 估算工龄 (实际生产中建议解析日期，此处做简化)
+        years_exp = 0
+        for exp in resume_data.get('workExps', []): years_exp += 2
+        
+        seniority = parse_seniority_refined(years_exp, job_role)
+        
+        # AI Persona 判定
+        has_ai_skills = any(kw.lower() in (' '.join(skills)).lower() for kw in ['ai', 'llm', 'gpt', 'agent', 'prompt', 'automation', 'python'])
+        is_modern_era = any('2024' in str(exp.get('date', '')) or '2025' in str(exp.get('date', '')) for exp in resume_data.get('workExps', []))
+        
+        ai_filter = None
+        if has_ai_skills: ai_filter = True
+        elif not is_modern_era: ai_filter = False
+        
+        query_text = f"{job_role} {industry} {' '.join(skills)} {summary}"
+        query_vector = generate_embedding(query_text)
+        if not query_vector: return []
+
+        # 第一层及更高层逻辑合并 (RPC match_master_cases 已处理过滤)
+        seniority_pool = ['senior'] if seniority == 'senior' else ['junior', 'mid']
+        try:
+            rpc_response = supabase.rpc('match_master_cases', {
+                'query_embedding': query_vector,
+                'match_threshold': 0.5, # 稍放宽一点初始阈值
+                'match_count': limit,
+                'filter_seniority': seniority_pool,
+                'filter_is_ai_enhanced': ai_filter if ai_filter is not None else None
+            }).execute()
+            results = rpc_response.data
+        except Exception as e:
+            logger.error(f"RAG Retrieval failed: {e}")
+            return []
+
+        # 第三层兜底：如果没结果，尝试不带 AI 过滤再次检索
+        if not results and ai_filter is not None:
+             rpc_response = supabase.rpc('match_master_cases', {
+                'query_embedding': query_vector,
+                'match_threshold': 0.4,
+                'match_count': limit,
+                'filter_seniority': seniority_pool,
+                'filter_is_ai_enhanced': None
+            }).execute()
+             results = rpc_response.data
+
+        return [r['content'] for r in results] if results else []
+    except Exception as e:
+        logger.error(f"find_relevant_cases_vector error: {e}")
+        return []
 
 def token_required(f):
     @wraps(f)
@@ -2064,7 +2153,24 @@ def analyze_resume(current_user_id):
 
         if model and check_gemini_quota():
             try:
-                format_requirements = """
+                # --- RAG 检索逻辑开始 ---
+                relevant_cases = find_relevant_cases_vector(resume_data)
+                formatted_cases = ""
+                if relevant_cases:
+                    for i, case in enumerate(relevant_cases):
+                        formatted_cases += f"案例 {i+1}：{case.get('job_role')} ({case.get('industry')})\n"
+                        star = case.get('star', {})
+                        formatted_cases += f"- 情况: {star.get('situation')}\n"
+                        formatted_cases += f"- 任务: {star.get('task')}\n"
+                        formatted_cases += f"- 行动: {star.get('action')}\n"
+                        formatted_cases += f"- 结果: {star.get('result')}\n\n"
+                
+                rag_context = ""
+                if formatted_cases:
+                    rag_context = f"\n【参考案例】\n以下是该领域的优秀简历案例（STAR法则与Bullet Points示范），请参考其分析深度与用词风格：\n{formatted_cases}\n请注意：以上参考案例仅用于辅助你理解该领域的动作深度（Action Depth）和结果量化方式（Result Quantification）。请根据用户真实的经历进行优化，严禁生搬硬套案例中的具体业务内容，确保优化后的简历具有真实性。\n"
+                # --- RAG 检索逻辑结束 ---
+
+                format_requirements = f"""
 重要格式要求（必须严格遵守）：
 1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
 2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
@@ -2075,6 +2181,7 @@ def analyze_resume(current_user_id):
 5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
 6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
+{rag_context}
 """
 
                 if job_description:
@@ -2224,101 +2331,41 @@ def analyze_resume(current_user_id):
         }), 200
 
     except Exception as e:
+        logger.error(f"简历分析出错: {traceback.format_exc()}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-
-def format_resume_for_ai(resume_data):
-    """用于 AI 的简历格式化文本"""
-    formatted = []
-
-    personal = resume_data.get('personalInfo', {})
-    if personal:
-        formatted.append(f"姓名: {personal.get('name', '')}")
-        formatted.append(f"职位: {personal.get('title', '')}")
-        formatted.append(f"邮箱: {personal.get('email', '')}")
-        formatted.append(f"电话: {personal.get('phone', '')}")
-        if personal.get('location'):
-            formatted.append(f"地点: {personal.get('location', '')}")
-
-    # Add summary (top-level or from personalInfo)
-    summary = resume_data.get('summary') or personal.get('summary', '')
-    if summary:
-        formatted.append(f"\n个人简介:\n{summary}")
-
-    work_exps = resume_data.get('workExps', [])
-    if work_exps:
-        formatted.append("\n工作经历:")
-        for exp in work_exps:
-            company = exp.get('company') or exp.get('title', '')
-            position = exp.get('position') or exp.get('subtitle', '')
-            formatted.append(f"- {position} @ {company}")
-            date_str = exp.get('date') or f"{exp.get('startDate', '')} - {exp.get('endDate', '')}"
-            formatted.append(f"  {date_str}")
-            formatted.append(f"  {exp.get('description', '')}")
-
-    educations = resume_data.get('educations', [])
-    if educations:
-        formatted.append("\n教育背景:")
-        for edu in educations:
-            school = edu.get('school') or edu.get('title', '')
-            degree = edu.get('degree') or edu.get('subtitle', '')
-            major = edu.get('major', '')
-            formatted.append(f"- {degree} {major}")
-            formatted.append(f"  {school}")
-            date_str = edu.get('date') or f"{edu.get('startDate', '')} - {edu.get('endDate', '')}"
-            formatted.append(f"  {date_str}")
-
-    projects = resume_data.get('projects', [])
-    if projects:
-        formatted.append("\n项目经历:")
-        for proj in projects:
-            title = proj.get('title', '')
-            role = proj.get('subtitle') or proj.get('role', '')
-            formatted.append(f"- {title}")
-            if role:
-                formatted.append(f"  角色: {role}")
-            date_str = proj.get('date', '')
-            if date_str:
-                formatted.append(f"  {date_str}")
-            formatted.append(f"  {proj.get('description', '')}")
-
-    skills = resume_data.get('skills', [])
-    if skills:
-        formatted.append(f"\n技能: {', '.join(skills)}")
-
-    return '\n'.join(formatted)
-
-
-def parse_ai_response(response_text):
-    """解析 AI 回复中的结构化数据"""
+@app.route('/api/ai/parse-screenshot', methods=['POST', 'OPTIONS'])
+@token_required
+def parse_screenshot(current_user_id):
     try:
-        import json
-        start = response_text.find('{')
-        end = response_text.rfind('}') + 1
-        if start != -1 and end != 0:
-            json_str = response_text[start:end]
-            return json.loads(json_str)
-    except Exception:
-        pass
+        data = request.get_json()
+        image = data.get('image', '')
+        if not image:
+            return jsonify({'error': '图片不能为空'}), 400
 
-    # 兜底返回
-    return {
-        'score': 75,
-        'strengths': ['简历结构清晰'],
-        'weaknesses': ['需要更多细节'],
-        'suggestions': ['补充具体成果'],
-        'missingKeywords': []
-    }
+        if model and check_gemini_quota():
+            try:
+                prompt = "请从图片中提取职位描述文本，只返回提取结果，不要解释。请仅使用中文输出。"
+                from base64 import b64decode
+                import re
+                base64_data = re.sub('^data:image/.+;base64,', '', image)
+                image_data = b64decode(base64_data)
+                image_part = {"mime_type": "image/png", "data": image_data}
+                response = model.generate_content([prompt, image_part])
+                return jsonify({'text': response.text.strip()})
+            except Exception as ai_error:
+                logger.error(f"AI 截图解析失败: {ai_error}")
+                return jsonify({'text': '职位描述识别失败，请手动粘贴。'}), 200
+        return jsonify({'text': '职位描述识别失败，请手动粘贴。'}), 200
+    except Exception as e:
+        return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/ai/chat', methods=['POST', 'OPTIONS'])
 @token_required
 def ai_chat(current_user_id):
     try:
-        print(f"Chat Current User ID: {current_user_id}")
-
         data = request.get_json()
         message = data.get('message', '')
-        print(f"Received Chat Message: {message[:100]}...")
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
         chat_history = data.get('chatHistory', [])
@@ -2341,103 +2388,59 @@ def ai_chat(current_user_id):
 
                 prompt = f"""
 【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
-禁止：
-- 提及任何评分或 X/100
-- 给出简历优化建议
-- 以猎头/顾问/优化师身份出现
-- 回复超过 100 字
-- 使用非中文回复
-你必须：
-1. 保持面试官角色。
-2. 基于 JD 提问。
-3. 结合简历经历进行追问。
-4. 给出 1-2 句点评。
-5. 立即提出下一题。
-6. 全程仅使用中文作答。
-
-职位描述：
-{job_description if job_description else '未提供 JD，请基于简历进行通用面试。'}
-
-简历信息：
-{format_resume_for_ai(resume_data) if resume_data else '未提供简历信息。'}
-
-对话历史：
-{formatted_chat if formatted_chat else '面试刚开始。'}
-
-候选人回答：
-{clean_message}
-
+禁止提及任何评分，禁止给出建议，保持面试官角色。
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
+对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
+候选人回答：{clean_message}
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
-
                 response = model.generate_content(prompt)
-                ai_response = response.text
-
-                return jsonify({'response': ai_response})
-
+                return jsonify({'response': response.text})
             except Exception as ai_error:
-                print(f"AI 面试对话失败: {ai_error}")
-                logger.error(f"AI 面试对话失败: {ai_error}")
-
-                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
-                    print("Gemini 配额超限，使用本地模拟面试回复")
-                    logger.warning("Gemini 配额超限，使用本地模拟面试回复")
-
-                mock_response = generate_enhanced_mock_chat_response(message, score, suggestions)
-                return jsonify({'response': mock_response}), 200
-
-        mock_response = generate_mock_chat_response(message, score, suggestions)
-        return jsonify({'response': mock_response}), 200
-
+                logger.error(f"AI 面试失败: {ai_error}")
+                return jsonify({'response': '面试官暂时开小差了，请稍后再试。'}), 200
+        return jsonify({'response': '面试官暂时开小差了。'}), 200
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
 
-@app.route('/api/ai/parse-screenshot', methods=['POST', 'OPTIONS'])
-@token_required
-def parse_screenshot(current_user_id):
+def format_resume_for_ai(resume_data):
+    """用于 AI 的简历格式化文本"""
+    formatted = []
+    personal = resume_data.get('personalInfo', {})
+    if personal:
+        formatted.append(f"姓名: {personal.get('name', '')}")
+        formatted.append(f"职位: {personal.get('title', '')}")
+    
+    summary = resume_data.get('summary') or personal.get('summary', '')
+    if summary: formatted.append(f"个人简介: {summary}")
+
+    work_exps = resume_data.get('workExps', [])
+    if work_exps:
+        formatted.append("\n工作经历:")
+        for exp in work_exps:
+            formatted.append(f"- {exp.get('position', '')} @ {exp.get('company', '')}: {exp.get('description', '')}")
+
+    educations = resume_data.get('educations', [])
+    if educations:
+        formatted.append("\n教育背景:")
+        for edu in educations:
+             formatted.append(f"- {edu.get('degree', '')} {edu.get('major', '')} @ {edu.get('school', '')}")
+
+    skills = resume_data.get('skills', [])
+    if skills: formatted.append(f"\n技能: {', '.join(skills)}")
+    return '\n'.join(formatted)
+
+def parse_ai_response(response_text):
+    """解析 AI 回复中的结构化数据"""
     try:
-        print(f"Parse Screenshot Current User ID: {current_user_id}")
-
-        data = request.get_json()
-        image = data.get('image', '')
-
-        if not image:
-            return jsonify({'error': '图片不能为空'}), 400
-
-        if model and check_gemini_quota():
-            try:
-                prompt = "请从图片中提取职位描述文本，只返回提取结果，不要解释。请仅使用中文输出。"
-
-                import base64
-                import re
-
-                base64_data = re.sub('^data:image/.+;base64,', '', image)
-                image_data = base64.b64decode(base64_data)
-
-                image_part = {
-                    "mime_type": "image/png",
-                    "data": image_data
-                }
-
-                response = model.generate_content([prompt, image_part])
-                extracted_text = response.text.strip()
-
-                return jsonify({'text': extracted_text})
-
-            except Exception as ai_error:
-                print(f"AI 截图解析失败: {ai_error}")
-                logger.error(f"AI 截图解析失败: {ai_error}")
-
-                if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():
-                    print("Gemini 配额超限，使用本地结果")
-                    logger.warning("Gemini 配额超限，使用本地结果")
-
-                return jsonify({'text': '职位描述识别失败，请手动粘贴职位描述。'}), 200
-
-        return jsonify({'text': '职位描述识别失败，请手动粘贴职位描述。'}), 200
-
-    except Exception as e:
-        return jsonify({'error': '服务器内部错误'}), 500
+        import json
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+        if start != -1 and end != 0:
+            return json.loads(response_text[start:end])
+    except: pass
+    return {'score': 75, 'strengths': [], 'weaknesses': [], 'suggestions': [], 'missingKeywords': []}
 
 @app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
 @token_required
