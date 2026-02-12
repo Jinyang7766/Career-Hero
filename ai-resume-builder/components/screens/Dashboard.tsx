@@ -159,19 +159,17 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-blue-500/10 rounded-full -mr-6 -mt-6"></div>
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative">
             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">简历总数</p>
             <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</p>
           </div>
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-full -mr-6 -mt-6"></div>
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative">
             <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">已优化</p>
-            <p className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">{stats.optimized}</p>
+            <p className="text-3xl font-bold text-primary dark:text-primary mt-1">{stats.optimized}</p>
           </div>
         </div>
 
-        {/* Quick Actions - Simplified and Enlarged */}
+        {/* Quick Actions - Reverted to Vibrant Style */}
         <div>
           <div
             onClick={createNewResume}
@@ -206,7 +204,6 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
           <div>
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <span className="w-1 h-4 bg-orange-500 rounded-full"></span>
                 最近编辑
               </h3>
               <button
@@ -253,12 +250,9 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
         )}
 
         {/* Daily Tip */}
-        <div className="bg-gradient-to-br from-indigo-50 to-blue-50 dark:from-indigo-900/20 dark:to-blue-900/20 rounded-xl p-4 border border-indigo-100 dark:border-indigo-500/10 relative overflow-hidden">
-          <div className="absolute top-0 right-0 text-indigo-200 dark:text-indigo-800/10 transform translate-x-1/4 -translate-y-1/4">
-            <span className="material-symbols-outlined text-[80px]">format_quote</span>
-          </div>
-          <p className="text-xs font-bold text-indigo-500 dark:text-indigo-400 mb-1 uppercase tracking-wider">每日职场建议</p>
-          <p className="text-sm text-slate-700 dark:text-indigo-100 font-medium italic relative z-10 leading-relaxed">
+        <div className="bg-slate-50 dark:bg-surface-dark rounded-xl p-5 border border-slate-100 dark:border-white/5 relative overflow-hidden">
+          <p className="text-[10px] font-bold text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
+          <p className="text-sm text-slate-700 dark:text-slate-200 font-medium relative z-10 leading-relaxed italic">
             "{dailyTip}"
           </p>
         </div>

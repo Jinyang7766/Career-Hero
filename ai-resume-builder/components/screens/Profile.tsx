@@ -2,6 +2,28 @@ import React, { useState, useRef } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 
+const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
+  <button
+    onClick={onClick}
+    className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+  >
+    <div className="flex items-center gap-4">
+      <div className={`w-10 h-10 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary`}>
+        <span className="material-symbols-outlined">{icon}</span>
+      </div>
+      <span className="text-base font-medium text-slate-900 dark:text-white">{label}</span>
+    </div>
+    <div className="flex items-center gap-2">
+      {badge && (
+        <span className="text-[10px] font-bold bg-primary text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-primary/20">
+          {badge}
+        </span>
+      )}
+      <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+    </div>
+  </button>
+);
+
 const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, currentUser, allResumes }) => {
   const [avatar, setAvatar] = useState('https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -53,16 +75,15 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
 
       <main className="flex flex-col gap-6 p-4">
         {/* Profile Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 shadow-sm border border-gray-100 dark:border-white/5 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-          <div className="flex items-center gap-4 relative z-10">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 relative group">
+          <div className="flex items-center gap-5 relative z-10">
             <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
               <div
-                className="w-20 h-20 rounded-full bg-cover bg-center border-2 border-white dark:border-[#233648] shadow-sm transition-opacity hover:opacity-80"
+                className="w-20 h-20 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm transition-opacity hover:opacity-80"
                 style={{ backgroundImage: `url("${avatar}")` }}
               ></div>
-              <div className="absolute bottom-0 right-0 bg-[#233648] text-white p-1 rounded-full border border-surface-dark flex items-center justify-center pointer-events-none">
-                <span className="material-symbols-outlined text-[14px]">edit</span>
+              <div className="absolute bottom-0 right-0 bg-primary text-white p-1 rounded-full border-2 border-white dark:border-surface-dark flex items-center justify-center pointer-events-none">
+                <span className="material-symbols-outlined text-[12px]">edit</span>
               </div>
               <input
                 type="file"
@@ -77,153 +98,95 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
                 <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                   {displayName || ' '}
                 </h2>
-                <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-[10px] font-medium text-slate-500 dark:text-slate-400">
+                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
                   免费版
                 </span>
               </div>
               {displayEmail && (
-                <p className="text-gray-500 dark:text-gray-400 text-sm truncate">
+                <p className="text-slate-500 dark:text-slate-400 text-sm truncate">
                   {displayEmail}
-                </p>
-              )}
-              {joinedDate && (
-                <p className="text-xs text-gray-400 mt-1">
-                  {joinedDate} 加入
                 </p>
               )}
             </div>
           </div>
 
-          <div className="mt-5 grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 dark:bg-[#1c1c1e] rounded-xl p-3 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold text-primary">{allResumes?.length ?? 0}</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">简历总数</span>
+          <div className="mt-6 grid grid-cols-2 gap-4">
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-4 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-2xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">简历总数</span>
             </div>
-            <div className="bg-slate-50 dark:bg-[#1c1c1e] rounded-xl p-3 flex flex-col items-center justify-center">
-              <span className="text-2xl font-bold text-emerald-500">
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-4 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-2xl font-bold text-primary">
                 {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
               </span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 mt-1">已优化</span>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">已优化</span>
             </div>
           </div>
         </div>
 
-        {/* Upgrade Banner */}
-        <div className="bg-gradient-to-r from-violet-600 to-indigo-600 rounded-2xl p-5 shadow-lg shadow-indigo-500/20 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl -mr-10 -mt-10 pointer-events-none"></div>
+        {/* Upgrade Banner - Unified Style with Dashboard */}
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all">
+          <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
+          <div className="absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl"></div>
           <div className="relative z-10 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-bold flex items-center gap-2">
-                <span className="material-symbols-outlined">diamond</span>
-                升级到 Pro
-              </h3>
-              <p className="text-sm text-white/80 mt-1">解锁无限 AI 优化与高级模板</p>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/20 shadow-inner">
+                <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>diamond</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-black tracking-tight">升级到 Pro</h3>
+                <p className="text-sm text-blue-100 mt-0.5 font-medium opacity-90">解锁无限 AI 优化与高级模板</p>
+              </div>
             </div>
-            <button className="px-4 py-2 bg-white text-indigo-600 rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-50 transition-colors">
-              立即升级
+            <button className="px-5 py-2.5 bg-white text-primary rounded-xl text-sm font-black shadow-lg hover:bg-blue-50 transition-all hover:scale-105">
+              立即开启
             </button>
           </div>
         </div>
 
-        {/* Menu Group 1 */}
+        {/* Menu Items - Unified Colors */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-          <button
+          <MenuItem
             onClick={() => setCurrentView(View.HISTORY)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-500/10 flex items-center justify-center text-orange-600 dark:text-orange-400">
-                <span className="material-symbols-outlined">history</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">导出历史</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-
-          <button
+            icon="history"
+            label="导出历史"
+            color="primary"
+          />
+          <MenuItem
             onClick={() => setCurrentView(View.ALL_RESUMES)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                <span className="material-symbols-outlined">description</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">我的简历</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-        </div>
-
-        {/* Menu Group 2 */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-          <button
+            icon="description"
+            label="我的简历"
+            color="primary"
+          />
+          <MenuItem
             onClick={() => setCurrentView(View.ACCOUNT_SECURITY)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-500/10 flex items-center justify-center text-purple-600 dark:text-purple-400">
-                <span className="material-symbols-outlined">verified_user</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">账号与安全</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-
-          <button
+            icon="verified_user"
+            label="账号与安全"
+            color="primary"
+          />
+          <MenuItem
             onClick={() => setCurrentView(View.SETTINGS)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-gray-100 dark:bg-gray-700/30 flex items-center justify-center text-gray-600 dark:text-gray-300">
-                <span className="material-symbols-outlined">settings</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">设置</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-
-          <button
+            icon="settings"
+            label="设置"
+            color="primary"
+          />
+          <MenuItem
             onClick={() => { }}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-pink-50 dark:bg-pink-500/10 flex items-center justify-center text-pink-600 dark:text-pink-400">
-                <span className="material-symbols-outlined">share</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">邀请好友</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs bg-red-500 text-white px-2 py-0.5 rounded-full">得会员</span>
-              <span className="material-symbols-outlined text-gray-400 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
-
-          <button
+            icon="share"
+            label="邀请好友"
+            color="primary"
+            badge="得会员"
+          />
+          <MenuItem
             onClick={() => setCurrentView(View.HELP)}
-            className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-[#233648] transition-colors group"
-          >
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                <span className="material-symbols-outlined">help_center</span>
-              </div>
-              <span className="text-base font-medium text-slate-900 dark:text-white">帮助与反馈</span>
-            </div>
-            <div className="text-gray-400">
-              <span className="material-symbols-outlined group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </div>
-          </button>
+            icon="help_center"
+            label="帮助与反馈"
+            color="primary"
+          />
         </div>
 
         <div className="flex justify-center mt-2">
-          <p className="text-xs text-gray-400 dark:text-gray-600">版本 1.1.0 (Build 302)</p>
+          <p className="text-xs text-gray-400 dark:text-gray-600">版本 1.2.0 (Build 303)</p>
         </div>
       </main>
     </div>
