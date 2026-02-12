@@ -2369,6 +2369,76 @@ def _normalize_parsed_resume_result(ai_result):
         'skills': skills if isinstance(skills, list) else []
     }
 
+def _extract_skills_from_resume_text(resume_text):
+    """
+    Heuristic fallback: extract skills from raw resume text when AI JSON misses skills.
+    """
+    text = (resume_text or '').strip()
+    if not text:
+        return []
+
+    lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if ln and ln.strip()]
+    collected = []
+
+    # 1) Prefer explicit skill sections.
+    skill_heading_re = re.compile(r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能)\s*[:：]?$')
+    next_section_re = re.compile(r'^(工作经历|项目经历|教育经历|教育背景|个人总结|自我评价|证书|资格证书|荣誉|语言能力)\s*[:：]?$')
+    in_skill_block = False
+    for ln in lines:
+        if skill_heading_re.match(ln):
+            in_skill_block = True
+            continue
+        if in_skill_block and next_section_re.match(ln):
+            in_skill_block = False
+        if not in_skill_block:
+            continue
+        parts = [p.strip() for p in re.split(r'[，,、;；|/]+', ln) if p.strip()]
+        collected.extend(parts)
+
+    # 2) If no explicit section, pick common skill keywords from full text.
+    if not collected:
+        keyword_patterns = [
+            r'\b(Python|Java|JavaScript|TypeScript|SQL|Excel|Word|PowerPoint|Office|Photoshop|Illustrator|Figma|Tableau|PowerBI|SPSS|R|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring)\b',
+            r'(数据分析|电商运营|直播运营|活动策划|项目管理|产品运营|用户运营|新媒体运营|短视频运营|社群运营|内容运营|A/B测试|可视化|机器学习|深度学习|提示词工程|自动化)',
+            r'(天猫|京东|拼多多|抖音|快手|小红书|微信公众号|钉钉)'
+        ]
+        for pat in keyword_patterns:
+            for m in re.findall(pat, text, flags=re.IGNORECASE):
+                if isinstance(m, tuple):
+                    m = next((x for x in m if x), '')
+                v = str(m).strip()
+                if v:
+                    collected.append(v)
+
+    # Normalize + deduplicate + filter obvious noise
+    noise = {'技能', '专业技能', '核心技能', '工作经历', '教育经历', '项目经历'}
+    result = []
+    seen = set()
+    for item in collected:
+        v = re.sub(r'\s+', ' ', str(item)).strip('：:;；,，|/ ').strip()
+        if not v or v in noise:
+            continue
+        if len(v) > 40:
+            continue
+        key = v.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(v)
+        if len(result) >= 25:
+            break
+    return result
+
+def _fill_skills_if_missing(parsed_data, resume_text):
+    skills = parsed_data.get('skills', [])
+    if isinstance(skills, list) and len([s for s in skills if str(s).strip()]) > 0:
+        return parsed_data
+    fallback_skills = _extract_skills_from_resume_text(resume_text)
+    if fallback_skills:
+        parsed_data['skills'] = fallback_skills
+        logger.info("Skills recovered by fallback extraction, count=%s", len(fallback_skills))
+    return parsed_data
+
 
 def _repair_missing_core_fields_with_ai(resume_text, parsed_data):
     """Second-pass extraction for core fields when first-pass misses key info."""
@@ -2533,6 +2603,7 @@ def parse_resume_text_with_ai(resume_text):
 
     parsed_data = _normalize_parsed_resume_result(ai_result)
     parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
+    parsed_data = _fill_skills_if_missing(parsed_data, resume_text)
 
     logger.info("Resume parsed successfully with AI")
     return parsed_data

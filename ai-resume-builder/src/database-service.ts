@@ -210,11 +210,20 @@ export class DatabaseService {
         })
         .eq('id', resumeId)
         .select()
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('Error updating resume:', error);
         return { success: false, error, data: null };
+      }
+
+      if (!data) {
+        const notFoundError = {
+          code: 'RESUME_NOT_FOUND_OR_NO_ACCESS',
+          message: '未找到可更新的简历，或当前用户无权限更新该简历'
+        };
+        console.error('Error updating resume:', notFoundError, { resumeId });
+        return { success: false, error: notFoundError, data: null };
       }
 
       return { success: true, data };

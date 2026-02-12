@@ -130,6 +130,33 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     return text;
   };
+  const normalizeSkillToken = (raw: any) => {
+    const text = String(raw ?? '')
+      .replace(/[•·]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!text) return '';
+    return text;
+  };
+  const toSkillList = (value: any): string[] => {
+    const rawList = Array.isArray(value)
+      ? value
+      : String(value ?? '')
+          .split(/[\n,，;；、]+/)
+          .map((v) => v.trim())
+          .filter(Boolean);
+    const expanded = rawList.flatMap((item: any) =>
+      String(item)
+        .split(/[\/|｜]+/)
+        .map((v) => v.trim())
+        .filter(Boolean)
+    );
+    const cleaned = expanded
+      .map(normalizeSkillToken)
+      .filter(Boolean)
+      .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v);
+    return Array.from(new Set(cleaned));
+  };
 
   const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
     const field = (raw?.targetField || '').toString().toLowerCase();
@@ -341,7 +368,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const saved = localStorage.getItem('ai_analysis_step') as Step | null;
     return saved || 'resume_select';
   });
-  const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
+  const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
+  const sourceResumeIdRef = useRef<string | number | null>(null);
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
   const [chatEntrySource, setChatEntrySource] = useState<'internal' | 'preview' | null>(() => {
     const stored = localStorage.getItem('ai_chat_entry_source');
@@ -442,10 +470,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [isFromCache, setIsFromCache] = useState(false);
 
   // Optimized Resume Tracking
-  const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
-  const optimizedResumeIdRef = useRef<number | null>(null);
-  const creatingOptimizedResumeRef = useRef<Promise<number | null> | null>(null);
+  const [optimizedResumeId, setOptimizedResumeId] = useState<string | number | null>(null);
+  const optimizedResumeIdRef = useRef<string | number | null>(null);
+  const creatingOptimizedResumeRef = useRef<Promise<string | number | null> | null>(null);
+  const creatingOptimizedForOriginalIdRef = useRef<string | null>(null);
   const acceptSuggestionQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
+  const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
     status: 'idle',
     message: '尚未读取简历，请先选择简历'
@@ -479,7 +510,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (isLikelyJwt(legacyToken)) return legacyToken;
     return '';
   };
-  const setAnalysisResumeId = (id: number | null) => {
+  const setAnalysisResumeId = (id: string | number | null) => {
     if (id === null || id === undefined) {
       localStorage.removeItem('ai_analysis_resume_id');
       return;
@@ -489,7 +520,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
   const ANALYSIS_COMPLETED_KEY = 'ai_analysis_completed_once';
   const saveLastAnalysis = (payload: {
-    resumeId: number;
+    resumeId: string | number;
     jdText: string;
     targetCompany?: string;
     snapshot: any;
@@ -572,8 +603,122 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
 
   useEffect(() => {
-    optimizedResumeIdRef.current = optimizedResumeId || resumeData?.optimizedResumeId || null;
-  }, [optimizedResumeId, resumeData?.optimizedResumeId]);
+    optimizedResumeIdRef.current = optimizedResumeId;
+  }, [optimizedResumeId]);
+
+  const normalizeResumeId = (id: any) => String(id ?? '').trim();
+  const isSameResumeId = (a: any, b: any) => {
+    const aa = normalizeResumeId(a);
+    const bb = normalizeResumeId(b);
+    return !!aa && !!bb && aa === bb;
+  };
+
+  const resolveOriginalResumeIdForOptimization = () => {
+    if (sourceResumeIdRef.current) {
+      return sourceResumeIdRef.current;
+    }
+    if (selectedResumeId) {
+      return selectedResumeId;
+    }
+    if (!resumeData?.id) return null;
+    if (resumeData.optimizationStatus === 'optimized') {
+      return resumeData.optimizedFromId || resumeData.id;
+    }
+    return resumeData.id;
+  };
+
+  const findExistingOptimizedResumeId = async (userId: string, originalResumeId: string | number) => {
+    const normalizedOriginalId = normalizeResumeId(originalResumeId);
+    const list = await DatabaseService.getUserResumes(userId);
+    if (!list.success || !Array.isArray(list.data)) return null;
+    const hit = list.data.find((r: any) => {
+      const data = r?.resume_data || {};
+      const isOptimized = data?.optimizationStatus === 'optimized';
+      return isOptimized && isSameResumeId(data?.optimizedFromId, normalizedOriginalId);
+    });
+    return hit?.id ? hit.id : null;
+  };
+
+  const ensureSingleOptimizedResume = async (
+    userId: string,
+    originalResumeId: string | number,
+    baseResumeData: ResumeData
+  ): Promise<string | number> => {
+    const normalizedOriginalId = normalizeResumeId(originalResumeId);
+    const current = optimizedResumeIdRef.current;
+    if (current) {
+      const currentRow = await DatabaseService.getResume(current);
+      const currentData = currentRow.success ? currentRow.data?.resume_data : null;
+      const isValidCurrent =
+        !!currentRow.success &&
+        !!currentRow.data &&
+        currentData?.optimizationStatus === 'optimized' &&
+        isSameResumeId(currentData?.optimizedFromId, normalizedOriginalId);
+      if (isValidCurrent) {
+        return currentRow.data.id;
+      }
+      setOptimizedResumeId(null);
+      optimizedResumeIdRef.current = null;
+    }
+
+    const existingId = await findExistingOptimizedResumeId(userId, normalizedOriginalId);
+    if (existingId) {
+      setOptimizedResumeId(existingId);
+      optimizedResumeIdRef.current = existingId;
+      return existingId;
+    }
+
+    if (
+      creatingOptimizedResumeRef.current &&
+      creatingOptimizedForOriginalIdRef.current === normalizedOriginalId
+    ) {
+      const pendingId = await creatingOptimizedResumeRef.current;
+      if (!pendingId) {
+        throw new Error('创建优化简历失败');
+      }
+      return pendingId;
+    }
+
+    creatingOptimizedForOriginalIdRef.current = normalizedOriginalId;
+    creatingOptimizedResumeRef.current = (async () => {
+      const baseTitle = allResumes?.find(r => isSameResumeId(r.id, baseResumeData.id))?.title || '简历';
+      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true);
+      const createResult = await DatabaseService.createResume(userId, newTitle, {
+        ...baseResumeData,
+        optimizationStatus: 'optimized' as const,
+        optimizedFromId: normalizedOriginalId,
+        lastJdText: jdText || baseResumeData.lastJdText || '',
+        targetCompany: targetCompany || baseResumeData.targetCompany || ''
+      });
+      if (!createResult.success || !createResult.data?.id) {
+        console.error('ensureSingleOptimizedResume create failed:', createResult.error);
+        // 兼容并发/唯一约束场景：创建失败后再次回查一次，若已存在则直接复用
+        const fallbackId = await findExistingOptimizedResumeId(userId, normalizedOriginalId);
+        if (fallbackId) {
+          return fallbackId;
+        }
+        const errMsg =
+          (createResult.error as any)?.message ||
+          (createResult.error as any)?.details ||
+          (createResult.error as any)?.code ||
+          '创建优化简历失败';
+        throw new Error(errMsg);
+      }
+      return createResult.data.id;
+    })()
+      .finally(() => {
+        creatingOptimizedResumeRef.current = null;
+        creatingOptimizedForOriginalIdRef.current = null;
+      });
+
+    const createdId = await creatingOptimizedResumeRef.current;
+    if (!createdId) {
+      throw new Error('创建优化简历失败');
+    }
+    setOptimizedResumeId(createdId);
+    optimizedResumeIdRef.current = createdId;
+    return createdId;
+  };
 
   const persistAnalysisSnapshot = async (data: ResumeData, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => {
     if (!data?.id) return;
@@ -818,10 +963,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // --- Handlers ---
 
-  const handleResumeSelect = async (id: number, preferReport: boolean = false) => {
+  const handleResumeSelect = async (id: string | number, preferReport: boolean = false) => {
     setSelectedResumeId(id);
+    sourceResumeIdRef.current = id;
     setAnalysisResumeId(id);
-    const selectedTitle = (allResumes || []).find((item) => Number(item.id) === Number(id))?.title || '当前简历';
+    const selectedTitle = (allResumes || []).find((item) => isSameResumeId(item.id, id))?.title || '当前简历';
     setResumeReadState({
       status: 'loading',
       message: `正在读取《${selectedTitle}》...`
@@ -920,6 +1066,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           ...resume.resume_data,
           resumeTitle: resume.title
         };
+        sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
 
         console.log('Setting resume data:', finalResumeData);
         setResumeData(finalResumeData);
@@ -978,10 +1125,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         if (cachedSummary.length < 80) {
           console.log('Cached summary too short, bypassing cache and requesting fresh analysis');
         } else {
-        console.log('🎯 Using cached AI analysis result');
-        console.log(`📊 Cache stats: ${AICacheService.getHitRate()}% hit rate`);
-        setIsFromCache(true);
-        return cachedResult;
+          console.log('🎯 Using cached AI analysis result');
+          console.log(`📊 Cache stats: ${AICacheService.getHitRate()}% hit rate`);
+          setIsFromCache(true);
+          return cachedResult;
         }
       }
       setIsFromCache(false);
@@ -1131,7 +1278,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               targetSection: inferredSection,
               targetId: suggestion.targetId,
               targetField: suggestion.targetField,
-              suggestedValue: sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
+              suggestedValue: inferredSection === 'skills'
+                ? toSkillList(suggestion.suggestedValue)
+                : sanitizeSuggestedValue(suggestion.suggestedValue, inferredSection),
               originalValue,
               status: 'pending' as const
             });
@@ -1184,7 +1333,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
         if (persistTargetId) {
           await persistAnalysisSnapshot(
-            { ...resumeData, id: persistTargetId },
+            { ...resumeData, id: persistTargetId as any },
             newReport,
             totalScore,
             appliedSuggestions
@@ -1232,262 +1381,347 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const handleAcceptSuggestionInChat = async (suggestion: Suggestion) => {
     acceptSuggestionQueueRef.current = acceptSuggestionQueueRef.current.then(async () => {
       try {
-      if (!setResumeData || !resumeData) return;
+        if (!setResumeData || !resumeData) return;
 
-      const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: string) => {
-        if (!field) return field;
-        const key = field.trim();
-        if (!key) return field;
-        if (section === 'personalInfo') {
-          if (['jobTitle', 'job_title', 'position', 'targetTitle', 'title'].includes(key)) {
-            return 'title';
+        const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: string) => {
+          if (!field) return field;
+          const key = field.trim();
+          if (!key) return field;
+          if (section === 'personalInfo') {
+            if (['jobTitle', 'job_title', 'position', 'targetTitle', 'title'].includes(key)) {
+              return 'title';
+            }
+            return key;
+          }
+          if (section === 'workExps') {
+            if (['position', 'jobTitle', 'job_title', 'role', 'subtitle'].includes(key)) {
+              return 'subtitle';
+            }
+            if (['company', 'employer', 'organization', 'org', 'title'].includes(key)) {
+              return 'company';
+            }
+            return key;
+          }
+          if (section === 'projects') {
+            if (['role', 'position', 'jobTitle', 'job_title', 'subtitle'].includes(key)) {
+              return 'subtitle';
+            }
+            return key;
+          }
+          if (section === 'educations') {
+            if (['school', 'university', 'college', 'title'].includes(key)) {
+              return 'school';
+            }
+            if (['major', 'specialty', 'discipline', 'subtitle'].includes(key)) {
+              return 'major';
+            }
+            if (['degree', 'educationLevel'].includes(key)) {
+              return 'degree';
+            }
+            return key;
           }
           return key;
-        }
-        if (section === 'workExps') {
-          if (['position', 'jobTitle', 'job_title', 'role', 'subtitle'].includes(key)) {
-            return 'subtitle';
-          }
-          if (['company', 'employer', 'organization', 'org', 'title'].includes(key)) {
-            return 'company';
-          }
-          return key;
-        }
-        if (section === 'projects') {
-          if (['role', 'position', 'jobTitle', 'job_title', 'subtitle'].includes(key)) {
-            return 'subtitle';
-          }
-          return key;
-        }
-        if (section === 'educations') {
-          if (['school', 'university', 'college', 'title'].includes(key)) {
-            return 'school';
-          }
-          if (['major', 'specialty', 'discipline', 'subtitle'].includes(key)) {
-            return 'major';
-          }
-          if (['degree', 'educationLevel'].includes(key)) {
-            return 'degree';
-          }
-          return key;
-        }
-        return key;
-      };
+        };
 
-      const applySuggestionToResume = (base: ResumeData) => {
-        const newData = { ...base };
-        const effectiveSection =
-          normalizeTargetSection(suggestion.targetSection) ||
-          inferTargetSection(suggestion);
-        const normalizedField = normalizeFieldForSection(effectiveSection, suggestion.targetField);
-
-        if (effectiveSection === 'personalInfo') {
-          if (!normalizedField) return newData;
-          newData.personalInfo = {
-            ...newData.personalInfo,
-            [normalizedField!]: suggestion.suggestedValue
-          };
-          return newData;
-        }
-
-        if (effectiveSection === 'workExps' && Array.isArray(newData.workExps)) {
-          const targetId = suggestion.targetId;
-          const hasIdMatch = typeof targetId === 'number' && newData.workExps.some(item => item.id === targetId);
-          newData.workExps = newData.workExps.map((item, index) => {
-            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
-            if (!shouldApply) return item;
-            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
-            const field = normalizedField || 'description';
-            const next: any = { ...item, [field]: value };
-            if (field === 'company' || field === 'title') {
-              next.company = value;
-              next.title = value;
+        const applySuggestionToResume = (base: ResumeData) => {
+          const newData = { ...base };
+          const effectiveSection =
+            normalizeTargetSection(suggestion.targetSection) ||
+            inferTargetSection(suggestion);
+          const normalizedField = normalizeFieldForSection(effectiveSection, suggestion.targetField);
+          const normalizeForMatch = (v: any) =>
+            String(v ?? '')
+              .toLowerCase()
+              .replace(/\s+/g, '')
+              .replace(/[，,。.;；:：\-—_()（）\[\]【】'"`]/g, '');
+          const suggestionNeedle = (() => {
+            if (typeof suggestion.originalValue === 'string') return normalizeForMatch(suggestion.originalValue);
+            if (Array.isArray(suggestion.originalValue as any)) {
+              return normalizeForMatch((suggestion.originalValue as any[]).join(' '));
             }
-            if (field === 'position' || field === 'subtitle') {
-              next.position = value;
-              next.subtitle = value;
+            if (suggestion.originalValue && typeof suggestion.originalValue === 'object') {
+              return normalizeForMatch(JSON.stringify(suggestion.originalValue));
             }
-            return next;
-          });
-          return newData;
-        }
-
-        if (effectiveSection === 'projects' && Array.isArray(newData.projects)) {
-          const targetId = suggestion.targetId;
-          const hasIdMatch = typeof targetId === 'number' && newData.projects.some(item => item.id === targetId);
-          newData.projects = newData.projects.map((item, index) => {
-            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
-            if (!shouldApply) return item;
-            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
-            const field = normalizedField || 'description';
-            const next: any = { ...item, [field]: value };
-            if (field === 'role' || field === 'subtitle') {
-              next.role = value;
-              next.subtitle = value;
+            return '';
+          })();
+          const targetIdStr = suggestion.targetId === undefined || suggestion.targetId === null
+            ? ''
+            : String(suggestion.targetId);
+          const findBestTargetIndex = (items: any[], fieldFallback: string) => {
+            if (!Array.isArray(items) || items.length === 0) return -1;
+            if (targetIdStr) {
+              const idIndex = items.findIndex((item: any) => String(item?.id ?? '') === targetIdStr);
+              if (idIndex >= 0) return idIndex;
             }
-            return next;
-          });
-          return newData;
-        }
-
-        if (effectiveSection === 'educations' && Array.isArray(newData.educations)) {
-          const targetId = suggestion.targetId;
-          const hasIdMatch = typeof targetId === 'number' && newData.educations.some(item => item.id === targetId);
-          newData.educations = newData.educations.map((item, index) => {
-            const shouldApply = (hasIdMatch && item.id === targetId) || (!hasIdMatch && index === 0);
-            if (!shouldApply) return item;
-            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
-            const field = normalizedField || 'major';
-            const next: any = { ...item, [field]: value };
-            if (field === 'school' || field === 'title') {
-              next.school = value;
-              next.title = value;
-            }
-            if (field === 'major' || field === 'subtitle') {
-              next.major = value;
-              next.subtitle = value;
-            }
-            return next;
-          });
-          return newData;
-        }
-
-        if (effectiveSection === 'skills') {
-          let safeSkills = suggestion.suggestedValue;
-          if (typeof safeSkills === 'string') {
-            safeSkills = safeSkills.split(/[,，]\s*/).filter(Boolean);
-          }
-          if (Array.isArray(safeSkills)) {
-            newData.skills = safeSkills;
-          }
-          return newData;
-        }
-
-        if (effectiveSection === 'summary') {
-          const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
-          newData.summary = value;
-          newData.personalInfo = {
-            ...newData.personalInfo,
-            summary: value
-          };
-          return newData;
-        }
-
-        return newData;
-      };
-
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      let targetOptimizedId =
-        (resumeData.optimizationStatus === 'optimized' && resumeData.id) ? resumeData.id :
-          (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
-
-      let baseResume = resumeData;
-      if (targetOptimizedId) {
-        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
-        if (optimizedResult.success && optimizedResult.data?.resume_data) {
-          baseResume = {
-            id: optimizedResult.data.id,
-            ...optimizedResult.data.resume_data,
-            resumeTitle: optimizedResult.data.title
-          } as ResumeData;
-        }
-      }
-
-      if (!targetOptimizedId) {
-        if (!creatingOptimizedResumeRef.current) {
-          creatingOptimizedResumeRef.current = (async () => {
-            const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-            const newTitle = buildResumeTitle(baseTitle, resumeData, jdText, true);
-            const createResult = await DatabaseService.createResume(user.id, newTitle, {
-              ...resumeData,
-              optimizationStatus: 'optimized' as const,
-              lastJdText: jdText,
-              targetCompany,
-              optimizedFromId: resumeData.id
+            let bestIndex = -1;
+            let bestScore = -1;
+            items.forEach((item: any, idx: number) => {
+              const fieldValue = normalizeForMatch(item?.[normalizedField || fieldFallback] || '');
+              const haystack = normalizeForMatch([
+                item?.title,
+                item?.subtitle,
+                item?.company,
+                item?.position,
+                item?.school,
+                item?.major,
+                item?.description
+              ].filter(Boolean).join(' '));
+              let score = 0;
+              if (suggestionNeedle && suggestionNeedle.length >= 4) {
+                if (fieldValue.includes(suggestionNeedle)) score += 80;
+                if (haystack.includes(suggestionNeedle)) score += 60;
+              }
+              if (normalizedField && String(item?.[normalizedField] ?? '').trim()) score += 5;
+              if (score > bestScore) {
+                bestScore = score;
+                bestIndex = idx;
+              }
             });
-            if (!createResult.success || !createResult.data) return null;
-            return createResult.data.id as number;
-          })().finally(() => {
-            creatingOptimizedResumeRef.current = null;
-          });
+            // 没有任何有效线索时，不默认改第一个，避免错改
+            if (bestScore <= 0 && items.length > 1) return -1;
+            return bestIndex >= 0 ? bestIndex : 0;
+          };
+          const patchFieldValue = (item: any, field: string, value: any) => {
+            const next: any = { ...item };
+            // description 场景优先替换命中的原句，避免覆盖整段
+            if (
+              field === 'description' &&
+              typeof item?.description === 'string' &&
+              typeof value === 'string' &&
+              typeof suggestion.originalValue === 'string'
+            ) {
+              const origin = String(suggestion.originalValue).trim();
+              if (origin && item.description.includes(origin)) {
+                next.description = item.description.replace(origin, value);
+              } else {
+                next.description = value;
+              }
+            } else {
+              next[field] = value;
+            }
+            return next;
+          };
+
+          if (effectiveSection === 'personalInfo') {
+            if (!normalizedField) return newData;
+            newData.personalInfo = {
+              ...newData.personalInfo,
+              [normalizedField!]: suggestion.suggestedValue
+            };
+            return newData;
+          }
+
+          if (effectiveSection === 'workExps' && Array.isArray(newData.workExps)) {
+            const targetIndex = findBestTargetIndex(newData.workExps, 'description');
+            if (targetIndex < 0) {
+              console.warn('Skip workExps suggestion: unable to resolve target item', suggestion);
+              return newData;
+            }
+            newData.workExps = newData.workExps.map((item, index) => {
+              if (index !== targetIndex) return item;
+              const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+              const field = normalizedField || 'description';
+              const next: any = patchFieldValue(item, field, value);
+              if (field === 'company' || field === 'title') {
+                next.company = value;
+                next.title = value;
+              }
+              if (field === 'position' || field === 'subtitle') {
+                next.position = value;
+                next.subtitle = value;
+              }
+              return next;
+            });
+            return newData;
+          }
+
+          if (effectiveSection === 'projects' && Array.isArray(newData.projects)) {
+            const targetIndex = findBestTargetIndex(newData.projects, 'description');
+            if (targetIndex < 0) {
+              console.warn('Skip projects suggestion: unable to resolve target item', suggestion);
+              return newData;
+            }
+            newData.projects = newData.projects.map((item, index) => {
+              if (index !== targetIndex) return item;
+              const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+              const field = normalizedField || 'description';
+              const next: any = patchFieldValue(item, field, value);
+              if (field === 'role' || field === 'subtitle') {
+                next.role = value;
+                next.subtitle = value;
+              }
+              return next;
+            });
+            return newData;
+          }
+
+          if (effectiveSection === 'educations' && Array.isArray(newData.educations)) {
+            const targetIndex = findBestTargetIndex(newData.educations, 'major');
+            if (targetIndex < 0) {
+              console.warn('Skip educations suggestion: unable to resolve target item', suggestion);
+              return newData;
+            }
+            newData.educations = newData.educations.map((item, index) => {
+              if (index !== targetIndex) return item;
+              const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+              const field = normalizedField || 'major';
+              const next: any = patchFieldValue(item, field, value);
+              if (field === 'school' || field === 'title') {
+                next.school = value;
+                next.title = value;
+              }
+              if (field === 'major' || field === 'subtitle') {
+                next.major = value;
+                next.subtitle = value;
+              }
+              return next;
+            });
+            return newData;
+          }
+
+          if (effectiveSection === 'skills') {
+            const safeSkills = toSkillList(suggestion.suggestedValue);
+            if (safeSkills.length > 0) newData.skills = safeSkills;
+            return newData;
+          }
+
+          if (effectiveSection === 'summary') {
+            const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+            newData.summary = value;
+            newData.personalInfo = {
+              ...newData.personalInfo,
+              summary: value
+            };
+            return newData;
+          }
+
+          return newData;
+        };
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          throw new Error('登录已过期，请重新登录后再采纳建议');
+        }
+        const originalResumeId = resolveOriginalResumeIdForOptimization();
+        if (!originalResumeId) {
+          throw new Error('未找到原始简历ID，无法创建优化简历');
         }
 
-        targetOptimizedId = await creatingOptimizedResumeRef.current;
-        if (!targetOptimizedId) return;
+        const originResult = await DatabaseService.getResume(originalResumeId);
+        if (!originResult.success || !originResult.data?.resume_data) {
+          throw new Error('未找到原始简历，无法执行优化');
+        }
+        const originalResume = {
+          id: originResult.data.id,
+          ...originResult.data.resume_data,
+          resumeTitle: originResult.data.title
+        } as ResumeData;
+
+        const targetOptimizedId =
+          (resumeData.optimizationStatus === 'optimized' &&
+            resumeData.id &&
+            isSameResumeId(resumeData.optimizedFromId, originalResumeId))
+            ? resumeData.id
+            : await ensureSingleOptimizedResume(user.id, originalResumeId, originalResume);
+
+        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
+        if (!optimizedResult.success || !optimizedResult.data?.resume_data) {
+          throw new Error('未找到优化简历，无法采纳建议');
+        }
+
+        const optimizedRowData = optimizedResult.data.resume_data || {};
+        const validTarget =
+          optimizedRowData.optimizationStatus === 'optimized' &&
+          isSameResumeId(optimizedRowData.optimizedFromId, originalResumeId);
+        if (!validTarget) {
+          throw new Error('检测到优化简历关联异常，已阻止覆盖原简历');
+        }
+
+        const baseResume = {
+          id: optimizedResult.data.id,
+          ...optimizedRowData,
+          resumeTitle: optimizedResult.data.title
+        } as ResumeData;
+
+        const nextResumeData = applySuggestionToResume(baseResume);
+        const updatedSuggestions = suggestions.map(s =>
+          s.id === suggestion.id ? { ...s, status: 'accepted' as const } : s
+        );
+
+        const baseTitle = allResumes?.find(r => isSameResumeId(r.id, originalResumeId))?.title || '简历';
+        const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true);
+        let updatedOptimized: ResumeData = {
+          ...nextResumeData,
+          interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || originalResume.interviewSessions,
+          aiSuggestionFeedback: nextResumeData.aiSuggestionFeedback || baseResume.aiSuggestionFeedback || originalResume.aiSuggestionFeedback,
+          optimizationStatus: 'optimized' as const,
+          optimizedFromId: originalResumeId as any,
+          lastJdText: jdText || baseResume.lastJdText || originalResume.lastJdText || '',
+          targetCompany: targetCompany || baseResume.targetCompany || originalResume.targetCompany || ''
+        };
+
+        let snapshotForPersist: any = null;
+        if (report && score > 0) {
+          snapshotForPersist = {
+            score,
+            summary: report.summary || '',
+            strengths: report.strengths || [],
+            weaknesses: report.weaknesses || [],
+            missingKeywords: report.missingKeywords || [],
+            scoreBreakdown: report.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+            suggestions: updatedSuggestions,
+            updatedAt: new Date().toISOString(),
+            jdText: jdText || updatedOptimized.lastJdText || '',
+            targetCompany: targetCompany || updatedOptimized.targetCompany || ''
+          };
+          updatedOptimized = {
+            ...updatedOptimized,
+            analysisSnapshot: snapshotForPersist
+          };
+        }
+
+        const updateResult = await DatabaseService.updateResume(String(targetOptimizedId), {
+          resume_data: updatedOptimized,
+          title: newTitle,
+          updated_at: new Date().toISOString()
+        });
+        if (!updateResult.success) {
+          throw new Error(updateResult.error?.message || '更新优化简历失败');
+        }
 
         optimizedResumeIdRef.current = targetOptimizedId;
         setOptimizedResumeId(targetOptimizedId);
         setAnalysisResumeId(targetOptimizedId);
+        setResumeData({
+          ...updatedOptimized,
+          id: targetOptimizedId as any,
+          resumeTitle: newTitle
+        });
+        setSuggestions(updatedSuggestions);
+        setChatMessages(prev => prev.map(msg =>
+          msg.suggestion?.id === suggestion.id
+            ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' as const } }
+            : msg
+        ));
 
-        // Always use the latest optimized resume as base to avoid split updates.
-        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
-        if (optimizedResult.success && optimizedResult.data?.resume_data) {
-          baseResume = {
-            id: optimizedResult.data.id,
-            ...optimizedResult.data.resume_data,
-            resumeTitle: optimizedResult.data.title
-          } as ResumeData;
-        } else {
-          baseResume = {
-            id: targetOptimizedId,
-            ...resumeData,
-            optimizationStatus: 'optimized' as const,
-            lastJdText: jdText,
-            targetCompany,
-            optimizedFromId: resumeData.id
-          } as ResumeData;
-        }
-      }
-
-      const nextResumeData = applySuggestionToResume(baseResume);
-      const updatedSuggestions = suggestions.map(s =>
-        s.id === suggestion.id ? { ...s, status: 'accepted' as const } : s
-      );
-
-      setResumeData(nextResumeData);
-      setSuggestions(updatedSuggestions);
-      setChatMessages(prev => prev.map(msg =>
-        msg.suggestion?.id === suggestion.id
-          ? { ...msg, suggestion: { ...msg.suggestion!, status: 'accepted' as const } }
-          : msg
-      ));
-
-      const baseTitle = allResumes?.find(r => r.id === resumeData.id)?.title || '简历';
-      const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true);
-      let updatedOptimized: ResumeData = {
-        ...nextResumeData,
-        interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || resumeData.interviewSessions,
-        aiSuggestionFeedback: nextResumeData.aiSuggestionFeedback || baseResume.aiSuggestionFeedback || resumeData.aiSuggestionFeedback,
-        optimizationStatus: 'optimized' as const,
-        lastJdText: jdText,
-        targetCompany
-      };
-
-      if (report && score > 0) {
-        const withSnapshot = await persistAnalysisSnapshot(updatedOptimized, report, score, updatedSuggestions);
-        if (withSnapshot) {
-          updatedOptimized = withSnapshot;
+        if (snapshotForPersist) {
           saveLastAnalysis({
             resumeId: targetOptimizedId,
-            jdText: jdText || resumeData.lastJdText || '',
-            targetCompany: targetCompany || resumeData.targetCompany || '',
-            snapshot: withSnapshot.analysisSnapshot,
-            updatedAt: withSnapshot.analysisSnapshot?.updatedAt || new Date().toISOString()
+            jdText: snapshotForPersist.jdText || '',
+            targetCompany: snapshotForPersist.targetCompany || '',
+            snapshot: snapshotForPersist,
+            updatedAt: snapshotForPersist.updatedAt || new Date().toISOString()
           });
         }
-      }
 
-      await DatabaseService.updateResume(String(targetOptimizedId), {
-        resume_data: updatedOptimized,
-        title: newTitle,
-        updated_at: new Date().toISOString()
-      });
+        if (loadUserResumes) {
+          await loadUserResumes();
+        }
 
-      updateScore(5);
+        updateScore(5);
       } catch (error) {
         console.error('Error in handleAcceptSuggestionInChat:', error);
+        alert(`采纳失败：${(error as any)?.message || '请稍后重试'}`);
       }
     }).catch((error) => {
       console.error('Error in accept suggestion queue:', error);
@@ -1521,7 +1755,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const handleAnalyzeOtherResume = () => {
     setSelectedResumeId(null);
+    sourceResumeIdRef.current = null;
     setAnalysisResumeId(null);
+    optimizedResumeIdRef.current = null;
+    creatingOptimizedResumeRef.current = null;
+    creatingOptimizedForOriginalIdRef.current = null;
     clearLastAnalysis();
     setJdText('');
     setSuggestions([]);
@@ -1708,7 +1946,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
       setAnalysisResumeId(last.resumeId);
       if (!resumeData || String(resumeData.id) !== String(last.resumeId)) {
-        DatabaseService.getResume(Number(last.resumeId)).then((result) => {
+        DatabaseService.getResume(last.resumeId).then((result) => {
           if (!result.success || !result.data) return;
           const finalResumeData = {
             id: result.data.id,
@@ -1716,6 +1954,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             resumeTitle: result.data.title
           };
           if (setResumeData) {
+            sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
             setResumeData(finalResumeData);
           }
         });
@@ -1743,7 +1982,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     localStorage.removeItem('ai_interview_resume_id');
 
     (async () => {
-      const resumeId = Number(targetId);
+      const resumeId = targetId;
       const result = await DatabaseService.getResume(resumeId);
       if (result.success && result.data) {
         const finalResumeData = {
@@ -1818,6 +2057,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         resumeTitle: payload.title || payload.resume_data.resumeTitle || '简历'
       };
       if (setResumeData) {
+        sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
         setResumeData(finalResumeData);
       }
       setSelectedResumeId(payload.id);
@@ -1850,7 +2090,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
 
     (async () => {
-      const resumeId = Number(targetId);
+      const resumeId = targetId;
       const result = await DatabaseService.getResume(resumeId);
       if (result.success && result.data) {
         const finalResumeData = {
@@ -1859,6 +2099,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           resumeTitle: result.data.title
         };
         if (setResumeData) {
+          sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
           setResumeData(finalResumeData);
         }
         setOptimizedResumeId(
@@ -2162,32 +2403,85 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <h2 className="text-xl font-bold text-slate-900 dark:text-white">第一步：选择简历</h2>
           </div>
           <div className="flex flex-col">
-            {(allResumes || []).filter(r => r.optimizationStatus !== 'optimized').length > 0 ? (
-              (allResumes || []).filter(r => r.optimizationStatus !== 'optimized').map((resume) => (
-                <div
-                  key={resume.id}
-                  onClick={() => handleResumeSelect(resume.id, false)}
-                  className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
-                >
-                  <div className="shrink-0 relative">
-                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
-                      {resume.thumbnail}
+            {/* 已优化 */}
+            <button
+              onClick={() => setIsOptimizedOpen(v => !v)}
+              className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-slate-900 dark:text-white"
+            >
+              <span>已优化</span>
+              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
+                {isOptimizedOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+            {isOptimizedOpen && (() => {
+              const optimizedResumes = (allResumes || []).filter(r => r.optimizationStatus === 'optimized');
+              return optimizedResumes.length > 0 ? (
+                optimizedResumes.map((resume) => (
+                  <div
+                    key={resume.id}
+                    onClick={() => handleResumeSelect(resume.id, false)}
+                    className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
+                  >
+                    <div className="shrink-0 relative">
+                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                        {resume.thumbnail}
+                      </div>
                     </div>
+                    <div className="flex flex-col flex-1 justify-center min-w-0">
+                      <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                      <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                        上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                      </p>
+                    </div>
+                    <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">arrow_forward_ios</span>
                   </div>
-                  <div className="flex flex-col flex-1 justify-center min-w-0">
-                    <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                    <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
-                      上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
-                    </p>
-                  </div>
-                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">arrow_forward_ios</span>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-500 text-sm">
+                  暂无已优化简历
                 </div>
-              ))
-            ) : (
-              <div className="p-8 text-center text-slate-500 text-sm">
-                暂无可用简历
-              </div>
-            )}
+              );
+            })()}
+
+            {/* 未优化 */}
+            <button
+              onClick={() => setIsUnoptimizedOpen(v => !v)}
+              className="w-full flex items-center justify-between px-4 pt-4 text-lg font-bold text-slate-900 dark:text-white"
+            >
+              <span>未优化</span>
+              <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
+                {isUnoptimizedOpen ? 'expand_less' : 'expand_more'}
+              </span>
+            </button>
+            {isUnoptimizedOpen && (() => {
+              const unoptimizedResumes = (allResumes || []).filter(r => r.optimizationStatus !== 'optimized');
+              return unoptimizedResumes.length > 0 ? (
+                unoptimizedResumes.map((resume) => (
+                  <div
+                    key={resume.id}
+                    onClick={() => handleResumeSelect(resume.id, false)}
+                    className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
+                  >
+                    <div className="shrink-0 relative">
+                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                        {resume.thumbnail}
+                      </div>
+                    </div>
+                    <div className="flex flex-col flex-1 justify-center min-w-0">
+                      <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                      <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                        上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                      </p>
+                    </div>
+                    <span className="material-symbols-outlined text-slate-400 dark:text-slate-500 group-hover:text-primary transition-colors">arrow_forward_ios</span>
+                  </div>
+                ))
+              ) : (
+                <div className="p-8 text-center text-slate-500 text-sm">
+                  暂无未优化简历
+                </div>
+              );
+            })()}
           </div>
         </main>
       </div>
@@ -2197,7 +2491,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   // 2. JD Input
   if (currentStep === 'jd_input') {
     const selectedResumeLabel = (() => {
-      const selected = (allResumes || []).find((item) => Number(item.id) === Number(selectedResumeId));
+      const selected = (allResumes || []).find((item) => isSameResumeId(item.id, selectedResumeId));
       if (selected?.title) return selected.title;
       if (resumeData?.resumeTitle) return resumeData.resumeTitle;
       const name = (resumeData?.personalInfo?.name || '').trim();
@@ -2306,11 +2600,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             {/* 截图上传按钮 */}
             <div className="mt-3">
               <button
-                onClick={() => document.getElementById('jd-screenshot-upload')?.click()}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all"
+                onClick={() => !isUploading && document.getElementById('jd-screenshot-upload')?.click()}
+                disabled={isUploading}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                <span className="material-symbols-outlined">image</span>
-                上传JD截图
+                {isUploading ? (
+                  <span className="size-5 border-2 border-slate-400 border-t-primary rounded-full animate-spin"></span>
+                ) : (
+                  <span className="material-symbols-outlined">image</span>
+                )}
+                {isUploading ? '上传成功，正在解析...' : '上传JD截图'}
               </button>
               <input
                 type="file"
@@ -2321,12 +2620,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               />
             </div>
 
-            {/* 上传状态显示 */}
-            {isUploading && (
-              <div className="mt-3 text-center text-sm text-slate-500 dark:text-slate-400">
-                正在处理截图...
-              </div>
-            )}
           </div>
 
           <div className="flex gap-4 mt-2">
@@ -2549,16 +2842,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         {suggestion.targetSection === 'skills' ? (
                           <div className="p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
                             <div className="flex flex-wrap gap-2 min-h-[44px]">
-                              {(Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue : suggestion.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []).map((skill: string, idx: number) => (
+                              {toSkillList(suggestion.suggestedValue).map((skill: string, idx: number) => (
                                 <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20">
                                   {skill}
                                   <button
                                     onClick={() => {
                                       setSuggestions(prev => prev.map(s => {
                                         if (s.id !== suggestion.id) return s;
-                                        const list = Array.isArray(s.suggestedValue)
-                                          ? [...s.suggestedValue]
-                                          : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                        const list = toSkillList(s.suggestedValue);
                                         list.splice(idx, 1);
                                         return { ...s, suggestedValue: list };
                                       }));
@@ -2586,11 +2877,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                                   if (!value) return;
                                   setSuggestions(prev => prev.map(s => {
                                     if (s.id !== suggestion.id) return s;
-                                    const list = Array.isArray(s.suggestedValue)
-                                      ? [...s.suggestedValue]
-                                      : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                    const list = toSkillList(s.suggestedValue);
                                     if (!list.includes(value)) list.push(value);
-                                    return { ...s, suggestedValue: list };
+                                    return { ...s, suggestedValue: toSkillList(list) };
                                   }));
                                   e.currentTarget.value = '';
                                 }}
@@ -2605,11 +2894,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                                   if (!value) return;
                                   setSuggestions(prev => prev.map(s => {
                                     if (s.id !== suggestion.id) return s;
-                                    const list = Array.isArray(s.suggestedValue)
-                                      ? [...s.suggestedValue]
-                                      : (s.suggestedValue?.split(/[,，]\s*/).filter(Boolean) || []);
+                                    const list = toSkillList(s.suggestedValue);
                                     if (!list.includes(value)) list.push(value);
-                                    return { ...s, suggestedValue: list };
+                                    return { ...s, suggestedValue: toSkillList(list) };
                                   }));
                                   input.value = '';
                                 }}
@@ -2658,27 +2945,25 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
 
-          {/* Export PDF Button - After suggestions */}
-          <div className="mb-52 space-y-3">
+          {/* Export PDF & Analyze Other Buttons - Arranged side-by-side */}
+          <div className="mb-52 flex gap-3">
             <button
               onClick={handleExportPDF}
               disabled={!hasAcceptedSuggestion}
-              className={`w-full flex items-center justify-center gap-3 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
+              className={`flex-1 flex items-center justify-center gap-2 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
                 ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                 : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
                 }`}
             >
-              <>
-                <span className="material-symbols-outlined text-[24px]">download</span>
-                <span className="text-base font-bold tracking-wide">前往预览导出</span>
-              </>
+              <span className="material-symbols-outlined text-[20px]">download</span>
+              <span className="text-sm font-bold tracking-wide">前往预览导出</span>
             </button>
             <button
               onClick={handleAnalyzeOtherResume}
-              className="w-full flex items-center justify-center gap-3 h-12 rounded-xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all active:scale-[0.98]"
+              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
             >
               <span className="material-symbols-outlined text-[20px]">restart_alt</span>
-              <span className="text-sm font-semibold tracking-wide">分析其他简历</span>
+              <span className="text-sm font-bold tracking-wide">分析其他简历</span>
             </button>
 
           </div>

@@ -482,7 +482,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                   optimizedResumes.length > 0 ? (
                     renderResumeList(optimizedResumes)
                   ) : (
-                    <div className="mx-4 mb-2 p-3 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <div className="mx-4 mb-2 p-3 text-center text-slate-500 text-sm">
                       暂无已优化简历
                     </div>
                   )
@@ -504,7 +504,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                   unoptimizedResumes.length > 0 ? (
                     renderResumeList(unoptimizedResumes)
                   ) : (
-                    <div className="mx-4 mb-2 p-3 text-center text-slate-500 text-sm bg-white dark:bg-card-dark rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+                    <div className="mx-4 mb-2 p-3 text-center text-slate-500 text-sm">
                       暂无未优化简历
                     </div>
                   )
