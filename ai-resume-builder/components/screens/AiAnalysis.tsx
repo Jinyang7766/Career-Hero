@@ -41,6 +41,10 @@ interface AnalysisReport {
 }
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
+type ResumeReadState = {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  message: string;
+};
 
 const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
   const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
@@ -350,6 +354,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Optimized Resume Tracking
   const [optimizedResumeId, setOptimizedResumeId] = useState<number | null>(null);
+  const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
+    status: 'idle',
+    message: '尚未读取简历，请先选择简历'
+  });
   const isLikelyJwt = (token?: string | null) => {
     const raw = (token || '').trim();
     if (!raw) return false;
@@ -693,6 +701,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const handleResumeSelect = async (id: number, preferReport: boolean = false) => {
     setSelectedResumeId(id);
     setAnalysisResumeId(id);
+    const selectedTitle = (allResumes || []).find((item) => Number(item.id) === Number(id))?.title || '当前简历';
+    setResumeReadState({
+      status: 'loading',
+      message: `正在读取《${selectedTitle}》...`
+    });
 
     // 立即切换到下一步，提高用户体验
     // 避免优先进入 report 导致 0 分闪屏，再进入 JD
@@ -712,6 +725,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       if (userError || !user) {
         console.error('User not authenticated:', userError);
+        setResumeReadState({
+          status: 'error',
+          message: '读取失败：用户未登录或登录已过期'
+        });
         // 已经切换到下一步，这里只需要显示错误提示
         alert('请先登录');
         return;
@@ -725,6 +742,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         const result = await DatabaseService.getUserResumes(user.id);
         if (!result.success) {
           console.error('Failed to load resumes:', result.error);
+          setResumeReadState({
+            status: 'error',
+            message: `读取失败：${result.error?.message || '加载简历失败'}`
+          });
           alert(`加载简历失败: ${result.error?.message || '请重试'}`);
           return;
         }
@@ -741,6 +762,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       if (!resume) {
         console.error('Resume not found');
+        setResumeReadState({
+          status: 'error',
+          message: `读取失败：未找到该简历（ID: ${id}）`
+        });
         alert(`简历不存在 (ID: ${id})`);
         return;
       }
@@ -749,12 +774,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       if (!resume.resume_data) {
         console.error('Resume data is empty: resume_data is null/undefined');
+        setResumeReadState({
+          status: 'error',
+          message: '读取失败：简历内容为空'
+        });
         alert('简历数据为空，请重新创建简历');
         return;
       }
 
       if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
         console.error('Resume data is empty object: resume_data is empty object');
+        setResumeReadState({
+          status: 'error',
+          message: '读取失败：简历内容为空对象'
+        });
         alert('简历数据为空，请重新创建简历');
         return;
       }
@@ -770,6 +803,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         console.log('Setting resume data:', finalResumeData);
         setResumeData(finalResumeData);
+        setResumeReadState({
+          status: 'success',
+          message: `已成功读取《${resume.title || selectedTitle}》`
+        });
         setOptimizedResumeId(
           finalResumeData.optimizedResumeId ||
           (finalResumeData.optimizationStatus === 'optimized' ? resume.id : null)
@@ -799,6 +836,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
     } catch (error) {
       console.error('Error loading resume:', error);
+      setResumeReadState({
+        status: 'error',
+        message: '读取失败：网络异常或服务不可用'
+      });
       alert('加载简历失败，请检查网络连接');
     }
   };
@@ -1636,6 +1677,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     })();
   }, []);
 
+  useEffect(() => {
+    if (currentStep !== 'jd_input') return;
+    if (resumeReadState.status !== 'idle') return;
+    if (!resumeData?.id) return;
+    const fallbackLabel =
+      (resumeData.resumeTitle || '').trim() ||
+      ((resumeData.personalInfo?.name || '').trim() ? `${resumeData.personalInfo.name.trim()}的简历` : '当前简历');
+    setResumeReadState({
+      status: 'success',
+      message: `已成功读取《${fallbackLabel}》`
+    });
+  }, [currentStep, resumeData?.id, resumeData?.resumeTitle, resumeData?.personalInfo?.name, resumeReadState.status]);
+
   // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
   useEffect(() => {
     if (currentStep === 'chat' && !chatInitialized && chatMessages.length === 0) {
@@ -1929,6 +1983,55 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // 2. JD Input
   if (currentStep === 'jd_input') {
+    const selectedResumeLabel = (() => {
+      const selected = (allResumes || []).find((item) => Number(item.id) === Number(selectedResumeId));
+      if (selected?.title) return selected.title;
+      if (resumeData?.resumeTitle) return resumeData.resumeTitle;
+      const name = (resumeData?.personalInfo?.name || '').trim();
+      if (name) return `${name}的简历`;
+      return '当前简历';
+    })();
+    const statusTone = (() => {
+      if (resumeReadState.status === 'success') {
+        return {
+          bg: 'bg-emerald-50/50 dark:bg-emerald-500/5',
+          border: 'border-emerald-100 dark:border-emerald-500/20',
+          text: 'text-emerald-700 dark:text-emerald-400',
+          icon: 'check_circle',
+          badge: '已就绪'
+        };
+      }
+      if (resumeReadState.status === 'loading') {
+        return {
+          bg: 'bg-blue-50/50 dark:bg-blue-500/5',
+          border: 'border-blue-100 dark:border-blue-500/20',
+          text: 'text-blue-700 dark:text-blue-400',
+          icon: 'sync',
+          badge: '读取中'
+        };
+      }
+      if (resumeReadState.status === 'error') {
+        return {
+          bg: 'bg-rose-50/50 dark:bg-rose-500/5',
+          border: 'border-rose-100 dark:border-rose-500/20',
+          text: 'text-rose-700 dark:text-rose-400',
+          icon: 'error',
+          badge: '读取失败'
+        };
+      }
+      return {
+        bg: 'bg-slate-50/50 dark:bg-slate-500/5',
+        border: 'border-slate-100 dark:border-slate-500/20',
+        text: 'text-slate-600 dark:text-slate-400',
+        icon: 'info',
+        badge: '初始化'
+      };
+    })();
+    const statusMessage =
+      resumeReadState.status === 'idle'
+        ? `尚未读取简历，请先返回上一步选择简历（当前：${selectedResumeLabel}）`
+        : resumeReadState.message;
+
     return (
       <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
         <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
@@ -1941,6 +2044,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           </div>
         </header>
         <main className="p-4 flex flex-col gap-6">
+          <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className={`size-10 rounded-full flex items-center justify-center ${statusTone.bg} ${statusTone.border}`}>
+                  <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{selectedResumeLabel}</p>
+                </div>
+              </div>
+              <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${statusTone.bg} ${statusTone.border} ${statusTone.text}`}>
+                <span className={`material-symbols-outlined text-[14px] ${resumeReadState.status === 'loading' ? 'animate-spin' : ''}`}>{statusTone.icon}</span>
+                {statusTone.badge}
+              </div>
+            </div>
+            {resumeReadState.status !== 'success' && (
+              <p className={`mt-3 text-xs leading-relaxed ${statusTone.text}`}>
+                {statusMessage}
+              </p>
+            )}
+          </div>
+
           <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
             <div className="flex items-center gap-2 mb-3">
               <span className="material-symbols-outlined text-primary">description</span>

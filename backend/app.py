@@ -2898,29 +2898,58 @@ def ai_chat(current_user_id):
 
 def format_resume_for_ai(resume_data):
     """用于 AI 的简历格式化文本"""
-    formatted = []
-    personal = resume_data.get('personalInfo', {})
-    if personal:
-        formatted.append(f"姓名: {personal.get('name', '')}")
-        formatted.append(f"职位: {personal.get('title', '')}")
-    
-    summary = resume_data.get('summary') or personal.get('summary', '')
-    if summary: formatted.append(f"个人简介: {summary}")
+    def _text(v):
+        return str(v).strip() if v is not None else ''
 
-    work_exps = resume_data.get('workExps', [])
+    formatted = []
+    personal = resume_data.get('personalInfo', {}) or {}
+    if personal:
+        formatted.append(f"姓名: {_text(personal.get('name'))}")
+        formatted.append(f"职位: {_text(personal.get('title') or personal.get('jobTitle'))}")
+    
+    summary = _text(resume_data.get('summary') or personal.get('summary'))
+    if summary:
+        formatted.append(f"个人简介: {summary}")
+
+    work_exps = resume_data.get('workExps', []) or []
     if work_exps:
         formatted.append("\n工作经历:")
         for exp in work_exps:
-            formatted.append(f"- {exp.get('position', '')} @ {exp.get('company', '')}: {exp.get('description', '')}")
+            exp = exp or {}
+            company = _text(exp.get('company') or exp.get('title'))
+            position = _text(exp.get('position') or exp.get('subtitle'))
+            start_date = _text(exp.get('startDate'))
+            end_date = _text(exp.get('endDate'))
+            date_range = _text(exp.get('date')) or (f"{start_date}-{end_date}" if (start_date or end_date) else '')
+            description = _text(exp.get('description'))
+            line = f"- {position or '职位未填写'} @ {company or '公司未填写'}"
+            if date_range:
+                line += f" [{date_range}]"
+            if description:
+                line += f": {description}"
+            formatted.append(line)
 
-    educations = resume_data.get('educations', [])
+    educations = resume_data.get('educations', []) or []
     if educations:
         formatted.append("\n教育背景:")
         for edu in educations:
-             formatted.append(f"- {edu.get('degree', '')} {edu.get('major', '')} @ {edu.get('school', '')}")
+            edu = edu or {}
+            school = _text(edu.get('school') or edu.get('title'))
+            major = _text(edu.get('major') or edu.get('subtitle'))
+            degree = _text(edu.get('degree'))
+            start_date = _text(edu.get('startDate'))
+            end_date = _text(edu.get('endDate'))
+            date_range = _text(edu.get('date')) or (f"{start_date}-{end_date}" if (start_date or end_date) else '')
+            line = f"- {degree} {major}".strip() + f" @ {school or '学校未填写'}"
+            if date_range:
+                line += f" [{date_range}]"
+            formatted.append(line)
 
-    skills = resume_data.get('skills', [])
-    if skills: formatted.append(f"\n技能: {', '.join(skills)}")
+    skills = resume_data.get('skills', []) or []
+    if isinstance(skills, list) and skills:
+        normalized = [_text(s) for s in skills if _text(s)]
+        if normalized:
+            formatted.append(f"\n技能: {', '.join(normalized)}")
     return '\n'.join(formatted)
 
 def parse_ai_response(response_text):
