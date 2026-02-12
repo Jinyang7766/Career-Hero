@@ -1992,7 +1992,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
           <div className="flex gap-4 mt-2">
             <button
-              onClick={handleStepBack}
+              onClick={() => setCurrentStep('resume_select')}
               className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
             >
               上一步
