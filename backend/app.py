@@ -2693,6 +2693,7 @@ def analyze_resume(current_user_id):
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
+        reference_cases = []
 
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
@@ -2701,6 +2702,17 @@ def analyze_resume(current_user_id):
             try:
                 # --- RAG 检索逻辑开始 ---
                 relevant_cases = find_relevant_cases_vector(resume_data)
+                if isinstance(relevant_cases, list):
+                    reference_cases = [{
+                        'id': c.get('id'),
+                        'job_role': c.get('job_role'),
+                        'industry': c.get('industry'),
+                        'seniority': c.get('seniority'),
+                        'scenario': c.get('scenario'),
+                        'star': c.get('star', {}),
+                        'similarity': c.get('similarity')
+                    } for c in relevant_cases]
+                logger.info(f"RAG retrieval count: {len(reference_cases)}")
                 formatted_cases = ""
                 if relevant_cases:
                     for i, case in enumerate(relevant_cases):
@@ -2727,6 +2739,12 @@ def analyze_resume(current_user_id):
 5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
 6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
+8. **技能词条白名单/黑名单规则（强制）**：
+   - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
+   - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
+   - 技能词条必须短、可检索、可复用：每条建议控制在 2-12 字符（英文术语可适当放宽），不得是完整句。
+   - 技能词条禁止使用斜杠拼接长短语（如“A/B/C/...”），如需多个技能请拆分为多个数组元素。
+   - 如果某项更适合写在工作经历中，请不要放在 skills 建议里。
 {rag_context}
 """
 
@@ -2853,7 +2871,8 @@ def analyze_resume(current_user_id):
                     'suggestions': ai_result.get('suggestions', []),
                     'strengths': ai_result.get('strengths', []),
                     'weaknesses': ai_result.get('weaknesses', []),
-                    'missingKeywords': ai_result.get('missingKeywords', [])
+                    'missingKeywords': ai_result.get('missingKeywords', []),
+                    'reference_cases': reference_cases
                 }), 200
 
             except Exception as ai_error:
@@ -2874,7 +2893,8 @@ def analyze_resume(current_user_id):
                     'suggestions': suggestions,
                     'strengths': ['结构清晰', '格式规范'],
                     'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
-                    'missingKeywords': [] if not job_description else ['智能分析暂不可用']
+                    'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
+                    'reference_cases': reference_cases
                 }), 200
 
         score = calculate_resume_score(resume_data)
@@ -2886,7 +2906,8 @@ def analyze_resume(current_user_id):
             'suggestions': suggestions,
             'strengths': ['结构清晰', '格式规范'],
             'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
-            'missingKeywords': [] if not job_description else ['正在分析关键词...']
+            'missingKeywords': [] if not job_description else ['正在分析关键词...'],
+            'reference_cases': reference_cases
         }), 200
 
     except Exception as e:

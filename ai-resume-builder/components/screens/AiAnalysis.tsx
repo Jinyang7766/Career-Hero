@@ -138,6 +138,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (!text) return '';
     return text;
   };
+  const isProfessionalSkillToken = (token: string) => {
+    const t = token.trim();
+    if (!t || t.length < 2) return false;
+
+    const keepPatterns = [
+      /^(sql|python|java|javascript|typescript|excel|tableau|power\s?bi|scrm|crm|ltv|roi|cpc|cpa|cpm|gmv|erp|wms|sap|vba|ga4|seo|sem|a\/b\s?test|ab\s?test)$/i,
+      /(生意参谋|京东商智|万相台|直通车|引力魔方|京东快车|千川|巨量引擎|飞书|钉钉|notion|chatgpt|zapier|make|airtable|supabase|photoshop|figma)/i,
+      /(数据分析|数据建模|数据可视化|用户分层|增长模型|库存预测|供应链scm|供应链管理|定价模型)/i
+    ];
+    if (keepPatterns.some((p) => p.test(t))) return true;
+
+    const rejectPatterns = [
+      /(全链路|运营|打法|策略|构建|打造|推进|落地|执行|管理|策划|复盘|对接|沟通|协同|增长|提效|优化|闭环|主导|负责)/,
+      /(直播间|店群|主播|私域|社群)/,
+      /(体系|方案|流程|SOP)/i
+    ];
+    if (rejectPatterns.some((p) => p.test(t))) return false;
+
+    // 默认保留更像“名词型工具/技术”的短词，过滤长句型表述
+    return t.length <= 12;
+  };
   const toSkillList = (value: any): string[] => {
     const rawList = Array.isArray(value)
       ? value
@@ -154,7 +175,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const cleaned = expanded
       .map(normalizeSkillToken)
       .filter(Boolean)
-      .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v);
+      .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v)
+      .filter((v) => isProfessionalSkillToken(v));
     return Array.from(new Set(cleaned));
   };
 
