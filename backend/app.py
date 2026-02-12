@@ -98,7 +98,8 @@ gemini_request_count = 0  # Track daily usage
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-3-pro-preview')
+    # Use Gemini 2.0 Flash as default model - fast & capable
+    model = genai.GenerativeModel('gemini-2.0-flash-exp')
 else:
     model = None
 
@@ -848,7 +849,7 @@ def request_deletion(current_user_id):
             result = supabase.table('users').update({'deletion_pending_until': deletion_until}).eq('id', current_user_id).execute()
             
         if result.data:
-            return jsonify({'message': '已申请注销，账号进入3天冷静期', 'deletion_pending_until': deletion_until}), 200
+            return jsonify({'message': '已申请注销，账号将在3天后清除', 'deletion_pending_until': deletion_until}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
@@ -2121,8 +2122,8 @@ def extract_text_multimodal(file_bytes):
             return ""
 
         genai.configure(api_key=GEMINI_API_KEY)
-        # 使用 pro 模型，视觉能力更强
-        vision_model = genai.GenerativeModel('gemini-3-pro-preview')
+        # 使用 Gemini 2.0 Flash 模型，视觉能力强且速度快
+        vision_model = genai.GenerativeModel('gemini-2.0-flash-exp')
         
         prompt = "你是一位专业的简历解析专家。请阅读这张简历图片，并将其中所有的文字内容完整、准确地提取出来，保持原有的段落和逻辑结构。不需要返回 JSON，只需要提取出的原始文本。"
         
@@ -2152,7 +2153,7 @@ def parse_resume_text_with_ai(resume_text):
     logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
 
     genai.configure(api_key=GEMINI_API_KEY)
-    ai_model = genai.GenerativeModel('gemini-3-pro-preview')
+    ai_model = genai.GenerativeModel('gemini-2.0-flash-exp')
 
     prompt = f"""
     你是一位顶尖的简历解析专家。请分析以下简历文本，并将其转换为精确的结构化 JSON。
