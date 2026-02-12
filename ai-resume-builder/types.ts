@@ -13,6 +13,7 @@ export enum View {
   LOGIN = 'LOGIN',
   SIGNUP = 'SIGNUP',
   FORGOT_PASSWORD = 'FORGOT_PASSWORD',
+  DELETION_PENDING = 'DELETION_PENDING',
 }
 
 export interface NavProps {

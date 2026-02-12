@@ -17,6 +17,7 @@ import AiAnalysis from './components/screens/AiAnalysis';
 import Login from './components/screens/Login';
 import Signup from './components/screens/Signup';
 import ForgotPassword from './components/screens/ForgotPassword';
+import DeletionPending from './components/screens/DeletionPending';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -44,7 +45,18 @@ function App() {
           console.log('User authenticated:', session.user);
           setCurrentUser(session.user);
           setIsAuthenticated(true);
-          setCurrentView(View.DASHBOARD);
+
+          // IMPORTANT: Check for deletion pending status from database record
+          // because session.user.user_metadata might be stale
+          const profileResult = await DatabaseService.getUser(session.user.id);
+          if (profileResult.success && profileResult.data?.deletion_pending_until) {
+            // Update local user object with latest deletion status
+            const updatedUser = { ...session.user, deletion_pending_until: profileResult.data.deletion_pending_until };
+            setCurrentUser(updatedUser);
+            setCurrentView(View.DELETION_PENDING);
+          } else {
+            setCurrentView(View.DASHBOARD);
+          }
         } else {
           console.log('No active session');
           setCurrentView(View.LOGIN);
@@ -386,13 +398,15 @@ function App() {
       case View.SETTINGS:
         return <Settings {...commonProps} onLogout={handleLogout} />;
       case View.ACCOUNT_SECURITY:
-        return <AccountSecurity {...commonProps} />;
+        return <AccountSecurity {...commonProps} onLogout={handleLogout} />;
       case View.HELP:
         return <Help {...commonProps} />;
       case View.HISTORY:
         return <History {...commonProps} />;
       case View.ALL_RESUMES:
         return <AllResumes {...commonProps} />;
+      case View.DELETION_PENDING:
+        return <DeletionPending {...commonProps} onLogout={handleLogout} />;
       default:
         // Fallback based on auth status
         return isAuthenticated ? <Dashboard {...commonProps} createNewResume={() => setShowWizard(true)} /> : <Login setCurrentView={setCurrentView} onLogin={handleLogin} />;

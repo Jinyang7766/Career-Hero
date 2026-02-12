@@ -8,6 +8,7 @@ export interface UserProfile {
   name: string;
   created_at: string;
   updated_at: string;
+  deletion_pending_until?: string;
 }
 
 // 缓存项接口
@@ -33,13 +34,13 @@ const cacheWithExpiry = {
   get: (key: string): UserProfile | null => {
     const item = userCache.get(key);
     if (!item) return null;
-    
+
     // 检查缓存是否过期
     if (Date.now() - item.timestamp > CACHE_EXPIRY) {
       userCache.delete(key);
       return null;
     }
-    
+
     return item.profile;
   },
   delete: (key: string) => {
@@ -54,13 +55,13 @@ export const getUserFromLocalStorage = (): any => {
     if (userStr) {
       return JSON.parse(userStr);
     }
-    
+
     const sessionStr = localStorage.getItem('supabase_session');
     if (sessionStr) {
       const session = JSON.parse(sessionStr);
       return session.user;
     }
-    
+
     return null;
   } catch (error) {
     console.error('Error getting user from localStorage:', error);
@@ -82,10 +83,10 @@ export const useUserProfile = (userId?: string) => {
         // Get current authenticated user if no userId provided
         let targetUserId = userId;
         let authUser = null;
-        
+
         // 1. 优先从localStorage获取用户信息
         const localStorageUser = getUserFromLocalStorage();
-        
+
         if (!targetUserId) {
           // 2. 尝试从supabase获取当前用户
           const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -121,7 +122,7 @@ export const useUserProfile = (userId?: string) => {
             created_at: authUser.created_at || new Date().toISOString(),
             updated_at: new Date().toISOString()
           };
-          
+
           console.log('Using quick auth user profile for initial load:', quickProfile);
           setUserProfile(quickProfile);
           // 不设置loading为false，继续加载完整信息
@@ -129,7 +130,7 @@ export const useUserProfile = (userId?: string) => {
 
         // 5. 尝试从数据库获取完整用户信息（异步，不阻塞UI）
         const profileResult = await DatabaseService.getUser(targetUserId);
-        
+
         if (profileResult.success && profileResult.data) {
           console.log('User profile loaded from database:', profileResult.data);
           setUserProfile(profileResult.data);

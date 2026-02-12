@@ -504,13 +504,18 @@ def login():
         if not JWT_SECRET:
             return jsonify({'error': 'JWT_SECRET 未配置'}), 500
         token = jwt.encode({'user_id': user['id']}, JWT_SECRET, algorithm="HS256")
+        
+        # Check for pending deletion
+        deletion_pending_until = user.get('deletion_pending_until')
+        
         return jsonify({
             'message': '登录成功',
             'token': token,
             'user': {
                 'id': user['id'],
                 'email': user['email'],
-                'name': user['name']
+                'name': user['name'],
+                'deletion_pending_until': deletion_pending_until
             }
         }), 200
 
@@ -798,22 +803,78 @@ def get_profile(current_user_id):
                 return jsonify({'error': '用户不存在'}), 404
             
             # Return only selected fields
-            user_data = {
-                'id': user['id'],
-                'email': user['email'],
-                'name': user['name'],
-                'created_at': user['created_at']
-            }
+            return jsonify({
+                'id': user.get('id'),
+                'email': user.get('email'),
+                'name': user.get('name'),
+                'deletion_pending_until': user.get('deletion_pending_until')
+            }), 200
         else:
-            result = supabase.table('users').select('id, email, name, created_at').eq('id', current_user_id).execute()
-            
+            result = supabase.table('users').select('id,email,name,deletion_pending_until').eq('id', current_user_id).execute()
             if not result.data:
                 return jsonify({'error': '用户不存在'}), 404
-            
-            user_data = result.data[0]
+            return jsonify(result.data[0]), 200
+    except Exception as e:
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@app.route('/api/user/request-deletion', methods=['POST'])
+@token_required
+def request_deletion(current_user_id):
+    try:
+        from datetime import timedelta
+        # Default to 3 days grace period
+        deletion_until = (datetime.utcnow() + timedelta(days=3)).isoformat()
         
-        return jsonify({'user': user_data}), 200
-    
+        if is_mock_mode():
+            user = mock_users.get(current_user_id)
+            if not user: return jsonify({'error': '用户不存在'}), 404
+            user['deletion_pending_until'] = deletion_until
+            result = mock_supabase_response(data=[user])
+        else:
+            result = supabase.table('users').update({'deletion_pending_until': deletion_until}).eq('id', current_user_id).execute()
+            
+        if result.data:
+            return jsonify({'message': '已申请注销，账号将在3天后清除', 'deletion_pending_until': deletion_until}), 200
+        return jsonify({'error': '操作失败'}), 500
+    except Exception as e:
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@app.route('/api/user/cancel-deletion', methods=['POST'])
+@token_required
+def cancel_deletion(current_user_id):
+    try:
+        if is_mock_mode():
+            user = mock_users.get(current_user_id)
+            if not user: return jsonify({'error': '用户不存在'}), 404
+            user['deletion_pending_until'] = None
+            result = mock_supabase_response(data=[user])
+        else:
+            result = supabase.table('users').update({'deletion_pending_until': None}).eq('id', current_user_id).execute()
+            
+        if result.data:
+            return jsonify({'message': '已撤销注销申请'}), 200
+        return jsonify({'error': '操作失败'}), 500
+    except Exception as e:
+        return jsonify({'error': '服务器内部错误'}), 500
+
+@app.route('/api/user/delete-account-immediate', methods=['POST'])
+@token_required
+def delete_account_immediate(current_user_id):
+    try:
+        # Immediate deletion of all data
+        if is_mock_mode():
+            if current_user_id in mock_users: del mock_users[current_user_id]
+            if current_user_id in mock_resumes: del mock_resumes[current_user_id]
+            result = mock_supabase_response(data=[{'id': current_user_id}])
+        else:
+            # Delete resumes first (if not cascading)
+            supabase.table('resumes').delete().eq('user_id', current_user_id).execute()
+            # Delete user
+            result = supabase.table('users').delete().eq('id', current_user_id).execute()
+            
+        if result.data:
+            return jsonify({'message': '账号已立即永久注销'}), 200
+        return jsonify({'error': '操作失败'}), 500
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
 
