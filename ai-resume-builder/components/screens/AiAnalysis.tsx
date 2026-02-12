@@ -138,6 +138,39 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (!text) return '';
     return text;
   };
+  const toNounSkillToken = (raw: string) => {
+    let t = raw.trim();
+    if (!t) return '';
+
+    // 去掉常见动作词/过程词，尽量保留“工具/技术/方法”名词
+    const actionWords = [
+      '搭建', '构建', '设计', '训练', '微调', '精调', '调优', '优化', '执行', '推进', '落地', '管理',
+      '脚本', '自动化', '开发', '实现', '运营', '打造', '分析', '监控', '维护', '产出'
+    ];
+    actionWords.forEach((w) => {
+      t = t.replace(new RegExp(w, 'g'), '');
+    });
+
+    // 清理尾部连接词，避免“模型与”“流程和”这类残留
+    t = t
+      .replace(/[与和及、,\s]+$/g, '')
+      .replace(/^[与和及、,\s]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // 删除仅剩动作残片（如“精调”“优化”“自动化”）
+    if (/^(微调|精调|调优|优化|自动化|搭建|构建|设计|训练|开发|实现|运营|管理)$/.test(t)) {
+      return '';
+    }
+
+    // 语义归一：把泛化表达转成更硬核名词；若无法落到硬技能则在后续过滤
+    t = t
+      .replace(/智能化数据看板/g, '数据可视化')
+      .replace(/数据看板/g, '数据可视化')
+      .replace(/AI短视频分镜/g, '短视频内容策划');
+
+    return t;
+  };
   const isProfessionalSkillToken = (token: string) => {
     const t = token.trim();
     if (!t || t.length < 2) return false;
@@ -152,7 +185,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const rejectPatterns = [
       /(全链路|运营|打法|策略|构建|打造|推进|落地|执行|管理|策划|复盘|对接|沟通|协同|增长|提效|优化|闭环|主导|负责)/,
       /(直播间|店群|主播|私域|社群)/,
-      /(体系|方案|流程|SOP)/i
+      /(体系|方案|流程|SOP)/i,
+      /^(与|和|及).*/,
+      /(微调|精调|调优|自动化)$/,
+      /(短视频分镜|内容策划|智能化|看板)$/
     ];
     if (rejectPatterns.some((p) => p.test(t))) return false;
 
@@ -174,6 +210,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     );
     const cleaned = expanded
       .map(normalizeSkillToken)
+      .map(toNounSkillToken)
       .filter(Boolean)
       .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v)
       .filter((v) => isProfessionalSkillToken(v));
