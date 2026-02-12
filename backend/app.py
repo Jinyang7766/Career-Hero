@@ -19,9 +19,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 from pypdf import PdfReader
 from docx import Document
+import fitz  # PyMuPDF for PDF-to-image
 import io
 import base64
-import urllib.request
+import traceback
 import ipaddress
 import socket
 from playwright.sync_api import sync_playwright
@@ -1995,16 +1996,65 @@ def generate_resume_html(resume_data):
 
 def extract_text_from_pdf(file_bytes):
     """Extract text content from a PDF file (bytes)."""
-    reader = PdfReader(io.BytesIO(file_bytes))
-    pages_text = []
-    for page in reader.pages:
-        try:
-            page_text = page.extract_text() or ""
-        except Exception:
-            page_text = ""
-        if page_text:
-            pages_text.append(page_text)
-    return "\n".join(pages_text).strip()
+    try:
+        reader = PdfReader(io.BytesIO(file_bytes))
+        pages_text = []
+        for page in reader.pages:
+            try:
+                page_text = page.extract_text() or ""
+            except Exception:
+                page_text = ""
+            if page_text:
+                pages_text.append(page_text)
+        
+        text = "\n".join(pages_text).strip()
+        # 如果提取出的文字太少（比如扫描件），判断为需要 OCR
+        if len(text) < 50:
+            logger.info("PDF text extraction result too short, switching to multimodal OCR.")
+            return "[EXTERNAL_OCR_REQUIRED]"
+        return text
+    except Exception as e:
+        logger.error(f"Error in extract_text_from_pdf: {e}")
+        return "[EXTERNAL_OCR_REQUIRED]"
+
+def extract_text_multimodal(file_bytes):
+    """Use Gemini Vision to extract text from PDF pages converted to images."""
+    try:
+        logger.info("Starting multimodal resume parsing...")
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        images = []
+        
+        # 限制页数，防止超过 API 限制或过慢
+        max_pages = min(len(doc), 5)
+        for i in range(max_pages):
+            page = doc.load_page(i)
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2)) # 2x zoom for better OCR
+            img_bytes = pix.tobytes("png")
+            images.append({
+                "mime_type": "image/png",
+                "data": base64.b64encode(img_bytes).decode("utf-8")
+            })
+        
+        if not images:
+            return ""
+
+        genai.configure(api_key=GEMINI_API_KEY)
+        # 使用 pro 模型，视觉能力更强
+        vision_model = genai.GenerativeModel('gemini-3-pro-preview')
+        
+        prompt = "你是一位专业的简历解析专家。请阅读这张简历图片，并将其中所有的文字内容完整、准确地提取出来，保持原有的段落和逻辑结构。不需要返回 JSON，只需要提取出的原始文本。"
+        
+        # 构造内容列表 [prompt, img1, img2, ...]
+        content = [prompt]
+        for img in images:
+            content.append(img)
+            
+        response = vision_model.generate_content(content)
+        return response.text.strip()
+    except Exception as e:
+        logger.error(f"Multimodal extraction failed: {e}")
+        logger.error(traceback.format_exc())
+        return ""
 
 def extract_text_from_docx(file_bytes):
     """Extract text content from a DOCX file (bytes)."""
@@ -2020,61 +2070,65 @@ def parse_resume_text_with_ai(resume_text):
     logger.info(f"Starting resume parsing with AI, text length: {len(resume_text)}")
 
     genai.configure(api_key=GEMINI_API_KEY)
-    ai_model = genai.GenerativeModel('gemini-3-flash-preview')
+    ai_model = genai.GenerativeModel('gemini-3-pro-preview')
 
     prompt = f"""
-    请解析以下简历文本，并按如下 JSON 格式返回结构化数据：
+    你是一位顶尖的简历解析专家。请分析以下简历文本，并将其转换为精确的结构化 JSON。
+    
+    **解析准则：**
+    1. **语义优先**：理解标题含义。例如，“学业”、“教育经历”、“求学” -> `educations`；“实践”、“履历”、“工作背景”、“项目案例” -> `workExps` 或 `projects`。
+    2. **贪婪提取**：无论是否有明确标题，都要尽力识别姓名、电话、邮箱、现居地。
+    3. **关键词对标**：确保提取以下核心字段，即使简历中使用了同义词：
+       - `company`: 公司全称/机构名称。
+       - `position`: 职位/头衔。
+       - `school`: 学校全称。
+       - `major`: 专业名称。
+    4. **个人总结**：查找“自我评价”、“Summary”、“个人简介”等，存入 `personalInfo.summary`。
+    5. **日期规范**：统一为 YYYY-MM 格式。至今写为“至今”。
+    6. **纯净输出**：仅返回 JSON 块，不要包含任何 Markdown 语法标记。
+
+    **JSON 结构模板：**
     {{
         "personalInfo": {{
             "name": "",
             "title": "",
             "email": "",
             "phone": "",
-            "location": ""
+            "location": "",
+            "summary": ""
         }},
         "workExps": [
             {{
-                "company": "公司名称",
-                "position": "职位名称",
+                "company": "",
+                "position": "",
                 "startDate": "YYYY-MM",
                 "endDate": "YYYY-MM",
-                "description": "工作内容描述"
+                "description": ""
             }}
         ],
         "educations": [
             {{
-                "school": "学校名称",
-                "degree": "学历（本科/硕士/博士等）",
-                "major": "专业名称",
+                "school": "",
+                "degree": "本科/硕士/博士/等",
+                "major": "",
                 "startDate": "YYYY-MM",
                 "endDate": "YYYY-MM"
             }}
         ],
         "projects": [
             {{
-                "title": "项目名称",
-                "description": "项目描述",
-                "date": "时间段"
+                "title": "",
+                "description": "",
+                "date": ""
             }}
         ],
-        "skills": ["技能1", "技能2"]
+        "skills": []
     }}
 
-    严格规则：
-    1. **必须提取**：如果简历中包含，必须提取 **公司名称(company)**、**学校名称(school)** 和 **专业(major)**。不要遗漏。
-    2. **日期格式**：统一转换为 YYYY-MM 格式（如 2023-01）。至今写为 "至今"。
-    3. **教育背景**：
-       - `school`: 填写学校全名。
-       - `degree`: 仅填写学历层次（如：本科、硕士、学士、博士）。不要填专业。
-       - `major`: 填写具体专业名称（如：计算机科学与技术）。
-    4. **工作经历**：
-       - `company`: 填写公司全称。
-       - `position`: 填写职位/岗位名称。
-    5. 若有多段经历，请全部提取，不要遗漏。
-    6. 仅返回 JSON，禁止包含 Markdown 标记（如 ```json ... ```）。
-
-    简历文本：
+    **简历待解析文本内容：**
+    ---
     {resume_text}
+    ---
     """
 
     response = ai_model.generate_content(prompt)
@@ -2083,13 +2137,13 @@ def parse_resume_text_with_ai(resume_text):
     if not ai_result:
         raise RuntimeError('AI parse failed')
 
+    # 映射回系统内部格式
     parsed_data = {
         'personalInfo': ai_result.get('personalInfo', {}) or {},
         'workExps': ai_result.get('workExps', []) or [],
         'educations': ai_result.get('educations', []) or [],
         'projects': ai_result.get('projects', []) or [],
-        'skills': ai_result.get('skills', []) or [],
-        'gender': ''
+        'skills': ai_result.get('skills', []) or []
     }
 
     logger.info("Resume parsed successfully with AI")
@@ -2127,10 +2181,15 @@ def parse_pdf():
             return jsonify({'error': '文件内容为空'}), 400
         if is_pdf:
             resume_text = extract_text_from_pdf(file_bytes)
+            # 如果判定为需要 OCR
+            if resume_text == "[EXTERNAL_OCR_REQUIRED]":
+                resume_text = extract_text_multimodal(file_bytes)
         else:
             resume_text = extract_text_from_docx(file_bytes)
-        if not resume_text:
-            return jsonify({'error': '未能提取文本，请上传可复制文本的 PDF/DOCX。'}), 400
+            
+        if not resume_text or len(resume_text.strip()) < 10:
+            return jsonify({'error': '未能提取文本，且 OCR 识别失败。请上传内容清晰的 PDF/DOCX。'}), 400
+            
         parsed_data = parse_resume_text_with_ai(resume_text)
         return jsonify({'success': True, 'data': parsed_data})
     except Exception as e:
