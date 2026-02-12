@@ -97,27 +97,22 @@ CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or [_normalize_origin(o) for o in DEFAUL
 CORS(app, 
      resources={
          r"/api/*": {
-             "origins": CORS_ALLOWED_ORIGINS,
+             "origins": "*",
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
          }
      },
-     supports_credentials=True
+     supports_credentials=False
 )
 
 # Handle OPTIONS preflight
 @app.before_request
 def handle_options_request():
     if request.method == 'OPTIONS':
-        normalized_request_origin = _resolve_request_origin()
-        allow_origin = normalized_request_origin if normalized_request_origin in CORS_ALLOWED_ORIGINS else ''
         response = jsonify({'status': '成功'})
-        if allow_origin:
-            response.headers.add('Access-Control-Allow-Origin', allow_origin)
-            response.headers.add('Vary', 'Origin')
+        response.headers.add('Access-Control-Allow-Origin', '*')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        response.headers.add('Access-Control-Allow-Credentials', 'true')
         return response
 
 
@@ -127,13 +122,9 @@ def apply_cors_headers(response):
     Ensure CORS headers are present on actual responses as well (not only OPTIONS),
     otherwise browser may show `Failed to fetch` even when backend returns 200.
     """
-    normalized_request_origin = _resolve_request_origin()
-    if normalized_request_origin in CORS_ALLOWED_ORIGINS:
-        response.headers['Access-Control-Allow-Origin'] = normalized_request_origin
-        response.headers['Vary'] = 'Origin'
-        response.headers['Access-Control-Allow-Credentials'] = 'true'
-        response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
-        response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
     return response
 
 # Supabase configuration
