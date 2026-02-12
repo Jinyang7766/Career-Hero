@@ -141,12 +141,25 @@ GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-previ
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
 GEMINI_VISION_MODELS = [
+    GEMINI_RESUME_PARSE_MODEL,
     os.getenv('GEMINI_VISION_MODEL', '').strip(),
-    'gemini-3-pro-preview',
     'gemini-3-flash-preview'
 ]
 GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
 PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
+
+def get_ocr_model_candidates():
+    """Shared OCR model list used by both PDF OCR and JD screenshot OCR."""
+    models = []
+    for model_name in GEMINI_VISION_MODELS:
+        if not model_name:
+            continue
+        # Hard block deprecated/disabled model from any OCR path.
+        if model_name.strip() == 'gemini-3-pro-preview':
+            continue
+        if model_name not in models:
+            models.append(model_name)
+    return models
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -2213,7 +2226,7 @@ def extract_text_multimodal(file_bytes):
              img_bytes_decoded = base64.b64decode(img['data'])
              contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
             
-        for model_name in GEMINI_VISION_MODELS:
+        for model_name in get_ocr_model_candidates():
             try:
                 logger.info("Trying OCR model: %s", model_name)
                 response = gemini_client.models.generate_content(
@@ -2670,7 +2683,7 @@ def analyze_resume(current_user_id):
     "skills": 25,
     "format": 25
   }},
-  "summary": "简历整体评估简述（控制在50字以内）。",
+  "summary": "简历整体评估简述（控制在100字以内）。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -2718,7 +2731,7 @@ def analyze_resume(current_user_id):
     "skills": 20,
     "format": 25
   }},
-  "summary": "简历整体评估简述（控制在50字以内）。",
+  "summary": "简历整体评估简述（控制在100字以内）。",
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -2754,11 +2767,18 @@ def analyze_resume(current_user_id):
                     )
                 )
                 ai_result = parse_ai_response(response.text)
+                ensured_summary = ensure_analysis_summary(
+                    ai_result.get('summary', ''),
+                    ai_result.get('strengths', []),
+                    ai_result.get('weaknesses', []),
+                    ai_result.get('missingKeywords', []),
+                    bool(job_description)
+                )
 
                 return jsonify({
                     'score': ai_result.get('score', 70),
                     'scoreBreakdown': ai_result.get('scoreBreakdown', {'experience': 0, 'skills': 0, 'format': 0}),
-                    'summary': ai_result.get('summary', '智能分析完成，简历整体评估已生成。'),
+                    'summary': ensured_summary,
                     'suggestions': ai_result.get('suggestions', []),
                     'strengths': ai_result.get('strengths', []),
                     'weaknesses': ai_result.get('weaknesses', []),
@@ -2806,33 +2826,66 @@ def analyze_resume(current_user_id):
 @token_required
 def parse_screenshot(current_user_id):
     try:
-        data = request.get_json()
+        data = request.get_json() or {}
         image = data.get('image', '')
         if not image:
             return jsonify({'error': '图片不能为空'}), 400
 
         if gemini_client and check_gemini_quota():
             try:
-                prompt = "请从图片中提取职位描述文本，只返回提取结果，不要解释。请仅使用中文输出。"
-                from base64 import b64decode
-                import re
-                base64_data = re.sub('^data:image/.+;base64,', '', image)
-                image_data = b64decode(base64_data)
-                
-                contents = [
-                    prompt,
-                    types.Part.from_bytes(data=image_data, mime_type="image/png")
-                ]
-                
-                response = gemini_client.models.generate_content(
-                    model='gemini-3-pro-preview',
-                    contents=contents
+                prompt = (
+                    "请从图片中提取完整职位描述（JD）文本。"
+                    "尽可能保留原始分段和要点，删除与JD无关的噪声内容。"
+                    "仅返回可直接粘贴的中文文本，不要解释，不要JSON。"
                 )
-                return jsonify({'text': response.text.strip()})
+                from base64 import b64decode
+                mime_type = "image/png"
+                base64_data = image
+
+                # Support data URL from browser uploads: data:image/jpeg;base64,...
+                m = re.match(r'^data:(image/[a-zA-Z0-9.+-]+);base64,(.*)$', image, flags=re.DOTALL)
+                if m:
+                    mime_type = (m.group(1) or "image/png").strip().lower()
+                    base64_data = m.group(2)
+
+                image_data = b64decode(base64_data)
+
+                contents = [prompt, types.Part.from_bytes(data=image_data, mime_type=mime_type)]
+
+                candidate_models = get_ocr_model_candidates()
+
+                last_error = None
+                for model_name in candidate_models:
+                    try:
+                        response = gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=contents
+                        )
+                        text = (response.text or '').strip()
+                        if text:
+                            return jsonify({'success': True, 'text': text, 'model': model_name}), 200
+                    except Exception as model_err:
+                        last_error = model_err
+                        logger.warning(f"JD screenshot OCR failed on model {model_name}: {model_err}")
+
+                logger.error(f"JD screenshot OCR all models failed: {last_error}")
+                return jsonify({
+                    'success': False,
+                    'text': '',
+                    'error': 'JD截图识别失败，请尝试更清晰截图或直接粘贴JD文本。'
+                }), 200
             except Exception as ai_error:
                 logger.error(f"AI 截图解析失败: {ai_error}")
-                return jsonify({'text': '职位描述识别失败，请手动粘贴。'}), 200
-        return jsonify({'text': '职位描述识别失败，请手动粘贴。'}), 200
+                return jsonify({
+                    'success': False,
+                    'text': '',
+                    'error': 'JD截图识别失败，请稍后重试或手动粘贴。'
+                }), 200
+        return jsonify({
+            'success': False,
+            'text': '',
+            'error': 'AI服务不可用，请手动粘贴JD文本。'
+        }), 200
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
 
@@ -2963,6 +3016,43 @@ def parse_ai_response(response_text):
     except: pass
     return {'score': 75, 'strengths': [], 'weaknesses': [], 'suggestions': [], 'missingKeywords': []}
 
+def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_keywords=None, has_jd=False):
+    """
+    为分析总结提供长度与信息密度兜底，避免返回过短描述。
+    目标长度：约 90-180 字。
+    """
+    text = (summary or '').strip()
+    if len(text) >= 90:
+        return text
+
+    strengths = strengths or []
+    weaknesses = weaknesses or []
+    missing_keywords = missing_keywords or []
+
+    parts = []
+    if text:
+        parts.append(text)
+    else:
+        parts.append("简历具备一定基础，但当前表达深度和岗位贴合度仍有明显提升空间。")
+
+    clean_strengths = [str(s).strip() for s in strengths if str(s).strip()]
+    clean_weaknesses = [str(w).strip() for w in weaknesses if str(w).strip()]
+    clean_keywords = [str(k).strip() for k in missing_keywords if str(k).strip()]
+
+    if clean_strengths:
+        parts.append(f"优势方面：{'、'.join(clean_strengths[:2])}。")
+    if clean_weaknesses:
+        parts.append(f"短板主要在：{'、'.join(clean_weaknesses[:3])}。")
+    if has_jd and clean_keywords:
+        parts.append(f"与JD相比仍缺关键词：{'、'.join(clean_keywords[:5])}。")
+
+    parts.append("建议优先补充可量化成果、职责场景和业务结果，按STAR结构重写核心经历，以提升筛选通过率和岗位说服力。")
+
+    merged = ''.join(parts).strip()
+    if len(merged) > 200:
+        merged = merged[:200].rstrip('，,;； ') + '。'
+    return merged
+
 @app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
 @token_required
 def generate_resume(current_user_id):
@@ -3064,7 +3154,7 @@ def generate_resume(current_user_id):
 """
 
                 response = gemini_client.models.generate_content(
-                    model='gemini-3-pro-preview',
+                    model=GEMINI_ANALYSIS_MODEL,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json"
