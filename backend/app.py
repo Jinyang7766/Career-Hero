@@ -65,8 +65,12 @@ DEFAULT_CORS_ORIGINS = [
     "https://localhost:5173",
     "https://localhost:3000",
 ]
-ENV_CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
-CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or DEFAULT_CORS_ORIGINS
+
+def _normalize_origin(origin: str) -> str:
+    return (origin or "").strip().rstrip("/")
+
+ENV_CORS_ORIGINS = [_normalize_origin(o) for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if _normalize_origin(o)]
+CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or [_normalize_origin(o) for o in DEFAULT_CORS_ORIGINS]
 
 # CORS configuration
 CORS(app, 
@@ -85,7 +89,8 @@ CORS(app,
 def handle_options_request():
     if request.method == 'OPTIONS':
         request_origin = request.headers.get('Origin', '')
-        allow_origin = request_origin if request_origin in CORS_ALLOWED_ORIGINS else ''
+        normalized_request_origin = _normalize_origin(request_origin)
+        allow_origin = normalized_request_origin if normalized_request_origin in CORS_ALLOWED_ORIGINS else ''
         response = jsonify({'status': '成功'})
         if allow_origin:
             response.headers.add('Access-Control-Allow-Origin', allow_origin)
