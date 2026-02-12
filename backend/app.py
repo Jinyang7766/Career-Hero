@@ -96,6 +96,14 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
 GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
 gemini_request_count = 0  # Track daily usage
+GEMINI_TEXT_MODEL = os.getenv('GEMINI_TEXT_MODEL', 'gemini-3-flash-preview')
+GEMINI_VISION_MODELS = [
+    os.getenv('GEMINI_VISION_MODEL', '').strip(),
+    'gemini-3-pro-preview',
+    'gemini-3-flash-preview'
+]
+GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
+PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -2076,11 +2084,17 @@ def generate_resume_html(resume_data):
     env = Environment(loader=BaseLoader(), autoescape=True)
     return env.from_string(template_html).render(**context)
 
-def extract_text_from_pdf(file_bytes):
-    """Extract text content from a PDF file (bytes)."""
+def _normalize_extracted_text(text):
+    if not text:
+        return ""
+    # Collapse noisy whitespace to improve length/quality checks.
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _extract_text_via_pypdf(file_bytes):
+    pages_text = []
     try:
         reader = PdfReader(io.BytesIO(file_bytes))
-        pages_text = []
         for page in reader.pages:
             try:
                 page_text = page.extract_text() or ""
@@ -2088,16 +2102,47 @@ def extract_text_from_pdf(file_bytes):
                 page_text = ""
             if page_text:
                 pages_text.append(page_text)
-        
-        text = "\n".join(pages_text).strip()
-        # 如果提取出的文字太少（比如扫描件），判断为需要 OCR
-        if len(text) < 50:
-            logger.info("PDF text extraction result too short, switching to multimodal OCR.")
-            return "[EXTERNAL_OCR_REQUIRED]"
-        return text
     except Exception as e:
-        logger.error(f"Error in extract_text_from_pdf: {e}")
-        return "[EXTERNAL_OCR_REQUIRED]"
+        logger.warning(f"pypdf extraction failed: {e}")
+    return _normalize_extracted_text("\n".join(pages_text))
+
+
+def _extract_text_via_pymupdf(file_bytes):
+    pages_text = []
+    try:
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        for i in range(len(doc)):
+            try:
+                page = doc.load_page(i)
+                page_text = page.get_text("text") or ""
+            except Exception:
+                page_text = ""
+            if page_text:
+                pages_text.append(page_text)
+    except Exception as e:
+        logger.warning(f"PyMuPDF extraction failed: {e}")
+    return _normalize_extracted_text("\n".join(pages_text))
+
+
+def extract_text_from_pdf(file_bytes):
+    """Extract text content from a PDF file (bytes), fallback across multiple engines."""
+    text_pypdf = _extract_text_via_pypdf(file_bytes)
+    text_pymupdf = _extract_text_via_pymupdf(file_bytes)
+
+    # Prefer the longer candidate; different engines perform better on different PDFs.
+    text = text_pypdf if len(text_pypdf) >= len(text_pymupdf) else text_pymupdf
+
+    # If we can extract any meaningful text, skip OCR completely.
+    # Keep threshold low to avoid false negatives on short/compact resumes.
+    if len(text) >= 6:
+        return text
+
+    logger.info(
+        "PDF extraction result too short (pypdf=%s, pymupdf=%s), switching to OCR.",
+        len(text_pypdf),
+        len(text_pymupdf),
+    )
+    return "[EXTERNAL_OCR_REQUIRED]"
 
 def extract_text_multimodal(file_bytes):
     """Use Gemini Vision to extract text from PDF pages converted to images."""
@@ -2121,6 +2166,7 @@ def extract_text_multimodal(file_bytes):
             return ""
 
         if not gemini_client:
+            logger.warning("Gemini client is not configured, OCR is unavailable.")
             return ""
 
         prompt = "你是一位专业的简历解析专家。请阅读这张简历图片，并将其中所有的文字内容完整、准确地提取出来，保持原有的段落和逻辑结构。不需要返回 JSON，只需要提取出的原始文本。"
@@ -2133,13 +2179,22 @@ def extract_text_multimodal(file_bytes):
              img_bytes_decoded = base64.b64decode(img['data'])
              contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
             
-        print(f"DEBUG: Calling Gemini vision model with {len(contents)} parts")
-        response = gemini_client.models.generate_content(
-            model='gemini-3-pro-preview',
-            contents=contents
-        )
-        print(f"DEBUG: Gemini Vision response received. Text length: {len(response.text)}")
-        return response.text.strip()
+        for model_name in GEMINI_VISION_MODELS:
+            try:
+                logger.info("Trying OCR model: %s", model_name)
+                response = gemini_client.models.generate_content(
+                    model=model_name,
+                    contents=contents
+                )
+                text = (response.text or "").strip()
+                if text:
+                    logger.info("OCR success with model=%s, text_len=%s", model_name, len(text))
+                    return text
+            except Exception as model_err:
+                logger.warning("OCR model failed (%s): %s", model_name, model_err)
+                continue
+        logger.error("All OCR models failed or returned empty text.")
+        return ""
     except Exception as e:
         logger.error(f"Multimodal extraction failed: {e}")
         logger.error(traceback.format_exc())
@@ -2222,7 +2277,7 @@ def parse_resume_text_with_ai(resume_text):
 
     try:
         response = gemini_client.models.generate_content(
-            model='gemini-3-pro-preview',
+            model=GEMINI_TEXT_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
@@ -2265,6 +2320,7 @@ def parse_resume():
 def parse_pdf():
     """解析 PDF/DOCX 简历并返回结构化数据"""
     try:
+        debug_meta = {}
         if 'file' not in request.files:
             return jsonify({'error': '未上传文件'}), 400
         file = request.files['file']
@@ -2276,18 +2332,45 @@ def parse_pdf():
         if not is_pdf and not is_docx:
             return jsonify({'error': '仅支持 PDF 或 DOCX 文件'}), 400
         file_bytes = file.read()
+        debug_meta = {
+            'filename': file.filename,
+            'size_bytes': len(file_bytes),
+            'is_pdf': is_pdf,
+            'is_docx': is_docx
+        }
         if not file_bytes:
             return jsonify({'error': '文件内容为空'}), 400
         if is_pdf:
             resume_text = extract_text_from_pdf(file_bytes)
+            debug_meta['extract_stage'] = 'pdf_extract'
+            debug_meta['text_len_after_extract'] = len(resume_text or "")
             # 如果判定为需要 OCR
             if resume_text == "[EXTERNAL_OCR_REQUIRED]":
-                resume_text = extract_text_multimodal(file_bytes)
+                # Fallback: keep any short text if available, instead of failing immediately.
+                short_text = _extract_text_via_pymupdf(file_bytes) or _extract_text_via_pypdf(file_bytes)
+                debug_meta['text_len_short_fallback'] = len(short_text or "")
+                if short_text:
+                    logger.info("Using short extracted text fallback, length=%s", len(short_text))
+                    resume_text = short_text
+                else:
+                    if not gemini_client:
+                        payload = {'error': '当前服务未配置 OCR 能力。请上传可复制文本的 PDF，或改用 DOCX。'}
+                        if PDF_PARSE_DEBUG:
+                            payload['debug'] = {**debug_meta, 'stage': 'ocr_unavailable'}
+                        return jsonify(payload), 400
+                    debug_meta['extract_stage'] = 'ocr'
+                    resume_text = extract_text_multimodal(file_bytes)
+                    debug_meta['text_len_after_ocr'] = len(resume_text or "")
         else:
             resume_text = extract_text_from_docx(file_bytes)
+            debug_meta['extract_stage'] = 'docx_extract'
+            debug_meta['text_len_after_extract'] = len(resume_text or "")
             
-        if not resume_text or len(resume_text.strip()) < 10:
-            return jsonify({'error': '未能提取文本，且 OCR 识别失败。请上传内容清晰的 PDF/DOCX。'}), 400
+        if not resume_text or not resume_text.strip():
+            payload = {'error': '未能提取文本，且 OCR 识别失败。请上传内容清晰的 PDF/DOCX。'}
+            if PDF_PARSE_DEBUG:
+                payload['debug'] = {**debug_meta, 'stage': 'empty_text_after_extract'}
+            return jsonify(payload), 400
             
         parsed_data = parse_resume_text_with_ai(resume_text)
         return jsonify({'success': True, 'data': parsed_data})
