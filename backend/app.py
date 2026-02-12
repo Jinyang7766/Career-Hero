@@ -147,6 +147,7 @@ GEMINI_VISION_MODELS = [
 ]
 GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
 PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
+RAG_ENABLED = os.getenv('RAG_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 
 def get_ocr_model_candidates():
     """Shared OCR model list used by both PDF OCR and JD screenshot OCR."""
@@ -362,6 +363,18 @@ def token_required(f):
 def check_gemini_quota():
     """Local quota guard removed: rely on upstream Gemini quota and retries."""
     return True
+
+def parse_bool_flag(value, default=False):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    s = str(value).strip().lower()
+    if s in ('1', 'true', 'yes', 'on'):
+        return True
+    if s in ('0', 'false', 'no', 'off'):
+        return False
+    return default
 
 def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -2693,6 +2706,7 @@ def analyze_resume(current_user_id):
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
+        rag_enabled = parse_bool_flag(data.get('ragEnabled'), RAG_ENABLED)
         reference_cases = []
 
         if not resume_data:
@@ -2701,31 +2715,33 @@ def analyze_resume(current_user_id):
         if gemini_client and check_gemini_quota():
             try:
                 # --- RAG 检索逻辑开始 ---
-                relevant_cases = find_relevant_cases_vector(resume_data)
-                if isinstance(relevant_cases, list):
-                    reference_cases = [{
-                        'id': c.get('id'),
-                        'job_role': c.get('job_role'),
-                        'industry': c.get('industry'),
-                        'seniority': c.get('seniority'),
-                        'scenario': c.get('scenario'),
-                        'star': c.get('star', {}),
-                        'similarity': c.get('similarity')
-                    } for c in relevant_cases]
-                logger.info(f"RAG retrieval count: {len(reference_cases)}")
-                formatted_cases = ""
-                if relevant_cases:
-                    for i, case in enumerate(relevant_cases):
-                        formatted_cases += f"案例 {i+1}：{case.get('job_role')} ({case.get('industry')})\n"
-                        star = case.get('star', {})
-                        formatted_cases += f"- 情况: {star.get('situation')}\n"
-                        formatted_cases += f"- 任务: {star.get('task')}\n"
-                        formatted_cases += f"- 行动: {star.get('action')}\n"
-                        formatted_cases += f"- 结果: {star.get('result')}\n\n"
-                
                 rag_context = ""
-                if formatted_cases:
-                    rag_context = f"\n【参考案例】\n以下是该领域的优秀简历案例（STAR法则与Bullet Points示范），请参考其分析深度与用词风格：\n{formatted_cases}\n请注意：以上参考案例仅用于辅助你理解该领域的动作深度（Action Depth）和结果量化方式（Result Quantification）。请根据用户真实的经历进行优化，严禁生搬硬套案例中的具体业务内容，确保优化后的简历具有真实性。\n"
+                if rag_enabled:
+                    relevant_cases = find_relevant_cases_vector(resume_data)
+                    if isinstance(relevant_cases, list):
+                        reference_cases = [{
+                            'id': c.get('id'),
+                            'job_role': c.get('job_role'),
+                            'industry': c.get('industry'),
+                            'seniority': c.get('seniority'),
+                            'scenario': c.get('scenario'),
+                            'star': c.get('star', {}),
+                            'similarity': c.get('similarity')
+                        } for c in relevant_cases]
+                    logger.info(f"RAG retrieval count: {len(reference_cases)}")
+                    formatted_cases = ""
+                    if relevant_cases:
+                        for i, case in enumerate(relevant_cases):
+                            formatted_cases += f"案例 {i+1}：{case.get('job_role')} ({case.get('industry')})\n"
+                            star = case.get('star', {})
+                            formatted_cases += f"- 情况: {star.get('situation')}\n"
+                            formatted_cases += f"- 任务: {star.get('task')}\n"
+                            formatted_cases += f"- 行动: {star.get('action')}\n"
+                            formatted_cases += f"- 结果: {star.get('result')}\n\n"
+                    if formatted_cases:
+                        rag_context = f"\n【参考案例】\n以下是该领域的优秀简历案例（STAR法则与Bullet Points示范），请参考其分析深度与用词风格：\n{formatted_cases}\n请注意：以上参考案例仅用于辅助你理解该领域的动作深度（Action Depth）和结果量化方式（Result Quantification）。请根据用户真实的经历进行优化，严禁生搬硬套案例中的具体业务内容，确保优化后的简历具有真实性。\n"
+                else:
+                    logger.info("RAG disabled for this request (ragEnabled=false)")
                 # --- RAG 检索逻辑结束 ---
 
                 format_requirements = f"""
@@ -2876,7 +2892,8 @@ def analyze_resume(current_user_id):
                     'strengths': ai_result.get('strengths', []),
                     'weaknesses': ai_result.get('weaknesses', []),
                     'missingKeywords': ai_result.get('missingKeywords', []),
-                    'reference_cases': reference_cases
+                    'reference_cases': reference_cases,
+                    'rag_enabled': rag_enabled
                 }), 200
 
             except Exception as ai_error:
@@ -2898,7 +2915,8 @@ def analyze_resume(current_user_id):
                     'strengths': ['结构清晰', '格式规范'],
                     'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
                     'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
-                    'reference_cases': reference_cases
+                    'reference_cases': reference_cases,
+                    'rag_enabled': rag_enabled
                 }), 200
 
         score = calculate_resume_score(resume_data)
@@ -2911,7 +2929,8 @@ def analyze_resume(current_user_id):
             'strengths': ['结构清晰', '格式规范'],
             'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
             'missingKeywords': [] if not job_description else ['正在分析关键词...'],
-            'reference_cases': reference_cases
+            'reference_cases': reference_cases,
+            'rag_enabled': rag_enabled
         }), 200
 
     except Exception as e:

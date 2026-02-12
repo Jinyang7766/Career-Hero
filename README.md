@@ -4,7 +4,7 @@
 
 ## ✨ 核心功能
 
-- 🤖 **AI智能分析** - 基于 **Google Gemini 3 Pro** 的多维度简历评估
+- 🤖 **AI智能分析** - 基于 **Google Gemini 3** 的多维度简历评估
 - 🔍 **Vector RAG 增强** - 集成 Supabase `pgvector` 与语义检索，根据行业案例精准优化
 - 🎙️ **AI模拟面试** - 沉浸式模拟面试体验，针对性问题提问与实时反馈
 - 🎯 **猎头策略** - 专业的求职指导和面试技巧
@@ -92,6 +92,7 @@ GEMINI_ANALYSIS_MODEL=gemini-3-flash-preview
 GEMINI_INTERVIEW_MODEL=gemini-3-flash-preview
 GEMINI_VISION_MODEL=gemini-3-pro-preview
 PDF_PARSE_DEBUG=1  # 开启 PDF 解析详细调试
+RAG_ENABLED=1      # 全局 RAG 检索开关 (1=开启, 0=关闭)
 ```
 
 启动后端服务：

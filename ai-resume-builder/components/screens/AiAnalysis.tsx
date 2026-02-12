@@ -264,7 +264,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         const school = (edu.school || edu.title || '').trim();
         const degree = (edu.degree || '').trim();
         const major = (edu.major || edu.subtitle || '').trim();
-        const composed = [school, degree, major].filter(Boolean).join(' | ');
+        const parts = [school, degree, major].filter(Boolean);
+        const uniqueParts: string[] = [];
+        const seen = new Set<string>();
+        parts.forEach((p) => {
+          const key = p.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          uniqueParts.push(p);
+        });
+        const composed = uniqueParts.join(' | ');
         if (composed) return composed;
       }
 
