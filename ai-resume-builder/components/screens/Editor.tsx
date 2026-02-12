@@ -36,6 +36,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const pdfInputRef = useRef<HTMLInputElement>(null);
   const autosaveIntervalRef = useRef<number | null>(null);
   const lastAutosavedRef = useRef<string>('');
+  const latestResumeDataRef = useRef<ResumeData>(resumeData);
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
   const [hasTouchedProjects, setHasTouchedProjects] = useState(false);
@@ -52,6 +53,10 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   const [currentStep, setCurrentStep] = useState<WizardStep>('import');
 
   const [summary, setSummary] = useState(resumeData?.summary || '');
+
+  useEffect(() => {
+    latestResumeDataRef.current = resumeData;
+  }, [resumeData]);
 
   // Sync summary state to resumeData whenever it changes
   useEffect(() => {
@@ -156,15 +161,23 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       window.clearInterval(autosaveIntervalRef.current);
     }
 
+    // Initialize baseline snapshot for this resume to avoid unnecessary writes.
+    lastAutosavedRef.current = JSON.stringify(latestResumeDataRef.current);
+
     autosaveIntervalRef.current = window.setInterval(async () => {
       try {
-        const serialized = JSON.stringify(resumeData);
+        const currentData = latestResumeDataRef.current;
+        if (!currentData?.id) return;
+        const serialized = JSON.stringify(currentData);
         if (serialized === lastAutosavedRef.current) return;
         setIsAutosaving(true);
-        await DatabaseService.updateResume(String(resumeData.id), {
-          resume_data: resumeData,
+        const saveResult = await DatabaseService.updateResume(String(currentData.id), {
+          resume_data: currentData,
           updated_at: new Date().toISOString()
         });
+        if (!saveResult?.success) {
+          throw saveResult?.error || new Error('Auto-save failed');
+        }
         lastAutosavedRef.current = serialized;
         const now = new Date();
         const timeLabel = now.toLocaleTimeString('zh-CN', {
@@ -188,7 +201,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
           };
           const formatted = formatDateTime(now.toISOString()).replace(/[^0-9\-:\s]/g, '');
           setAllResumes((prev: any) => (prev || []).map((r: any) =>
-            r.id === resumeData.id ? { ...r, date: formatted } : r
+            r.id === currentData.id ? { ...r, date: formatted } : r
           ));
         }
       } catch (error) {
