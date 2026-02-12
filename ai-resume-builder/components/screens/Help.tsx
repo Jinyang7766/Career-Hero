@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { ScreenProps } from '../../types';
+import { buildApiUrl } from '../../src/api-config';
 
 const Help: React.FC<ScreenProps> = ({ goBack }) => {
   const [images, setImages] = useState<string[]>([]);
@@ -60,7 +61,7 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
         }
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/feedback`, {
+      const response = await fetch(buildApiUrl('/api/feedback'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import { DatabaseService } from '../../src/database-service';
+import { buildApiUrl } from '../../src/api-config';
 import BottomNav from '../BottomNav';
 
 // --- Helper Functions ---
@@ -542,7 +543,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
         filename: resumeTitle
       };
       if (htmlContent) payload.htmlContent = htmlContent;
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'}/api/export-pdf`, {
+      const response = await fetch(buildApiUrl('/api/export-pdf'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

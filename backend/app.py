@@ -57,18 +57,22 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# CORS origin allowlist
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:5174",
+    "https://localhost:5173",
+    "https://localhost:3000",
+]
+ENV_CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or DEFAULT_CORS_ORIGINS
+
 # CORS configuration
 CORS(app, 
      resources={
          r"/api/*": {
-             "origins": [
-                 "*",  # Allow all origins; restrict in production
-                 "http://localhost:5173",
-                 "http://localhost:3000",
-                 "http://localhost:5174",
-                 "https://localhost:5173",
-                 "https://localhost:3000"
-             ],
+             "origins": CORS_ALLOWED_ORIGINS,
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
             "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
          }
@@ -80,8 +84,12 @@ CORS(app,
 @app.before_request
 def handle_options_request():
     if request.method == 'OPTIONS':
+        request_origin = request.headers.get('Origin', '')
+        allow_origin = request_origin if request_origin in CORS_ALLOWED_ORIGINS else ''
         response = jsonify({'status': '成功'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        if allow_origin:
+            response.headers.add('Access-Control-Allow-Origin', allow_origin)
+            response.headers.add('Vary', 'Origin')
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
         response.headers.add('Access-Control-Allow-Credentials', 'true')
@@ -94,9 +102,12 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 
 # Google Gemini AI configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
-GEMINI_QUOTA_LIMIT = 20  # Free tier daily limit
-gemini_request_count = 0  # Track daily usage
-GEMINI_TEXT_MODEL = os.getenv('GEMINI_TEXT_MODEL', 'gemini-3-flash-preview')
+# 上传/读取简历文本解析模型
+GEMINI_RESUME_PARSE_MODEL = os.getenv('GEMINI_RESUME_PARSE_MODEL', 'gemini-2.5-flash-lite')
+# 简历分析（优化建议）模型
+GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
+# 面试对话模型
+GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
 GEMINI_VISION_MODELS = [
     os.getenv('GEMINI_VISION_MODEL', '').strip(),
     'gemini-3-pro-preview',
@@ -271,49 +282,40 @@ def token_required(f):
         if not auth_header:
             return jsonify({'message': '缺少 Authorization 请求头'}), 401
 
-        token = auth_header.split(" ")[1] if " " in auth_header else auth_header
+        token = auth_header.split(" ", 1)[1].strip() if " " in auth_header else auth_header.strip()
+        if not token:
+            return jsonify({'message': 'Token 为空'}), 401
 
-        # --- 临时修复 ---
-        # 1. 尝试直接解码而不验证签名
-        try:
-            payload = jwt.decode(token, options={"verify_signature": False})
-            user_id = payload.get('sub') or payload.get('user_id')
-
-            if user_id:
-                print(f"DEBUG: Auth Success (Skip Verify). User: {user_id}")
-                return f(user_id, *view_args, **view_kwargs)
-        except Exception as e:
-            print(f"DEBUG: Payload decode failed: {str(e)}")
-
-        # 2. 调用 Supabase 验证用户
-        if hasattr(supabase, 'auth'):
+        # 1) 优先验证 Supabase access token
+        if supabase and hasattr(supabase, 'auth'):
             try:
                 user_res = supabase.auth.get_user(token)
-                if user_res and user_res.user:
+                if user_res and user_res.user and getattr(user_res.user, 'id', None):
                     return f(user_res.user.id, *view_args, **view_kwargs)
             except Exception as se:
-                print(f"DEBUG: Supabase SDK failed: {str(se)}")
+                logger.warning(f"Supabase token verify failed: {se}")
 
-        # 验证失败
+        # 2) 兼容后端自签 token（JWT_SECRET）
+        try:
+            payload = jwt.decode(
+                token,
+                JWT_SECRET,
+                algorithms=["HS256"],
+                options={"verify_aud": False}
+            )
+            user_id = payload.get('sub') or payload.get('user_id') or payload.get('id')
+            if user_id:
+                return f(user_id, *view_args, **view_kwargs)
+        except Exception as je:
+            logger.warning(f"Custom JWT verify failed: {je}")
+
+        # 验证失败（不再允许无验签放行）
         return jsonify({'message': 'Token 无效或已过期，请重新登录'}), 401
 
     return decorated
 
 def check_gemini_quota():
-    """Check if Gemini API quota is available"""
-    global gemini_request_count
-    
-    # For development environment, disable quota check to avoid rate limiting issues
-    # In production, this should be stored in database with daily reset
-    if os.environ.get('FLASK_ENV') == 'development':
-        return True
-    
-    # Simple quota check - in production, this should be stored in database
-    if gemini_request_count >= GEMINI_QUOTA_LIMIT:
-        return False
-    
-    gemini_request_count += 1
-    print(f"Gemini API request count: {gemini_request_count}/{GEMINI_QUOTA_LIMIT}")
+    """Local quota guard removed: rely on upstream Gemini quota and retries."""
     return True
 
 def validate_email(email):
@@ -2206,6 +2208,144 @@ def extract_text_from_docx(file_bytes):
     paragraphs = [p.text for p in doc.paragraphs if p.text]
     return "\n".join(paragraphs).strip()
 
+
+def _parse_json_object_from_text(response_text):
+    """Try parse a JSON object from model output; return None on failure."""
+    if not response_text:
+        return None
+    try:
+        import json
+        start = response_text.find('{')
+        end = response_text.rfind('}') + 1
+        if start != -1 and end > start:
+            return json.loads(response_text[start:end])
+    except Exception:
+        return None
+    return None
+
+
+def _is_missing_resume_core_fields(parsed_data):
+    personal = parsed_data.get('personalInfo', {}) or {}
+    work_exps = parsed_data.get('workExps', []) or []
+    educations = parsed_data.get('educations', []) or []
+
+    summary_missing = not (personal.get('summary') or '').strip()
+    work_missing = (not work_exps) or any(
+        not (w.get('company') or '').strip() or not (w.get('position') or '').strip()
+        for w in work_exps
+    )
+    edu_missing = (not educations) or any(
+        not (e.get('school') or '').strip() or not (e.get('major') or '').strip()
+        for e in educations
+    )
+    return summary_missing or work_missing or edu_missing
+
+
+def _normalize_parsed_resume_result(ai_result):
+    """Map potential alias keys to canonical fields used by frontend."""
+    ai_result = ai_result or {}
+    personal = ai_result.get('personalInfo') or ai_result.get('personal') or {}
+    work_exps = ai_result.get('workExps') or ai_result.get('workExperience') or ai_result.get('experiences') or []
+    educations = ai_result.get('educations') or ai_result.get('education') or []
+    projects = ai_result.get('projects') or ai_result.get('projectExperience') or []
+    skills = ai_result.get('skills') or ai_result.get('skillSet') or []
+
+    if isinstance(skills, str):
+        skills = [s.strip() for s in re.split(r"[，,、/\n]", skills) if s.strip()]
+
+    return {
+        'personalInfo': {
+            'name': personal.get('name', '') or '',
+            'title': personal.get('title') or personal.get('jobTitle') or '',
+            'email': personal.get('email', '') or '',
+            'phone': personal.get('phone') or personal.get('mobile') or '',
+            'location': personal.get('location') or personal.get('city') or '',
+            'summary': personal.get('summary') or personal.get('profile') or personal.get('selfIntro') or ''
+        },
+        'workExps': work_exps if isinstance(work_exps, list) else [],
+        'educations': educations if isinstance(educations, list) else [],
+        'projects': projects if isinstance(projects, list) else [],
+        'skills': skills if isinstance(skills, list) else []
+    }
+
+
+def _repair_missing_core_fields_with_ai(resume_text, parsed_data):
+    """Second-pass extraction for core fields when first-pass misses key info."""
+    if not gemini_client:
+        return parsed_data
+    if not _is_missing_resume_core_fields(parsed_data):
+        return parsed_data
+
+    logger.info("Core fields missing after first parse, running second-pass extraction.")
+    repair_prompt = f"""
+你是简历字段提取专家。请只做信息提取，不要润色。
+从以下简历文本中尽最大可能提取：
+1) personalInfo.summary（个人总结/自我评价）
+2) workExps[].company 和 workExps[].position（公司名称与职位）
+3) educations[].school 和 educations[].major（学校与专业）
+
+要求：
+- 仅返回 JSON，不要解释。
+- 保留原文信息，不要编造。
+- 如果某字段确实没有，返回空字符串。
+
+输出格式：
+{{
+  "personalInfo": {{"summary": ""}},
+  "workExps": [{{"company": "", "position": ""}}],
+  "educations": [{{"school": "", "major": ""}}]
+}}
+
+简历文本：
+---
+{resume_text}
+---
+"""
+    try:
+        response = gemini_client.models.generate_content(
+            model=GEMINI_RESUME_PARSE_MODEL,
+            contents=repair_prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json")
+        )
+        repair_json = _parse_json_object_from_text(response.text) or {}
+    except Exception as e:
+        logger.warning(f"Second-pass extraction failed: {e}")
+        return parsed_data
+
+    personal = parsed_data.get('personalInfo', {}) or {}
+    repaired_personal = repair_json.get('personalInfo', {}) or {}
+    if not (personal.get('summary') or '').strip():
+        personal['summary'] = (repaired_personal.get('summary') or '').strip()
+    parsed_data['personalInfo'] = personal
+
+    repaired_work = repair_json.get('workExps', []) or []
+    work_exps = parsed_data.get('workExps', []) or []
+    if not work_exps and repaired_work:
+        parsed_data['workExps'] = repaired_work
+    else:
+        for i, item in enumerate(work_exps):
+            if i >= len(repaired_work):
+                break
+            if not (item.get('company') or '').strip():
+                item['company'] = repaired_work[i].get('company', '')
+            if not (item.get('position') or '').strip():
+                item['position'] = repaired_work[i].get('position', '')
+
+    repaired_edu = repair_json.get('educations', []) or []
+    educations = parsed_data.get('educations', []) or []
+    if not educations and repaired_edu:
+        parsed_data['educations'] = repaired_edu
+    else:
+        for i, item in enumerate(educations):
+            if i >= len(repaired_edu):
+                break
+            if not (item.get('school') or '').strip():
+                item['school'] = repaired_edu[i].get('school', '')
+            if not (item.get('major') or '').strip():
+                item['major'] = repaired_edu[i].get('major', '')
+
+    return parsed_data
+
 def parse_resume_text_with_ai(resume_text):
     """Parse resume text into structured data via AI."""
     if not resume_text.strip():
@@ -2277,7 +2417,7 @@ def parse_resume_text_with_ai(resume_text):
 
     try:
         response = gemini_client.models.generate_content(
-            model=GEMINI_TEXT_MODEL,
+            model=GEMINI_RESUME_PARSE_MODEL,
             contents=prompt,
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
@@ -2286,19 +2426,12 @@ def parse_resume_text_with_ai(resume_text):
     except Exception as e:
         logger.error(f"AI parse failed: {e}")
         raise RuntimeError('AI parse failed')
-    ai_result = parse_ai_response(response.text)
-
+    ai_result = _parse_json_object_from_text(response.text)
     if not ai_result:
         raise RuntimeError('AI parse failed')
 
-    # 映射回系统内部格式
-    parsed_data = {
-        'personalInfo': ai_result.get('personalInfo', {}) or {},
-        'workExps': ai_result.get('workExps', []) or [],
-        'educations': ai_result.get('educations', []) or [],
-        'projects': ai_result.get('projects', []) or [],
-        'skills': ai_result.get('skills', []) or []
-    }
+    parsed_data = _normalize_parsed_resume_result(ai_result)
+    parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
 
     logger.info("Resume parsed successfully with AI")
     return parsed_data
@@ -2526,7 +2659,7 @@ def analyze_resume(current_user_id):
 """
 
                 response = gemini_client.models.generate_content(
-                    model='gemini-3-pro-preview',
+                    model=GEMINI_ANALYSIS_MODEL,
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json"
@@ -2651,16 +2784,23 @@ def ai_chat(current_user_id):
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
                 response = gemini_client.models.generate_content(
-                    model='gemini-3-pro-preview',
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json"
-                    )
+                    model=GEMINI_INTERVIEW_MODEL,
+                    contents=prompt
                 )
-                
-                # Parse JSON
-                parsed_json = json.loads(response.text)
-                return jsonify({'response': parsed_json})
+
+                raw_text = (response.text or "").strip()
+                # Defensive normalization: if model still returns JSON-like text, extract the reply field.
+                parsed = _parse_json_object_from_text(raw_text)
+                if isinstance(parsed, dict):
+                    raw_text = (
+                        parsed.get('response')
+                        or parsed.get('text')
+                        or parsed.get('message')
+                        or parsed.get('reply')
+                        or raw_text
+                    )
+
+                return jsonify({'response': raw_text if isinstance(raw_text, str) and raw_text.strip() else '感谢你的回答，我们继续下一题。'})
             except Exception as ai_error:
                 logger.error(f"AI 面试失败: {ai_error}")
                 return jsonify({'response': '面试官暂时开小差了，请稍后再试。'}), 200

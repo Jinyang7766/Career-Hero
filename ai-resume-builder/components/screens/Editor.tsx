@@ -2,6 +2,7 @@
 import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import { buildApiUrl } from '../../src/api-config';
 import ImportStep from '../editor/steps/ImportStep';
 import PersonalStep from '../editor/steps/PersonalStep';
 import WorkStep from '../editor/steps/WorkStep';
@@ -288,7 +289,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
     setTextError('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/parse-resume`, {
+      const response = await fetch(buildApiUrl('/api/ai/parse-resume'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -328,7 +329,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/parse-pdf`, {
+      const response = await fetch(buildApiUrl('/api/parse-pdf'), {
         method: 'POST',
         body: formData
       });
@@ -926,5 +927,4 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 };
 
 export default Editor;
-
 

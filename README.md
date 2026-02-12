@@ -86,6 +86,12 @@ cp .env.example .env
 SUPABASE_URL=your-supabase-url
 SUPABASE_KEY=your-supabase-key
 JWT_SECRET=your-jwt-secret-key
+# AI 模型细粒度控制 (可选)
+GEMINI_RESUME_PARSE_MODEL=gemini-2.5-flash-lite
+GEMINI_ANALYSIS_MODEL=gemini-3-flash-preview
+GEMINI_INTERVIEW_MODEL=gemini-3-flash-preview
+GEMINI_VISION_MODEL=gemini-3-pro-preview
+PDF_PARSE_DEBUG=1  # 开启 PDF 解析详细调试
 ```
 
 启动后端服务：
@@ -223,6 +229,10 @@ backend/
    SUPABASE_URL=your_supabase_url
    SUPABASE_KEY=your_supabase_key
    JWT_SECRET=your_jwt_secret
+   # 生产环境建议设置具体模型以保证成本和效果平衡
+   GEMINI_RESUME_PARSE_MODEL=gemini-2.5-flash-lite
+   GEMINI_ANALYSIS_MODEL=gemini-3-flash-preview
+   GEMINI_INTERVIEW_MODEL=gemini-3-flash-preview
    ```
 6. **创建Web Service** - 自动部署！
 
@@ -285,9 +295,13 @@ CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
 ## 📝 更新日志
 
 ### v1.2.0 (2026-02-12)
-- 🤖 **模型升级**：全面升级至 `gemini-3-pro-preview`，大幅提升分析深度与逻辑推理能力
+- 🤖 **模型升级**：全面支持 Gemini 3.0 系列模型，并引入细粒度模型控制：
+  - `GEMINI_RESUME_PARSE_MODEL`: 专门用于高效率简历解析
+  - `GEMINI_ANALYSIS_MODEL`: 驱动深度简历诊断
+  - `GEMINI_INTERVIEW_MODEL`: 沉浸式模拟面试
 - 🔍 **RAG 向量检索**：引入 Supabase `pgvector`，实现基于语义匹配的“行业对标”案例库
-- 🛡️ **三层检索机制**：实现 (职级匹配 -> 跨行匹配 -> 通用兜底) 的鲁棒检索架构
+- 🛡️ **混合解析架构**：实现 (PyMuPDF -> PyPDF -> Gemini Vision OCR) 的三级降级 PDF 解析机制，大幅提升扫描件识别率
+- 🧪 **调试增强**：新增 `PDF_PARSE_DEBUG` 模式，支持实时追踪解析链路详情
 - 🧪 **数据同步工具**：新增 `seed_cases.py`，支持 3072 维向量的高质量语料上传
 
 ### v1.1.0 (2026-02-09)

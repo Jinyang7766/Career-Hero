@@ -3,6 +3,7 @@ import { ScreenProps, ResumeData, View } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { AICacheService } from '../../src/ai-cache-service';
+import { buildApiUrl } from '../../src/api-config';
 
 interface Suggestion {
   id: string;
@@ -824,7 +825,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const maskedResumeData = masker.maskObject(resumeData);
       const maskedJdText = masker.maskText(jdText || '');
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/analyze`, {
+      const response = await fetch(buildApiUrl('/api/ai/analyze'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1317,7 +1318,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         }
 
         // 调用后端API进行OCR识别
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/parse-screenshot`, {
+        const response = await fetch(buildApiUrl('/api/ai/parse-screenshot'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -1761,7 +1762,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
 
-      const apiEndpoint = `${import.meta.env.VITE_API_BASE_URL}/api/ai/chat`;
+      const apiEndpoint = buildApiUrl('/api/ai/chat');
 
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';

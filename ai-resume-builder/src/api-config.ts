@@ -1,20 +1,11 @@
-// API配置文件
-export const API_CONFIG = {
-  // 开发环境
-  development: {
-    baseURL: 'http://localhost:5000'
-  },
-  // 生产环境 - 从环境变量读取
-  production: {
-    baseURL: import.meta.env.VITE_API_BASE_URL || 'https://your-backend-url.onrender.com'
-  }
-};
+const DEFAULT_API_BASE_URL = 'http://localhost:5000';
 
-// 获取当前环境的API配置
-export const getAPIConfig = () => {
-  const env = import.meta.env.MODE || 'development';
-  return API_CONFIG[env as keyof typeof API_CONFIG] || API_CONFIG.development;
-};
+const normalizeBaseUrl = (value: string) => value.replace(/\/+$/, '');
 
-// 导出API基础URL
-export const API_BASE_URL = getAPIConfig().baseURL;
+const envBase = (import.meta.env.VITE_API_BASE_URL || '').trim();
+export const API_BASE_URL = normalizeBaseUrl(envBase || DEFAULT_API_BASE_URL);
+
+export const buildApiUrl = (path: string) => {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+};

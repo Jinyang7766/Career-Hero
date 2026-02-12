@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ResumeData } from '../types';
+import { buildApiUrl } from '../src/api-config';
 
 interface ResumeImportDialogProps {
   isOpen: boolean;
@@ -29,7 +30,7 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
       console.log('开始智能解析简历...');
       
       // 调用 AI 解析接口
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/api/ai/parse-resume`, {
+      const response = await fetch(buildApiUrl('/api/ai/parse-resume'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -69,13 +70,34 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
     setError('');
 
     try {
-      console.log('PDF导入功能暂未实现...');
-      setError('PDF导入功能暂未实现，请使用文本导入');
-    } catch (err) {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(buildApiUrl('/api/parse-pdf'), {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'PDF/DOCX 导入失败');
+      }
+
+      const result = await response.json();
+      if (result.success && result.data) {
+        onImport(result.data);
+        handleClose();
+      } else {
+        throw new Error('解析结果为空');
+      }
+    } catch (err: any) {
       console.error('PDF导入失败:', err);
       setError(err.message || 'PDF导入失败');
     } finally {
       setIsProcessing(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -185,24 +207,25 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  上传PDF文件
+                  上传 PDF / DOCX 文件
                 </label>
                 <div className="border-2 border-dashed border-slate-300 dark:border-[#324d67] rounded-lg p-8 text-center">
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".pdf"
+                    accept=".pdf,.docx"
                     onChange={handlePDFImport}
                     className="hidden"
                   />
                   <span className="material-symbols-outlined text-4xl text-slate-400 mb-4">picture_as_pdf</span>
-                  <p className="text-slate-600 dark:text-slate-300 mb-2">点击或拖拽PDF文件到此处</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">支持PDF格式，最大10MB</p>
+                  <p className="text-slate-600 dark:text-slate-300 mb-2">点击选择简历文件（PDF 或 DOCX）</p>
+                  <p className="text-sm text-slate-500 dark:text-slate-400">支持 PDF/DOCX，建议文件小于 10MB</p>
                   <button
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
                     className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   >
-                    选择文件
+                    {isProcessing ? '解析中...' : '选择文件'}
                   </button>
                 </div>
               </div>
