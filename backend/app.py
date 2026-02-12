@@ -848,7 +848,7 @@ def request_deletion(current_user_id):
             result = supabase.table('users').update({'deletion_pending_until': deletion_until}).eq('id', current_user_id).execute()
             
         if result.data:
-            return jsonify({'message': '已申请注销，账号将在3天后清除', 'deletion_pending_until': deletion_until}), 200
+            return jsonify({'message': '已申请注销，账号进入3天冷静期', 'deletion_pending_until': deletion_until}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500

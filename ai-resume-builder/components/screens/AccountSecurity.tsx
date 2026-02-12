@@ -41,7 +41,7 @@ const AccountSecurity: React.FC<ScreenProps> = ({ goBack, currentUser, onLogout,
           alert('账号已立即永久注销');
           onLogout?.();
         } else {
-          alert('注销申请已提交，账号进入3天公示期');
+          alert('注销申请已提交，账号进入3天冷静期');
           // Update currentUser locally to reflect pending deletion
           if (currentUser) {
             currentUser.deletion_pending_until = result.deletion_pending_until;
