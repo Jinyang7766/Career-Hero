@@ -3124,7 +3124,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
           {/* Export PDF & Analyze Other Buttons - Arranged side-by-side */}
-          <div className="mb-44 flex gap-3">
+          <div className="mb-40 flex gap-3">
             <button
               onClick={handleExportPDF}
               disabled={!hasAcceptedSuggestion}
@@ -3148,7 +3148,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}
-        <div className="fixed bottom-[48px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
+        <div className="fixed bottom-[50px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
           <button
             onClick={() => openChat('internal')}
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
