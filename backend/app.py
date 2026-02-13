@@ -2886,10 +2886,11 @@ def analyze_resume(current_user_id):
 {format_requirements}
 """
 
+                analysis_models_tried = get_analysis_model_candidates()
                 last_model_error = None
                 response = None
                 used_model = None
-                for model_name in get_analysis_model_candidates():
+                for model_name in analysis_models_tried:
                     try:
                         response = gemini_client.models.generate_content(
                             model=model_name,
@@ -2949,7 +2950,10 @@ def analyze_resume(current_user_id):
                     'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
                     'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
                     'reference_cases': reference_cases,
-                    'rag_enabled': rag_enabled
+                    'rag_enabled': rag_enabled,
+                    'analysis_model': None,
+                    'analysis_models_tried': analysis_models_tried if 'analysis_models_tried' in locals() else [],
+                    'analysis_error': str(ai_error)[:500]
                 }), 200
 
         score = calculate_resume_score(resume_data)

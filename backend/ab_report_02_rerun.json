@@ -13,13 +13,13 @@
     "on_win_rate": 0.0,
     "scores": {
       "jd_relevance": {
-        "on": 1.0,
-        "off": 1.0,
+        "on": 1.2,
+        "off": 1.2,
         "delta": 0.0
       },
       "actionability": {
-        "on": 1.8,
-        "off": 1.8,
+        "on": 2.0,
+        "off": 2.0,
         "delta": 0.0
       },
       "factuality": {
@@ -28,8 +28,8 @@
         "delta": 0.0
       },
       "skill_precision": {
-        "on": 2.2,
-        "off": 2.2,
+        "on": 1.8,
+        "off": 1.8,
         "delta": 0.0
       },
       "writing_quality": {
@@ -72,7 +72,7 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 1380.44,
+        "elapsed_ms": 1737.28,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -122,7 +122,7 @@
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 801.52,
+        "elapsed_ms": 839.14,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -172,22 +172,22 @@
       },
       "judge": {
         "winner_real": "tie",
-        "reason": "Both outputs are identical and represent a system failure state; they contain error messages instead of analysis, suggest adding skills the candidate already possesses (SQL, Python), and provide generic, fabricated work descriptions that do not match the specific context of the resume.",
+        "reason": "两者内容完全一致且质量极低，均包含系统报错信息（智能分析暂不可用），工作经历优化建议完全编造数据且脱离原始简历事实（将增长实验改为通用的效率提升），技能建议建议了简历中已存在的技能（Python/SQL）。",
         "on": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
+          "skill_precision": 3,
           "writing_quality": 2,
-          "overall": 1.6
+          "overall": 1.8
         },
         "off": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
+          "skill_precision": 3,
           "writing_quality": 2,
-          "overall": 1.6
+          "overall": 1.8
         },
         "raw": {
           "winner": "tie",
@@ -195,19 +195,19 @@
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
+            "skill_precision": 3,
             "writing_quality": 2,
-            "overall": 1.6
+            "overall": 1.8
           },
           "right": {
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
+            "skill_precision": 3,
             "writing_quality": 2,
-            "overall": 1.6
+            "overall": 1.8
           },
-          "reason": "Both outputs are identical and represent a system failure state; they contain error messages instead of analysis, suggest adding skills the candidate already possesses (SQL, Python), and provide generic, fabricated work descriptions that do not match the specific context of the resume."
+          "reason": "两者内容完全一致且质量极低，均包含系统报错信息（智能分析暂不可用），工作经历优化建议完全编造数据且脱离原始简历事实（将增长实验改为通用的效率提升），技能建议建议了简历中已存在的技能（Python/SQL）。"
         }
       }
     },
@@ -216,7 +216,7 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 919.24,
+        "elapsed_ms": 1156.53,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -266,7 +266,7 @@
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 771.06,
+        "elapsed_ms": 939.7,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -316,42 +316,42 @@
       },
       "judge": {
         "winner_real": "tie",
-        "reason": "两侧结果完全一致，均为系统降级/报错状态的兜底回复；存在严重幻觉（建议补充简历中已有的SQL/Python），且工作经历优化建议为通用模板与简历原内容无关，summary字段包含错误提示信息。",
+        "reason": "两侧结果完全一致，且均存在严重幻觉（提示缺失已有的Python/SQL技能）和错误数据（关键词字段显示为错误提示信息）。",
         "on": {
-          "jd_relevance": 1,
+          "jd_relevance": 2,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "skill_precision": 1,
+          "writing_quality": 2,
+          "overall": 1.6
         },
         "off": {
-          "jd_relevance": 1,
+          "jd_relevance": 2,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "skill_precision": 1,
+          "writing_quality": 2,
+          "overall": 1.6
         },
         "raw": {
           "winner": "tie",
           "left": {
-            "jd_relevance": 1,
+            "jd_relevance": 2,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "skill_precision": 1,
+            "writing_quality": 2,
+            "overall": 1.6
           },
           "right": {
-            "jd_relevance": 1,
+            "jd_relevance": 2,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "skill_precision": 1,
+            "writing_quality": 2,
+            "overall": 1.6
           },
-          "reason": "两侧结果完全一致，均为系统降级/报错状态的兜底回复；存在严重幻觉（建议补充简历中已有的SQL/Python），且工作经历优化建议为通用模板与简历原内容无关，summary字段包含错误提示信息。"
+          "reason": "两侧结果完全一致，且均存在严重幻觉（提示缺失已有的Python/SQL技能）和错误数据（关键词字段显示为错误提示信息）。"
         }
       }
     },
@@ -360,7 +360,7 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 959.11,
+        "elapsed_ms": 1097.98,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -410,7 +410,7 @@
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 761.52,
+        "elapsed_ms": 792.02,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -460,22 +460,22 @@
       },
       "judge": {
         "winner_real": "tie",
-        "reason": "两侧输出完全一致且质量均较差：Summary包含报错信息，技能建议重复（简历已有SQL/Python仍建议添加），工作经历建议使用通用模版覆盖了原有的具体业务内容（严重的幻觉/编造）。",
+        "reason": "两份结果内容完全一致，且均包含无效的占位符摘要（'智能分析暂时不可用'），错误地建议添加已存在的技能（SQL/Python），并编造了与简历原意不符的通用工作经历数据。",
         "on": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
+          "skill_precision": 1,
           "writing_quality": 2,
-          "overall": 1.6
+          "overall": 1.4
         },
         "off": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 2,
+          "skill_precision": 1,
           "writing_quality": 2,
-          "overall": 1.6
+          "overall": 1.4
         },
         "raw": {
           "winner": "tie",
@@ -483,19 +483,19 @@
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
+            "skill_precision": 1,
             "writing_quality": 2,
-            "overall": 1.6
+            "overall": 1.4
           },
           "right": {
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 2,
+            "skill_precision": 1,
             "writing_quality": 2,
-            "overall": 1.6
+            "overall": 1.4
           },
-          "reason": "两侧输出完全一致且质量均较差：Summary包含报错信息，技能建议重复（简历已有SQL/Python仍建议添加），工作经历建议使用通用模版覆盖了原有的具体业务内容（严重的幻觉/编造）。"
+          "reason": "两份结果内容完全一致，且均包含无效的占位符摘要（'智能分析暂时不可用'），错误地建议添加已存在的技能（SQL/Python），并编造了与简历原意不符的通用工作经历数据。"
         }
       }
     },
@@ -504,7 +504,7 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 788.11,
+        "elapsed_ms": 853.93,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -554,7 +554,7 @@
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 765.42,
+        "elapsed_ms": 822.83,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -604,22 +604,22 @@
       },
       "judge": {
         "winner_real": "tie",
-        "reason": "两份结果完全一致且均存在严重幻觉：提示缺失简历中已有的技能（SQL/Python），且工作经历优化建议使用了毫无关联的通用模板数据（如“提升团队效率30%”），而非基于原有“增长/转化率”内容的优化。",
+        "reason": "两边内容完全一致，均输出了系统错误提示（智能分析暂时不可用），且建议中出现了严重的事实性错误（推荐已有的技能、编造与原经历无关的通用数据），属于低质量的无效分析。",
         "on": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 3,
-          "writing_quality": 2,
-          "overall": 1.8
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.4
         },
         "off": {
           "jd_relevance": 1,
           "actionability": 2,
           "factuality": 1,
-          "skill_precision": 3,
-          "writing_quality": 2,
-          "overall": 1.8
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.4
         },
         "raw": {
           "winner": "tie",
@@ -627,19 +627,19 @@
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 3,
-            "writing_quality": 2,
-            "overall": 1.8
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.4
           },
           "right": {
             "jd_relevance": 1,
             "actionability": 2,
             "factuality": 1,
-            "skill_precision": 3,
-            "writing_quality": 2,
-            "overall": 1.8
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.4
           },
-          "reason": "两份结果完全一致且均存在严重幻觉：提示缺失简历中已有的技能（SQL/Python），且工作经历优化建议使用了毫无关联的通用模板数据（如“提升团队效率30%”），而非基于原有“增长/转化率”内容的优化。"
+          "reason": "两边内容完全一致，均输出了系统错误提示（智能分析暂时不可用），且建议中出现了严重的事实性错误（推荐已有的技能、编造与原经历无关的通用数据），属于低质量的无效分析。"
         }
       }
     },
@@ -648,7 +648,7 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 1055.23,
+        "elapsed_ms": 790.37,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -698,7 +698,7 @@
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 865.67,
+        "elapsed_ms": 3802.54,
         "response": {
           "score": 90,
           "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
@@ -748,42 +748,42 @@
       },
       "judge": {
         "winner_real": "tie",
-        "reason": "两侧结果完全一致，且均为系统服务降级后的错误兜底响应（包含“智能分析不可用”提示），未能识别简历中已存在的技能导致重复建议，工作经历优化建议也为通用模板而非基于事实，质量极低。",
+        "reason": "双侧内容完全一致且均为含有系统错误占位符（'智能分析暂时不可用'）的兜底回复，且逻辑存在严重缺陷（提示补充简历中已有的技能、工作经历优化建议为通用模板而非基于事实），属于低质量平局。",
         "on": {
           "jd_relevance": 1,
-          "actionability": 1,
+          "actionability": 2,
           "factuality": 1,
           "skill_precision": 2,
           "writing_quality": 1,
-          "overall": 1.2
+          "overall": 1.4
         },
         "off": {
           "jd_relevance": 1,
-          "actionability": 1,
+          "actionability": 2,
           "factuality": 1,
           "skill_precision": 2,
           "writing_quality": 1,
-          "overall": 1.2
+          "overall": 1.4
         },
         "raw": {
           "winner": "tie",
           "left": {
             "jd_relevance": 1,
-            "actionability": 1,
+            "actionability": 2,
             "factuality": 1,
             "skill_precision": 2,
             "writing_quality": 1,
-            "overall": 1.2
+            "overall": 1.4
           },
           "right": {
             "jd_relevance": 1,
-            "actionability": 1,
+            "actionability": 2,
             "factuality": 1,
             "skill_precision": 2,
             "writing_quality": 1,
-            "overall": 1.2
+            "overall": 1.4
           },
-          "reason": "两侧结果完全一致，且均为系统服务降级后的错误兜底响应（包含“智能分析不可用”提示），未能识别简历中已存在的技能导致重复建议，工作经历优化建议也为通用模板而非基于事实，质量极低。"
+          "reason": "双侧内容完全一致且均为含有系统错误占位符（'智能分析暂时不可用'）的兜底回复，且逻辑存在严重缺陷（提示补充简历中已有的技能、工作经历优化建议为通用模板而非基于事实），属于低质量平局。"
         }
       }
     }
