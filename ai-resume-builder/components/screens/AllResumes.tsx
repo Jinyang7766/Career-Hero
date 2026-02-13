@@ -415,24 +415,25 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
       onClick={handleContainerClick}
       className="relative flex h-screen w-full flex-col mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
     >
-      <div className="h-10 w-full bg-background-light dark:bg-background-dark shrink-0"></div>
-      <div className="flex items-center px-4 pb-2 pt-1 justify-between bg-background-light dark:bg-background-dark shrink-0 z-10">
-        <button
-          onClick={goBack}
-          className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
-        </button>
-        <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center text-slate-900 dark:text-white">全部简历</h2>
-        <div className="flex w-10 justify-end">
+      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
+        <div className="flex items-center justify-between h-14 px-4 relative">
           <button
-            onClick={() => setCurrentView(View.TEMPLATES)}
-            className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+            onClick={goBack}
+            className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
           </button>
+          <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center text-slate-900 dark:text-white">全部简历</h2>
+          <div className="flex w-10 justify-end">
+            <button
+              onClick={() => setCurrentView(View.TEMPLATES)}
+              className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+            </button>
+          </div>
         </div>
-      </div>
+      </header>
 
       <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">

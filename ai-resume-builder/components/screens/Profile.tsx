@@ -5,13 +5,13 @@ import { useUserProfile } from '../../src/useUserProfile';
 const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center justify-between p-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+    className="w-full flex items-center justify-between py-3 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
   >
-    <div className="flex items-center gap-4">
-      <div className={`w-10 h-10 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary`}>
-        <span className="material-symbols-outlined">{icon}</span>
+    <div className="flex items-center gap-3">
+      <div className={`w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary`}>
+        <span className="material-symbols-outlined text-[20px]">{icon}</span>
       </div>
-      <span className="text-base font-medium text-slate-900 dark:text-white">{label}</span>
+      <span className="text-sm font-medium text-slate-900 dark:text-white">{label}</span>
     </div>
     <div className="flex items-center gap-2">
       {badge && (
@@ -19,7 +19,7 @@ const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, col
           {badge}
         </span>
       )}
-      <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+      <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
     </div>
   </button>
 );
@@ -73,17 +73,17 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
         </div>
       </header>
 
-      <main className="flex flex-col gap-6 p-4">
+      <main className="flex flex-col gap-4 p-4">
         {/* Profile Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 relative group">
-          <div className="flex items-center gap-5 relative z-10">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-white/5 relative group">
+          <div className="flex items-center gap-4 relative z-10">
             <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
               <div
-                className="w-20 h-20 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm transition-opacity hover:opacity-80"
+                className="w-16 h-16 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm transition-opacity hover:opacity-80"
                 style={{ backgroundImage: `url("${avatar}")` }}
               ></div>
-              <div className="absolute bottom-0 right-0 bg-primary text-white p-1 rounded-full border-2 border-white dark:border-surface-dark flex items-center justify-center pointer-events-none">
-                <span className="material-symbols-outlined text-[12px]">edit</span>
+              <div className="absolute bottom-0 right-0 bg-primary text-white p-0.5 rounded-full border border-white dark:border-surface-dark flex items-center justify-center pointer-events-none">
+                <span className="material-symbols-outlined text-[10px]">edit</span>
               </div>
               <input
                 type="file"
@@ -94,8 +94,8 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
               />
             </div>
             <div className="flex flex-col flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
+              <div className="flex items-center gap-2 mb-0.5">
+                <h2 className="text-lg font-bold truncate text-slate-900 dark:text-white">
                   {displayName || ' '}
                 </h2>
                 <span className="px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
@@ -110,35 +110,35 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
             </div>
           </div>
 
-          <div className="mt-6 grid grid-cols-2 gap-4">
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-4 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">简历总数</span>
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
             </div>
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-4 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-2xl font-bold text-primary">
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-xl font-bold text-primary">
                 {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
               </span>
-              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 mt-1 uppercase tracking-wider">已优化</span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
             </div>
           </div>
         </div>
 
         {/* Upgrade Banner - Unified Style with Dashboard */}
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all">
+        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-4 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all">
           <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
           <div className="absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl"></div>
           <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/20 shadow-inner">
-                <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>diamond</span>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/20 shadow-inner">
+                <span className="material-symbols-outlined text-white" style={{ fontSize: '24px' }}>diamond</span>
               </div>
               <div>
-                <h3 className="text-lg font-black tracking-tight">升级到 Pro</h3>
-                <p className="text-sm text-blue-100 mt-0.5 font-medium opacity-90">解锁无限 AI 优化与高级模板</p>
+                <h3 className="text-base font-black tracking-tight">升级到 Pro</h3>
+                <p className="text-xs text-blue-100 mt-0.5 font-medium opacity-90">解锁无限 AI 优化与模板</p>
               </div>
             </div>
-            <button className="px-5 py-2.5 bg-white text-primary rounded-xl text-sm font-black shadow-lg hover:bg-blue-50 transition-all hover:scale-105">
+            <button className="px-4 py-2 bg-white text-primary rounded-xl text-xs font-black shadow-lg hover:bg-blue-50 transition-all hover:scale-105">
               立即开启
             </button>
           </div>
