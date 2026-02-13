@@ -75,52 +75,63 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
 
       <main className="flex flex-col gap-4 p-4">
         {/* Profile Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-white/5 relative group">
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
-              <div
-                className="w-16 h-16 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm transition-opacity hover:opacity-80"
-                style={{ backgroundImage: `url("${avatar}")` }}
-              ></div>
-              <div className="absolute bottom-0 right-0 bg-primary text-white p-0.5 rounded-full border border-white dark:border-surface-dark flex items-center justify-center pointer-events-none">
-                <span className="material-symbols-outlined text-[10px]">edit</span>
+        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 relative group overflow-hidden">
+          <div className="p-4">
+            <div className="flex items-center gap-4 relative z-10">
+              <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
+                <div
+                  className="w-16 h-16 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm transition-opacity hover:opacity-80"
+                  style={{ backgroundImage: `url("${avatar}")` }}
+                ></div>
+                <div className="absolute bottom-0 right-0 bg-primary text-white p-0.5 rounded-full border border-white dark:border-surface-dark flex items-center justify-center pointer-events-none">
+                  <span className="material-symbols-outlined text-[10px]">edit</span>
+                </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                />
               </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                className="hidden"
-                accept="image/*"
-                onChange={handleFileChange}
-              />
+              <div className="flex flex-col flex-1 min-w-0 pr-24">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <h2 className="text-lg font-bold truncate text-slate-900 dark:text-white">
+                    {displayName || ' '}
+                  </h2>
+                </div>
+                {displayEmail && (
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
+                    {displayEmail}
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="flex flex-col flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <h2 className="text-lg font-bold truncate text-slate-900 dark:text-white">
-                  {displayName || ' '}
-                </h2>
-                <span className="px-2 py-0.5 rounded-full bg-primary/10 text-[10px] font-bold text-primary">
-                  免费版
-                </span>
+
+            <div className="mt-4 grid grid-cols-2 gap-3 relative z-10">
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+                <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
               </div>
-              {displayEmail && (
-                <p className="text-slate-500 dark:text-slate-400 text-sm truncate">
-                  {displayEmail}
-                </p>
-              )}
+              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+                <span className="text-xl font-bold text-primary">
+                  {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
+                </span>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
+              </div>
             </div>
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
+          {/* Member Center - Seamless Embedded Corner Card */}
+          <div
+            onClick={() => setCurrentView(View.MEMBER_CENTER)}
+            className="absolute top-0 right-0 h-[72px] w-[120px] bg-gradient-to-br from-primary via-blue-600 to-indigo-700 rounded-bl-[28px] flex flex-col items-center justify-center cursor-pointer active:opacity-90 transition-all z-20"
+          >
+            <div className="flex items-center gap-0.5">
+              <span className="text-[13px] font-black text-white tracking-widest leading-none">会员中心</span>
+              <span className="material-symbols-outlined text-white/50 text-[12px]">chevron_right</span>
             </div>
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-xl font-bold text-primary">
-                {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
-            </div>
+            <span className="text-[9px] font-medium text-white/70 mt-1.5 tracking-[0.1em]">解锁特权</span>
           </div>
         </div>
 
@@ -150,12 +161,6 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
             onClick={() => setCurrentView(View.HISTORY)}
             icon="history"
             label="导出历史"
-            color="primary"
-          />
-          <MenuItem
-            onClick={() => setCurrentView(View.MEMBER_CENTER)}
-            icon="card_membership"
-            label="会员中心"
             color="primary"
           />
 

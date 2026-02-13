@@ -38,7 +38,7 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
 
   const handleSubmit = async () => {
     if (!description.trim()) {
-      setSubmitError('???????');
+      setSubmitError('请填写问题描述');
       setSubmitSuccess('');
       return;
     }
@@ -75,14 +75,14 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || '??????????');
+        throw new Error(err.error || '提交反馈失败，请稍后重试');
       }
 
       setDescription('');
       setImages([]);
-      setSubmitSuccess('????????????');
+      setSubmitSuccess('反馈提交成功，感谢你的建议');
     } catch (error: any) {
-      setSubmitError(error?.message || '??????????');
+      setSubmitError(error?.message || '提交反馈失败，请稍后重试');
     } finally {
       setIsSubmitting(false);
     }
@@ -97,32 +97,32 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
         >
           <span className="material-symbols-outlined text-2xl">arrow_back_ios</span>
         </div>
-        <h2 className="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">?????</h2>
+        <h2 className="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">帮助与反馈</h2>
       </div>
 
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="px-4 pb-6 pt-6">
-          <h3 className="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] pb-3">????</h3>
+          <h3 className="text-gray-900 dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] pb-3">问题反馈</h3>
           <div className="flex flex-col gap-4 rounded-xl bg-white dark:bg-[#192633] border border-gray-200 dark:border-[#324d67] p-4">
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">????</label>
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">问题描述</label>
               <textarea
                 className="form-textarea w-full min-h-[140px] resize-none rounded-lg border border-gray-200 dark:border-[#324d67] bg-gray-50 dark:bg-[#111a22] p-3 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-[#6b7d91] focus:border-primary focus:ring-primary dark:focus:border-primary dark:focus:ring-1 focus:outline-none transition-shadow"
-                placeholder="???????????????????????..."
+                placeholder="请描述你遇到的问题或建议，我们会尽快处理..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               ></textarea>
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">???? (?? 3 ?)</label>
+              <label className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">截图上传（最多 3 张）</label>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 <button
                   onClick={handlePickImages}
                   className="flex h-20 w-20 shrink-0 flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 dark:border-[#324d67] bg-gray-50 dark:bg-[#111a22] hover:border-primary dark:hover:border-primary hover:bg-primary/5 transition-colors group"
                 >
                   <span className="material-symbols-outlined text-gray-400 dark:text-[#6b7d91] group-hover:text-primary mb-1">add_a_photo</span>
-                  <span className="text-[10px] text-gray-400 dark:text-[#6b7d91] group-hover:text-primary">????</span>
+                  <span className="text-[10px] text-gray-400 dark:text-[#6b7d91] group-hover:text-primary">添加图片</span>
                 </button>
                 <input
                   ref={fileInputRef}
@@ -151,7 +151,7 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
               disabled={isSubmitting}
               className="mt-6 w-full rounded-xl bg-primary py-3.5 text-center text-sm font-bold text-white shadow-lg shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              {isSubmitting ? '???...' : '????'}
+              {isSubmitting ? '提交中...' : '提交反馈'}
             </button>
             {submitError && (
               <p className="text-center text-xs text-red-500">{submitError}</p>
@@ -160,7 +160,7 @@ const Help: React.FC<ScreenProps> = ({ goBack }) => {
               <p className="text-center text-xs text-green-600 dark:text-green-400">{submitSuccess}</p>
             )}
             <p className="mt-4 text-center text-xs text-gray-400 dark:text-gray-500">
-              ???????????????????
+              我们会认真阅读每一条反馈并持续优化体验
             </p>
           </div>
         </div>

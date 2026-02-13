@@ -1,0 +1,531 @@
+{
+  "meta": {
+    "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
+    "runs": 20,
+    "judge_model": "gemini-2.5-flash"
+  },
+  "summary": {
+    "evaluated_runs": 0,
+    "failures": 20,
+    "on_wins": 0,
+    "off_wins": 0,
+    "ties": 0,
+    "on_win_rate": 0.0,
+    "scores": {
+      "jd_relevance": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "actionability": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "factuality": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "skill_precision": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "writing_quality": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "overall": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      }
+    },
+    "hard_metrics": {
+      "jd_keyword_coverage_rate": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "suggestion_schema_valid_rate": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "skill_hard_term_ratio": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      },
+      "placeholder_leak_rate": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      }
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 758.15,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 699.0,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 2,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 685.69,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 713.1,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 3,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 706.86,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 749.75,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 4,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 684.37,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 752.26,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 5,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 700.52,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 691.14,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 6,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 712.45,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 822.68,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 7,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 920.71,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 815.42,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 8,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 680.31,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 999.81,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 9,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 910.11,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 702.74,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 10,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 687.68,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 760.33,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 11,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 825.27,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 685.92,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 12,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 762.77,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 1002.34,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 13,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 685.95,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 707.05,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 14,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 749.0,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 673.12,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 15,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 767.32,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 691.07,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 16,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 747.84,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 844.84,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 17,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 693.57,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 866.04,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 18,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 684.49,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 6204.81,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 19,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 919.7,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 953.46,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    },
+    {
+      "run": 20,
+      "stage": "analyze",
+      "off": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 746.62,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "on": {
+        "ok": false,
+        "status": 401,
+        "elapsed_ms": 738.25,
+        "error": null,
+        "json": {
+          "message": "Token 无效或已过期，请重新登录"
+        }
+      },
+      "judge": null
+    }
+  ]
+}
