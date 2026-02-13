@@ -129,3 +129,4 @@ backend/Pipfile.lock
 *.backup
 *.old
 backup/
+dev.log
