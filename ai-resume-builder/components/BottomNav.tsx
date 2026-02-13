@@ -17,7 +17,10 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-gray-200 dark:border-white/5 h-[50px] max-w-md mx-auto">
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-[100] bg-white/95 dark:bg-[#111a22]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/5 mx-auto max-w-md overflow-hidden transform-gpu"
+      style={{ height: '48px', minHeight: '48px', maxHeight: '48px', bottom: '0px' }}
+    >
       <div className="flex justify-around items-center h-full">
         <button
           onClick={() => setCurrentView(View.DASHBOARD)}
