@@ -46,7 +46,7 @@ type ResumeReadState = {
   message: string;
 };
 
-const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack }) => {
+const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden }) => {
   const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
 
   const normalizeScoreBreakdown = (raw: ScoreBreakdown, totalScore?: number): ScoreBreakdown => {
@@ -486,6 +486,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
   const sourceResumeIdRef = useRef<string | number | null>(null);
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
+
+  useEffect(() => {
+    if (setIsNavHidden) {
+      setIsNavHidden(currentStep === 'chat');
+    }
+    return () => {
+      if (setIsNavHidden) setIsNavHidden(false);
+    };
+  }, [currentStep, setIsNavHidden]);
   const [chatEntrySource, setChatEntrySource] = useState<'internal' | 'preview' | null>(() => {
     const stored = localStorage.getItem('ai_chat_entry_source');
     return stored === 'internal' || stored === 'preview' ? stored : null;
@@ -2729,14 +2738,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 <div className={`size-10 rounded-full flex items-center justify-center ${statusTone.bg} ${statusTone.border}`}>
                   <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
                 </div>
-                <div>
-                  <h4 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5">{selectedResumeLabel}</p>
+                <div className="flex flex-col">
+                  <h4 className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
                 </div>
               </div>
-              <div className={`px-2.5 py-1 rounded-full text-[10px] font-bold border flex items-center gap-1.5 ${statusTone.bg} ${statusTone.border} ${statusTone.text}`}>
+              <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${statusTone.bg} ${statusTone.border} ${statusTone.text}`}>
                 <span className={`material-symbols-outlined text-[14px] ${resumeReadState.status === 'loading' ? 'animate-spin' : ''}`}>{statusTone.icon}</span>
-                {statusTone.badge}
+                <span className="whitespace-nowrap">{statusTone.badge}</span>
               </div>
             </div>
             {resumeReadState.status !== 'success' && (
@@ -2777,11 +2786,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 {isUploading ? (
-                  <span className="size-5 border-2 border-slate-400 border-t-primary rounded-full animate-spin"></span>
+                  <span className="size-4 border-2 border-slate-400 border-t-primary rounded-full animate-spin"></span>
                 ) : (
-                  <span className="material-symbols-outlined">image</span>
+                  <span className="material-symbols-outlined text-[20px]">image</span>
                 )}
-                {isUploading ? '上传成功，正在解析...' : '上传JD截图'}
+                <span className="text-sm">{isUploading ? '正在解析...' : '上传JD截图'}</span>
               </button>
               <input
                 type="file"
@@ -2794,16 +2803,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
           </div>
 
-          <div className="flex gap-4 mt-2">
+          <div className="flex gap-3 mt-2">
             <button
               onClick={() => setCurrentStep('resume_select')}
-              className="flex-1 py-3.5 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
+              className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
             >
               上一步
             </button>
             <button
               onClick={handleStartAnalysisClick}
-              className="flex-[2] py-3.5 rounded-xl bg-primary text-white font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
+              className="flex-[2] py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             >
               开始分析
             </button>
@@ -2881,7 +2890,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
-            <h1 className="text-lg font-bold tracking-tight">诊断报告</h1>
+            <h1 className="text-base font-bold tracking-tight">诊断报告</h1>
             <div className="w-8"></div>
           </div>
         </header>
@@ -3070,44 +3079,46 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="p-3 flex items-center justify-between bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
-                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span>这条建议有帮助吗？</span>
-                        <button
-                          onClick={() => persistSuggestionFeedback(suggestion, 'up')}
-                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'up'
-                            ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
-                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
-                            }`}
-                          aria-label="点赞"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">thumb_up</span>
-                        </button>
-                        <button
-                          onClick={() => persistSuggestionFeedback(suggestion, 'down')}
-                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'down'
-                            ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
-                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
-                            }`}
-                          aria-label="点踩"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">thumb_down</span>
-                        </button>
+                    <div className="p-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 min-w-0">
+                        <span className="truncate">有帮助吗？</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            onClick={() => persistSuggestionFeedback(suggestion, 'up')}
+                            className={`inline-flex items-center justify-center size-7 rounded-full border transition-colors ${suggestion.rating === 'up'
+                              ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
+                              : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
+                              }`}
+                            aria-label="点赞"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">thumb_up</span>
+                          </button>
+                          <button
+                            onClick={() => persistSuggestionFeedback(suggestion, 'down')}
+                            className={`inline-flex items-center justify-center size-7 rounded-full border transition-colors ${suggestion.rating === 'down'
+                              ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
+                              : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
+                              }`}
+                            aria-label="点踩"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">thumb_down</span>
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-3">
+                      <div className="flex items-center gap-2 ml-auto">
                         <button
                           onClick={() => {
                             setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'ignored' as const } : s));
                           }}
-                          className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+                          className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
                         >
                           忽略
                         </button>
                         <button
                           onClick={() => handleAcceptSuggestionInChat(suggestion)}
-                          className="px-6 py-2 text-sm bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
+                          className="px-4 py-2 text-xs bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap"
                         >
-                          <span className="material-symbols-outlined text-[18px]">check</span>
+                          <span className="material-symbols-outlined text-[16px]">check</span>
                           采纳优化
                         </button>
                       </div>
@@ -3125,20 +3136,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <button
               onClick={handleExportPDF}
               disabled={!hasAcceptedSuggestion}
-              className={`flex-1 flex items-center justify-center gap-2 h-14 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
+              className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
                 ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
                 : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
                 }`}
             >
-              <span className="material-symbols-outlined text-[20px]">download</span>
-              <span className="text-sm font-bold tracking-wide">前往预览导出</span>
+              <span className="material-symbols-outlined text-[18px]">download</span>
+              <span className="text-[13px] font-bold tracking-wide">前往预览导出</span>
             </button>
             <button
               onClick={handleAnalyzeOtherResume}
-              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
             >
-              <span className="material-symbols-outlined text-[20px]">restart_alt</span>
-              <span className="text-sm font-bold tracking-wide">分析其他简历</span>
+              <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+              <span className="text-[13px] font-bold tracking-wide">分析其他简历</span>
             </button>
 
           </div>
@@ -3156,8 +3167,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 <span className="absolute bottom-0 right-0 size-2.5 bg-green-500 rounded-full border-2 border-white"></span>
               </div>
               <div className="text-left">
-                <p className="text-sm font-bold">AI 模拟面试官</p>
-                <p className="text-xs text-blue-100">点击开始模拟面试</p>
+                <p className="text-[13px] font-bold">AI 模拟面试官</p>
+                <p className="text-[10px] text-blue-100 italic opacity-80">点击开始模拟面试</p>
               </div>
             </div>
             <div className="size-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">

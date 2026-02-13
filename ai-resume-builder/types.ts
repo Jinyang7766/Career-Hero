@@ -132,4 +132,5 @@ export interface ScreenProps {
   createResume?: (title: string) => Promise<any>;
   loadUserResumes?: () => Promise<void>;
   currentUser?: any;
+  setIsNavHidden?: (hidden: boolean) => void;
 }

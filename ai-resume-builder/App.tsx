@@ -24,9 +24,10 @@ function App() {
   const [currentView, setCurrentView] = useState<View>(View.LOGIN);
   const [history, setHistory] = useState<View[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isNavHidden, setIsNavHidden] = useState(false);
 
   // Show bottom nav on main tabs only (Editor has its own navigation)
-  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView);
+  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
 
   // Load user resumes when authenticated
   useEffect(() => {
@@ -359,7 +360,8 @@ function App() {
       createResume,
       loadUserResumes,
       currentUser,
-      hasBottomNav: showBottomNav
+      hasBottomNav: showBottomNav,
+      setIsNavHidden
     };
 
     switch (currentView) {
