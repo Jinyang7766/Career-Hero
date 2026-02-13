@@ -153,11 +153,12 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
             color="primary"
           />
           <MenuItem
-            onClick={() => setCurrentView(View.ALL_RESUMES)}
-            icon="description"
-            label="我的简历"
+            onClick={() => setCurrentView(View.MEMBER_CENTER)}
+            icon="card_membership"
+            label="会员中心"
             color="primary"
           />
+
           <MenuItem
             onClick={() => setCurrentView(View.ACCOUNT_SECURITY)}
             icon="verified_user"

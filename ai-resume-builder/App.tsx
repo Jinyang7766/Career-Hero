@@ -18,6 +18,7 @@ import Login from './components/screens/Login';
 import Signup from './components/screens/Signup';
 import ForgotPassword from './components/screens/ForgotPassword';
 import DeletionPending from './components/screens/DeletionPending';
+import MemberCenter from './components/screens/MemberCenter';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -407,6 +408,8 @@ function App() {
         return <History {...commonProps} />;
       case View.ALL_RESUMES:
         return <AllResumes {...commonProps} />;
+      case View.MEMBER_CENTER:
+        return <MemberCenter {...commonProps} />;
       case View.DELETION_PENDING:
         return <DeletionPending {...commonProps} onLogout={handleLogout} />;
       default:

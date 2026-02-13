@@ -173,27 +173,27 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
         <div>
           <div
             onClick={createNewResume}
-            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-8 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[200px] flex flex-col justify-center"
+            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[160px] flex flex-col justify-center"
           >
             <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
             <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
-            <div className="relative z-10 flex flex-col items-start gap-5">
-              <div className="flex items-center justify-center h-16 w-16 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
-                <span className="material-symbols-outlined text-white" style={{ fontSize: '36px' }}>add</span>
+            <div className="relative z-10 flex flex-col items-start gap-4">
+              <div className="flex items-center justify-center h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
+                <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>add</span>
               </div>
               <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <h3 className="text-2xl font-black text-white tracking-tight">新建简历</h3>
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
+                <div className="flex items-center gap-3 mb-1.5">
+                  <h3 className="text-xl font-black text-white tracking-tight">新建简历</h3>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
                 </div>
                 <p className="text-blue-100 text-sm font-medium opacity-90 max-w-[85%] leading-relaxed">
                   通过智能 AI 向导，轻松定制专属于你的高光简历，几步操作即可开启职场新篇章。
                 </p>
               </div>
 
-              <div className="mt-2 flex items-center gap-3 rounded-xl bg-white px-6 py-3 text-base font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
+              <div className="mt-1 flex items-center gap-3 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
                 <span>立即开始</span>
-                <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
+                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
               </div>
             </div>
           </div>

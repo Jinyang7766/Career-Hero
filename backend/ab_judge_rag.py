@@ -13,9 +13,9 @@ Example:
 """
 
 import argparse
+import hashlib
 import json
 import os
-import random
 import re
 import statistics
 import time
@@ -35,26 +35,61 @@ def load_payload(path: str) -> Dict[str, Any]:
     return {"resumeData": data, "jobDescription": ""}
 
 
+def refresh_access_token(
+    supabase_url: str,
+    supabase_anon_key: str,
+    refresh_token: str,
+    timeout: int = 30,
+) -> Optional[str]:
+    if not (supabase_url and supabase_anon_key and refresh_token):
+        return None
+    token_url = supabase_url.rstrip("/") + "/auth/v1/token?grant_type=refresh_token"
+    headers = {
+        "apikey": supabase_anon_key,
+        "Content-Type": "application/json",
+    }
+    payload = {"refresh_token": refresh_token}
+    session = requests.Session()
+    session.trust_env = False
+    try:
+        resp = session.post(token_url, headers=headers, json=payload, timeout=timeout)
+        if not resp.ok:
+            return None
+        data = resp.json()
+        access_token = data.get("access_token")
+        if isinstance(access_token, str) and access_token.strip():
+            return access_token.strip()
+        return None
+    except Exception:
+        return None
+
+
 def post_analyze(
     url: str,
-    token: str,
+    auth_state: Dict[str, str],
     payload: Dict[str, Any],
     rag_enabled: bool,
+    supabase_url: str = "",
+    supabase_anon_key: str = "",
     timeout: int = 90,
     retries: int = 2,
 ) -> Dict[str, Any]:
     req = dict(payload)
     req["ragEnabled"] = rag_enabled
     headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token.strip()}"
 
     t0 = time.time()
     session = requests.Session()
     session.trust_env = False
     last_exc = None
     resp = None
+    refreshed_once = False
     for _ in range(max(1, retries + 1)):
+        token = (auth_state.get("access_token") or "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        else:
+            headers.pop("Authorization", None)
         try:
             resp = session.post(
                 url,
@@ -62,6 +97,16 @@ def post_analyze(
                 data=json.dumps(req, ensure_ascii=False).encode("utf-8"),
                 timeout=timeout,
             )
+            if resp.status_code == 401 and not refreshed_once:
+                new_access = refresh_access_token(
+                    supabase_url=supabase_url,
+                    supabase_anon_key=supabase_anon_key,
+                    refresh_token=auth_state.get("refresh_token", ""),
+                )
+                if new_access:
+                    auth_state["access_token"] = new_access
+                    refreshed_once = True
+                    continue
             last_exc = None
             break
         except RequestException as e:
@@ -85,6 +130,10 @@ def compact_for_judge(body: Dict[str, Any]) -> Dict[str, Any]:
         "summary": body.get("summary"),
         "suggestions": body.get("suggestions", []),
         "missingKeywords": body.get("missingKeywords", []),
+        "reference_cases_count": len(body.get("reference_cases", []) or []),
+        "rag_enabled": body.get("rag_enabled"),
+        "rag_requested": body.get("rag_requested"),
+        "rag_strategy": body.get("rag_strategy"),
     }
 
 def _to_text(obj: Any) -> str:
@@ -203,7 +252,11 @@ def judge_pair(
     off_body: Dict[str, Any],
     on_body: Dict[str, Any],
 ) -> Dict[str, Any]:
-    left_is_on = random.random() < 0.5
+    # Deterministic side assignment to reduce positional bias variance across judge models.
+    off_sig = json.dumps(compact_for_judge(off_body), ensure_ascii=False, sort_keys=True)
+    on_sig = json.dumps(compact_for_judge(on_body), ensure_ascii=False, sort_keys=True)
+    digest = hashlib.sha256((off_sig + "||" + on_sig).encode("utf-8")).hexdigest()
+    left_is_on = int(digest[-1], 16) % 2 == 0
     left = on_body if left_is_on else off_body
     right = off_body if left_is_on else on_body
 
@@ -223,16 +276,35 @@ def judge_pair(
 - 候选 RIGHT：
 {json.dumps(compact_for_judge(right), ensure_ascii=False)}
 
-请按以下维度对 LEFT 和 RIGHT 分别 1-5 分打分：
-1) jd_relevance（与JD匹配度）
-2) actionability（建议可直接采纳程度）
-3) factuality（是否编造、是否基于简历事实）
-4) skill_precision（技能是否是硬技能名词，是否避免泛词）
-5) writing_quality（表达清晰、无噪声）
+请按以下维度对 LEFT 和 RIGHT 分别 1-5 分打分，必须使用整数分。
+评分锚点（统一口径）：
+1) jd_relevance（权重 35%）
+- 5: 关键职责/关键词高覆盖，几乎逐条命中 JD
+- 3: 仅部分命中，存在明显缺口
+- 1: 与 JD 关系弱
+2) actionability（权重 25%）
+- 5: 建议可直接粘贴到简历，具体且可执行
+- 3: 有建议但泛化，落地性一般
+- 1: 空泛或难执行
+3) factuality（权重 20%）
+- 5: 基于给定简历事实，无臆造
+- 3: 有轻微推断但可接受
+- 1: 明显编造/硬套
+4) skill_precision（权重 15%）
+- 5: 技能为硬技能名词，术语准确
+- 3: 混入泛词或动作词
+- 1: 大量非技能词
+5) writing_quality（权重 5%）
+- 5: 清晰简洁，无噪声
+- 3: 偶有冗余
+- 1: 混乱影响可读性
+
+强制规则：
+- 若出现明显臆造事实，factuality 不得高于 2。
+- 若建议多数无法直接用于简历，actionability 不得高于 2。
 
 输出严格 JSON（不要解释）：
 {{
-  "winner": "left|right|tie",
   "left": {{
     "jd_relevance": 1,
     "actionability": 1,
@@ -249,35 +321,74 @@ def judge_pair(
     "writing_quality": 1,
     "overall": 1.0
   }},
-  "reason": "一句话说明胜负依据"
+  "reason": "一句话说明关键差异"
 }}
 """
 
     resp = client.models.generate_content(
         model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(response_mime_type="application/json")
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            temperature=0
+        )
     )
     text = (resp.text or "").strip()
     data = safe_json_loads(text)
     if not data:
         raise RuntimeError(f"judge parse failed: {text[:400]}")
 
-    winner = data.get("winner", "tie")
-    if winner == "left":
-        winner_real = "on" if left_is_on else "off"
-    elif winner == "right":
-        winner_real = "off" if left_is_on else "on"
-    else:
-        winner_real = "tie"
-
     left_score = data.get("left", {})
     right_score = data.get("right", {})
+
+    dims = ["jd_relevance", "actionability", "factuality", "skill_precision", "writing_quality"]
+    weights = {
+        "jd_relevance": 0.35,
+        "actionability": 0.25,
+        "factuality": 0.20,
+        "skill_precision": 0.15,
+        "writing_quality": 0.05,
+    }
+
+    def _normalize_block(block: Dict[str, Any]) -> Dict[str, float]:
+        out: Dict[str, float] = {}
+        for d in dims:
+            v = block.get(d, 1)
+            try:
+                fv = float(v)
+            except Exception:
+                fv = 1.0
+            if fv < 1.0:
+                fv = 1.0
+            if fv > 5.0:
+                fv = 5.0
+            out[d] = round(fv, 3)
+        weighted = sum(out[d] * weights[d] for d in dims)
+        out["overall"] = round(weighted, 3)
+        return out
+
+    left_score = _normalize_block(left_score if isinstance(left_score, dict) else {})
+    right_score = _normalize_block(right_score if isinstance(right_score, dict) else {})
+
+    tie_margin = 0.1
+    diff = left_score["overall"] - right_score["overall"]
+    if abs(diff) <= tie_margin:
+        winner_side = "tie"
+        winner_real = "tie"
+    elif diff > 0:
+        winner_side = "left"
+        winner_real = "on" if left_is_on else "off"
+    else:
+        winner_side = "right"
+        winner_real = "off" if left_is_on else "on"
+
     on_score = left_score if left_is_on else right_score
     off_score = right_score if left_is_on else left_score
 
     return {
         "winner_real": winner_real,
+        "winner_side": winner_side,
+        "tie_margin": tie_margin,
         "reason": data.get("reason", ""),
         "on": on_score,
         "off": off_score,
@@ -300,6 +411,9 @@ def main():
     ap.add_argument("--runs", type=int, default=5)
     ap.add_argument("--url", default=os.getenv("ANALYZE_URL", "http://127.0.0.1:5000/api/ai/analyze"))
     ap.add_argument("--token", default=os.getenv("BACKEND_JWT_TOKEN", ""))
+    ap.add_argument("--refresh-token", default=os.getenv("BACKEND_REFRESH_TOKEN", ""))
+    ap.add_argument("--supabase-url", default=os.getenv("SUPABASE_URL", ""))
+    ap.add_argument("--supabase-anon-key", default=os.getenv("SUPABASE_ANON_KEY", ""))
     ap.add_argument("--gemini-api-key", default=os.getenv("GEMINI_API_KEY", ""))
     ap.add_argument("--judge-model", default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3-pro-preview"))
     ap.add_argument("--timeout", type=int, default=90)
@@ -315,6 +429,10 @@ def main():
     resume_data = payload.get("resumeData", {})
     jd_text = payload.get("jobDescription", "")
     client = genai.Client(api_key=args.gemini_api_key)
+    auth_state = {
+        "access_token": args.token or "",
+        "refresh_token": args.refresh_token or "",
+    }
 
     judged_rows = []
     failures = 0
@@ -323,9 +441,31 @@ def main():
 
     print(f"Target URL: {args.url}")
     print(f"Runs: {args.runs}")
+    if auth_state.get("refresh_token") and args.supabase_url and args.supabase_anon_key:
+        print("Auth refresh: enabled")
+    else:
+        print("Auth refresh: disabled")
     for i in range(args.runs):
-        off = post_analyze(args.url, args.token, payload, rag_enabled=False, timeout=args.timeout, retries=args.retries)
-        on = post_analyze(args.url, args.token, payload, rag_enabled=True, timeout=args.timeout, retries=args.retries)
+        off = post_analyze(
+            args.url,
+            auth_state,
+            payload,
+            rag_enabled=False,
+            supabase_url=args.supabase_url,
+            supabase_anon_key=args.supabase_anon_key,
+            timeout=args.timeout,
+            retries=args.retries,
+        )
+        on = post_analyze(
+            args.url,
+            auth_state,
+            payload,
+            rag_enabled=True,
+            supabase_url=args.supabase_url,
+            supabase_anon_key=args.supabase_anon_key,
+            timeout=args.timeout,
+            retries=args.retries,
+        )
 
         if not off.get("ok") or not on.get("ok") or not isinstance(off.get("json"), dict) or not isinstance(on.get("json"), dict):
             failures += 1
@@ -356,7 +496,11 @@ def main():
             print(
                 f"#{i+1} winner={judged['winner_real']} "
                 f"on_overall={judged.get('on', {}).get('overall')} "
-                f"off_overall={judged.get('off', {}).get('overall')}"
+                f"off_overall={judged.get('off', {}).get('overall')} "
+                f"on_ref={len((on.get('json') or {}).get('reference_cases', []) or [])} "
+                f"off_ref={len((off.get('json') or {}).get('reference_cases', []) or [])} "
+                f"on_strategy={(on.get('json') or {}).get('rag_strategy')} "
+                f"off_strategy={(off.get('json') or {}).get('rag_strategy')}"
             )
             run_records.append({
                 "run": i + 1,

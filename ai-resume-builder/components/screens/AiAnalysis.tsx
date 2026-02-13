@@ -3144,6 +3144,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           {/* Export PDF & Analyze Other Buttons - Arranged side-by-side */}
           <div className="mb-40 flex gap-3">
             <button
+              onClick={handleAnalyzeOtherResume}
+              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
+            >
+              <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+              <span className="text-[13px] font-bold tracking-wide">分析其他简历</span>
+            </button>
+            <button
               onClick={handleExportPDF}
               disabled={!hasAcceptedSuggestion}
               className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
@@ -3153,13 +3160,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             >
               <span className="material-symbols-outlined text-[18px]">download</span>
               <span className="text-[13px] font-bold tracking-wide">前往预览导出</span>
-            </button>
-            <button
-              onClick={handleAnalyzeOtherResume}
-              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-              <span className="text-[13px] font-bold tracking-wide">分析其他简历</span>
             </button>
 
           </div>

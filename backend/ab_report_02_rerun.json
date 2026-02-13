@@ -1,52 +1,52 @@
 {
   "meta": {
-    "url": "https://career-hero-backend-production.up.railway.app/api/ai/analyze",
+    "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
     "runs": 5,
-    "judge_model": "gemini-3-pro-preview"
+    "judge_model": "gemini-2.5-flash"
   },
   "summary": {
     "evaluated_runs": 5,
     "failures": 0,
-    "on_wins": 0,
-    "off_wins": 0,
-    "ties": 5,
-    "on_win_rate": 0.0,
+    "on_wins": 4,
+    "off_wins": 1,
+    "ties": 0,
+    "on_win_rate": 0.8,
     "scores": {
       "jd_relevance": {
-        "on": 1.2,
-        "off": 1.2,
-        "delta": 0.0
+        "on": 5.0,
+        "off": 4.6,
+        "delta": 0.4
       },
       "actionability": {
-        "on": 2.0,
-        "off": 2.0,
-        "delta": 0.0
+        "on": 5.0,
+        "off": 4.4,
+        "delta": 0.6
       },
       "factuality": {
-        "on": 1.0,
-        "off": 1.0,
+        "on": 5.0,
+        "off": 5.0,
         "delta": 0.0
       },
       "skill_precision": {
-        "on": 1.8,
-        "off": 1.8,
-        "delta": 0.0
+        "on": 4.6,
+        "off": 4.2,
+        "delta": 0.4
       },
       "writing_quality": {
-        "on": 1.6,
-        "off": 1.6,
-        "delta": 0.0
+        "on": 5.0,
+        "off": 4.8,
+        "delta": 0.2
       },
       "overall": {
-        "on": 1.52,
-        "off": 1.52,
-        "delta": 0.0
+        "on": 4.92,
+        "off": 4.6,
+        "delta": 0.32
       }
     },
     "hard_metrics": {
       "jd_keyword_coverage_rate": {
-        "on": 0.4615,
-        "off": 0.4615,
+        "on": 0.8,
+        "off": 0.8,
         "delta": 0.0
       },
       "suggestion_schema_valid_rate": {
@@ -55,9 +55,9 @@
         "delta": 0.0
       },
       "skill_hard_term_ratio": {
-        "on": 1.0,
-        "off": 1.0,
-        "delta": 0.0
+        "on": 0.3695,
+        "off": 0.1571,
+        "delta": 0.2124
       },
       "placeholder_leak_rate": {
         "on": 0.0,
@@ -72,142 +72,321 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 1737.28,
+        "elapsed_ms": 27296.02,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历具备增长产品经理基础经验与技能，但在JD核心职责如用户分层、仪表盘搭建及量化成果方面存在明显缺失，需详细补充。优势方面：拥有5年增长产品经验，与JD吻合、熟悉A/B Test，并有相关平台建设经验。短板主要在：工作经历描述缺乏具体量化成果、部分JD核心职责未在简历中体现、技能列表与JD要求存在部分缺失。与JD相比仍缺关键词：增长策略设计、用户分层、仪表盘搭建、埋点体系、项目规模。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-exp-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "工作经历中“推动注册转化率提升”缺乏具体数字，无法衡量实际贡献与影响力。",
+              "suggestedValue": "主导增长实验平台建设，通过数据驱动策略与产品优化，使注册转化率提升了X% (如15%)。",
+              "targetSection": "workExps",
+              "title": "量化增长实验成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-exp-2",
+              "reason": "JD明确要求“增长策略设计”，简历中未明确体现此项核心职责与成果。",
+              "suggestedValue": "负责设计并落地新用户获取与激活策略，通过XX渠道优化，实现用户增长Y% (如20%)。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-exp-3",
+              "reason": "JD强调“用户分层”，简历中完全未提及，是重要能力缺口。",
+              "suggestedValue": "基于用户行为数据与画像分析，构建用户分层模型，并针对不同分层用户制定精细化增长方案。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-exp-4",
+              "reason": "简历仅提及“用户增长实验”，需具体阐述实验分析的流程、方法及对决策的支撑作用。",
+              "suggestedValue": "负责A/B测试全流程管理，包括实验设计、数据收集、结果解读与统计显著性分析，为产品迭代提供量化决策依据。",
+              "targetSection": "workExps",
+              "title": "明确实验分析职责与深度",
               "type": "optimization"
+            },
+            {
+              "id": "suggestion-exp-5",
+              "reason": "JD明确要求“仪表盘搭建”，简历中未体现此项数据可视化与洞察能力。",
+              "suggestedValue": "利用数据可视化工具，搭建核心业务与增长指标仪表盘，实现数据实时监控与异常预警。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-exp-6",
+              "originalValue": "负责漏斗优化和用户增长实验。",
+              "reason": "个人简介提及“漏斗优化”，但工作经历中缺乏具体案例与量化效果。",
+              "suggestedValue": "深入分析用户转化漏斗，识别关键流失节点，通过产品改版与流程优化，将漏斗各环节转化率平均提升X%。",
+              "targetSection": "workExps",
+              "title": "具体化漏斗优化成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-exp-7",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“增长实验平台建设”是重要项目，需量化其带来的效率提升或业务支撑能力。",
+              "suggestedValue": "从零主导增长实验平台建设，支持百余项A/B测试并行，将实验周期缩短X%，提升团队迭代效率。",
+              "targetSection": "workExps",
+              "title": "量化增长实验平台建设效益",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-exp-8",
+              "reason": "简历缺乏项目背景、用户规模等信息，难以评估经验的广度与深度。",
+              "suggestedValue": "在负责的增长方向中，覆盖用户规模达XX万，管理XX个业务模块的产品增长。",
+              "targetSection": "workExps",
+              "title": "补充项目规模与影响力",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skill-1",
+              "reason": "JD明确要求熟悉“埋点体系”，简历技能中未提及。",
+              "suggestedValue": [
+                "埋点体系"
+              ],
+              "targetSection": "skills",
+              "title": "补齐埋点体系技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skill-2",
+              "reason": "为支撑“仪表盘搭建”职责，建议补充常用数据可视化工具。",
+              "suggestedValue": [
+                "Tableau",
+                "Power BI"
+              ],
+              "targetSection": "skills",
+              "title": "补充仪表盘搭建工具",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skill-3",
+              "reason": "为支撑“用户分层”职责，建议补充相关分析方法或模型。",
+              "suggestedValue": [
+                "RFM模型",
+                "用户画像分析"
+              ],
+              "targetSection": "skills",
+              "title": "补充用户分层分析方法",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skill-4",
+              "reason": "增长产品经理常需使用更多专业数据分析工具，以提升分析效率与深度。",
+              "suggestedValue": [
+                "Amplitude",
+                "Mixpanel"
+              ],
+              "targetSection": "skills",
+              "title": "补充其他数据分析工具",
+              "type": "missing"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "增长策略设计",
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系",
+            "项目规模",
+            "量化成果"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.6923,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.2857,
           "placeholder_leak_rate": 0.0
         }
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 839.14,
+        "elapsed_ms": 33178.63,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历初步匹配岗位要求，具备核心增长经验，但在职责细节、量化成果和部分关键技能方面尚有提升空间，需进一步完善以展现更全面的能力。优势方面：5年互联网增长产品经验与岗位高度匹配、熟悉SQL、Python、A/B Test、GA4等核心技能。短板主要在：工作经历中缺乏具体量化成果和STAR法则描述、部分JD核心职责如“用户分层”和“仪表盘搭建”未明确体现、技能列表深度与广度有待拓展，未涵盖所有JD要求。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介过于通用，未能突出最具竞争力的量化成果。",
+              "suggestedValue": "5年互联网产品与增长经验，通过漏斗优化和精细化用户增长实验，持续驱动核心业务指标平均提升15%以上。",
+              "targetSection": "personalSummary",
+              "title": "个人简介量化与聚焦",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“推动注册转化率提升”缺乏具体数据支撑，难以评估实际贡献。",
+              "suggestedValue": "主导增长实验平台从0到1建设，支持月均10+个增长实验高效运行；通过数据驱动的漏斗优化，推动注册转化率提升20%，月新增用户成本降低15%。",
+              "targetSection": "workExps",
+              "title": "工作经历量化具体化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-3",
+              "reason": "JD明确要求“增长策略设计”能力，简历中未明确体现。",
+              "suggestedValue": "基于用户行为数据与市场趋势，设计并实施用户生命周期增长策略，提升用户粘性与活跃度。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-4",
+              "reason": "JD要求具备“用户分层”经验，简历中缺乏对应描述。",
+              "suggestedValue": "构建并优化用户分层模型，针对不同用户群设计差异化增长方案，实现用户精准触达与转化。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "reason": "仅提到“增长实验平台建设”，未详细阐述如何进行“实验分析”及洞察提取。",
+              "suggestedValue": "负责A/B测试方案设计、数据收集与结果分析，产出深度实验报告及优化建议，指导产品迭代方向。",
+              "targetSection": "workExps",
+              "title": "细化实验分析职责",
               "type": "optimization"
+            },
+            {
+              "id": "suggestion-6",
+              "reason": "JD要求“仪表盘搭建”能力，简历中未提及。",
+              "suggestedValue": "搭建核心业务数据仪表盘，实现数据实时监控与异常预警，为产品运营决策提供数据支持。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建能力",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-7",
+              "reason": "JD明确要求熟悉“埋点体系”，简历技能中缺失。",
+              "suggestedValue": [
+                "埋点设计",
+                "埋点管理",
+                "数据采集"
+              ],
+              "targetSection": "skills",
+              "title": "补齐埋点体系技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-8",
+              "reason": "Python技能已列出，但未体现具体应用场景，可补充更专业的用途。",
+              "suggestedValue": [
+                "Python数据分析",
+                "Python数据处理",
+                "数据自动化脚本"
+              ],
+              "targetSection": "skills",
+              "title": "深化Python应用场景",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-9",
+              "reason": "SQL技能已列出，可补充更高级/复杂的应用，体现熟练度。",
+              "suggestedValue": [
+                "SQL复杂查询",
+                "SQL性能优化",
+                "数据仓库"
+              ],
+              "targetSection": "skills",
+              "title": "深化SQL应用能力",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-10",
+              "reason": "配合“仪表盘搭建”职责，补充具体的数据可视化工具，展示专业性。",
+              "suggestedValue": [
+                "Tableau",
+                "Power BI",
+                "FineBI"
+              ],
+              "targetSection": "skills",
+              "title": "补充数据可视化工具",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-11",
+              "reason": "增长产品经理常使用专业数据分析工具，可补充以提升技能广度。",
+              "suggestedValue": [
+                "Amplitude",
+                "Mixpanel",
+                "友盟+"
+              ],
+              "targetSection": "skills",
+              "title": "拓展专业数据分析工具",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-12",
+              "reason": "增长产品经理应熟悉常见的增长框架和指标，体现专业知识体系。",
+              "suggestedValue": [
+                "用户生命周期管理",
+                "LTV",
+                "CAC",
+                "北极星指标"
+              ],
+              "targetSection": "skills",
+              "title": "补充增长方法论与指标",
+              "type": "missing"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "增长策略设计",
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.8462,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.3684,
           "placeholder_leak_rate": 0.0
         }
       },
       "judge": {
-        "winner_real": "tie",
-        "reason": "两者内容完全一致且质量极低，均包含系统报错信息（智能分析暂不可用），工作经历优化建议完全编造数据且脱离原始简历事实（将增长实验改为通用的效率提升），技能建议建议了简历中已存在的技能（Python/SQL）。",
+        "winner_real": "on",
+        "reason": "LEFT在关键词匹配的精确性、建议的可采纳度与技能的细化程度上略优于RIGHT，尤其在处理缺失技能时提供了更具体的子项建议。",
         "on": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 3,
-          "writing_quality": 2,
-          "overall": 1.8
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 5,
+          "writing_quality": 5,
+          "overall": 5.0
         },
         "off": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 3,
-          "writing_quality": 2,
-          "overall": 1.8
+          "jd_relevance": 4,
+          "actionability": 4,
+          "factuality": 5,
+          "skill_precision": 4,
+          "writing_quality": 5,
+          "overall": 4.4
         },
         "raw": {
-          "winner": "tie",
+          "winner": "left",
           "left": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 3,
-            "writing_quality": 2,
-            "overall": 1.8
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 5,
+            "writing_quality": 5,
+            "overall": 5.0
           },
           "right": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 3,
-            "writing_quality": 2,
-            "overall": 1.8
+            "jd_relevance": 4,
+            "actionability": 4,
+            "factuality": 5,
+            "skill_precision": 4,
+            "writing_quality": 5,
+            "overall": 4.4
           },
-          "reason": "两者内容完全一致且质量极低，均包含系统报错信息（智能分析暂不可用），工作经历优化建议完全编造数据且脱离原始简历事实（将增长实验改为通用的效率提升），技能建议建议了简历中已存在的技能（Python/SQL）。"
+          "reason": "LEFT在关键词匹配的精确性、建议的可采纳度与技能的细化程度上略优于RIGHT，尤其在处理缺失技能时提供了更具体的子项建议。"
         }
       }
     },
@@ -216,142 +395,256 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 1156.53,
+        "elapsed_ms": 41271.75,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历核心方向与岗位匹配，但内容过于简略，缺乏量化成果和具体职责阐述，未能充分展现候选人能力深度。优势方面：5年互联网产品与增长经验，经验背景与JD高度契合、核心技能（SQL, Python, A/B Test, GA4）与JD要求吻合。短板主要在：工作经历描述过于概括，缺乏具体项目细节和量化业绩、未明确展示用户分层、仪表盘搭建等关键职责经验、简历整体信息密度不足，未能有效凸显个人亮点。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "增长方向 @ 某SaaS公司 [2020-04-2025-02]: 主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "现有工作经历描述过于简略，建议以更具体的项目案例和职责分条阐述，并量化成果，方便面试官快速捕捉亮点。",
+              "suggestedValue": "增长方向 @ 某SaaS公司 [2020-04-2025-02]\n- 主导增长实验平台从0到1建设，覆盖用户行为数据采集、实验设计与效果评估全流程，提升实验效率X%。\n- 负责核心业务增长策略设计与落地，通过AARRR漏斗优化，将注册转化率提升15%，为公司带来XX万新增用户。\n- 构建用户分层模型，指导精细化运营，提升高价值用户LTV X%。\n- 搭建核心业务指标仪表盘（如Power BI/Tableau），实现数据自动化监测与预警，支持业务决策效率提升Y%。",
+              "targetSection": "workExps",
+              "title": "工作经历详述与结构优化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "未明确提及用户分层经验。",
+              "reason": "JD明确要求具备用户分层能力，简历中需补充相关项目经验和成果。",
+              "suggestedValue": "基于用户行为数据与业务目标，深度分析并构建用户分层模型，实现精细化触达与运营，成功提升核心用户群留存率Z%。",
+              "targetSection": "workExps",
+              "title": "补充用户分层经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-3",
+              "originalValue": "仅提及推动转化率提升，未具体阐述策略设计过程。",
+              "reason": "JD将增长策略设计列为核心职责，需在经历中具体阐述如何设计并落地策略。",
+              "suggestedValue": "负责从市场分析到用户洞察的全链路增长策略设计，例如通过优化新用户引导流程、设计激励机制等，将NPS提升X点。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "体现增长策略设计与落地能力",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-4",
+              "originalValue": "推动注册转化率提升。",
+              "reason": "现有描述缺乏具体数据支撑，建议为每一项职责或项目补充可量化的业绩指标。",
+              "suggestedValue": "通过对注册流程进行A/B测试与迭代优化，使注册转化率提升15%，每月为平台新增高质量用户X万。",
+              "targetSection": "workExps",
+              "title": "量化项目成果与业务影响",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "未提及埋点体系技能。",
+              "reason": "JD明确要求熟悉埋点体系，但简历技能列表中未体现。",
+              "suggestedValue": [
+                "埋点体系"
+              ],
+              "targetSection": "skills",
+              "title": "补充埋点体系技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-6",
+              "originalValue": "主导增长实验平台建设。",
+              "reason": "“主导增长实验平台建设”是重要亮点，建议进一步展开其功能、技术栈及带来的业务价值。",
+              "suggestedValue": "主导设计并落地增长实验平台的核心功能模块，包括实验配置、数据采集、效果评估及可视化报告，支持数百项A/B测试的快速迭代，加速产品决策周期X%。",
+              "targetSection": "workExps",
+              "title": "深化增长实验平台经验描述",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "未提及跨部门协作经验。",
+              "reason": "增长产品经理常需跨部门协作，建议补充相关协作经验以展现综合能力。",
+              "suggestedValue": "紧密协同研发、运营、市场及数据团队，成功推动多个复杂增长项目上线，确保各环节高效配合，达成既定增长目标。",
+              "targetSection": "workExps",
+              "title": "增加跨部门协作经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-8",
+              "originalValue": "（缺少具体项目案例）",
+              "reason": "简历缺乏具体项目案例来支撑能力，建议补充一个完整的、体现增长产品经理价值的项目描述。",
+              "suggestedValue": "项目案例：主导“新用户转化加速”项目，通过前端漏斗分析、用户路径优化及个性化推荐算法改进，成功将首购转化率提升8%，为公司带来年化新增营收XX万元。",
+              "targetSection": "workExps",
+              "title": "补充具体项目案例",
               "type": "optimization"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "埋点体系",
+            "增长策略设计",
+            "用户分层",
+            "仪表盘搭建",
+            "量化成果"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.7692,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.0,
           "placeholder_leak_rate": 0.0
         }
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 939.7,
+        "elapsed_ms": 46875.58,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历与JD核心职责匹配度高，但缺乏具体项目细节与量化成果。建议深度挖掘工作内容，用数据支撑成就，并补足JD提及的特定技能。优势方面：核心岗位职责（增长产品经理）匹配度高、拥有增长实验平台建设经验，符合JD要求。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-summary-quantification",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介过于泛泛，缺乏量化成果与核心亮点，应直接突出数据。",
+              "suggestedValue": "5年互联网产品与增长经验，擅长数据驱动的漏斗优化与用户增长实验，曾主导增长实验平台建设并使注册转化率提升15%。",
+              "targetSection": "summary",
+              "title": "个人简介量化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-workexp-details",
+              "originalValue": "增长方向 @ 某SaaS公司 [2020-04-2025-02]: 主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "当前工作经历描述过于概括，缺乏具体的项目细节、挑战与成果量化，难以评估真实贡献。建议采用STAR法则或子弹点形式丰富内容。",
+              "suggestedValue": "增长方向产品经理 @ 某SaaS公司 [2020-04-2025-02]\n- 从0到1主导增长实验平台的规划、设计与落地，赋能业务高效开展百余次A/B Test，提升实验效率50%。\n- 负责新用户注册转化漏斗优化，通过多轮A/B测试与产品迭代，将注册转化率提升15%，新增用户数量达XX万。\n- 基于用户行为数据构建用户分层模型，设计差异化增长策略，实现高价值用户留存率提升8%。\n- 规划与搭建核心增长指标数据仪表盘，利用Tableau/Power BI等工具，为跨部门提供实时数据洞察。",
+              "targetSection": "workExps",
+              "title": "工作经历细节化与量化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-strategy-design",
+              "reason": "JD明确要求“增长策略设计”，简历中需有更直接体现。",
+              "suggestedValue": "负责全链路增长策略设计，从用户获取、激活、留存到推荐，规划并实施系列增长方案。",
+              "targetSection": "workExps",
+              "title": "明确增长策略设计能力",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-user-segmentation",
+              "reason": "JD明确要求“用户分层”，简历中未明确展示具体实践。",
+              "suggestedValue": "运用用户行为数据与画像标签进行用户分层，识别核心用户与潜在流失用户，并针对性地制定运营与产品策略。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "突出用户分层实践",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-experiment-analysis",
+              "originalValue": "负责用户增长实验。",
+              "reason": "简历仅提及“增长实验”，但未体现实验分析的深度与方法。",
+              "suggestedValue": "深入参与增长实验的设计、数据分析与效果评估，利用统计学方法验证实验结论，指导产品迭代方向。",
+              "targetSection": "workExps",
+              "title": "强调实验分析深度",
               "type": "optimization"
+            },
+            {
+              "id": "suggestion-funnel-optimization",
+              "originalValue": "负责漏斗优化。",
+              "reason": "简历提及“漏斗优化”，但未具体说明优化的哪个环节及成果。",
+              "suggestedValue": "专注于用户注册、激活、付费等核心转化漏斗的痛点分析与优化，通过产品改版与运营策略调整，提升各环节转化率。",
+              "targetSection": "workExps",
+              "title": "细化漏斗优化环节",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-data-tool-application",
+              "reason": "简历已列出SQL/Python技能，但未在工作经历中体现其具体应用。",
+              "suggestedValue": "熟练运用SQL进行数据提取、清洗与分析，并利用Python编写数据脚本，自动化报告生成与异常监控。",
+              "targetSection": "workExps",
+              "title": "补充数据分析工具应用",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-skills-tracking",
+              "reason": "JD明确要求“埋点体系”，简历中未提及。",
+              "suggestedValue": [
+                "埋点体系",
+                "数据埋点设计"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能补全",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skills-bi-tools",
+              "reason": "JD要求“仪表盘搭建”，简历未列出具体BI工具名称。",
+              "suggestedValue": [
+                "Tableau",
+                "Power BI",
+                "FineBI"
+              ],
+              "targetSection": "skills",
+              "title": "数据可视化工具补全",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-skills-growth-methodology",
+              "reason": "简历仅列出工具技能，缺乏对增长领域方法论的体现，无法展示思考深度。",
+              "suggestedValue": [
+                "用户生命周期价值 (LTV) 分析",
+                "用户画像构建",
+                "增长黑客方法论"
+              ],
+              "targetSection": "skills",
+              "title": "补充增长方法论",
+              "type": "missing"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "埋点体系",
+            "用户分层",
+            "增长策略设计",
+            "仪表盘搭建"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.7692,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.375,
           "placeholder_leak_rate": 0.0
         }
       },
       "judge": {
-        "winner_real": "tie",
-        "reason": "两侧结果完全一致，且均存在严重幻觉（提示缺失已有的Python/SQL技能）和错误数据（关键词字段显示为错误提示信息）。",
+        "winner_real": "on",
+        "reason": "RIGHT在JD匹配度上略胜一筹，尤其是在将JD要求的“仪表盘搭建”具体化为技能列表中的BI工具名称，并更全面地将JD核心职责融入到工作经历的优化建议中，使其建议更具针对性和完整性。",
         "on": {
-          "jd_relevance": 2,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 1,
-          "writing_quality": 2,
-          "overall": 1.6
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 4,
+          "writing_quality": 5,
+          "overall": 4.8
         },
         "off": {
-          "jd_relevance": 2,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 1,
-          "writing_quality": 2,
-          "overall": 1.6
+          "jd_relevance": 4,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 4,
+          "writing_quality": 5,
+          "overall": 4.6
         },
         "raw": {
-          "winner": "tie",
+          "winner": "right",
           "left": {
-            "jd_relevance": 2,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 1,
-            "writing_quality": 2,
-            "overall": 1.6
+            "jd_relevance": 4,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 4,
+            "writing_quality": 5,
+            "overall": 4.6
           },
           "right": {
-            "jd_relevance": 2,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 1,
-            "writing_quality": 2,
-            "overall": 1.6
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 4,
+            "writing_quality": 5,
+            "overall": 4.8
           },
-          "reason": "两侧结果完全一致，且均存在严重幻觉（提示缺失已有的Python/SQL技能）和错误数据（关键词字段显示为错误提示信息）。"
+          "reason": "RIGHT在JD匹配度上略胜一筹，尤其是在将JD要求的“仪表盘搭建”具体化为技能列表中的BI工具名称，并更全面地将JD核心职责融入到工作经历的优化建议中，使其建议更具针对性和完整性。"
         }
       }
     },
@@ -360,142 +653,285 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 1097.98,
+        "elapsed_ms": 20654.8,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 80,
+          "summary": "简历初步展现了增长产品经理的核心能力，但缺乏具体项目细节与量化成果。部分关键职责与技能需明确补充。优势方面：职位与JD核心职责高度匹配、具备5年互联网产品与增长经验。短板主要在：工作经历描述过于概括，缺乏量化业绩指标、未明确体现用户分层、仪表盘搭建等关键职责、简历整体信息量不足，排版有优化空间。与JD相比仍缺关键词：用户分层、仪表盘搭建、埋点体系。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "JD对实际落地效果有要求，需补充具体量化指标。",
+              "suggestedValue": "主导增长实验平台从0到1建设，支持XX个增长实验并行，将实验效率提升YY%；推动注册转化率提升X%，为公司带来YY万新增用户/营收增长。",
+              "targetSection": "workExps",
+              "title": "工作经历-量化成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "reason": "JD明确要求用户分层能力，简历中未体现。",
+              "suggestedValue": "基于用户行为数据和业务目标，进行用户分层模型设计与实施，指导精细化运营策略，提升精细化运营效果Z%。",
+              "targetSection": "workExps",
+              "title": "工作经历-用户分层",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-3",
+              "reason": "JD明确要求仪表盘搭建能力，简历中未体现。",
+              "suggestedValue": "独立搭建并维护核心业务数据仪表盘（如用户增长、转化漏斗、实验效果等），支撑数据驱动决策与业务复盘。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "工作经历-仪表盘搭建",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-4",
+              "originalValue": "负责漏斗优化和用户增长实验。",
+              "reason": "JD对增长策略设计有要求，需更具体地阐述。",
+              "suggestedValue": "根据业务目标和市场趋势，设计并落地多项用户增长策略，覆盖用户获取、激活、留存全生命周期；负责用户漏斗深度分析与优化，识别并解决关键转化瓶颈。",
+              "targetSection": "workExps",
+              "title": "工作经历-增长策略设计",
               "type": "optimization"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "负责用户增长实验。",
+              "reason": "JD对实验分析有要求，需更具体地阐述能力和产出。",
+              "suggestedValue": "对A/B Test实验结果进行严谨的数据分析与解读，输出可落地的优化建议与行动方案，指导产品迭代方向。",
+              "targetSection": "workExps",
+              "title": "工作经历-实验分析",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-6",
+              "reason": "JD明确要求熟悉埋点体系，简历中缺失。",
+              "suggestedValue": [
+                "埋点体系设计",
+                "埋点数据治理"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能-埋点体系",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "SQL, Python",
+              "reason": "SQL/Python是硬性要求，需体现具体应用场景。",
+              "suggestedValue": [
+                "SQL数据建模",
+                "Python数据分析",
+                "数据自动化脚本"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能-SQL与Python",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-8",
+              "originalValue": "GA4",
+              "reason": "GA4是重要工具，需体现其应用深度。",
+              "suggestedValue": [
+                "GA4事件配置",
+                "GA4报告定制",
+                "Google Tag Manager"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能-GA4",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-9",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介应更具吸引力，突出成果导向。",
+              "suggestedValue": "5年资深增长产品经理，擅长通过数据驱动的增长策略设计与A/B实验，实现用户获取、激活与留存的显著提升。",
+              "targetSection": "summary",
+              "title": "个人简介",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-10",
+              "reason": "简历过于简洁，缺乏结构化信息，不易快速获取关键内容。",
+              "suggestedValue": "建议采用分点描述（Bullet Points）来细化工作职责和项目成果，使信息更清晰、易读。如：\n- 负责：XXXX\n- 主导：XXXX\n- 成果：XXXX",
+              "targetSection": "overall",
+              "title": "简历排版与结构",
+              "type": "format"
+            },
+            {
+              "id": "suggestion-11",
+              "reason": "目前简历仅有公司经验，缺乏具体项目细节，无法判断经验含金量。",
+              "suggestedValue": "建议补充1-2个代表性增长项目（包括项目背景、职责、具体行动、取得成果），例如：\n项目名称：XX用户增长项目\n项目职责：作为增长产品经理，负责XX模块的增长策略设计、实验规划与数据分析。\n具体行动：通过XXXX策略和YYY实验，成功将Z指标提升X%。\n项目成果：达成XX目标，为公司带来YY收益。",
+              "targetSection": "workExps",
+              "title": "项目经验",
+              "type": "missing"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.9231,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.5,
           "placeholder_leak_rate": 0.0
         }
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 792.02,
+        "elapsed_ms": 31518.11,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历展现了扎实的增长产品基础与互联网经验，核心技能匹配度高。但工作经历描述过于简略，量化成果和具体职责需大幅细化。优势方面：拥有5年互联网产品与增长经验，与JD方向高度契合、核心硬技能（SQL, Python, A/B Test, GA4）与JD要求吻合。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介应更具概括性和吸引力，突出核心竞争力与数据驱动成果。",
+              "suggestedValue": "拥有5年互联网增长产品经验，擅长通过数据驱动的增长策略、用户分层及A/B测试，实现关键业务指标的显著提升，尤其在SaaS产品注册转化和用户活跃方面表现突出。",
+              "targetSection": "summary",
+              "title": "个人简介优化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "（无）",
+              "reason": "JD明确要求具备增长策略设计能力，简历中需具体体现。",
+              "suggestedValue": "负责SaaS产品用户增长策略设计，通过市场分析和用户研究，识别增长机会并制定实施方案，落地多项增长举措。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-3",
+              "originalValue": "推动注册转化率提升。",
+              "reason": "工作经历中的业绩应具体量化，以便评估实际贡献和影响力。",
+              "suggestedValue": "通过优化注册流程和实施多轮A/B测试，成功将目标用户注册转化率提升15%，有效提升新用户增长效率。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "量化注册转化率提升成果",
               "type": "optimization"
+            },
+            {
+              "id": "suggestion-4",
+              "originalValue": "（无）",
+              "reason": "JD明确要求熟悉用户分层，需在工作经历中具体展示相关经验。",
+              "suggestedValue": "构建并维护用户分层模型，基于用户行为数据进行精细化运营，针对高价值用户群体设计差异化触达策略，提升核心用户活跃度X%。",
+              "targetSection": "workExps",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "（无）",
+              "reason": "虽提及实验平台，但缺乏具体实验分析的职责描述，需明确指出在实验数据分析上的贡献。",
+              "suggestedValue": "负责A/B测试结果的深度分析与解读，评估实验效果，提供数据驱动的迭代建议，指导产品功能优化方向。",
+              "targetSection": "workExps",
+              "title": "明确实验分析职责",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-6",
+              "originalValue": "（无）",
+              "reason": "JD明确要求具备仪表盘搭建能力，需在工作经历中体现。",
+              "suggestedValue": "搭建并维护SaaS产品核心业务数据仪表盘（如用户增长、漏斗转化、实验效果），支持日常数据监控与管理层决策。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "主导增长实验平台建设",
+              "reason": "“主导增长实验平台建设”可进一步展开，体现具体职责和技术深度。",
+              "suggestedValue": "主导并从0到1建设增长实验平台，涵盖实验设计、配置、数据采集与分析全流程，支持日均5+增长实验并行，有效提升实验效率50%。",
+              "targetSection": "workExps",
+              "title": "丰富增长实验平台建设细节",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-8",
+              "originalValue": "（无）",
+              "reason": "个人简介提及漏斗优化，但工作经历中缺乏具体落地项目和量化成果，建议补充。",
+              "suggestedValue": "深入分析用户转化漏斗，识别关键瓶颈并设计优化方案，通过迭代测试使某关键转化节点效率提升X%，用户流失率降低Y%。",
+              "targetSection": "workExps",
+              "title": "细化漏斗优化成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-9",
+              "originalValue": "（无）",
+              "reason": "JD明确要求熟悉“埋点体系”，此为关键缺失技能点。",
+              "suggestedValue": [
+                "埋点体系"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能：埋点体系",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-10",
+              "originalValue": "（无）",
+              "reason": "“仪表盘搭建”职责通常需要特定工具支撑，补充常用数据可视化工具可增加技能匹配度。",
+              "suggestedValue": [
+                "Tableau",
+                "Power BI"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能：数据可视化工具",
+              "type": "missing"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "增长策略设计",
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.7692,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.6667,
           "placeholder_leak_rate": 0.0
         }
       },
       "judge": {
-        "winner_real": "tie",
-        "reason": "两份结果内容完全一致，且均包含无效的占位符摘要（'智能分析暂时不可用'），错误地建议添加已存在的技能（SQL/Python），并编造了与简历原意不符的通用工作经历数据。",
+        "winner_real": "on",
+        "reason": "LEFT在建议的可采纳程度和表达质量上略胜一筹，其提供的优化建议更侧重于直接的内容补充而非普遍性指导，且量化成果的细节更具体。",
         "on": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 1,
-          "writing_quality": 2,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 5,
+          "writing_quality": 5,
+          "overall": 5.0
         },
         "off": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 1,
-          "writing_quality": 2,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 4,
+          "factuality": 5,
+          "skill_precision": 5,
+          "writing_quality": 4,
+          "overall": 4.6
         },
         "raw": {
-          "winner": "tie",
+          "winner": "left",
           "left": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 1,
-            "writing_quality": 2,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 5,
+            "writing_quality": 5,
+            "overall": 5.0
           },
           "right": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 1,
-            "writing_quality": 2,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 4,
+            "factuality": 5,
+            "skill_precision": 5,
+            "writing_quality": 4,
+            "overall": 4.6
           },
-          "reason": "两份结果内容完全一致，且均包含无效的占位符摘要（'智能分析暂时不可用'），错误地建议添加已存在的技能（SQL/Python），并编造了与简历原意不符的通用工作经历数据。"
+          "reason": "LEFT在建议的可采纳程度和表达质量上略胜一筹，其提供的优化建议更侧重于直接的内容补充而非普遍性指导，且量化成果的细节更具体。"
         }
       }
     },
@@ -504,142 +940,310 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 853.93,
+        "elapsed_ms": 34882.38,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 84,
+          "summary": "简历核心岗位匹配度高，具备增长产品经理经验和关键技能基础，但需大幅增强工作经历的量化与细节，并补充JD中未充分体现的能力点。优势方面：岗位与经验方向高度匹配，具备5年增长产品经验。、熟悉SQL、Python、A/B Test、GA4等核心数据与实验工具。短板主要在：工作经历描述过于概括，缺乏具体量化成果和项目细节。、JD中明确要求的“用户分层”和“仪表盘搭建”经验未体现。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "推动注册转化率提升。",
+              "reason": "工作经历缺乏可量化的具体业绩，建议补充核心指标提升的百分比或带来的价值。",
+              "suggestedValue": "推动注册转化率提升X%（例如20%），成功将新用户留存率提高Y%，为公司带来Z万元收益。",
+              "targetSection": "workExps",
+              "title": "量化工作成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "reason": "JD明确要求具备增长策略设计能力，简历需具体体现相关经验。",
+              "suggestedValue": "设计并实施多项用户全生命周期增长策略，如用户获取、激活、留存和召回，有效提升核心增长指标。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-3",
+              "reason": "JD强调用户分层能力，简历中未明确提及，需补充具体实践。",
+              "suggestedValue": "运用SQL和Python进行用户行为分析与分层，针对不同用户群设计并落地个性化增长方案。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-4",
+              "reason": "JD要求具备仪表盘搭建能力，建议在工作经历中体现具体工具与成果。",
+              "suggestedValue": "独立设计与搭建关键业务数据仪表盘（如Power BI/Tableau），实现用户增长、转化、留存等核心指标的实时监控与可视化。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“实验分析”是JD核心职责，建议在工作经历中体现更深入的分析流程和产出。",
+              "suggestedValue": "主导增长实验平台建设及实验全流程管理，通过严谨的A/B测试设计、数据分析与结果解读，迭代优化产品功能与策略，形成可复用增长经验。",
+              "targetSection": "workExps",
+              "title": "深化实验分析细节",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-6",
+              "reason": "JD明确要求熟悉“埋点体系”，此为关键技能，但简历中未提及。",
+              "suggestedValue": [
+                "埋点体系",
+                "埋点设计",
+                "数据埋点",
+                "数据采集"
+              ],
+              "targetSection": "skills",
+              "title": "补全埋点体系技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介应更具亮点和成就导向，突出核心优势而非仅职责。",
+              "suggestedValue": "5年互联网产品与增长经验，擅长数据驱动的漏斗优化与用户增长实验，通过精细化运营与策略迭代，多次实现关键增长指标突破。",
+              "targetSection": "summary",
+              "title": "优化个人简介",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-8",
+              "originalValue": "主导增长实验平台建设",
+              "reason": "“主导增长实验平台建设”是重要亮点，建议增加具体职责和产出，体现深度与广度。",
+              "suggestedValue": "主导从需求分析、方案设计到研发上线、灰度发布的增长实验平台全链路建设，支持多业务线A/B实验并行，提高实验效率与迭代速度。",
+              "targetSection": "workExps",
+              "title": "详述平台建设内容",
               "type": "optimization"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.8462,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.0,
           "placeholder_leak_rate": 0.0
         }
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 822.83,
+        "elapsed_ms": 26451.61,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历初步评估通过，王宁具备增长产品经理的核心经验和技能，但内容描述过于简略，缺乏具体量化成果与项目细节，需大幅优化以展现竞争力。优势方面：拥有5年增长产品经理经验，与目标岗位高度匹配、核心技能（SQL, Python, A/B Test, GA4）与JD要求吻合。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介应更具吸引力，突出核心竞争力与量化成就，与岗位职责紧密结合。",
+              "suggestedValue": "5年互联网增长产品经理经验，擅长数据驱动的增长策略设计与A/B实验，负责用户增长漏斗优化与转化率提升，曾主导增长实验平台建设并实现注册转化率提升X%。",
+              "targetSection": "summary",
+              "title": "个人简介优化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "工作经历缺乏具体可量化的业绩指标，无法直观体现个人贡献与业务价值。",
+              "suggestedValue": "主导增长实验平台从0到1建设，覆盖核心业务场景，支撑日均X个实验运行；通过迭代优化，推动注册转化率提升15%，年度GMV增长Y%。",
+              "targetSection": "workExps",
+              "title": "工作经历量化成果",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-3",
+              "originalValue": "",
+              "reason": "JD明确要求具备“增长策略设计”能力，但简历中未明确体现相关经验。",
+              "suggestedValue": "基于用户行为数据与市场趋势，设计并实施多项增长策略（如新用户引导、活跃度提升、流失挽回），实现用户留存率提升Z%。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-4",
+              "originalValue": "",
+              "reason": "JD明确要求具备“用户分层”能力，但简历中未具体展开相关经验。",
+              "suggestedValue": "构建并优化用户分层模型，通过RFM、LTV等指标对用户进行精细化运营，支持差异化产品功能与营销活动，提升目标用户转化效率。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "",
+              "reason": "JD明确要求具备“仪表盘搭建”能力，但简历中未具体展开相关经验。",
+              "suggestedValue": "搭建并维护关键增长指标监控仪表盘（如Power BI/Tableau），实现实时数据可视化与异常预警，支持管理层决策与业务复盘。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-6",
+              "originalValue": "推动注册转化率提升。",
+              "reason": "“实验分析”是增长产品的核心职能，应更具体化操作流程和方法论。",
+              "suggestedValue": "负责A/B Test实验全生命周期管理，从假设提出、方案设计、数据埋点、实验执行到结果分析与结论输出，确保实验科学性与业务落地效果。",
+              "targetSection": "workExps",
+              "title": "细化实验分析流程",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-7",
+              "reason": "JD明确要求熟悉“埋点体系”，简历技能列表未明确提及。",
+              "suggestedValue": [
+                "埋点体系",
+                "埋点规范"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能：埋点体系",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-8",
+              "reason": "“仪表盘搭建”需要专业工具支撑，建议补充常用的数据可视化工具。",
+              "suggestedValue": [
+                "Tableau",
+                "Power BI",
+                "FineReport"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能：数据可视化工具",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-9",
+              "reason": "GA4已提及，但更专业的行为分析工具能更好支撑“用户分层”和“漏斗优化”的实践。",
+              "suggestedValue": [
+                "Mixpanel",
+                "Amplitude",
+                "神策数据"
+              ],
+              "targetSection": "skills",
+              "title": "核心技能：用户行为分析工具",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-10",
+              "originalValue": "",
+              "reason": "个人简介提到“漏斗优化”，工作经历中应具体展开，体现操作细节与成果。",
+              "suggestedValue": "深入分析用户转化漏斗，识别关键流失节点，并通过产品功能迭代、文案优化、流程简化等手段，持续提升注册、激活、付费等核心转化率。",
+              "targetSection": "workExps",
+              "title": "工作经历：漏斗优化具体实践",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-11",
+              "originalValue": "Python",
+              "reason": "Python技能应具体化在增长产品经理领域的应用，提升含金量。",
+              "suggestedValue": [
+                "Python数据分析",
+                "Python自动化脚本"
+              ],
+              "targetSection": "skills",
+              "title": "细化Python应用场景",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-12",
+              "originalValue": "SQL",
+              "reason": "SQL技能应具体化在增长产品经理领域的应用，体现实际操作能力。",
+              "suggestedValue": [
+                "SQL数据提取",
+                "SQL报表开发",
+                "SQL数据建模"
+              ],
+              "targetSection": "skills",
+              "title": "细化SQL应用场景",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-13",
+              "reason": "增长产品经理需要对增长理论和模型有系统性认知，建议补充相关技能。",
+              "suggestedValue": [
+                "AARRR模型",
+                "北极星指标设计",
+                "增长飞轮"
+              ],
+              "targetSection": "skills",
+              "title": "补充增长理论/模型技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-14",
+              "originalValue": "",
+              "reason": "产品经理需要体现跨部门协作和项目管理能力，建议在工作经历中体现。",
+              "suggestedValue": "与研发、数据、运营、市场等团队紧密协作，主导增长项目从立项到落地，确保策略有效执行和目标达成。",
+              "targetSection": "workExps",
+              "title": "补充跨部门协作能力",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-15",
+              "originalValue": "主导增长实验平台建设。",
+              "reason": "工作经历中的项目描述可增加背景、挑战与解决思路，使其更具说服力。",
+              "suggestedValue": "在面临复杂的实验需求与数据一致性挑战下，独立规划并主导增长实验平台V1.0版本建设，从需求分析、技术选型到上线推广，缩短实验周期X%，提升数据分析效率Y%。",
+              "targetSection": "workExps",
+              "title": "明确项目挑战与价值",
               "type": "optimization"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "用户分层",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.8462,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.4375,
           "placeholder_leak_rate": 0.0
         }
       },
       "judge": {
-        "winner_real": "tie",
-        "reason": "两边内容完全一致，均输出了系统错误提示（智能分析暂时不可用），且建议中出现了严重的事实性错误（推荐已有的技能、编造与原经历无关的通用数据），属于低质量的无效分析。",
+        "winner_real": "on",
+        "reason": "LEFT在建议的细节程度、可操作性以及技能的精准度方面表现更优，不仅补充了缺失技能，还对现有技能进行了更具体的应用场景细化。",
         "on": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 5,
+          "writing_quality": 5,
+          "overall": 5.0
         },
         "off": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 4,
+          "factuality": 5,
+          "skill_precision": 3,
+          "writing_quality": 5,
+          "overall": 4.4
         },
         "raw": {
-          "winner": "tie",
+          "winner": "left",
           "left": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 5,
+            "writing_quality": 5,
+            "overall": 5.0
           },
           "right": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 4,
+            "factuality": 5,
+            "skill_precision": 3,
+            "writing_quality": 5,
+            "overall": 4.4
           },
-          "reason": "两边内容完全一致，均输出了系统错误提示（智能分析暂时不可用），且建议中出现了严重的事实性错误（推荐已有的技能、编造与原经历无关的通用数据），属于低质量的无效分析。"
+          "reason": "LEFT在建议的细节程度、可操作性以及技能的精准度方面表现更优，不仅补充了缺失技能，还对现有技能进行了更具体的应用场景细化。"
         }
       }
     },
@@ -648,142 +1252,272 @@
       "stage": "ok",
       "off": {
         "status": 200,
-        "elapsed_ms": 790.37,
+        "elapsed_ms": 35254.15,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "简历匹配度尚可，经验年限与核心技术栈符合要求，但在职责体现和量化成果上存在明显不足，需进一步细化和补充。优势方面：5年互联网产品与增长经验，年限匹配、熟悉SQL, Python, A/B Test, GA4等核心工具。短板主要在：工作经历缺乏具体量化业绩与业务深度描述、对用户分层、仪表盘搭建等核心职责体现不足、埋点体系等关键技能未明确列出。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "推动注册转化率提升。",
+              "reason": "JD要求具备结果导向，简历中缺少具体的量化业绩，无法体现贡献价值。",
+              "suggestedValue": "通过A/B测试与迭代优化，成功将注册转化率提升15%，带来月新增用户XX万。",
+              "targetSection": "workExps",
+              "title": "工作经历量化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "",
+              "reason": "JD明确要求具备增长策略设计能力，简历中未具体体现策略制定过程与成果。",
+              "suggestedValue": "基于市场分析与用户行为数据，设计并落地新用户增长、用户激活及召回策略，提升用户生命周期价值。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-3",
+              "originalValue": "",
+              "reason": "JD强调用户分层能力，简历中未体现相关经验与模型构建。",
+              "suggestedValue": "构建并应用RFM、LTV等多维度用户分层模型，针对不同群体设计精细化运营方案。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-4",
+              "originalValue": "",
+              "reason": "JD要求具备仪表盘搭建能力，简历中未提及数据报表或监控系统建设经验。",
+              "suggestedValue": "负责核心增长数据指标（如转化漏斗、留存率）的仪表盘设计与搭建，赋能业务数据驱动决策。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "负责漏斗优化和用户增长实验。",
+              "reason": "个人简介提及漏斗优化，但工作经历中缺乏具体案例与方法论。",
+              "suggestedValue": "深入分析用户行为漏斗，识别关键流失节点，并通过产品优化、流程重构等方式，提升关键环节转化率10%。",
+              "targetSection": "workExps",
+              "title": "细化漏斗优化细节",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-6",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "现有描述过于概括，建议补充平台建设的具体职责、技术挑战及带来的业务价值。",
+              "suggestedValue": "主导从0到1增长实验平台的产品规划、功能设计与上线管理，支持百级并行A/B实验，将实验周期缩短20%。",
+              "targetSection": "workExps",
+              "title": "提升增长实验平台建设描述深度",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "",
+              "reason": "增长产品经理需强烈体现数据驱动能力，建议在经历中明确指出如何通过数据支持决策。",
+              "suggestedValue": "建立并维护核心增长指标体系，利用数据分析指导产品迭代方向，实现业务营收环比增长8%。",
+              "targetSection": "workExps",
+              "title": "强调数据驱动决策",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-8",
+              "reason": "JD明确要求熟悉埋点体系，简历中未体现此项关键技能。",
+              "suggestedValue": [
+                "埋点设计",
+                "埋点规范",
+                "数据埋点"
+              ],
+              "targetSection": "skills",
+              "title": "补充埋点体系技能",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-9",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介过于通用，建议更具体地概括核心优势和与岗位职责的匹配度。",
+              "suggestedValue": "5年互联网增长产品经理经验，擅长增长策略设计、用户分层、A/B Test与数据驱动决策，曾主导增长平台建设并有效提升核心转化率。",
+              "targetSection": "summary",
+              "title": "优化个人简介",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-10",
+              "originalValue": "增长方向 @ 某SaaS公司",
+              "reason": "应聘公司为SaaS，建议在经历中具体体现SaaS产品的增长特点和您的贡献。",
+              "suggestedValue": "针对SaaS产品用户生命周期特点，设计并优化用户激活、留存与付费转化路径，提升客户LTV。",
+              "targetSection": "workExps",
+              "title": "突出SaaS产品增长经验",
               "type": "optimization"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "用户分层",
+            "仪表盘搭建",
+            "增长策略设计",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.7692,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.0,
           "placeholder_leak_rate": 0.0
         }
       },
       "on": {
         "status": 200,
-        "elapsed_ms": 3802.54,
+        "elapsed_ms": 32149.84,
         "response": {
-          "score": 90,
-          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "score": 85,
+          "summary": "候选人具备五年增长产品经验，核心技能与岗位要求匹配度高，具备增长实验平台建设经验。但简历内容过于简略，需补充具体项目细节、量化成果及部分核心职责的经验描述。优势方面：核心技能（SQL, Python, A/B Test, GA4）与JD高度匹配、拥有增长实验平台建设的经验，符合岗位方向。",
           "suggestions": [
-            "添加项目经历",
-            "简历完整度较高，可进一步打磨细节。",
             {
-              "id": "jd-keywords-2",
-              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
-              "status": "pending",
-              "suggestedValue": [
-                "SQL",
-                "Python",
-                "A/B Test",
-                "GA4",
-                "Figma",
-                "Python",
-                "Sql"
-              ],
-              "targetSection": "skills",
-              "title": "技能关键词补全",
+              "id": "suggestion-1",
+              "originalValue": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。",
+              "reason": "个人简介应更具吸引力，突出核心竞争力与可量化成就，与岗位要求紧密结合。",
+              "suggestedValue": "五年互联网增长产品经验，主导用户增长策略与漏斗优化，通过A/B Test实践提升核心业务指标，擅长增长实验平台建设及数据驱动决策。",
+              "targetSection": "personalSummary",
+              "title": "个人简介优化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-2",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "工作经历缺乏具体量化数据支撑，难以评估实际贡献与业务影响。",
+              "suggestedValue": "主导增长实验平台从0到1建设，覆盖用户注册至付费全链路，通过A/B Test将注册转化率提升15%，月活跃用户增长8%。",
+              "targetSection": "workExps",
+              "title": "工作经历成果量化",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-3",
+              "originalValue": "（未明确体现）",
+              "reason": "JD明确要求具备增长策略设计能力，简历中未具体展开相关经验。",
+              "suggestedValue": "设计并落地用户生命周期增长策略，包括新用户获取、激活、留存及召回，制定个性化触达方案。",
+              "targetSection": "workExps",
+              "title": "补充增长策略设计经验",
               "type": "missing"
             },
             {
-              "id": "exp-detail-1",
-              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
-              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
-              "status": "pending",
-              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
-              "targetField": "description",
-              "targetId": 1,
+              "id": "suggestion-4",
+              "originalValue": "（未明确体现）",
+              "reason": "JD强调用户分层能力，简历中未体现相关实践经验。",
+              "suggestedValue": "利用RFM模型和用户行为数据进行精细化用户分层，针对高价值用户群设计差异化增长路径与营销活动。",
               "targetSection": "workExps",
-              "title": "工作经历细化",
+              "title": "补充用户分层经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-5",
+              "originalValue": "（隐含在增长实验平台建设中）",
+              "reason": "需具体描述如何进行实验分析，体现数据驱动决策的深度与广度。",
+              "suggestedValue": "负责增长实验数据分析与效果评估，利用统计学方法验证实验显著性，识别关键增长驱动因素，为产品迭代提供决策依据。",
+              "targetSection": "workExps",
+              "title": "具象化实验分析能力",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-6",
+              "originalValue": "（未明确体现）",
+              "reason": "JD明确要求具备仪表盘搭建能力，简历中未提及。",
+              "suggestedValue": "基于业务需求和数据指标，搭建核心增长数据监控仪表盘（如用户漏斗、活跃度、转化率），实现数据可视化与异常预警。",
+              "targetSection": "workExps",
+              "title": "补充仪表盘搭建经验",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-7",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "需进一步阐述增长实验平台的具体功能、覆盖范围及对业务的深层影响。",
+              "suggestedValue": "负责增长实验平台产品规划与迭代，支持多渠道A/B Test快速部署与数据回收，将实验周期缩短30%，支撑百余个增长实验的快速落地与评估。",
+              "targetSection": "workExps",
+              "title": "细化增长实验平台贡献",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-8",
+              "originalValue": "（个人简介中提及，工作经历未展开）",
+              "reason": "个人简介中提及的“漏斗优化”和“用户增长实验”应在工作经历中具化，展现实际行动与成果。",
+              "suggestedValue": "深入分析用户漏斗各环节数据，识别流失点与优化机会，通过系列A/B Test优化用户注册、激活、首购流程，提高关键转化指标。",
+              "targetSection": "workExps",
+              "title": "深化漏斗优化与增长实验细节",
+              "type": "optimization"
+            },
+            {
+              "id": "suggestion-9",
+              "originalValue": "（未列出）",
+              "reason": "JD明确要求熟悉埋点体系，但简历技能中未列出。",
+              "suggestedValue": [
+                "埋点体系"
+              ],
+              "targetSection": "skills",
+              "title": "补充核心技能“埋点体系”",
+              "type": "missing"
+            },
+            {
+              "id": "suggestion-10",
+              "originalValue": "主导增长实验平台建设",
+              "reason": "当前工作经历描述过于简洁，未体现个人在项目中的具体角色和关键贡献，不利于评估影响力。",
+              "suggestedValue": "作为核心产品负责人，主导增长实验平台从需求分析、方案设计、开发协调到上线推广全过程，确保项目按期高质量交付，显著提升团队实验效率。",
+              "targetSection": "workExps",
+              "title": "增加项目角色和贡献",
               "type": "optimization"
             }
           ],
           "missingKeywords": [
-            "智能分析暂不可用"
+            "增长策略设计",
+            "用户分层",
+            "实验分析",
+            "仪表盘搭建",
+            "埋点体系"
           ]
         },
         "hard_metrics": {
-          "jd_keyword_coverage_rate": 0.4615,
+          "jd_keyword_coverage_rate": 0.7692,
           "suggestion_schema_valid_rate": 1.0,
-          "skill_hard_term_ratio": 1.0,
+          "skill_hard_term_ratio": 0.0,
           "placeholder_leak_rate": 0.0
         }
       },
       "judge": {
-        "winner_real": "tie",
-        "reason": "双侧内容完全一致且均为含有系统错误占位符（'智能分析暂时不可用'）的兜底回复，且逻辑存在严重缺陷（提示补充简历中已有的技能、工作经历优化建议为通用模板而非基于事实），属于低质量平局。",
+        "winner_real": "off",
+        "reason": "LEFT在埋点体系技能的细化建议（如区分埋点设计、埋点规范等）和对SaaS产品增长特点的洞察上略优于RIGHT，使得其建议更具指导性和专业性。",
         "on": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 4,
+          "writing_quality": 5,
+          "overall": 4.8
         },
         "off": {
-          "jd_relevance": 1,
-          "actionability": 2,
-          "factuality": 1,
-          "skill_precision": 2,
-          "writing_quality": 1,
-          "overall": 1.4
+          "jd_relevance": 5,
+          "actionability": 5,
+          "factuality": 5,
+          "skill_precision": 5,
+          "writing_quality": 5,
+          "overall": 5.0
         },
         "raw": {
-          "winner": "tie",
+          "winner": "left",
           "left": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 5,
+            "writing_quality": 5,
+            "overall": 5.0
           },
           "right": {
-            "jd_relevance": 1,
-            "actionability": 2,
-            "factuality": 1,
-            "skill_precision": 2,
-            "writing_quality": 1,
-            "overall": 1.4
+            "jd_relevance": 5,
+            "actionability": 5,
+            "factuality": 5,
+            "skill_precision": 4,
+            "writing_quality": 5,
+            "overall": 4.8
           },
-          "reason": "双侧内容完全一致且均为含有系统错误占位符（'智能分析暂时不可用'）的兜底回复，且逻辑存在严重缺陷（提示补充简历中已有的技能、工作经历优化建议为通用模板而非基于事实），属于低质量平局。"
+          "reason": "LEFT在埋点体系技能的细化建议（如区分埋点设计、埋点规范等）和对SaaS产品增长特点的洞察上略优于RIGHT，使得其建议更具指导性和专业性。"
         }
       }
     }

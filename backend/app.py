@@ -148,6 +148,10 @@ GEMINI_VISION_MODELS = [
 GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
 PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
 RAG_ENABLED = os.getenv('RAG_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
+try:
+    RAG_MATCH_THRESHOLD = float(os.getenv('RAG_MATCH_THRESHOLD', '0.75'))
+except ValueError:
+    RAG_MATCH_THRESHOLD = 0.75
 
 def get_ocr_model_candidates():
     """Shared OCR model list used by both PDF OCR and JD screenshot OCR."""
@@ -313,7 +317,7 @@ def find_relevant_cases_vector(resume_data, limit=3):
         try:
             rpc_response = supabase.rpc('match_master_cases', {
                 'query_embedding': query_vector,
-                'match_threshold': 0.5, # 稍放宽一点初始阈值
+                'match_threshold': RAG_MATCH_THRESHOLD,
                 'match_count': limit,
                 'filter_seniority': seniority_pool,
                 'filter_is_ai_enhanced': ai_filter if ai_filter is not None else None
@@ -323,21 +327,122 @@ def find_relevant_cases_vector(resume_data, limit=3):
             logger.error(f"RAG Retrieval failed: {e}")
             return []
 
-        # 第三层兜底：如果没结果，尝试不带 AI 过滤再次检索
+        # 兜底：如果没结果，尝试不带 AI 过滤再次检索（阈值不降低）
         if not results and ai_filter is not None:
              rpc_response = supabase.rpc('match_master_cases', {
                 'query_embedding': query_vector,
-                'match_threshold': 0.4,
+                'match_threshold': RAG_MATCH_THRESHOLD,
                 'match_count': limit,
                 'filter_seniority': seniority_pool,
                 'filter_is_ai_enhanced': None
             }).execute()
              results = rpc_response.data
 
-        return [r['content'] for r in results] if results else []
+        if not results:
+            return []
+
+        def _get_similarity(row):
+            for key in ('similarity', 'match_similarity', 'score'):
+                val = row.get(key)
+                if isinstance(val, (int, float)):
+                    return float(val)
+            return None
+
+        strict_results = []
+        for row in results:
+            sim = _get_similarity(row)
+            if sim is not None and sim <= RAG_MATCH_THRESHOLD:
+                continue
+
+            content = dict(row.get('content') or {})
+            if sim is not None:
+                content['similarity'] = sim
+            strict_results.append(content)
+
+        if not strict_results:
+            logger.info(f"RAG skipped: no case similarity > {RAG_MATCH_THRESHOLD}")
+            return []
+
+        return strict_results
     except Exception as e:
         logger.error(f"find_relevant_cases_vector error: {e}")
         return []
+
+
+def resolve_rag_strategy(resume_data, job_description):
+    """
+    按行业路由 RAG 策略：
+    - 财务/审计：默认关闭案例型 RAG，仅注入合规导向约束
+    - 供应链/架构：增强 RAG（提高案例数量）
+    - 其他：默认策略
+    """
+    resume_data = resume_data or {}
+    personal = resume_data.get('personalInfo', {}) or {}
+    work_exps = resume_data.get('workExps', []) or []
+    skills = resume_data.get('skills', []) or []
+    if not isinstance(skills, list):
+        skills = [str(skills)]
+
+    text_chunks = [
+        str(job_description or ""),
+        str(resume_data.get('industry', '') or ''),
+        str(personal.get('jobTitle', '') or ''),
+        str(personal.get('title', '') or ''),
+        str(personal.get('summary', '') or ''),
+        " ".join(str(s) for s in skills)
+    ]
+    for exp in work_exps[:5]:
+        text_chunks.append(str(exp.get('jobTitle', '') or ''))
+        text_chunks.append(str(exp.get('company', '') or ''))
+        text_chunks.append(str(exp.get('description', '') or ''))
+
+    text = " ".join(text_chunks).lower()
+
+    finance_audit_keywords = [
+        '财务', '审计', '会计', '税务', '内控', '合规', '风控',
+        'ifrs', 'gaap', 'cpa', 'acca', 'big4', '四大'
+    ]
+    supply_arch_keywords = [
+        '供应链', '物流', '仓储', '采购', '计划', '库存',
+        '架构', '架构师', '系统架构', 'solution architect',
+        'architecture', 'architect', 'distributed', 'microservice', 'devops'
+    ]
+
+    has_finance_audit = any(k in text for k in finance_audit_keywords)
+    has_supply_arch = any(k in text for k in supply_arch_keywords)
+
+    if has_finance_audit:
+        compliance_context = """
+【行业策略：财务/审计（合规优先）】
+本次不使用案例型 RAG 内容参考。请优先基于候选人真实经历，围绕合规性、可审计性、内控完整性给出建议：
+1. 强调准则符合性（如会计准则、审计流程、内控规范）；
+2. 强调证据链完整（数据来源、口径一致、可追溯）；
+3. 对未给出的事实不得臆造，允许给出“应补充字段/证明材料类型”。
+"""
+        return {
+            'mode': 'finance_audit_compliance_only',
+            'disable_case_rag': True,
+            'enhance_case_rag': False,
+            'case_limit': 0,
+            'extra_context': compliance_context
+        }
+
+    if has_supply_arch:
+        return {
+            'mode': 'supply_chain_or_architecture_enhanced_rag',
+            'disable_case_rag': False,
+            'enhance_case_rag': True,
+            'case_limit': 5,
+            'extra_context': ''
+        }
+
+    return {
+        'mode': 'default',
+        'disable_case_rag': False,
+        'enhance_case_rag': False,
+        'case_limit': 3,
+        'extra_context': ''
+    }
 
 def token_required(f):
     @wraps(f)
@@ -2724,7 +2829,9 @@ def analyze_resume(current_user_id):
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
-        rag_enabled = parse_bool_flag(data.get('ragEnabled'), RAG_ENABLED)
+        rag_requested = parse_bool_flag(data.get('ragEnabled'), RAG_ENABLED)
+        rag_strategy = resolve_rag_strategy(resume_data, job_description)
+        rag_enabled = rag_requested and (not rag_strategy.get('disable_case_rag', False))
         reference_cases = []
 
         if not resume_data:
@@ -2735,7 +2842,10 @@ def analyze_resume(current_user_id):
                 # --- RAG 检索逻辑开始 ---
                 rag_context = ""
                 if rag_enabled:
-                    relevant_cases = find_relevant_cases_vector(resume_data)
+                    relevant_cases = find_relevant_cases_vector(
+                        resume_data,
+                        limit=rag_strategy.get('case_limit', 3)
+                    )
                     if isinstance(relevant_cases, list):
                         reference_cases = [{
                             'id': c.get('id'),
@@ -2757,9 +2867,26 @@ def analyze_resume(current_user_id):
                             formatted_cases += f"- 行动: {star.get('action')}\n"
                             formatted_cases += f"- 结果: {star.get('result')}\n\n"
                     if formatted_cases:
-                        rag_context = f"\n【参考案例】\n以下是该领域的优秀简历案例（STAR法则与Bullet Points示范），请参考其分析深度与用词风格：\n{formatted_cases}\n请注意：以上参考案例仅用于辅助你理解该领域的动作深度（Action Depth）和结果量化方式（Result Quantification）。请根据用户真实的经历进行优化，严禁生搬硬套案例中的具体业务内容，确保优化后的简历具有真实性。\n"
+                        rag_context = f"""
+【参考案例（仅限风格约束）】
+以下是该领域的优秀简历案例（STAR法则与Bullet Points示范）：
+{formatted_cases}
+
+请严格执行以下约束（强制）：
+1. 参考案例只允许用于“叙事结构、动词表达、量化逻辑”，不得作为事实来源。
+2. 严禁复用或改写参考案例中的任何具体事实，包括但不限于：公司名、项目名、产品名、客户名、品牌名、平台名、组织名、人物名。
+3. 严禁复用或映射参考案例中的任何具体数字与时间信息，包括百分比、金额、人数、时长、日期、排名、增长率（例如 14.2%）。
+4. 输出中所有事实必须来自用户简历原文；若简历未提供具体事实，使用中性占位表达或仅给出结构化改写，不得臆造细节。
+5. 若发现建议文本与参考案例在实体名或数字上重合，必须重写，直至完全去除案例事实痕迹。
+"""
                 else:
-                    logger.info("RAG disabled for this request (ragEnabled=false)")
+                    logger.info(
+                        "RAG disabled for this request (requested=%s, strategy=%s)",
+                        rag_requested,
+                        rag_strategy.get('mode')
+                    )
+                if rag_strategy.get('extra_context'):
+                    rag_context = f"{rag_context}\n{rag_strategy.get('extra_context')}\n"
                 # --- RAG 检索逻辑结束 ---
 
                 format_requirements = f"""
@@ -2927,6 +3054,8 @@ def analyze_resume(current_user_id):
                     'missingKeywords': ai_result.get('missingKeywords', []),
                     'reference_cases': reference_cases,
                     'rag_enabled': rag_enabled,
+                    'rag_requested': rag_requested,
+                    'rag_strategy': rag_strategy.get('mode'),
                     'analysis_model': used_model
                 }), 200
 
@@ -2951,6 +3080,8 @@ def analyze_resume(current_user_id):
                     'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
                     'reference_cases': reference_cases,
                     'rag_enabled': rag_enabled,
+                    'rag_requested': rag_requested,
+                    'rag_strategy': rag_strategy.get('mode'),
                     'analysis_model': None,
                     'analysis_models_tried': analysis_models_tried if 'analysis_models_tried' in locals() else [],
                     'analysis_error': str(ai_error)[:500]
@@ -2967,7 +3098,9 @@ def analyze_resume(current_user_id):
             'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
             'missingKeywords': [] if not job_description else ['正在分析关键词...'],
             'reference_cases': reference_cases,
-            'rag_enabled': rag_enabled
+            'rag_enabled': rag_enabled,
+            'rag_requested': rag_requested,
+            'rag_strategy': rag_strategy.get('mode')
         }), 200
 
     except Exception as e:
