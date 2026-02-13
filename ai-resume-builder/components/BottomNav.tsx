@@ -52,7 +52,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
               <path d="M21 1L22.2 3.8L25 5L22.2 6.2L21 9L19.8 6.2L17 5L19.8 3.8L21 1Z" fill="currentColor" transform="translate(-1, 0) scale(0.7)" />
             </svg>
           </div>
-          <span className={`text-[10px] font-medium leading-none ${currentView === View.AI_ANALYSIS ? 'text-primary' : ''}`}>AI 助手</span>
+          <span className={`text-[10px] font-medium leading-none ${currentView === View.AI_ANALYSIS ? 'text-primary' : ''}`}>AI 诊断</span>
         </button>
 
         <button

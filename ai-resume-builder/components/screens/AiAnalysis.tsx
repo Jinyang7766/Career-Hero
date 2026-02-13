@@ -2569,19 +2569,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
               <span className="material-symbols-outlined">arrow_back</span>
             </button>
-            <h1 className="text-lg font-bold tracking-tight">AI 智能诊断</h1>
+            <h1 className="text-lg font-bold tracking-tight">第一步：选择简历</h1>
             <div className="w-8"></div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto pb-32">
-          <div className="px-4 pt-4 pb-2">
-            <h2 className="text-xl font-bold text-slate-900 dark:text-white">第一步：选择简历</h2>
-          </div>
           <div className="flex flex-col">
             {/* 已优化 */}
             <button
               onClick={() => setIsOptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-slate-900 dark:text-white"
+              className="w-full flex items-center justify-between px-4 pt-2 text-base font-bold text-slate-900 dark:text-white"
             >
               <span>已优化</span>
               <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
@@ -2595,16 +2592,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div
                     key={resume.id}
                     onClick={() => handleResumeSelect(resume.id, false)}
-                    className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
+                    className="group relative flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
                   >
                     <div className="shrink-0 relative">
-                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-12 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                         {resume.thumbnail}
                       </div>
                     </div>
                     <div className="flex flex-col flex-1 justify-center min-w-0">
-                      <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                      <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                      <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                      <p className="text-slate-500 dark:text-text-secondary text-[12px] font-normal leading-normal line-clamp-1">
                         上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                       </p>
                     </div>
@@ -2621,7 +2618,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             {/* 未优化 */}
             <button
               onClick={() => setIsUnoptimizedOpen(v => !v)}
-              className="w-full flex items-center justify-between px-4 pt-4 text-lg font-bold text-slate-900 dark:text-white"
+              className="w-full flex items-center justify-between px-4 pt-4 text-base font-bold text-slate-900 dark:text-white"
             >
               <span>未优化</span>
               <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
@@ -2635,16 +2632,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div
                     key={resume.id}
                     onClick={() => handleResumeSelect(resume.id, false)}
-                    className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
+                    className="group relative flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5"
                   >
                     <div className="shrink-0 relative">
-                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                      <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-12 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                         {resume.thumbnail}
                       </div>
                     </div>
                     <div className="flex flex-col flex-1 justify-center min-w-0">
-                      <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                      <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1">
+                      <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                      <p className="text-slate-500 dark:text-text-secondary text-[12px] font-normal leading-normal line-clamp-1">
                         上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                       </p>
                     </div>
@@ -2861,7 +2858,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             </div>
           </div>
         </div>
-        <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
           {hasJdInput() ? '正在进行人岗匹配...' : '正在深度诊断简历...'}
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs leading-relaxed">
@@ -2955,7 +2952,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           {/* AI Optimization Suggestions - Editable */}
           {suggestions.filter(s => s.status === 'pending').length > 0 && (
             <div className="mb-6">
-              <h3 className="flex items-center gap-2 font-bold text-slate-800 dark:text-white text-lg mb-4">
+              <h3 className="flex items-center gap-2 font-bold text-slate-800 dark:text-white text-base mb-4">
                 <span className="material-symbols-outlined text-primary">auto_fix_high</span>
                 AI 优化建议 ({suggestions.filter(s => s.status === 'pending').length})
               </h3>

@@ -203,7 +203,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
         {recentResumes.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
                 最近编辑
               </h3>
               <button
@@ -220,10 +220,10 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                 <div
                   key={resume.id}
                   onClick={() => handleResumeClick(resume.id)}
-                  className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
+                  className={`group relative flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   <div className="shrink-0 relative">
-                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-12 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                       {resume.thumbnail}
                       {isLoadingResume === resume.id && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10">
@@ -233,8 +233,8 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                     </div>
                   </div>
                   <div className="flex flex-col flex-1 justify-center min-w-0">
-                    <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                    <p className="text-slate-500 dark:text-text-secondary text-[11px] font-normal leading-normal line-clamp-1">
+                    <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
+                    <p className="text-slate-500 dark:text-text-secondary text-[10px] font-normal leading-normal line-clamp-1">
                       上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                     </p>
                   </div>

@@ -322,10 +322,10 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
         <div
           key={resume.id}
           onClick={() => handlePreview(resume.id)}
-          className={`group relative flex items-center gap-4 px-4 py-4 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
+          className={`group relative flex items-center gap-4 px-4 py-3 hover:bg-black/5 dark:hover:bg-[#1c2936] transition-colors cursor-pointer border-b border-slate-200/50 dark:border-white/5 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <div className="shrink-0 relative">
-            <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-14 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+            <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-12 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
               {resume.thumbnail}
             </div>
             {isLoadingResume === resume.id && (
@@ -344,9 +344,9 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
           </div>
           <div className="flex flex-col flex-1 justify-center min-w-0">
             <div className="flex items-center gap-2 min-w-0">
-              <p className="text-slate-900 dark:text-white text-base font-medium leading-normal line-clamp-1">{resume.title}</p>
+              <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal line-clamp-1">{resume.title}</p>
             </div>
-            <p className="text-slate-500 dark:text-text-secondary text-sm font-normal leading-normal line-clamp-1 mt-0.5">上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}</p>
+            <p className="text-slate-500 dark:text-text-secondary text-[12px] font-normal leading-normal line-clamp-1 mt-0.5">上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}</p>
           </div>
 
           <div className="relative">
@@ -470,7 +470,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             <>
               <button
                 onClick={() => setIsOptimizedOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-white"
+                className="w-full flex items-center justify-between px-4 pt-2 text-base font-bold text-white"
               >
                 <span>已优化</span>
                 <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
@@ -492,7 +492,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
               <button
                 onClick={() => setIsUnoptimizedOpen(v => !v)}
-                className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-white"
+                className="w-full flex items-center justify-between px-4 pt-2 text-base font-bold text-white"
               >
                 <span>未优化</span>
                 <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
