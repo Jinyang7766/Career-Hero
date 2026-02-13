@@ -16,9 +16,10 @@ import argparse
 import json
 import os
 import random
+import re
 import statistics
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import requests
 from requests.exceptions import RequestException
@@ -84,6 +85,98 @@ def compact_for_judge(body: Dict[str, Any]) -> Dict[str, Any]:
         "summary": body.get("summary"),
         "suggestions": body.get("suggestions", []),
         "missingKeywords": body.get("missingKeywords", []),
+    }
+
+def _to_text(obj: Any) -> str:
+    if obj is None:
+        return ""
+    if isinstance(obj, str):
+        return obj
+    if isinstance(obj, (int, float, bool)):
+        return str(obj)
+    if isinstance(obj, list):
+        return " ".join(_to_text(x) for x in obj)
+    if isinstance(obj, dict):
+        return " ".join(_to_text(v) for v in obj.values())
+    return str(obj)
+
+
+def extract_jd_terms(jd_text: str) -> Set[str]:
+    if not jd_text:
+        return set()
+    # english technical terms
+    en_terms = {w.lower() for w in re.findall(r"[A-Za-z][A-Za-z0-9+/#\-.]{2,}", jd_text)}
+    # chinese chunks
+    zh_parts = re.split(r"[，。；：\s、\n\r\t\-\(\)（）]+", jd_text)
+    zh_terms = {p for p in zh_parts if 2 <= len(p) <= 10}
+    stop_zh = {"岗位", "职责", "要求", "负责", "熟悉", "具备", "经验", "能力", "相关", "以上", "优先"}
+    zh_terms = {t for t in zh_terms if t not in stop_zh}
+    return en_terms.union(zh_terms)
+
+
+def collect_hard_metrics(result_body: Dict[str, Any], jd_text: str) -> Dict[str, float]:
+    if not isinstance(result_body, dict):
+        return {
+            "jd_keyword_coverage_rate": 0.0,
+            "suggestion_schema_valid_rate": 0.0,
+            "skill_hard_term_ratio": 0.0,
+            "placeholder_leak_rate": 0.0,
+        }
+
+    suggestions = result_body.get("suggestions", []) or []
+    suggestions = [s for s in suggestions if isinstance(s, dict)]
+    total_s = len(suggestions)
+
+    # 1) JD keyword coverage over output text
+    terms = extract_jd_terms(jd_text)
+    output_text = _to_text(result_body.get("summary", "")) + " " + _to_text(suggestions)
+    output_text_l = output_text.lower()
+    matched = 0
+    for t in terms:
+        t_l = t.lower()
+        if t_l and t_l in output_text_l:
+            matched += 1
+    coverage = (matched / len(terms)) if terms else 0.0
+
+    # 2) Suggestion schema validity
+    required = {"title", "reason", "targetSection", "suggestedValue"}
+    valid = 0
+    for s in suggestions:
+        if all(k in s and s.get(k) not in (None, "") for k in required):
+            valid += 1
+    schema_valid_rate = (valid / total_s) if total_s else 0.0
+
+    # 3) Skill hard term ratio
+    hard_pat = re.compile(
+        r"(sql|python|java|javascript|typescript|excel|tableau|power\s?bi|scrm|crm|ltv|roi|cpc|cpa|cpm|gmv|erp|wms|sap|vba|ga4|seo|sem|a/b|ab\s?test|"
+        r"生意参谋|京东商智|万相台|直通车|引力魔方|京东快车|千川|巨量引擎|zapier|make|coze|dify|n8n|figma|copilot|notion|chatgpt)",
+        re.IGNORECASE
+    )
+    skill_terms = []
+    for s in suggestions:
+        ts = str(s.get("targetSection", "")).lower()
+        if ts in ("skills", "skill"):
+            sv = s.get("suggestedValue")
+            if isinstance(sv, list):
+                skill_terms.extend([_to_text(x).strip() for x in sv if _to_text(x).strip()])
+            elif isinstance(sv, str) and sv.strip():
+                skill_terms.extend([x.strip() for x in re.split(r"[,，;；、\n]+", sv) if x.strip()])
+    if skill_terms:
+        hard_cnt = sum(1 for t in skill_terms if hard_pat.search(t))
+        skill_hard_ratio = hard_cnt / len(skill_terms)
+    else:
+        skill_hard_ratio = 0.0
+
+    # 4) Placeholder leak rate
+    leak_pat = re.compile(r"(\[\[(COMPANY|ADDRESS|EMAIL|PHONE)_\d+\]\]|(COMPANY|ADDRESS|EMAIL|PHONE)_\d+)")
+    leak_hits = sum(1 for s in suggestions if leak_pat.search(_to_text(s)))
+    placeholder_leak_rate = (leak_hits / total_s) if total_s else 0.0
+
+    return {
+        "jd_keyword_coverage_rate": round(coverage, 4),
+        "suggestion_schema_valid_rate": round(schema_valid_rate, 4),
+        "skill_hard_term_ratio": round(skill_hard_ratio, 4),
+        "placeholder_leak_rate": round(placeholder_leak_rate, 4),
     }
 
 
@@ -208,7 +301,7 @@ def main():
     ap.add_argument("--url", default=os.getenv("ANALYZE_URL", "http://127.0.0.1:5000/api/ai/analyze"))
     ap.add_argument("--token", default=os.getenv("BACKEND_JWT_TOKEN", ""))
     ap.add_argument("--gemini-api-key", default=os.getenv("GEMINI_API_KEY", ""))
-    ap.add_argument("--judge-model", default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-2.5-flash-lite"))
+    ap.add_argument("--judge-model", default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3-pro-preview"))
     ap.add_argument("--timeout", type=int, default=90)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--sleep-ms", type=int, default=300)
@@ -226,6 +319,7 @@ def main():
     judged_rows = []
     failures = 0
     run_records = []
+    hard_rows = []
 
     print(f"Target URL: {args.url}")
     print(f"Runs: {args.runs}")
@@ -247,6 +341,8 @@ def main():
             continue
 
         try:
+            off_hard = collect_hard_metrics(off["json"], jd_text)
+            on_hard = collect_hard_metrics(on["json"], jd_text)
             judged = judge_pair(
                 client=client,
                 model=args.judge_model,
@@ -256,6 +352,7 @@ def main():
                 on_body=on["json"],
             )
             judged_rows.append(judged)
+            hard_rows.append({"on": on_hard, "off": off_hard})
             print(
                 f"#{i+1} winner={judged['winner_real']} "
                 f"on_overall={judged.get('on', {}).get('overall')} "
@@ -267,12 +364,14 @@ def main():
                 "off": {
                     "status": off.get("status"),
                     "elapsed_ms": off.get("elapsed_ms"),
-                    "response": compact_for_judge(off.get("json") or {})
+                    "response": compact_for_judge(off.get("json") or {}),
+                    "hard_metrics": off_hard
                 },
                 "on": {
                     "status": on.get("status"),
                     "elapsed_ms": on.get("elapsed_ms"),
-                    "response": compact_for_judge(on.get("json") or {})
+                    "response": compact_for_judge(on.get("json") or {}),
+                    "hard_metrics": on_hard
                 },
                 "judge": judged
             })
@@ -322,6 +421,29 @@ def main():
             "delta": round(on_avg - off_avg, 3),
         }
 
+    def avg_hard(side: str, key: str) -> float:
+        vals = []
+        for r in hard_rows:
+            v = r.get(side, {}).get(key)
+            if isinstance(v, (int, float)):
+                vals.append(float(v))
+        return round(statistics.mean(vals), 4) if vals else 0.0
+
+    hard_keys = [
+        "jd_keyword_coverage_rate",
+        "suggestion_schema_valid_rate",
+        "skill_hard_term_ratio",
+        "placeholder_leak_rate",
+    ]
+    hard_summary = {}
+    print("\n--- Hard Metrics (ON vs OFF) ---")
+    for k in hard_keys:
+        on_avg = avg_hard("on", k)
+        off_avg = avg_hard("off", k)
+        delta = round(on_avg - off_avg, 4)
+        print(f"{k}: on={on_avg} off={off_avg} delta={delta}")
+        hard_summary[k] = {"on": on_avg, "off": off_avg, "delta": delta}
+
     if args.out:
         output = {
             "meta": {
@@ -337,6 +459,7 @@ def main():
                 "ties": ties,
                 "on_win_rate": round(on_wins / total, 4) if total else 0.0,
                 "scores": score_summary,
+                "hard_metrics": hard_summary,
             },
             "runs": run_records,
         }

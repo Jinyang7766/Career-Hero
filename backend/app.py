@@ -3136,7 +3136,41 @@ def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_ke
     为分析总结提供长度与信息密度兜底，避免返回过短描述。
     目标长度：约 90-180 字。
     """
-    text = (summary or '').strip()
+    def _finalize_summary_text(raw_text: str, max_len: int = 200) -> str:
+        text = (raw_text or '').strip()
+        if not text:
+            return ''
+
+        # 标点与空白归一，避免出现“。;”等混合标点
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(r'[;；]+', '；', text)
+        text = re.sub(r'[。\.]{2,}', '。', text)
+        text = re.sub(r'([。！？；，])\s*([。！？；，])', r'\1', text).strip()
+
+        # 超长时，优先按句号边界截断，避免半句被硬切
+        if len(text) > max_len:
+            clipped = text[:max_len]
+            sentence_end = max(clipped.rfind('。'), clipped.rfind('！'), clipped.rfind('？'), clipped.rfind('；'))
+            if sentence_end >= int(max_len * 0.55):
+                text = clipped[:sentence_end + 1].strip()
+            else:
+                comma_end = max(clipped.rfind('，'), clipped.rfind('、'))
+                if comma_end >= int(max_len * 0.55):
+                    text = clipped[:comma_end].rstrip('，、 ') + '。'
+                else:
+                    text = clipped.rstrip('，、,;；:： ') + '。'
+
+        # 末尾如果是连接词或残片，回退到最近句号，避免“描述过。”这类不完整结尾
+        if re.search(r'(与|和|及|并|并且|且|在|将|对|过|中|的)[。]$', text):
+            last_sentence = max(text[:-1].rfind('。'), text[:-1].rfind('！'), text[:-1].rfind('？'), text[:-1].rfind('；'))
+            if last_sentence > 0:
+                text = text[:last_sentence + 1].strip()
+
+        if text and text[-1] not in '。！？；':
+            text += '。'
+        return text
+
+    text = _finalize_summary_text((summary or '').strip())
     if len(text) >= 90:
         return text
 
@@ -3164,9 +3198,7 @@ def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_ke
     parts.append("建议优先补充可量化成果、职责场景和业务结果，按STAR结构重写核心经历，以提升筛选通过率和岗位说服力。")
 
     merged = ''.join(parts).strip()
-    if len(merged) > 200:
-        merged = merged[:200].rstrip('，,;； ') + '。'
-    return merged
+    return _finalize_summary_text(merged, max_len=200)
 
 @app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
 @token_required

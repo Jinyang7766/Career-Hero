@@ -1,0 +1,31 @@
+{
+  "resumeData": {
+    "id": "sample-03",
+    "personalInfo": {
+      "name": "赵敏",
+      "title": "财务分析",
+      "email": "zhaomin@example.com",
+      "phone": "13800000003",
+      "location": "北京",
+      "summary": "6年财务分析与预算管理经验，支持经营决策与成本优化。"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "某制造集团",
+        "title": "财务分析师",
+        "subtitle": "经营分析",
+        "startDate": "2019-02",
+        "endDate": "2025-01",
+        "description": "负责预算编制、偏差分析与月度经营复盘。"
+      }
+    ],
+    "educations": [
+      { "id": 1, "school": "中央财经大学", "degree": "本科", "major": "会计学", "startDate": "2012-09", "endDate": "2016-06" }
+    ],
+    "projects": [],
+    "skills": ["Excel", "Power BI", "SQL", "预算管理", "成本分析"]
+  },
+  "jobDescription": "岗位：高级财务分析。要求掌握财务建模、预算滚动预测、Power BI可视化、SQL数据提取，支持经营决策和利润改善。"
+}
+

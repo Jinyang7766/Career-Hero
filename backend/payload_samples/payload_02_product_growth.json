@@ -1,0 +1,31 @@
+{
+  "resumeData": {
+    "id": "sample-02",
+    "personalInfo": {
+      "name": "王宁",
+      "title": "增长产品经理",
+      "email": "wangning@example.com",
+      "phone": "13800000002",
+      "location": "上海",
+      "summary": "5年互联网产品与增长经验，负责漏斗优化和用户增长实验。"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "某SaaS公司",
+        "title": "产品经理",
+        "subtitle": "增长方向",
+        "startDate": "2020-04",
+        "endDate": "2025-02",
+        "description": "主导增长实验平台建设，推动注册转化率提升。"
+      }
+    ],
+    "educations": [
+      { "id": 1, "school": "同济大学", "degree": "本科", "major": "信息管理", "startDate": "2014-09", "endDate": "2018-06" }
+    ],
+    "projects": [],
+    "skills": ["SQL", "Python", "A/B Test", "GA4", "Figma"]
+  },
+  "jobDescription": "岗位：增长产品经理。职责包括增长策略设计、用户分层、实验分析、仪表盘搭建。要求熟悉SQL/Python、A/B Test、埋点体系、GA4。"
+}
+

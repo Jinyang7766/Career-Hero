@@ -1,0 +1,31 @@
+{
+  "resumeData": {
+    "id": "sample-04",
+    "personalInfo": {
+      "name": "陈涛",
+      "title": "供应链运营",
+      "email": "chentao@example.com",
+      "phone": "13800000004",
+      "location": "深圳",
+      "summary": "5年供应链运营经验，关注库存周转、预测补货和履约效率。"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "某跨境品牌",
+        "title": "供应链运营",
+        "subtitle": "库存与履约",
+        "startDate": "2020-05",
+        "endDate": "2025-02",
+        "description": "负责库存策略、补货预测与物流履约协同。"
+      }
+    ],
+    "educations": [
+      { "id": 1, "school": "华南理工大学", "degree": "本科", "major": "物流管理", "startDate": "2015-09", "endDate": "2019-06" }
+    ],
+    "projects": [],
+    "skills": ["供应链管理", "库存预测", "ERP", "WMS", "SQL"]
+  },
+  "jobDescription": "岗位：供应链运营经理。要求具备供应链SCM、库存预测、补货模型、ERP/WMS系统经验，能通过数据驱动降低缺货率和滞销率。"
+}
+

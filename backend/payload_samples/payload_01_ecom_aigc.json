@@ -1,0 +1,31 @@
+{
+  "resumeData": {
+    "id": "sample-01",
+    "personalInfo": {
+      "name": "李晨",
+      "title": "电商运营",
+      "email": "lichen@example.com",
+      "phone": "13800000001",
+      "location": "杭州",
+      "summary": "4年电商运营经验，擅长平台活动策划、数据分析与投放优化。"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "杭州某电商科技有限公司",
+        "title": "电商运营",
+        "subtitle": "店铺增长",
+        "startDate": "2021-03",
+        "endDate": "2025-01",
+        "description": "负责天猫、京东店铺运营，策划促销活动并跟踪ROI。"
+      }
+    ],
+    "educations": [
+      { "id": 1, "school": "浙江理工大学", "degree": "本科", "major": "电子商务", "startDate": "2016-09", "endDate": "2020-06" }
+    ],
+    "projects": [],
+    "skills": ["SQL", "Excel", "Tableau", "生意参谋", "万相台"]
+  },
+  "jobDescription": "岗位：AIGC电商运营。要求熟悉Zapier/Make/Coze自动化，具备SQL和可视化能力，能够做A/B测试与ROI优化。"
+}
+

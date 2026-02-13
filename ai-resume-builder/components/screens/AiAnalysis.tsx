@@ -210,9 +210,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const rawList = Array.isArray(value)
       ? value
       : String(value ?? '')
-          .split(/[\n,，;；、]+/)
-          .map((v) => v.trim())
-          .filter(Boolean);
+        .split(/[\n,，;；、]+/)
+        .map((v) => v.trim())
+        .filter(Boolean);
     const expanded = rawList.flatMap((item: any) =>
       String(item)
         .split(/[\/|｜]+/)
@@ -624,6 +624,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const legacyToken = (localStorage.getItem('token') || '').trim();
     if (isLikelyJwt(legacyToken)) return legacyToken;
     return '';
+  };
+  const getRagEnabledFlag = () => {
+    try {
+      const raw = (localStorage.getItem('rag_enabled_test') || '').trim().toLowerCase();
+      if (!raw) return true; // default ON
+      if (raw === '0' || raw === 'false' || raw === 'off' || raw === 'no') return false;
+      if (raw === '1' || raw === 'true' || raw === 'on' || raw === 'yes') return true;
+      return true;
+    } catch {
+      return true;
+    }
   };
   const setAnalysisResumeId = (id: string | number | null) => {
     if (id === null || id === undefined) {
@@ -1310,6 +1321,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const masker = createMasker();
       const maskedResumeData = masker.maskObject(resumeData);
       const maskedJdText = masker.maskText(jdText || '');
+      const ragEnabled = getRagEnabledFlag();
+      console.log('AI analyze ragEnabled:', ragEnabled);
 
       const response = await fetch(buildApiUrl('/api/ai/analyze'), {
         method: 'POST',
@@ -1320,7 +1333,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         signal: controller.signal,
         body: JSON.stringify({
           resumeData: maskedResumeData,
-          jobDescription: maskedJdText
+          jobDescription: maskedJdText,
+          ragEnabled
         })
       });
       clearTimeout(timeoutId);
@@ -2957,29 +2971,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         </span>
                       </div>
                       <p className="text-sm text-slate-600 dark:text-slate-300">{suggestion.reason}</p>
-                      <div className="mt-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                        <span>这条建议有帮助吗？</span>
-                        <button
-                          onClick={() => persistSuggestionFeedback(suggestion, 'up')}
-                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'up'
-                            ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
-                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
-                            }`}
-                          aria-label="点赞"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">thumb_up</span>
-                        </button>
-                        <button
-                          onClick={() => persistSuggestionFeedback(suggestion, 'down')}
-                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'down'
-                            ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
-                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
-                            }`}
-                          aria-label="点踩"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">thumb_down</span>
-                        </button>
-                      </div>
+
                     </div>
 
                     {/* Original and Suggested Content - Stacked for better mobile view */}
@@ -3081,22 +3073,47 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     </div>
 
                     {/* Action Buttons */}
-                    <div className="p-3 flex justify-end gap-3 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
-                      <button
-                        onClick={() => {
-                          setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'ignored' as const } : s));
-                        }}
-                        className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
-                      >
-                        忽略
-                      </button>
-                      <button
-                        onClick={() => handleAcceptSuggestionInChat(suggestion)}
-                        className="px-6 py-2 text-sm bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
-                      >
-                        <span className="material-symbols-outlined text-[18px]">check</span>
-                        采纳优化
-                      </button>
+                    <div className="p-3 flex items-center justify-between bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span>这条建议有帮助吗？</span>
+                        <button
+                          onClick={() => persistSuggestionFeedback(suggestion, 'up')}
+                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'up'
+                            ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
+                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
+                            }`}
+                          aria-label="点赞"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">thumb_up</span>
+                        </button>
+                        <button
+                          onClick={() => persistSuggestionFeedback(suggestion, 'down')}
+                          className={`inline-flex items-center justify-center size-6 rounded-full border transition-colors ${suggestion.rating === 'down'
+                            ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
+                            : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
+                            }`}
+                          aria-label="点踩"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">thumb_down</span>
+                        </button>
+                      </div>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => {
+                            setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'ignored' as const } : s));
+                          }}
+                          className="px-4 py-2 text-sm text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+                        >
+                          忽略
+                        </button>
+                        <button
+                          onClick={() => handleAcceptSuggestionInChat(suggestion)}
+                          className="px-6 py-2 text-sm bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-2"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">check</span>
+                          采纳优化
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -3107,7 +3124,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
           {/* Export PDF & Analyze Other Buttons - Arranged side-by-side */}
-          <div className="mb-52 flex gap-3">
+          <div className="mb-48 flex gap-3">
             <button
               onClick={handleExportPDF}
               disabled={!hasAcceptedSuggestion}
@@ -3131,7 +3148,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </main>
 
         {/* Fixed AI Advisor Button - Above Navigation Bar */}
-        <div className="fixed bottom-[64px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
+        <div className="fixed bottom-[56px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
           <button
             onClick={() => openChat('internal')}
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
@@ -3179,7 +3196,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-32">
+        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
           {chatMessages.map((msg) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -3272,9 +3289,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 }
               }}
               placeholder="输入您的问题..."
-              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-2 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}
+              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}
               rows={1}
-              style={{ minHeight: '48px', maxHeight: '120px' }}
+              style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
             />
             <button
               onClick={() => handleSendMessage()}

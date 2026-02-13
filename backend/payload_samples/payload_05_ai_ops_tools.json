@@ -1,0 +1,31 @@
+{
+  "resumeData": {
+    "id": "sample-05",
+    "personalInfo": {
+      "name": "周雨",
+      "title": "AI运营",
+      "email": "zhouyu@example.com",
+      "phone": "13800000005",
+      "location": "广州",
+      "summary": "3年AI应用运营经验，推进工具落地和流程自动化。"
+    },
+    "workExps": [
+      {
+        "id": 1,
+        "company": "某内容平台",
+        "title": "AI运营专员",
+        "subtitle": "工具落地",
+        "startDate": "2022-06",
+        "endDate": "2025-01",
+        "description": "推动AIGC工具在内容生产流程应用，建设自动化工作流。"
+      }
+    ],
+    "educations": [
+      { "id": 1, "school": "暨南大学", "degree": "本科", "major": "新闻传播", "startDate": "2017-09", "endDate": "2021-06" }
+    ],
+    "projects": [],
+    "skills": ["Prompt Engineering", "ChatGPT", "Notion AI", "Zapier", "Make"]
+  },
+  "jobDescription": "岗位：AI运营经理。要求熟悉Prompt Engineering、RAG基础、Zapier/Make/Coze自动化、SQL基础与数据可视化，具备AI工具落地经验。"
+}
+
