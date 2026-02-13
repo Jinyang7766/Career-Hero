@@ -4,7 +4,7 @@ import { View, NavProps } from '../types';
 const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
   const getIconClass = (view: View, baseIcon: string) => {
     const isActive = currentView === view;
-    return `material-symbols-outlined text-[26px] mb-0.5 transition-transform duration-200 ${isActive ? 'fill-1' : ''}`;
+    return `material-symbols-outlined text-[22px] mb-0 transition-transform duration-200 ${isActive ? 'fill-1' : ''}`;
   };
 
   const getButtonClass = (view: View) => {
@@ -12,13 +12,13 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
       (view === View.ALL_RESUMES && [View.ALL_RESUMES, View.TEMPLATES, View.PREVIEW].includes(currentView)) ||
       (view === View.PROFILE && [View.SETTINGS, View.HELP].includes(currentView));
 
-    return `flex flex-col items-center justify-center w-full h-full space-y-1 transition-colors group ${isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+    return `flex flex-col items-center justify-center w-full h-full space-y-0.5 transition-colors group ${isActive ? 'text-primary' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
       }`;
   };
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-gray-200 dark:border-white/5 pb-safe pt-2 max-w-md mx-auto">
-      <div className="flex justify-around items-center h-14 pb-2">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-white/90 dark:bg-background-dark/90 backdrop-blur-xl border-t border-gray-200 dark:border-white/5 pb-safe pt-1 max-w-md mx-auto">
+      <div className="flex justify-around items-center h-12 pb-1">
         <button
           onClick={() => setCurrentView(View.DASHBOARD)}
           className={getButtonClass(View.DASHBOARD)}
@@ -40,7 +40,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
           className={getButtonClass(View.AI_ANALYSIS)}
         >
           <div className="flex items-center justify-center rounded-xl transition-colors">
-            <svg className={`w-[26px] h-[26px] mb-0.5 transition-transform duration-200 ${currentView === View.AI_ANALYSIS ? 'text-primary scale-110' : ''}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg className={`w-[22px] h-[22px] mb-0 transition-transform duration-200 ${currentView === View.AI_ANALYSIS ? 'text-primary scale-110' : ''}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               {/* A - Round caps */}
               <path d="M4 21L10 5L16 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
               <path d="M7 15H13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
