@@ -525,9 +525,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
       setChatEntrySource('internal');
       localStorage.setItem('ai_chat_entry_source', 'internal');
-      if (chatMessages.length === 0) {
-        restoreInterviewSession();
-      }
+      // Always restore by current resume + current JD to avoid cross-session leakage.
+      restoreInterviewSession();
       navigateToStep('chat');
       return;
     }
@@ -1052,6 +1051,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const entries = Object.values(sessions);
     if (entries.length === 0) return null;
     return entries.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1))[0];
+  };
+
+  const hasInterviewHistoryForCurrentResumeAndJd = () => {
+    const sessionJdText = (jdText ?? resumeData?.lastJdText ?? '').trim();
+    if (!sessionJdText) return false;
+    const sessionKey = makeJdKey(sessionJdText);
+    const session = resumeData?.interviewSessions?.[sessionKey];
+    return !!(session && Array.isArray(session.messages) && session.messages.length > 0);
   };
 
   const buildResumeTitle = (baseTitle: string | undefined, data: ResumeData, jd: string, includeCompany: boolean) => {
@@ -2071,17 +2078,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   useEffect(() => {
     if (currentStep === 'chat') {
-      const isNewInterview = !chatInitialized && chatMessages.length === 0;
-      if (isNewInterview && !inputMessage) {
+      const isNewInterviewForCurrentPair =
+        !chatInitialized &&
+        chatMessages.length === 0 &&
+        !hasInterviewHistoryForCurrentResumeAndJd();
+      if (isNewInterviewForCurrentPair && !inputMessage) {
         setInputMessage(CHAT_PREFILL_TEXT);
         setIsChatPrefill(true);
-      } else if (!isNewInterview && isChatPrefill) {
+      } else if (!isNewInterviewForCurrentPair && isChatPrefill) {
         setIsChatPrefill(false);
       }
     } else if (isChatPrefill) {
       setIsChatPrefill(false);
     }
-  }, [currentStep, chatInitialized, chatMessages.length]);
+  }, [currentStep, chatInitialized, chatMessages.length, jdText, resumeData?.lastJdText, resumeData?.interviewSessions, inputMessage, isChatPrefill]);
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -3285,7 +3295,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 setInputMessage(e.target.value);
               }}
               onBlur={() => {
-                if (!inputMessage.trim()) {
+                const canShowReadyPrefill =
+                  !chatInitialized &&
+                  chatMessages.length === 0 &&
+                  !hasInterviewHistoryForCurrentResumeAndJd();
+                if (!inputMessage.trim() && canShowReadyPrefill) {
                   setInputMessage(CHAT_PREFILL_TEXT);
                   setIsChatPrefill(true);
                 }

@@ -1,0 +1,791 @@
+{
+  "meta": {
+    "url": "https://career-hero-backend-production.up.railway.app/api/ai/analyze",
+    "runs": 5,
+    "judge_model": "gemini-3-pro-preview"
+  },
+  "summary": {
+    "evaluated_runs": 5,
+    "failures": 0,
+    "on_wins": 0,
+    "off_wins": 0,
+    "ties": 5,
+    "on_win_rate": 0.0,
+    "scores": {
+      "jd_relevance": {
+        "on": 1.0,
+        "off": 1.0,
+        "delta": 0.0
+      },
+      "actionability": {
+        "on": 1.8,
+        "off": 1.8,
+        "delta": 0.0
+      },
+      "factuality": {
+        "on": 1.0,
+        "off": 1.0,
+        "delta": 0.0
+      },
+      "skill_precision": {
+        "on": 2.2,
+        "off": 2.2,
+        "delta": 0.0
+      },
+      "writing_quality": {
+        "on": 1.6,
+        "off": 1.6,
+        "delta": 0.0
+      },
+      "overall": {
+        "on": 1.52,
+        "off": 1.52,
+        "delta": 0.0
+      }
+    },
+    "hard_metrics": {
+      "jd_keyword_coverage_rate": {
+        "on": 0.4615,
+        "off": 0.4615,
+        "delta": 0.0
+      },
+      "suggestion_schema_valid_rate": {
+        "on": 1.0,
+        "off": 1.0,
+        "delta": 0.0
+      },
+      "skill_hard_term_ratio": {
+        "on": 1.0,
+        "off": 1.0,
+        "delta": 0.0
+      },
+      "placeholder_leak_rate": {
+        "on": 0.0,
+        "off": 0.0,
+        "delta": 0.0
+      }
+    }
+  },
+  "runs": [
+    {
+      "run": 1,
+      "stage": "ok",
+      "off": {
+        "status": 200,
+        "elapsed_ms": 1380.44,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "on": {
+        "status": 200,
+        "elapsed_ms": 801.52,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "judge": {
+        "winner_real": "tie",
+        "reason": "Both outputs are identical and represent a system failure state; they contain error messages instead of analysis, suggest adding skills the candidate already possesses (SQL, Python), and provide generic, fabricated work descriptions that do not match the specific context of the resume.",
+        "on": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 2,
+          "overall": 1.6
+        },
+        "off": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 2,
+          "overall": 1.6
+        },
+        "raw": {
+          "winner": "tie",
+          "left": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 2,
+            "overall": 1.6
+          },
+          "right": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 2,
+            "overall": 1.6
+          },
+          "reason": "Both outputs are identical and represent a system failure state; they contain error messages instead of analysis, suggest adding skills the candidate already possesses (SQL, Python), and provide generic, fabricated work descriptions that do not match the specific context of the resume."
+        }
+      }
+    },
+    {
+      "run": 2,
+      "stage": "ok",
+      "off": {
+        "status": 200,
+        "elapsed_ms": 919.24,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "on": {
+        "status": 200,
+        "elapsed_ms": 771.06,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "judge": {
+        "winner_real": "tie",
+        "reason": "两侧结果完全一致，均为系统降级/报错状态的兜底回复；存在严重幻觉（建议补充简历中已有的SQL/Python），且工作经历优化建议为通用模板与简历原内容无关，summary字段包含错误提示信息。",
+        "on": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.4
+        },
+        "off": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.4
+        },
+        "raw": {
+          "winner": "tie",
+          "left": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.4
+          },
+          "right": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.4
+          },
+          "reason": "两侧结果完全一致，均为系统降级/报错状态的兜底回复；存在严重幻觉（建议补充简历中已有的SQL/Python），且工作经历优化建议为通用模板与简历原内容无关，summary字段包含错误提示信息。"
+        }
+      }
+    },
+    {
+      "run": 3,
+      "stage": "ok",
+      "off": {
+        "status": 200,
+        "elapsed_ms": 959.11,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "on": {
+        "status": 200,
+        "elapsed_ms": 761.52,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "judge": {
+        "winner_real": "tie",
+        "reason": "两侧输出完全一致且质量均较差：Summary包含报错信息，技能建议重复（简历已有SQL/Python仍建议添加），工作经历建议使用通用模版覆盖了原有的具体业务内容（严重的幻觉/编造）。",
+        "on": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 2,
+          "overall": 1.6
+        },
+        "off": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 2,
+          "overall": 1.6
+        },
+        "raw": {
+          "winner": "tie",
+          "left": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 2,
+            "overall": 1.6
+          },
+          "right": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 2,
+            "overall": 1.6
+          },
+          "reason": "两侧输出完全一致且质量均较差：Summary包含报错信息，技能建议重复（简历已有SQL/Python仍建议添加），工作经历建议使用通用模版覆盖了原有的具体业务内容（严重的幻觉/编造）。"
+        }
+      }
+    },
+    {
+      "run": 4,
+      "stage": "ok",
+      "off": {
+        "status": 200,
+        "elapsed_ms": 788.11,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "on": {
+        "status": 200,
+        "elapsed_ms": 765.42,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "judge": {
+        "winner_real": "tie",
+        "reason": "两份结果完全一致且均存在严重幻觉：提示缺失简历中已有的技能（SQL/Python），且工作经历优化建议使用了毫无关联的通用模板数据（如“提升团队效率30%”），而非基于原有“增长/转化率”内容的优化。",
+        "on": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 3,
+          "writing_quality": 2,
+          "overall": 1.8
+        },
+        "off": {
+          "jd_relevance": 1,
+          "actionability": 2,
+          "factuality": 1,
+          "skill_precision": 3,
+          "writing_quality": 2,
+          "overall": 1.8
+        },
+        "raw": {
+          "winner": "tie",
+          "left": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 3,
+            "writing_quality": 2,
+            "overall": 1.8
+          },
+          "right": {
+            "jd_relevance": 1,
+            "actionability": 2,
+            "factuality": 1,
+            "skill_precision": 3,
+            "writing_quality": 2,
+            "overall": 1.8
+          },
+          "reason": "两份结果完全一致且均存在严重幻觉：提示缺失简历中已有的技能（SQL/Python），且工作经历优化建议使用了毫无关联的通用模板数据（如“提升团队效率30%”），而非基于原有“增长/转化率”内容的优化。"
+        }
+      }
+    },
+    {
+      "run": 5,
+      "stage": "ok",
+      "off": {
+        "status": 200,
+        "elapsed_ms": 1055.23,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "on": {
+        "status": 200,
+        "elapsed_ms": 865.67,
+        "response": {
+          "score": 90,
+          "summary": "智能分析暂时不可用，已生成基础分析报告，建议稍后再试。",
+          "suggestions": [
+            "添加项目经历",
+            "简历完整度较高，可进一步打磨细节。",
+            {
+              "id": "jd-keywords-2",
+              "reason": "职位描述中提到 Python, Sql，建议补充这些技能以提升匹配度。",
+              "status": "pending",
+              "suggestedValue": [
+                "SQL",
+                "Python",
+                "A/B Test",
+                "GA4",
+                "Figma",
+                "Python",
+                "Sql"
+              ],
+              "targetSection": "skills",
+              "title": "技能关键词补全",
+              "type": "missing"
+            },
+            {
+              "id": "exp-detail-1",
+              "originalValue": "主导增长实验平台建设，推动注册转化率提升。",
+              "reason": "“产品经理”的描述过于简略，建议用 STAR 法则补充具体成果和数据。",
+              "status": "pending",
+              "suggestedValue": "负责核心项目的开发与优化，提升团队效率 30%，成功交付 3 个关键里程碑并获得客户认可。",
+              "targetField": "description",
+              "targetId": 1,
+              "targetSection": "workExps",
+              "title": "工作经历细化",
+              "type": "optimization"
+            }
+          ],
+          "missingKeywords": [
+            "智能分析暂不可用"
+          ]
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": 0.4615,
+          "suggestion_schema_valid_rate": 1.0,
+          "skill_hard_term_ratio": 1.0,
+          "placeholder_leak_rate": 0.0
+        }
+      },
+      "judge": {
+        "winner_real": "tie",
+        "reason": "两侧结果完全一致，且均为系统服务降级后的错误兜底响应（包含“智能分析不可用”提示），未能识别简历中已存在的技能导致重复建议，工作经历优化建议也为通用模板而非基于事实，质量极低。",
+        "on": {
+          "jd_relevance": 1,
+          "actionability": 1,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.2
+        },
+        "off": {
+          "jd_relevance": 1,
+          "actionability": 1,
+          "factuality": 1,
+          "skill_precision": 2,
+          "writing_quality": 1,
+          "overall": 1.2
+        },
+        "raw": {
+          "winner": "tie",
+          "left": {
+            "jd_relevance": 1,
+            "actionability": 1,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.2
+          },
+          "right": {
+            "jd_relevance": 1,
+            "actionability": 1,
+            "factuality": 1,
+            "skill_precision": 2,
+            "writing_quality": 1,
+            "overall": 1.2
+          },
+          "reason": "两侧结果完全一致，且均为系统服务降级后的错误兜底响应（包含“智能分析不可用”提示），未能识别简历中已存在的技能导致重复建议，工作经历优化建议也为通用模板而非基于事实，质量极低。"
+        }
+      }
+    }
+  ]
+}

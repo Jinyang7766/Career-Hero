@@ -137,7 +137,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
 # 上传/读取简历文本解析模型
 GEMINI_RESUME_PARSE_MODEL = os.getenv('GEMINI_RESUME_PARSE_MODEL', 'gemini-2.5-flash-lite')
 # 简历分析（优化建议）模型
-GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
+GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-2.5-flash')
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
 GEMINI_VISION_MODELS = [
@@ -155,12 +155,30 @@ def get_ocr_model_candidates():
     for model_name in GEMINI_VISION_MODELS:
         if not model_name:
             continue
-        # Hard block deprecated/disabled model from any OCR path.
-        if model_name.strip() == 'gemini-3-pro-preview':
-            continue
         if model_name not in models:
             models.append(model_name)
     return models
+
+
+def get_analysis_model_candidates():
+    """Model fallback chain for resume analysis to avoid permanent degraded responses."""
+    raw_fallback = os.getenv('GEMINI_ANALYSIS_FALLBACK_MODELS', '')
+    env_fallback = [m.strip() for m in raw_fallback.split(',') if m.strip()]
+
+    candidates = [
+        GEMINI_ANALYSIS_MODEL,
+        *env_fallback,
+        'gemini-2.5-flash',
+        'gemini-2.5-flash-lite'
+    ]
+
+    deduped = []
+    for model_name in candidates:
+        if not model_name:
+            continue
+        if model_name not in deduped:
+            deduped.append(model_name)
+    return deduped
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -2868,13 +2886,27 @@ def analyze_resume(current_user_id):
 {format_requirements}
 """
 
-                response = gemini_client.models.generate_content(
-                    model=GEMINI_ANALYSIS_MODEL,
-                    contents=prompt,
-                    config=types.GenerateContentConfig(
-                        response_mime_type="application/json"
-                    )
-                )
+                last_model_error = None
+                response = None
+                used_model = None
+                for model_name in get_analysis_model_candidates():
+                    try:
+                        response = gemini_client.models.generate_content(
+                            model=model_name,
+                            contents=prompt,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json"
+                            )
+                        )
+                        used_model = model_name
+                        break
+                    except Exception as model_error:
+                        last_model_error = model_error
+                        logger.warning("Analysis model failed: %s, error=%s", model_name, model_error)
+
+                if response is None:
+                    raise last_model_error or RuntimeError("No available Gemini analysis model")
+
                 ai_result = parse_ai_response(response.text)
                 ensured_summary = ensure_analysis_summary(
                     ai_result.get('summary', ''),
@@ -2893,7 +2925,8 @@ def analyze_resume(current_user_id):
                     'weaknesses': ai_result.get('weaknesses', []),
                     'missingKeywords': ai_result.get('missingKeywords', []),
                     'reference_cases': reference_cases,
-                    'rag_enabled': rag_enabled
+                    'rag_enabled': rag_enabled,
+                    'analysis_model': used_model
                 }), 200
 
             except Exception as ai_error:
