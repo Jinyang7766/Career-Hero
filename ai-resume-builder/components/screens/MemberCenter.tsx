@@ -33,7 +33,7 @@ const MemberCenter: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
                         <BenefitItem icon="psychology" title="无限次 AI 诊断" desc="深度优化每一份简历细节" />
                         <BenefitItem icon="chat_bubble" title="专属 AI 面试官" desc="无限量沉浸式模拟面试" />
                         <BenefitItem icon="palette" title="所有高级模板" desc="职场精英专属定制布局" />
-                        <BenefitItem icon="download" title="导出不限次数" desc="高清 PDF/Word 随时下载" />
+                        <BenefitItem icon="download" title="导出不限次数" desc="高清 PDF 随时下载" />
                     </div>
                 </div>
 

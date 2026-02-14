@@ -150,6 +150,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       workExps: (prev.workExps || []).map(normalizeWork),
       educations: (prev.educations || []).map(normalizeEdu),
       projects: (prev.projects || []).map(normalizeProjects),
+      // Also normalize skills once per resume load to fix historical bad tokens like "(PowerBI" / "Tableau)" / "B Test)".
+      skills: toSkillList(prev.skills),
     }));
 
     lastNormalizedResumeIdRef.current = resumeData.id;
@@ -615,13 +617,16 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   };
 
   const handleAddSkill = () => {
-    if (newSkill.trim()) {
-      setResumeData(prev => ({
-        ...prev,
-        skills: [...prev.skills, newSkill.trim()]
-      }));
+    const tokens = toSkillList(newSkill);
+    if (!tokens.length) {
       setNewSkill('');
+      return;
     }
+    setResumeData(prev => ({
+      ...prev,
+      skills: mergeSkills(prev.skills, tokens)
+    }));
+    setNewSkill('');
   };
 
   const handleSaveAndPreview = async () => {

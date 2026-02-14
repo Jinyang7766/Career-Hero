@@ -5,12 +5,12 @@ import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
 
-const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) => {
+const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack, currentUser }) => {
   const { userProfile } = useUserProfile();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  const email = userProfile?.email || '';
+  const email = currentUser?.email || userProfile?.email || '';
   const phone = userProfile?.phone || '';
 
   const handleDeleteAccount = async (immediate: boolean) => {

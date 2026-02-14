@@ -29,41 +29,38 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
         const missingStart = showValidation && !exp.startDate;
         const missingEnd = showValidation && !exp.endDate;
         return (
-        <div key={exp.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-100 dark:border-white/5 last:border-0 relative">
-          <div className="flex justify-between items-center">
-            <h4 className="text-sm font-semibold text-primary uppercase tracking-wide">工作经历 {index + 1}</h4>
-            <button
-              onClick={() => onRemove(exp.id)}
-              className="text-slate-400 hover:text-red-400 p-1"
-            >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
-            </button>
-          </div>
-          <div className="grid gap-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">公司名称 *</label>
-              <input
-                className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${
-                  missingTitle
-                    ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                    : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
-                } text-slate-900 dark:text-white`}
-                placeholder="公司名称"
-                type="text"
-                value={exp.title}
-                onChange={(e) => onUpdate(exp.id, 'title', e.target.value)}
-              />
-              {missingTitle && <p className="text-xs text-red-500">请填写公司名称</p>}
+          <div key={exp.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-100 dark:border-white/5 last:border-0 relative">
+            <div className="flex justify-between items-center">
+              <h4 className="text-sm font-semibold text-primary uppercase tracking-wide">工作经历 {index + 1}</h4>
+              <button
+                onClick={() => onRemove(exp.id)}
+                className="text-slate-400 hover:text-red-400 p-1"
+              >
+                <span className="material-symbols-outlined text-[18px]">delete</span>
+              </button>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">公司名称 *</label>
+                <input
+                  className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${missingTitle
+                      ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
+                      : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                    } text-slate-900 dark:text-white`}
+                  placeholder="公司名称"
+                  type="text"
+                  value={exp.title}
+                  onChange={(e) => onUpdate(exp.id, 'title', e.target.value)}
+                />
+                {missingTitle && <p className="text-xs text-red-500">请填写公司名称</p>}
+              </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">职位名称 *</label>
                 <input
-                  className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${
-                    missingSubtitle
+                  className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${missingSubtitle
                       ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
                       : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
-                  } text-slate-900 dark:text-white`}
+                    } text-slate-900 dark:text-white`}
                   placeholder="职位名称"
                   type="text"
                   value={exp.subtitle}
@@ -75,11 +72,10 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                 <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">任职时间 *</label>
                 <div className="flex items-center gap-2">
                   <input
-                    className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${
-                      missingStart
+                    className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${missingStart
                         ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
                         : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
-                    } text-slate-900 dark:text-white`}
+                      } text-slate-900 dark:text-white`}
                     placeholder="开始时间"
                     type="text"
                     value={exp.startDate || ''}
@@ -87,11 +83,10 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   />
                   <span className="text-slate-400">-</span>
                   <input
-                    className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${
-                      missingEnd
+                    className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 placeholder:text-slate-400 outline-none transition-all focus:ring-2 ${missingEnd
                         ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
                         : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
-                    } text-slate-900 dark:text-white`}
+                      } text-slate-900 dark:text-white`}
                     placeholder="结束时间"
                     type="text"
                     value={exp.endDate || ''}
@@ -102,21 +97,20 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   <p className="text-xs text-red-500">请填写开始/结束时间（结束可填“至今”）</p>
                 )}
               </div>
-            </div>
-            <div className="relative">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">工作内容（可选）</label>
+              <div className="relative">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">工作内容（可选）</label>
+                </div>
+                <textarea
+                  className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed"
+                  placeholder="描述您的主要职责和业绩成就..."
+                  rows={4}
+                  value={exp.description}
+                  onChange={(e) => onUpdate(exp.id, 'description', e.target.value)}
+                ></textarea>
               </div>
-              <textarea
-                className="w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed"
-                placeholder="描述您的主要职责和业绩成就..."
-                rows={4}
-                value={exp.description}
-                onChange={(e) => onUpdate(exp.id, 'description', e.target.value)}
-              ></textarea>
             </div>
           </div>
-        </div>
         );
       })}
 

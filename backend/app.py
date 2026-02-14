@@ -2486,15 +2486,68 @@ def _normalize_parsed_resume_result(ai_result):
             return [value]
         return []
 
+    def _split_date_range(range_str):
+        if not range_str or not isinstance(range_str, str):
+            return None, None
+        # Split by typical range separators
+        # Sort by length descending to catch longer separators first
+        separators = [' - ', ' – ', ' — ', '-', '至', ' 到 ', '~', ' to ']
+        for sep in separators:
+            if sep in range_str:
+                parts = range_str.split(sep, 1)
+                return parts[0].strip(), parts[1].strip()
+        return None, None
+
+    def _fix_messed_up_dates(start, end):
+        # Case: start="2022", end="06-2022-12" (User report)
+        if start and end and len(start) == 4 and start.isdigit():
+            # If end starts with month and matches the year in second part
+            # e.g. "06-2022-12" -> Month "06", Year "2022", Dash, End "12" or "2022-12"
+            test_end = end.replace('.', '-').replace('/', '-')
+            parts = [p.strip() for p in test_end.split('-') if p.strip()]
+            if len(parts) >= 3 and parts[1] == start:
+                # Re-assembly: new_start = "2022-06", new_end = "2022-12" or parts[-1]
+                new_start = f"{start}-{parts[0]}"
+                # If only 3 parts ("06", "2022", "12"), end is likely just the month of the same year or a different year
+                if len(parts) == 3:
+                     # If the last part is not a year, assume it's a month of the same year
+                     if len(parts[2]) <= 2:
+                         new_end = f"{start}-{parts[2]}"
+                     else:
+                         new_end = parts[2]
+                else:
+                     new_end = "-".join(parts[2:])
+                return new_start, new_end
+        return start, end
+
+    def _extract_dates(item):
+        start = _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期'])
+        end = _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期'])
+        
+        # If one is empty, try to split the combined 'date' field
+        full_range = _pick(item, ['date', 'time', 'duration', '期间', '时间'])
+        if (not start or not end) and full_range:
+            s, e = _split_date_range(full_range)
+            if s and e:
+                start = start or s
+                end = end or e
+        
+        # Final fix for AI extraction glitches
+        if start and end:
+            start, end = _fix_messed_up_dates(start, end)
+            
+        return start, end
+
     normalized_work = []
     for item in _ensure_list(work_exps):
         if not isinstance(item, dict):
             continue
+        start, end = _extract_dates(item)
         normalized_work.append({
             'company': _pick(item, ['company', 'employer', 'organization', 'org', '单位', '公司', 'title']),
             'position': _pick(item, ['position', 'jobTitle', 'role', '岗位', '职位', 'subtitle']),
-            'startDate': _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期']),
-            'endDate': _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期']),
+            'startDate': start,
+            'endDate': end,
             'description': _pick(item, ['description', 'content', 'summary', '职责', '工作内容']),
         })
 
@@ -2502,12 +2555,26 @@ def _normalize_parsed_resume_result(ai_result):
     for item in _ensure_list(educations):
         if not isinstance(item, dict):
             continue
+        start, end = _extract_dates(item)
         normalized_edu.append({
             'school': _pick(item, ['school', 'university', 'college', '学校', 'title']),
             'degree': _pick(item, ['degree', '学历', '学位']),
             'major': _pick(item, ['major', 'speciality', '专业', 'subtitle']),
-            'startDate': _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期']),
-            'endDate': _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期']),
+            'startDate': start,
+            'endDate': end,
+        })
+
+    normalized_proj = []
+    for item in _ensure_list(projects):
+        if not isinstance(item, dict):
+            continue
+        start, end = _extract_dates(item)
+        normalized_proj.append({
+            'title': _pick(item, ['title', 'name', '项目名称', '项目', '项目名']),
+            'subtitle': _pick(item, ['role', 'position', 'subtitle', '角色', '职位', '担任角色']),
+            'startDate': start,
+            'endDate': end,
+            'description': _pick(item, ['description', 'content', 'summary', '职责', '项目内容', '项目描述']),
         })
 
     return {
@@ -2524,7 +2591,7 @@ def _normalize_parsed_resume_result(ai_result):
         },
         'workExps': normalized_work,
         'educations': normalized_edu,
-        'projects': _ensure_list(projects),
+        'projects': normalized_proj,
         'skills': skills if isinstance(skills, list) else []
     }
 
@@ -2698,8 +2765,9 @@ def parse_resume_text_with_ai(resume_text):
        - `school`: 学校全称。
        - `major`: 专业名称。
     4. **个人总结**：查找“自我评价”、“Summary”、“个人简介”等，存入 `personalInfo.summary`。
-    5. **日期规范**：统一为 YYYY-MM 格式。至今写为“至今”。
-    6. **纯净输出**：仅返回 JSON 块，不要包含任何 Markdown 语法标记。
+    5. **日期提取**：严格区分“开始”与“结束”日期。严禁将整个时间范围（如 2022.06-2024.12）塞入单一字段，必须分别提取到 `startDate` 和 `endDate`。
+    6. **日期格式**：统一为 YYYY-MM 格式（如 2022-06）。仅年份（如 2022）也可。结束时间若为“至今”或“现在”则写为“至今”。
+    7. **纯净输出**：仅返回 JSON 块，不要包含任何 Markdown 语法标记。
 
     **JSON 结构模板：**
     {{
@@ -2732,8 +2800,10 @@ def parse_resume_text_with_ai(resume_text):
         "projects": [
             {{
                 "title": "",
-                "description": "",
-                "date": ""
+                "subtitle": "担任角色",
+                "startDate": "YYYY-MM",
+                "endDate": "YYYY-MM",
+                "description": ""
             }}
         ],
         "skills": []
@@ -2940,8 +3010,13 @@ def analyze_resume(current_user_id):
 8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
    - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
    - 严禁尝试猜测或还原真实隐私信息。
+9. **教育信息不可“专业优化”（强制）**：
+   - 教育背景中的“学校/学院名称、专业名称、学历/学位、入学/毕业时间”属于事实字段，必须严格来自简历原文。
+   - 严禁为了贴合 JD 而擅自“优化专业名称/主修方向”（例如把“电子商务”改成“电子商务（主修方向：数据挖掘与商务智能）”）。
+   - 若 JD 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
 9. **技能词条白名单/黑名单规则（强制）**：
    - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
+   - **同类合并（强制）**：如果技能候选中出现任意大模型/对话模型/厂商或具体型号（例如：GPT-4/ChatGPT/OpenAI、Claude/Anthropic、Kimi/Moonshot、Gemini/Google、Qwen/通义千问、DeepSeek、Llama、GLM/智谱、文心一言/ERNIE 等），一律合并成单条技能：`LLM`。禁止同时列出多个不同模型名导致技能列表冗余。
    - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
    - 严禁输出动词化/过程化尾词：搭建、构建、设计、训练、微调、精调、调优、优化、执行、推进、落地、管理、脚本、自动化、开发、实现、运营、打造、分析、监控、维护、产出。
    - 严禁输出“连接残片词”：以“与/和/及”开头的片段，或“与精调”“和优化”“及搭建”这类残缺短语。
