@@ -500,8 +500,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
-  const CHAT_PREFILL_TEXT = '准备好了';
-  const [isChatPrefill, setIsChatPrefill] = useState(false);
+
+
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -2261,6 +2261,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
     if (isRecording) return;
 
+    // Some browsers require a secure context for speech recognition and mic access.
+    try {
+      if (typeof window !== 'undefined' && !window.isSecureContext && location.hostname !== 'localhost') {
+        setAudioError('语音识别需要在 HTTPS 环境下使用');
+        return;
+      }
+    } catch { }
+
+    // Preflight mic permission to avoid immediate SpeechRecognition failure on some mobile browsers.
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      try { s.getTracks().forEach(t => t.stop()); } catch { }
+    } catch (e: any) {
+      const name = String(e?.name || '').toLowerCase();
+      if (name.includes('notallowed') || name.includes('permission')) {
+        setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
+      } else {
+        setAudioError('麦克风启动失败，请重试');
+      }
+      return;
+    }
+
     // (Re)create recognition instance for this run to ensure handlers use latest closures.
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new SR();
@@ -2271,7 +2293,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     rec.lang = 'zh-CN';
     rec.interimResults = true;
-    rec.continuous = true;
+    // Mobile browsers are often unstable with continuous=true. We don't need it for "hold to talk".
+    rec.continuous = false;
 
     rec.onresult = (event: any) => {
       try {
@@ -2287,12 +2310,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       } catch { }
     };
 
-    rec.onerror = () => {
-      setAudioError('语音识别失败，请重试');
+    rec.onerror = (ev: any) => {
+      const code = String(ev?.error || '').toLowerCase();
+
+      // "no-speech" is common when user didn't speak; don't show as an error.
+      if (code === 'no-speech' || code === 'aborted') {
+        return;
+      }
+
+      if (code === 'not-allowed' || code === 'service-not-allowed') {
+        setAudioError('语音识别被拒绝：请允许麦克风权限后重试');
+      } else if (code === 'audio-capture') {
+        setAudioError('未检测到可用麦克风设备');
+      } else if (code === 'network') {
+        setAudioError('语音识别服务不可用：请检查网络后重试');
+      } else {
+        setAudioError('语音识别失败，请重试');
+      }
+
       setIsRecording(false);
       speechShouldSendRef.current = false;
       speechFinalRef.current = '';
       speechInterimRef.current = '';
+      try { rec.abort?.(); } catch { }
     };
 
     rec.onend = () => {
@@ -2351,22 +2391,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep]);
 
-  useEffect(() => {
-    if (currentStep === 'chat') {
-      const isNewInterviewForCurrentPair =
-        !chatInitialized &&
-        chatMessages.length === 0 &&
-        !hasInterviewHistoryForCurrentResumeAndJd();
-      if (isNewInterviewForCurrentPair && !inputMessage) {
-        setInputMessage(CHAT_PREFILL_TEXT);
-        setIsChatPrefill(true);
-      } else if (!isNewInterviewForCurrentPair && isChatPrefill) {
-        setIsChatPrefill(false);
-      }
-    } else if (isChatPrefill) {
-      setIsChatPrefill(false);
-    }
-  }, [currentStep, chatInitialized, chatMessages.length, jdText, resumeData?.lastJdText, resumeData?.interviewSessions, inputMessage, isChatPrefill]);
+
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -2662,7 +2687,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           const askMessage = {
             id: 'ai-ask',
             role: 'model' as const,
-            text: '请问您准备好开始模拟面试了吗？您可以回复"准备好了"开始，我会根据您的简历和岗位要求提出面试问题。'
+            text: '请问您准备好开始模拟面试了吗？您可以随时告诉我开始，我会根据您的简历和岗位要求提出面试问题。'
           };
           console.log('Adding ask message:', askMessage);
           setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
@@ -2695,9 +2720,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     // Allow "speech-to-text then send" flow: it may call this in the same tick that recording ends.
     if (isRecording && !textOverride) return;
 
-    if (isChatPrefill && hasText && textToSend === CHAT_PREFILL_TEXT) {
-      setIsChatPrefill(false);
-    }
+
 
     // Add user message (audio is kept client-side as an object URL).
     const userMessage: ChatMessage = {
@@ -3657,16 +3680,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           <div className="fixed inset-x-0 bottom-[140px] z-[200] flex flex-col items-center justify-center px-8 pointer-events-none mb-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
             {/* Status Text */}
             <div className={`mb-8 px-4 py-1.5 rounded-full backdrop-blur-md text-[14px] font-bold tracking-wide transition-all ${holdCancel
-                ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                : 'bg-black/20 text-slate-800 dark:text-slate-400'
+              ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+              : 'bg-black/20 text-slate-800 dark:text-slate-400'
               }`}>
               {holdCancel ? '松手取消' : '松手发送 上移取消'}
             </div>
 
             {/* Waveform Visualization Box */}
             <div className={`w-full max-w-[340px] h-[80px] rounded-[40px] flex items-center justify-center transition-all duration-300 shadow-2xl relative overflow-hidden ring-4 ring-white/10 ${holdCancel
-                ? 'bg-[#f85149] scale-105'
-                : 'bg-[#217aff] scale-100'
+              ? 'bg-[#f85149] scale-105'
+              : 'bg-[#217aff] scale-100'
               }`}>
               <div className="flex items-center justify-center gap-[4px]">
                 <WaveformVisualizer active={isRecording && !holdCancel} cancel={holdCancel} />
@@ -3765,18 +3788,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     ref={textareaRef}
                     value={inputMessage}
                     onChange={(e) => {
-                      if (isChatPrefill) setIsChatPrefill(false);
                       setInputMessage(e.target.value);
                     }}
                     onBlur={() => {
-                      const canShowReadyPrefill =
-                        !chatInitialized &&
-                        chatMessages.length === 0 &&
-                        !hasInterviewHistoryForCurrentResumeAndJd();
-                      if (!inputMessage.trim() && canShowReadyPrefill) {
-                        setInputMessage(CHAT_PREFILL_TEXT);
-                        setIsChatPrefill(true);
-                      }
+                      // Handled manually by user if needed
                     }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
@@ -3785,7 +3800,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       }
                     }}
                     placeholder="输入您的问题..."
-                    className={`flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-400 italic' : 'text-slate-900 dark:text-white'}`}
+                    className="flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none text-slate-900 dark:text-white"
                     rows={1}
                     style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
                   />
