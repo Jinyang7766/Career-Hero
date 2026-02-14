@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()  # 加载 .env 文件
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+import json
 import os
 # Clear proxy env vars before importing supabase to avoid proxy kw mismatch in some versions
 for _key in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']:
@@ -30,7 +31,6 @@ from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
-import traceback
 import google.genai as genai
 from google.genai import types
 
@@ -39,11 +39,6 @@ app = Flask(__name__)
 # 获取端口配置，优先使用环境变量中的 PORT
 # 这确保了在 Railway、Render 等平台上能正常监听正确的端口
 PORT = int(os.environ.get('PORT', 5000))
-
-# Debug: Log environment variable keys (NOT values) to verify injection
-logger = logging.getLogger(__name__)
-env_keys = list(os.environ.keys())
-logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
 
 # Ensure Render environment variables are loaded
 app.config['SECRET_KEY'] = os.environ.get('JWT_SECRET') or os.environ.get('SECRET_KEY')
@@ -58,40 +53,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# CORS origin allowlist
-DEFAULT_CORS_ORIGINS = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "http://localhost:5174",
-    "https://localhost:5173",
-    "https://localhost:3000",
-]
-
-def _normalize_origin(origin: str) -> str:
-    return (origin or "").strip().rstrip("/")
-
-
-def _resolve_request_origin() -> str:
-    """
-    Prefer Origin header. Fallback to Referer-derived origin for browsers that
-    may not expose Origin consistently in devtools/provisional header cases.
-    """
-    origin = _normalize_origin(request.headers.get('Origin', ''))
-    if origin:
-        return origin
-    referer = (request.headers.get('Referer', '') or '').strip()
-    if not referer:
-        return ''
-    try:
-        parsed = urlparse(referer)
-        if parsed.scheme and parsed.netloc:
-            return _normalize_origin(f"{parsed.scheme}://{parsed.netloc}")
-    except Exception:
-        return ''
-    return ''
-
-ENV_CORS_ORIGINS = [_normalize_origin(o) for o in os.getenv("CORS_ALLOWED_ORIGINS", "").split(",") if _normalize_origin(o)]
-CORS_ALLOWED_ORIGINS = ENV_CORS_ORIGINS or [_normalize_origin(o) for o in DEFAULT_CORS_ORIGINS]
+# Debug: Log environment variable keys (NOT values) to verify injection
+env_keys = list(os.environ.keys())
+logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
 
 # CORS configuration
 CORS(app, 
@@ -137,7 +101,7 @@ GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
 # 上传/读取简历文本解析模型
 GEMINI_RESUME_PARSE_MODEL = os.getenv('GEMINI_RESUME_PARSE_MODEL', 'gemini-2.5-flash-lite')
 # 简历分析（优化建议）模型
-GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-2.5-flash')
+GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
 GEMINI_VISION_MODELS = [
@@ -152,6 +116,45 @@ try:
     RAG_MATCH_THRESHOLD = float(os.getenv('RAG_MATCH_THRESHOLD', '0.75'))
 except ValueError:
     RAG_MATCH_THRESHOLD = 0.75
+
+# Lightweight server-side PII guard for defense-in-depth.
+# Frontend already masks PII before calling /api/ai/analyze, but scripts/clients may bypass it.
+# Modes:
+# - off: do nothing
+# - warn (default): log a warning if PII-like patterns are detected
+# - reject: return 400 if PII-like patterns are detected
+PII_GUARD_MODE = (os.getenv('PII_GUARD_MODE', 'warn') or 'warn').strip().lower()
+_PII_EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+_PII_PHONE_RE = re.compile(r"(?<!\d)(\+?\d[\d\s-]{7,}\d)(?!\d)")
+# CN ID: very rough heuristic; kept conservative to reduce false positives.
+_PII_CN_ID_RE = re.compile(r"(?<!\d)\d{17}[\dXx](?!\d)")
+
+
+def _detect_pii_types(text: str):
+    types = set()
+    if not text:
+        return types
+    if _PII_EMAIL_RE.search(text):
+        types.add("email")
+    if _PII_PHONE_RE.search(text):
+        types.add("phone")
+    if _PII_CN_ID_RE.search(text):
+        types.add("cn_id")
+    return types
+
+
+def _payload_pii_types(resume_data, job_description):
+    try:
+        sample = json.dumps(
+            {"resumeData": resume_data, "jobDescription": job_description},
+            ensure_ascii=False
+        )
+    except Exception:
+        sample = f"{resume_data}\n{job_description}"
+    # Prevent pathological huge payload logging; detection doesn't need full text.
+    if isinstance(sample, str) and len(sample) > 200_000:
+        sample = sample[:200_000]
+    return _detect_pii_types(sample)
 
 def get_ocr_model_candidates():
     """Shared OCR model list used by both PDF OCR and JD screenshot OCR."""
@@ -369,11 +372,11 @@ def find_relevant_cases_vector(resume_data, limit=3):
         return []
 
 
-def resolve_rag_strategy(resume_data, job_description):
+def resolve_rag_strategy(resume_data, job_description, rag_flag_present: bool):
     """
     按行业路由 RAG 策略：
-    - 财务/审计：默认关闭案例型 RAG，仅注入合规导向约束
-    - 供应链/架构：增强 RAG（提高案例数量）
+    - 硬技能导向（财务/审计、供应链、技术/架构）：强开启 RAG（术语/框架准确性收益更高）
+    - 软技能/创意导向（电商运营、市场/内容）：弱开启或关闭 RAG（避免模板化痕迹）
     - 其他：默认策略
     """
     resume_data = resume_data or {}
@@ -402,43 +405,64 @@ def resolve_rag_strategy(resume_data, job_description):
         '财务', '审计', '会计', '税务', '内控', '合规', '风控',
         'ifrs', 'gaap', 'cpa', 'acca', 'big4', '四大'
     ]
-    supply_arch_keywords = [
-        '供应链', '物流', '仓储', '采购', '计划', '库存',
-        '架构', '架构师', '系统架构', 'solution architect',
-        'architecture', 'architect', 'distributed', 'microservice', 'devops'
+    supply_chain_keywords = [
+        '供应链', '物流', '仓储', '采购', '计划', '库存', '补货', '预测', '排产',
+        'wms', 'tms', 'erp', 'sap', 'scm'
+    ]
+    tech_keywords = [
+        '架构', '架构师', '系统架构', '后端', '前端', '全栈', '算法', '数据工程', '数据分析', '数据科学',
+        'ai', 'llm', 'rag', 'agent', 'python', 'java', 'golang', 'node', 'react',
+        'architecture', 'architect', 'distributed', 'microservice', 'devops', 'kubernetes', 'k8s', 'grpc'
+    ]
+    soft_creative_keywords = [
+        '电商', '运营', '电商运营', '市场', '营销', '品牌', '增长', '投放', 'campaign',
+        '内容', '新媒体', '社群', '直播', '短视频', '达人', 'kol', 'koc', 'gmv'
     ]
 
     has_finance_audit = any(k in text for k in finance_audit_keywords)
-    has_supply_arch = any(k in text for k in supply_arch_keywords)
+    has_supply_chain = any(k in text for k in supply_chain_keywords)
+    has_tech = any(k in text for k in tech_keywords)
+    has_soft_creative = any(k in text for k in soft_creative_keywords)
 
-    if has_finance_audit:
-        compliance_context = """
-【行业策略：财务/审计（合规优先）】
-本次不使用案例型 RAG 内容参考。请优先基于候选人真实经历，围绕合规性、可审计性、内控完整性给出建议：
-1. 强调准则符合性（如会计准则、审计流程、内控规范）；
-2. 强调证据链完整（数据来源、口径一致、可追溯）；
-3. 对未给出的事实不得臆造，允许给出“应补充字段/证明材料类型”。
+    # Hard-skill domains: force-enable RAG (unless user explicitly turned it off via ragEnabled=false).
+    if has_finance_audit or has_supply_chain or has_tech:
+        hard_context = """
+【行业策略：硬技能导向（术语/框架优先）】
+允许使用 RAG 参考案例来提升术语准确性、框架完整性与表达结构，但必须严格遵守“只学风格不复用事实”的约束：
+- 只参考叙事结构、动词表达、量化逻辑，不得复用具体公司/项目/数字。
+- 必须把输出锚定到候选人真实经历；缺失事实只能用中性占位或提出“应补充的可验证指标/口径”。
 """
         return {
-            'mode': 'finance_audit_compliance_only',
-            'disable_case_rag': True,
-            'enhance_case_rag': False,
-            'case_limit': 0,
-            'extra_context': compliance_context
-        }
-
-    if has_supply_arch:
-        return {
-            'mode': 'supply_chain_or_architecture_enhanced_rag',
+            'mode': 'hard_skill_strong_rag',
             'disable_case_rag': False,
+            'force_case_rag_on': True,
             'enhance_case_rag': True,
             'case_limit': 5,
-            'extra_context': ''
+            'extra_context': hard_context
+        }
+
+    # Soft/creative domains: weak-enable or disable by default to avoid templated outputs.
+    if has_soft_creative:
+        soft_context = """
+【行业策略：软技能/创意导向（避免模板化）】
+本领域更看重“人的表达与灵气”。如启用 RAG，只允许弱引用（极少量示例），并且必须显著降低模板痕迹：
+- 不要套用固定句式/套路化结构；优先输出更贴近个人风格的表达。
+- 量化只用于“能被简历事实支持”的部分；不要为了好看硬造数据。
+"""
+        # Default behavior: if client didn't send ragEnabled, keep RAG off for soft domains.
+        return {
+            'mode': 'soft_creative_weak_rag',
+            'disable_case_rag': (not rag_flag_present),
+            'force_case_rag_on': False,
+            'enhance_case_rag': False,
+            'case_limit': 1,
+            'extra_context': soft_context
         }
 
     return {
         'mode': 'default',
         'disable_case_rag': False,
+        'force_case_rag_on': False,
         'enhance_case_rag': False,
         'case_limit': 3,
         'extra_context': ''
@@ -2395,7 +2419,6 @@ def _parse_json_object_from_text(response_text):
     if not response_text:
         return None
     try:
-        import json
         start = response_text.find('{')
         end = response_text.rfind('}') + 1
         if start != -1 and end > start:
@@ -2829,13 +2852,27 @@ def analyze_resume(current_user_id):
         data = request.get_json()
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
+        rag_flag_present = 'ragEnabled' in (data or {})
         rag_requested = parse_bool_flag(data.get('ragEnabled'), RAG_ENABLED)
-        rag_strategy = resolve_rag_strategy(resume_data, job_description)
-        rag_enabled = rag_requested and (not rag_strategy.get('disable_case_rag', False))
+        rag_strategy = resolve_rag_strategy(resume_data, job_description, rag_flag_present=rag_flag_present)
+        # Strategy can force-enable RAG only when client didn't explicitly turn it off.
+        force_on = bool(rag_strategy.get('force_case_rag_on', False)) and (not (rag_flag_present and (rag_requested is False)))
+        rag_enabled = (not rag_strategy.get('disable_case_rag', False)) and (rag_requested or force_on)
         reference_cases = []
 
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
+
+        # Defense-in-depth: detect common PII patterns if a client bypasses frontend masking.
+        if PII_GUARD_MODE in ('warn', 'reject'):
+            pii_types = _payload_pii_types(resume_data, job_description)
+            if pii_types:
+                logger.warning("PII guard detected types=%s (mode=%s)", sorted(list(pii_types)), PII_GUARD_MODE)
+                if PII_GUARD_MODE == 'reject':
+                    return jsonify({
+                        'error': '检测到可能的个人敏感信息（PII），已拒绝处理。请使用前端内置脱敏后再重试。',
+                        'pii_types': sorted(list(pii_types))
+                    }), 400
 
         if gemini_client and check_gemini_quota():
             try:
@@ -2900,7 +2937,10 @@ def analyze_resume(current_user_id):
 5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
 6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
-8. **技能词条白名单/黑名单规则（强制）**：
+8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
+   - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
+   - 严禁尝试猜测或还原真实隐私信息。
+9. **技能词条白名单/黑名单规则（强制）**：
    - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
    - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
    - 严禁输出动词化/过程化尾词：搭建、构建、设计、训练、微调、精调、调优、优化、执行、推进、落地、管理、脚本、自动化、开发、实现、运营、打造、分析、监控、维护、产出。
@@ -3293,7 +3333,6 @@ def format_resume_for_ai(resume_data):
 def parse_ai_response(response_text):
     """解析 AI 回复中的结构化数据"""
     try:
-        import json
         start = response_text.find('{')
         end = response_text.rfind('}') + 1
         if start != -1 and end != 0:

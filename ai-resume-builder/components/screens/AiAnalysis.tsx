@@ -225,7 +225,24 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       .filter(Boolean)
       .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v)
       .filter((v) => isProfessionalSkillToken(v));
-    return Array.from(new Set(cleaned));
+    // De-dupe in a more robust way:
+    // - ignore casing
+    // - ignore whitespace and common separators
+    const makeKey = (s: string) =>
+      s
+        .toLowerCase()
+        .replace(/[\s，,；;（()）\[\]【】"'`]+/g, '')
+        .trim();
+    const seen = new Set<string>();
+    const out: string[] = [];
+    cleaned.forEach((t) => {
+      const k = makeKey(t);
+      if (!k) return;
+      if (seen.has(k)) return;
+      seen.add(k);
+      out.push(t);
+    });
+    return out;
   };
 
   const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
@@ -716,9 +733,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
   const consolidateSkillSuggestions = (items: Suggestion[]) => {
     if (!Array.isArray(items) || items.length <= 1) return items;
+    const isSkillSuggestion = (item: Suggestion) => {
+      const normalized = normalizeTargetSection(item.targetSection);
+      if (normalized === 'skills') return true;
+      // Some older/edge suggestions may carry targetField=skill(s) but an incorrect targetSection.
+      return inferTargetSection(item) === 'skills';
+    };
     const skillIndices = items
       .map((item, idx) => ({ item, idx }))
-      .filter(({ item }) => normalizeTargetSection(item.targetSection) === 'skills');
+      .filter(({ item }) => isSkillSuggestion(item));
     if (skillIndices.length <= 1) return items;
 
     const mergedSkills = toSkillList(
@@ -741,6 +764,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       title: firstSkill.title || '技能补全',
       reason: sanitizeReasonText(mergedReason || firstSkill.reason),
       targetSection: 'skills',
+      targetField: 'skills',
       suggestedValue: mergedSkills,
       originalValue: mergedOriginal ?? firstSkill.originalValue,
       status: mergedStatus as any,

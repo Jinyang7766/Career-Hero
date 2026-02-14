@@ -1,62 +1,62 @@
 {
   "meta": {
-    "generated_at": "2026-02-13T14:00:43.088381Z",
+    "generated_at": "2026-02-14T08:38:51.018555Z",
     "report_count": 7
   },
   "summary": {
-    "evaluated_runs": 39,
-    "failures": 86,
-    "on_wins": 17,
-    "off_wins": 11,
-    "ties": 11,
-    "on_win_rate": 0.4359,
+    "evaluated_runs": 123,
+    "failures": 2,
+    "on_wins": 50,
+    "off_wins": 48,
+    "ties": 25,
+    "on_win_rate": 0.4065,
     "scores": {
       "jd_relevance": {
-        "on": 4.6925,
-        "off": 4.5642,
-        "delta": 0.1283
+        "on": 4.7643,
+        "off": 4.7318,
+        "delta": 0.0325
       },
       "actionability": {
-        "on": 3.8462,
-        "off": 3.6411,
-        "delta": 0.2051
+        "on": 4.0,
+        "off": 3.9432,
+        "delta": 0.0568
       },
       "factuality": {
-        "on": 2.6409,
-        "off": 2.3848,
-        "delta": 0.2561
+        "on": 2.374,
+        "off": 2.3821,
+        "delta": -0.0081
       },
       "skill_precision": {
-        "on": 4.7949,
-        "off": 4.8205,
-        "delta": -0.0256
+        "on": 4.7804,
+        "off": 4.7316,
+        "delta": 0.0488
       },
       "writing_quality": {
-        "on": 4.7949,
-        "off": 4.9487,
-        "delta": -0.1538
+        "on": 4.9512,
+        "off": 4.9186,
+        "delta": 0.0326
       },
       "overall": {
-        "on": 4.0888,
-        "off": 3.9579,
-        "delta": 0.1309
+        "on": 4.1061,
+        "off": 4.0749,
+        "delta": 0.0312
       }
     },
     "hard_metrics": {
       "jd_keyword_coverage_rate": {
-        "on": 0.9487,
-        "off": 0.9445,
-        "delta": 0.0042
+        "on": 0.8581,
+        "off": 0.8391,
+        "delta": 0.019
       },
       "suggestion_schema_valid_rate": {
         "on": 1.0,
-        "off": 1.0,
-        "delta": 0.0
+        "off": 0.9993,
+        "delta": 0.0007
       },
       "skill_hard_term_ratio": {
-        "on": 0.5082,
-        "off": 0.4706,
-        "delta": 0.0376
+        "on": 0.3645,
+        "off": 0.3432,
+        "delta": 0.0213
       },
       "placeholder_leak_rate": {
         "on": 0.0,
@@ -68,7 +68,7 @@
   "reports": [
     {
       "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_01_ecom_aigc_gemini_2_5_flash_runs20_20260213_210010.json",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_01_ecom_aigc_gemini_2_5_flash_runs20_20260214_132626.json",
       "meta": {
         "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
         "runs": 20,
@@ -77,47 +77,47 @@
       "summary": {
         "evaluated_runs": 20,
         "failures": 0,
-        "on_wins": 6,
-        "off_wins": 3,
-        "ties": 11,
-        "on_win_rate": 0.3,
+        "on_wins": 4,
+        "off_wins": 7,
+        "ties": 9,
+        "on_win_rate": 0.2,
         "scores": {
           "jd_relevance": {
-            "on": 4.45,
-            "off": 4.4,
+            "on": 4.35,
+            "off": 4.45,
+            "delta": -0.1
+          },
+          "actionability": {
+            "on": 2.85,
+            "off": 3.15,
+            "delta": -0.3
+          },
+          "factuality": {
+            "on": 1.45,
+            "off": 1.45,
+            "delta": 0.0
+          },
+          "skill_precision": {
+            "on": 4.9,
+            "off": 4.85,
             "delta": 0.05
           },
-          "actionability": {
-            "on": 3.1,
-            "off": 2.75,
-            "delta": 0.35
-          },
-          "factuality": {
-            "on": 2.1,
-            "off": 1.7,
-            "delta": 0.4
-          },
-          "skill_precision": {
-            "on": 4.95,
-            "off": 4.95,
-            "delta": 0.0
-          },
           "writing_quality": {
             "on": 4.95,
             "off": 4.95,
             "delta": 0.0
           },
           "overall": {
-            "on": 3.743,
-            "off": 3.558,
-            "delta": 0.185
+            "on": 3.508,
+            "off": 3.61,
+            "delta": -0.102
           }
         },
         "hard_metrics": {
           "jd_keyword_coverage_rate": {
-            "on": 0.975,
-            "off": 0.9667,
-            "delta": 0.0083
+            "on": 0.95,
+            "off": 0.9833,
+            "delta": -0.0333
           },
           "suggestion_schema_valid_rate": {
             "on": 1.0,
@@ -125,9 +125,9 @@
             "delta": 0.0
           },
           "skill_hard_term_ratio": {
-            "on": 0.519,
-            "off": 0.5288,
-            "delta": -0.0098
+            "on": 0.5127,
+            "off": 0.5019,
+            "delta": 0.0108
           },
           "placeholder_leak_rate": {
             "on": 0.0,
@@ -139,56 +139,269 @@
     },
     {
       "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_01_ecom_aigc_gemini_3_pro_preview_runs20_20260213_210010.json",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_01_ecom_aigc_gemini_3_pro_preview_runs20_20260214_132626.json",
       "meta": {
         "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
         "runs": 20,
         "judge_model": "gemini-3-pro-preview"
       },
       "summary": {
-        "evaluated_runs": 14,
-        "failures": 6,
-        "on_wins": 7,
+        "evaluated_runs": 20,
+        "failures": 0,
+        "on_wins": 9,
+        "off_wins": 11,
+        "ties": 0,
+        "on_win_rate": 0.45,
+        "scores": {
+          "jd_relevance": {
+            "on": 4.85,
+            "off": 4.9,
+            "delta": -0.05
+          },
+          "actionability": {
+            "on": 4.3,
+            "off": 4.5,
+            "delta": -0.2
+          },
+          "factuality": {
+            "on": 2.15,
+            "off": 2.3,
+            "delta": -0.15
+          },
+          "skill_precision": {
+            "on": 4.85,
+            "off": 4.7,
+            "delta": 0.15
+          },
+          "writing_quality": {
+            "on": 4.85,
+            "off": 4.95,
+            "delta": -0.1
+          },
+          "overall": {
+            "on": 4.173,
+            "off": 4.253,
+            "delta": -0.08
+          }
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": {
+            "on": 1.0,
+            "off": 0.975,
+            "delta": 0.025
+          },
+          "suggestion_schema_valid_rate": {
+            "on": 1.0,
+            "off": 0.9958,
+            "delta": 0.0042
+          },
+          "skill_hard_term_ratio": {
+            "on": 0.5796,
+            "off": 0.5361,
+            "delta": 0.0435
+          },
+          "placeholder_leak_rate": {
+            "on": 0.0,
+            "off": 0.0,
+            "delta": 0.0
+          }
+        }
+      }
+    },
+    {
+      "source_type": "generated",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_03_finance_analysis_gemini_2_5_flash_runs20_20260214_132626.json",
+      "meta": {
+        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
+        "runs": 20,
+        "judge_model": "gemini-2.5-flash"
+      },
+      "summary": {
+        "evaluated_runs": 20,
+        "failures": 0,
+        "on_wins": 5,
+        "off_wins": 8,
+        "ties": 7,
+        "on_win_rate": 0.25,
+        "scores": {
+          "jd_relevance": {
+            "on": 4.8,
+            "off": 4.8,
+            "delta": 0.0
+          },
+          "actionability": {
+            "on": 3.7,
+            "off": 3.45,
+            "delta": 0.25
+          },
+          "factuality": {
+            "on": 1.75,
+            "off": 2.3,
+            "delta": -0.55
+          },
+          "skill_precision": {
+            "on": 4.8,
+            "off": 4.9,
+            "delta": -0.1
+          },
+          "writing_quality": {
+            "on": 4.95,
+            "off": 4.95,
+            "delta": 0.0
+          },
+          "overall": {
+            "on": 3.922,
+            "off": 3.985,
+            "delta": -0.063
+          }
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": {
+            "on": 0.9437,
+            "off": 0.925,
+            "delta": 0.0187
+          },
+          "suggestion_schema_valid_rate": {
+            "on": 1.0,
+            "off": 1.0,
+            "delta": 0.0
+          },
+          "skill_hard_term_ratio": {
+            "on": 0.233,
+            "off": 0.2262,
+            "delta": 0.0068
+          },
+          "placeholder_leak_rate": {
+            "on": 0.0,
+            "off": 0.0,
+            "delta": 0.0
+          }
+        }
+      }
+    },
+    {
+      "source_type": "generated",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_03_finance_analysis_gemini_3_pro_preview_runs20_20260214_132626.json",
+      "meta": {
+        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
+        "runs": 20,
+        "judge_model": "gemini-3-pro-preview"
+      },
+      "summary": {
+        "evaluated_runs": 19,
+        "failures": 1,
+        "on_wins": 13,
+        "off_wins": 5,
+        "ties": 1,
+        "on_win_rate": 0.6842,
+        "scores": {
+          "jd_relevance": {
+            "on": 4.895,
+            "off": 4.474,
+            "delta": 0.421
+          },
+          "actionability": {
+            "on": 4.842,
+            "off": 4.474,
+            "delta": 0.368
+          },
+          "factuality": {
+            "on": 3.421,
+            "off": 3.263,
+            "delta": 0.158
+          },
+          "skill_precision": {
+            "on": 4.789,
+            "off": 4.526,
+            "delta": 0.263
+          },
+          "writing_quality": {
+            "on": 5.0,
+            "off": 4.842,
+            "delta": 0.158
+          },
+          "overall": {
+            "on": 4.576,
+            "off": 4.258,
+            "delta": 0.318
+          }
+        },
+        "hard_metrics": {
+          "jd_keyword_coverage_rate": {
+            "on": 0.8947,
+            "off": 0.8618,
+            "delta": 0.0329
+          },
+          "suggestion_schema_valid_rate": {
+            "on": 1.0,
+            "off": 1.0,
+            "delta": 0.0
+          },
+          "skill_hard_term_ratio": {
+            "on": 0.2269,
+            "off": 0.2063,
+            "delta": 0.0206
+          },
+          "placeholder_leak_rate": {
+            "on": 0.0,
+            "off": 0.0,
+            "delta": 0.0
+          }
+        }
+      }
+    },
+    {
+      "source_type": "generated",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_04_operations_supply_chain_gemini_2_5_flash_runs20_20260214_132626.json",
+      "meta": {
+        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
+        "runs": 20,
+        "judge_model": "gemini-2.5-flash"
+      },
+      "summary": {
+        "evaluated_runs": 19,
+        "failures": 1,
+        "on_wins": 4,
         "off_wins": 7,
-        "ties": 0,
-        "on_win_rate": 0.5,
+        "ties": 8,
+        "on_win_rate": 0.2105,
         "scores": {
           "jd_relevance": {
-            "on": 4.929,
-            "off": 4.786,
-            "delta": 0.143
+            "on": 4.842,
+            "off": 4.895,
+            "delta": -0.053
           },
           "actionability": {
-            "on": 4.5,
-            "off": 4.643,
-            "delta": -0.143
+            "on": 3.474,
+            "off": 3.316,
+            "delta": 0.158
           },
           "factuality": {
-            "on": 2.571,
-            "off": 2.429,
-            "delta": 0.142
+            "on": 2.0,
+            "off": 1.684,
+            "delta": 0.316
           },
           "skill_precision": {
-            "on": 4.643,
-            "off": 4.857,
-            "delta": -0.214
+            "on": 4.842,
+            "off": 4.947,
+            "delta": -0.105
           },
           "writing_quality": {
-            "on": 4.5,
-            "off": 5.0,
-            "delta": -0.5
+            "on": 4.947,
+            "off": 4.947,
+            "delta": 0.0
           },
           "overall": {
-            "on": 4.286,
-            "off": 4.3,
-            "delta": -0.014
+            "on": 3.937,
+            "off": 3.868,
+            "delta": 0.069
           }
         },
         "hard_metrics": {
           "jd_keyword_coverage_rate": {
-            "on": 0.9643,
-            "off": 0.9643,
-            "delta": 0.0
+            "on": 0.7281,
+            "off": 0.6404,
+            "delta": 0.0877
           },
           "suggestion_schema_valid_rate": {
             "on": 1.0,
@@ -196,9 +409,9 @@
             "delta": 0.0
           },
           "skill_hard_term_ratio": {
-            "on": 0.5424,
-            "off": 0.4993,
-            "delta": 0.0431
+            "on": 0.3036,
+            "off": 0.3454,
+            "delta": -0.0418
           },
           "placeholder_leak_rate": {
             "on": 0.0,
@@ -210,279 +423,66 @@
     },
     {
       "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_03_finance_analysis_gemini_2_5_flash_runs20_20260213_210010.json",
-      "meta": {
-        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
-        "runs": 20,
-        "judge_model": "gemini-2.5-flash"
-      },
-      "summary": {
-        "evaluated_runs": 0,
-        "failures": 20,
-        "on_wins": 0,
-        "off_wins": 0,
-        "ties": 0,
-        "on_win_rate": 0.0,
-        "scores": {
-          "jd_relevance": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "actionability": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "factuality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_precision": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "writing_quality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "overall": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        },
-        "hard_metrics": {
-          "jd_keyword_coverage_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "suggestion_schema_valid_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_hard_term_ratio": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "placeholder_leak_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        }
-      }
-    },
-    {
-      "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_03_finance_analysis_gemini_3_pro_preview_runs20_20260213_210010.json",
+      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_04_operations_supply_chain_gemini_3_pro_preview_runs20_20260214_132626.json",
       "meta": {
         "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
         "runs": 20,
         "judge_model": "gemini-3-pro-preview"
       },
       "summary": {
-        "evaluated_runs": 0,
-        "failures": 20,
-        "on_wins": 0,
-        "off_wins": 0,
+        "evaluated_runs": 20,
+        "failures": 0,
+        "on_wins": 11,
+        "off_wins": 9,
         "ties": 0,
-        "on_win_rate": 0.0,
+        "on_win_rate": 0.55,
         "scores": {
           "jd_relevance": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 4.8,
+            "off": 4.9,
+            "delta": -0.1
           },
           "actionability": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 4.6,
+            "off": 4.65,
+            "delta": -0.05
           },
           "factuality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 2.85,
+            "off": 2.65,
+            "delta": 0.2
           },
           "skill_precision": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 4.55,
+            "off": 4.6,
+            "delta": -0.05
           },
           "writing_quality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 5.0,
+            "off": 4.9,
+            "delta": 0.1
           },
           "overall": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 4.332,
+            "off": 4.343,
+            "delta": -0.011
           }
         },
         "hard_metrics": {
           "jd_keyword_coverage_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 0.6417,
+            "off": 0.65,
+            "delta": -0.0083
           },
           "suggestion_schema_valid_rate": {
-            "on": 0.0,
-            "off": 0.0,
+            "on": 1.0,
+            "off": 1.0,
             "delta": 0.0
           },
           "skill_hard_term_ratio": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "placeholder_leak_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        }
-      }
-    },
-    {
-      "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_04_operations_supply_chain_gemini_2_5_flash_runs20_20260213_210010.json",
-      "meta": {
-        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
-        "runs": 20,
-        "judge_model": "gemini-2.5-flash"
-      },
-      "summary": {
-        "evaluated_runs": 0,
-        "failures": 20,
-        "on_wins": 0,
-        "off_wins": 0,
-        "ties": 0,
-        "on_win_rate": 0.0,
-        "scores": {
-          "jd_relevance": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "actionability": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "factuality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_precision": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "writing_quality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "overall": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        },
-        "hard_metrics": {
-          "jd_keyword_coverage_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "suggestion_schema_valid_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_hard_term_ratio": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "placeholder_leak_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        }
-      }
-    },
-    {
-      "source_type": "generated",
-      "path": "G:\\AI_project\\Career-Hero\\backend\\ab_reports_batch\\payload_04_operations_supply_chain_gemini_3_pro_preview_runs20_20260213_210010.json",
-      "meta": {
-        "url": "https://career-hero-backend-production-a634.up.railway.app/api/ai/analyze",
-        "runs": 20,
-        "judge_model": "gemini-3-pro-preview"
-      },
-      "summary": {
-        "evaluated_runs": 0,
-        "failures": 20,
-        "on_wins": 0,
-        "off_wins": 0,
-        "ties": 0,
-        "on_win_rate": 0.0,
-        "scores": {
-          "jd_relevance": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "actionability": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "factuality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_precision": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "writing_quality": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "overall": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          }
-        },
-        "hard_metrics": {
-          "jd_keyword_coverage_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "suggestion_schema_valid_rate": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
-          },
-          "skill_hard_term_ratio": {
-            "on": 0.0,
-            "off": 0.0,
-            "delta": 0.0
+            "on": 0.3201,
+            "off": 0.2831,
+            "delta": 0.037
           },
           "placeholder_leak_rate": {
             "on": 0.0,
@@ -569,14 +569,14 @@
       "gemini-2.5-flash",
       "gemini-3-pro-preview"
     ],
-    "comparable_run_keys": 14,
-    "full_agreement": 4,
-    "full_agreement_rate": 0.2857,
+    "comparable_run_keys": 58,
+    "full_agreement": 12,
+    "full_agreement_rate": 0.2069,
     "pairwise": {
       "gemini-2.5-flash__vs__gemini-3-pro-preview": {
-        "compared": 14,
-        "agree": 4,
-        "agreement_rate": 0.2857
+        "compared": 58,
+        "agree": 12,
+        "agreement_rate": 0.2069
       }
     }
   }
