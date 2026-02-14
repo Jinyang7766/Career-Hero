@@ -1,7 +1,69 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, ScreenProps } from '../../types';
+import { AICacheService } from '../../src/ai-cache-service';
 
 const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) => {
+  const [cacheSize, setCacheSize] = useState<string>('0 B');
+  const [isClearing, setIsClearing] = useState(false);
+
+  const calculateCacheSize = () => {
+    try {
+      let total = 0;
+      // Estimate LocalStorage size
+      for (const key in localStorage) {
+        if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
+          total += (localStorage[key].length + key.length) * 2; // UTF-16 characters use 2 bytes
+        }
+      }
+
+      // Convert to human readable format
+      if (total === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(total) / Math.log(k));
+      return parseFloat((total / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    } catch (e) {
+      console.error('Failed to calculate cache size:', e);
+      return '未知';
+    }
+  };
+
+  useEffect(() => {
+    setCacheSize(calculateCacheSize());
+  }, []);
+
+  const handleClearCache = async () => {
+    if (!window.confirm('确定要清除缓存吗？这会清理本地分析记录。')) return;
+
+    setIsClearing(true);
+    try {
+      // 1. Clear IndexedDB Cache (AI Analysis results)
+      await AICacheService.clearAll();
+
+      // 2. Clear relevant localStorage items (not including auth tokens)
+      const keysToKeep = [
+        'supabase.auth.token',
+        'sb-qpxisqizyzqfsczfzfzv-auth-token', // Example Supabase project ref
+      ];
+
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && !keysToKeep.some(k => key.includes(k))) {
+          localStorage.removeItem(key);
+        }
+      }
+
+      // Re-calculate size
+      setCacheSize(calculateCacheSize());
+      alert('缓存已清理完成');
+    } catch (err) {
+      console.error('Failed to clear cache:', err);
+      alert('清理失败，请重试');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   return (
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
@@ -29,7 +91,11 @@ const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) =
               </div>
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
             </button>
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+            <button
+              onClick={handleClearCache}
+              disabled={isClearing}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group disabled:opacity-50"
+            >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">cleaning_services</span>
@@ -37,7 +103,9 @@ const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) =
                 <span className="text-sm font-medium text-slate-900 dark:text-white">清除缓存</span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium mr-1">24.5 MB</span>
+                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium mr-1">
+                  {isClearing ? '正在清理...' : cacheSize}
+                </span>
                 <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
               </div>
             </button>

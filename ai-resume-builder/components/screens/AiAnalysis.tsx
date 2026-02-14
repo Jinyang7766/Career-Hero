@@ -572,7 +572,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const ANALYSIS_COMPLETED_KEY = 'ai_analysis_completed_once';
   const ANALYSIS_USER_KEY = 'ai_analysis_user_id';
   const INPROGRESS_AT_KEY = 'ai_analysis_in_progress_at';
+  const INPROGRESS_SID_KEY = 'ai_analysis_in_progress_sid';
+  const SESSION_SID_KEY = 'ai_analysis_session_sid';
   const analysisUserIdRef = useRef<string | null>(null);
+  const sessionSidRef = useRef<string | null>(null);
   const saveLastAnalysis = (payload: {
     resumeId: string | number;
     jdText: string;
@@ -604,11 +607,27 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (value) {
       localStorage.setItem('ai_analysis_in_progress', '1');
       localStorage.setItem(INPROGRESS_AT_KEY, String(Date.now()));
+      if (sessionSidRef.current) {
+        localStorage.setItem(INPROGRESS_SID_KEY, sessionSidRef.current);
+      }
     } else {
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem(INPROGRESS_AT_KEY);
+      localStorage.removeItem(INPROGRESS_SID_KEY);
     }
   };
+
+  // Session-scoped id used to detect stale "in progress" flags after reload/tab close.
+  useEffect(() => {
+    try {
+      const existing = sessionStorage.getItem(SESSION_SID_KEY);
+      const sid = existing || `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      sessionStorage.setItem(SESSION_SID_KEY, sid);
+      sessionSidRef.current = sid;
+    } catch {
+      sessionSidRef.current = null;
+    }
+  }, []);
 
   // Prevent cross-account leakage: localStorage is shared across sessions, so reset analysis UI state
   // when the logged-in user changes (e.g. user registers a new account in the same browser).
@@ -653,15 +672,31 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const isAnalysisStillInProgress = () => {
     const flag = localStorage.getItem('ai_analysis_in_progress') === '1';
     if (!flag) return false;
+
+    // If the session differs (page reloaded / new tab), treat as stale and clear.
+    const storedSid = localStorage.getItem(INPROGRESS_SID_KEY);
+    if (storedSid && sessionSidRef.current && storedSid !== sessionSidRef.current) {
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem(INPROGRESS_AT_KEY);
+      localStorage.removeItem(INPROGRESS_SID_KEY);
+      return false;
+    }
+
     const atRaw = localStorage.getItem(INPROGRESS_AT_KEY);
     const at = atRaw ? Number(atRaw) : NaN;
-    // If we don't have a timestamp, keep legacy behavior (treat as in-progress).
-    if (!Number.isFinite(at)) return true;
+    // If we don't have a timestamp, it's almost certainly a stale legacy flag.
+    if (!Number.isFinite(at)) {
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem(INPROGRESS_AT_KEY);
+      localStorage.removeItem(INPROGRESS_SID_KEY);
+      return false;
+    }
     // If stuck for too long (tab closed/crash), auto-clear to avoid permanent "analyzing" state.
-    const MAX_MS = 15 * 60 * 1000;
+    const MAX_MS = 3 * 60 * 1000;
     if (Date.now() - at > MAX_MS) {
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem(INPROGRESS_AT_KEY);
+      localStorage.removeItem(INPROGRESS_SID_KEY);
       return false;
     }
     return true;
