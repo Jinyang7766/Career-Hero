@@ -215,15 +215,15 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               </button>
             </div>
 
-            <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-100 dark:border-white/5 overflow-hidden flex flex-col">
+            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5 flex flex-col">
               {recentResumes.map(resume => (
                 <div
                   key={resume.id}
                   onClick={() => handleResumeClick(resume.id)}
-                  className={`group relative flex items-center gap-4 px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0 ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
+                  className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
                 >
                   <div className="shrink-0 relative">
-                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-12 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                       {resume.thumbnail}
                       {isLoadingResume === resume.id && (
                         <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10">
@@ -233,13 +233,13 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                     </div>
                   </div>
                   <div className="flex flex-col flex-1 justify-center min-w-0">
-                    <p className="text-slate-900 dark:text-white text-sm font-medium leading-normal line-clamp-1 mb-1">{resume.title}</p>
-                    <p className="text-slate-500 dark:text-text-secondary text-[10px] font-normal leading-normal line-clamp-1">
+                    <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{resume.title}</p>
+                    <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
                       上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                     </p>
                   </div>
                   {resume.optimizationStatus === 'optimized' && (
-                    <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded text-xs font-medium shrink-0">
+                    <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded font-medium shrink-0">
                       已优化
                     </span>
                   )}

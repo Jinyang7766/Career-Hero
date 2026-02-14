@@ -52,12 +52,12 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) return;
 
-      const result = await DatabaseService.getUserResumes(user.id);
+      const result = await DatabaseService.getUserResumesExportHistory(user.id);
       if (!result.success) return;
 
       const exports: ExportItem[] = [];
       result.data.forEach((resume: any) => {
-        const history = resume.resume_data?.exportHistory || [];
+        const history = resume.exportHistory || resume.resume_data?.exportHistory || [];
         history.forEach((h: any, index: number) => {
           exports.push({
             id: `${resume.id}-${h.exportedAt || index}`,
@@ -79,12 +79,9 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
 
   const handleReExport = async (resumeId: number) => {
     try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const result = await DatabaseService.getUserResumes(user.id);
+      const result = await DatabaseService.getResume(resumeId);
       if (!result.success) return;
-      const resume = result.data.find((r: any) => r.id === resumeId);
+      const resume = result.data;
       if (!resume?.resume_data) return;
       if (setResumeData) {
         setResumeData({ id: resume.id, ...resume.resume_data, resumeTitle: resume.title });
@@ -119,7 +116,6 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
       if (!result.success || !result.data?.resume_data) return;
 
       const currentHistory = result.data.resume_data.exportHistory || [];
-      // Use exportedAt as a unique identifier for the specific entry
       const updatedHistory = currentHistory.filter((h: any) => h.exportedAt !== item.exportedAt);
 
       const updateResult = await DatabaseService.updateResume(item.resumeId.toString(), {
@@ -178,41 +174,43 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-50 bg-background-light dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 shrink-0">
         <div className="flex items-center px-4 h-14 relative">
           <button
             onClick={goBack}
-            className="flex items-center justify-center size-10 -ml-2 rounded-full hover:bg-gray-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white z-10"
+            className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
           >
-            <span className="material-symbols-outlined text-2xl">arrow_back_ios_new</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
           </button>
-          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-tight text-slate-900 dark:text-white pointer-events-none">
-            导出历史
-          </h1>
-          <button
-            onClick={handleDeleteAllExports}
-            disabled={items.length === 0}
-            className="ml-auto text-base font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 dark:hover:text-rose-300 disabled:opacity-30 z-10"
-          >
-            全部清空
-          </button>
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">导出历史</h2>
+          <div className="absolute right-4 z-10">
+            <button
+              onClick={handleDeleteAllExports}
+              disabled={items.length === 0}
+              className="flex size-10 items-center justify-center rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all active:scale-95 disabled:opacity-30"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>delete_sweep</span>
+            </button>
+          </div>
         </div>
       </header>
-
-      {/* Search Bar Removed */}
 
       <main className="flex flex-col w-full mt-4">
         {loading && (
           <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">history</span>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">正在加载导出历史...</p>
+            <div className="w-16 h-16 rounded-2xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary mb-4 animate-pulse">
+              <span className="material-symbols-outlined text-4xl">history</span>
+            </div>
+            <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">正在加载导出历史...</p>
           </div>
         )}
 
         {!loading && items.length === 0 && (
           <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-            <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">history</span>
-            <p className="text-slate-900 dark:text-white font-medium mb-1">暂无导出记录</p>
+            <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-4">
+              <span className="material-symbols-outlined text-4xl">history</span>
+            </div>
+            <p className="text-slate-900 dark:text-white font-bold text-lg mb-1">暂无导出记录</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm">导出简历后会显示在这里</p>
           </div>
         )}
@@ -220,43 +218,45 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
         {!loading && items.length > 0 && Object.entries(grouped).map(([label, group]) => {
           const isCollapsed = !!collapsedSections[label];
           return (
-            <div key={label} className="flex flex-col pt-2">
+            <div key={label} className="flex flex-col pt-2 mb-4">
               <button
                 onClick={() => toggleSection(label)}
-                className="w-full flex items-center justify-between px-4 pt-2 text-lg font-bold text-slate-900 dark:text-white"
+                className="w-full flex items-center justify-between px-4 py-2 group"
               >
-                <span>{label}</span>
-                <span className="material-symbols-outlined text-[20px] text-slate-500 dark:text-slate-400">
-                  {isCollapsed ? 'expand_more' : 'expand_less'}
+                <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</h3>
+                <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}>
+                  expand_more
                 </span>
               </button>
 
               {!isCollapsed && (
-                <div className="animate-in fade-in slide-in-from-top-1 duration-200 mt-2">
-                  {group.map((item) => (
-                    <div key={item.id} className="group relative flex items-center gap-4 px-4 py-3 hover:bg-white dark:hover:bg-surface-dark/50 transition-colors cursor-pointer border-b border-gray-100 dark:border-white/5 last:border-0">
-                      <div className="relative flex items-center justify-center shrink-0 size-12 rounded-xl bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400">
-                        <span className="material-symbols-outlined">picture_as_pdf</span>
-                      </div>
-                      <div className="flex flex-col flex-1 min-w-0" onClick={() => handleReExport(item.resumeId)}>
-                        <p className="text-slate-900 dark:text-white text-base font-medium truncate">{item.filename}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-slate-500 dark:text-text-secondary text-sm">
-                            {formatTime(item.exportedAt)} • {formatSize(item.size)}
-                          </span>
+                <div className="px-4 mt-1">
+                  <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+                    {group.map((item) => (
+                      <div key={item.id} className="relative flex items-center gap-4 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                        <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
+                          <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
                         </div>
+                        <div className="flex flex-col flex-1 min-w-0" onClick={() => handleReExport(item.resumeId)}>
+                          <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{item.filename}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal mt-0.5">
+                              {new Date(item.exportedAt).toLocaleString('zh-CN', { hour12: false })} · {item.type} · {(item.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteExport(item);
+                          }}
+                          className="p-2 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
+                        </button>
                       </div>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteExport(item);
-                        }}
-                        className="p-2 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors"
-                      >
-                        <span className="material-symbols-outlined text-[22px]">delete</span>
-                      </button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

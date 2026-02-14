@@ -5,7 +5,7 @@ import { useUserProfile } from '../../src/useUserProfile';
 const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center justify-between py-3 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+    className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
   >
     <div className="flex items-center gap-3">
       <div className={`w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary`}>
@@ -69,7 +69,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
     <div className="flex flex-col pb-24 animate-in fade-in duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
         <div className="flex items-center justify-center h-14 px-4 relative">
-          <h1 className="text-lg font-bold tracking-tight">个人中心</h1>
+          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">个人中心</h1>
         </div>
       </header>
 

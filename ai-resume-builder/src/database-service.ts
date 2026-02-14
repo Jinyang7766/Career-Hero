@@ -178,6 +178,46 @@ export class DatabaseService {
     }
   }
 
+  // 仅获取导出历史所需的轻量字段，避免拉取完整 resume_data 导致页面卡顿
+  static async getUserResumesExportHistory(userId: string) {
+    try {
+      const selects = [
+        // Prefer json-path selection if PostgREST supports it (fast, minimal payload)
+        'id,title,created_at,updated_at,exportHistory:resume_data->exportHistory',
+        // Fallback: still avoid '*' but may include full json
+        'id,title,created_at,updated_at,resume_data'
+      ];
+
+      let data: any[] | null = null;
+      let error: any = null;
+
+      for (const sel of selects) {
+        const res = await supabase
+          .from('resumes')
+          .select(sel)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false });
+        data = res.data as any[] | null;
+        error = res.error;
+        if (!error) break;
+      }
+
+      if (error) {
+        console.error('Error fetching export history index:', error);
+        return { success: false, error, data: [] as any[] };
+      }
+
+      const normalized = (data || []).map((row: any) => {
+        if (row && row.exportHistory !== undefined) return row;
+        return { ...row, exportHistory: row?.resume_data?.exportHistory || [] };
+      });
+      return { success: true, data: normalized };
+    } catch (err) {
+      console.error('Database operation failed:', err);
+      return { success: false, error: err, data: [] as any[] };
+    }
+  }
+
   // 获取单个简历
   static async getResume(resumeId: string | number) {
     try {

@@ -9,6 +9,7 @@ export interface UserProfile {
   created_at: string;
   updated_at: string;
   deletion_pending_until?: string;
+  phone?: string;
 }
 
 // 缓存项接口
