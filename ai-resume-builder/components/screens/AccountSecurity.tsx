@@ -3,6 +3,7 @@ import { View, ScreenProps } from '../../types';
 import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
+import { buildApiUrl } from '../../src/api-config';
 
 const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) => {
   const { userProfile } = useUserProfile();
@@ -15,22 +16,42 @@ const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBa
   const handleDeleteAccount = async (immediate: boolean) => {
     setIsDeleting(true);
     try {
-      if (immediate) {
-        // Immediate deletion logic
-        const { error } = await supabase.rpc('delete_user_account');
-        if (error) throw error;
-      } else {
-        // Cooling period logic
-        const { error } = await supabase.from('profiles').update({
-          status: 'deleting',
-          deletion_scheduled_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString()
-        }).eq('id', userProfile?.id);
-        if (error) throw error;
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token?.trim();
+      if (!token) {
+        alert('登录状态已失效，请重新登录后再试');
+        return;
       }
+
+      const url = immediate
+        ? buildApiUrl('/api/user/delete-account-immediate')
+        : buildApiUrl('/api/user/request-deletion');
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      let payload: any = null;
+      try {
+        payload = await resp.json();
+      } catch {
+        payload = null;
+      }
+
+      if (!resp.ok) {
+        const msg = payload?.error || payload?.message || `请求失败 (${resp.status})`;
+        throw new Error(msg);
+      }
+
+      alert(payload?.message || (immediate ? '账号已立即注销' : '已提交注销申请'));
       onLogout();
     } catch (err) {
       console.error('Delete account error:', err);
-      alert('注销操作失败，请稍后重试');
+      alert(`注销操作失败：${err instanceof Error ? err.message : '请稍后重试'}`);
     } finally {
       setIsDeleting(false);
       setShowDeleteConfirm(false);
@@ -67,28 +88,28 @@ const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBa
             </button>
 
             <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0 mr-4">
                 <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">smartphone</span>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">手机号</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">手机号</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium mr-1">{phone || '未绑定'}</span>
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium truncate">{phone || '未绑定'}</span>
+                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
               </div>
             </button>
 
             <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 shrink-0 mr-4">
                 <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">mail</span>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">电子邮箱</span>
+                <span className="text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">电子邮箱</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium mr-1">{email || '未绑定'}</span>
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+              <div className="flex items-center gap-2 min-w-0 text-right">
+                <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium truncate">{email || '未绑定'}</span>
+                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
               </div>
             </button>
           </div>

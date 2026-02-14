@@ -114,38 +114,23 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
         <div className="relative overflow-hidden rounded-2xl bg-slate-900 dark:bg-slate-900/80 backdrop-blur-xl border border-blue-500/20 p-4 shadow-xl shadow-blue-900/20 group">
           <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all duration-700"></div>
           <div className="relative z-10 flex items-center justify-between gap-4">
-            <div className="flex flex-col">
-              <h3 className="text-white text-[15px] font-bold tracking-tight">
+            <div className="flex flex-col min-w-0 flex-1">
+              <h3 className="text-white text-[15px] font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
                 当前版本：免费版
               </h3>
-              <p className="text-blue-200/60 text-[11px] mt-1 font-medium">
+              <p className="text-blue-200/60 text-[11px] mt-1 font-medium line-clamp-2">
                 升级以解锁更多AI简历优化次数及模拟面试
               </p>
             </div>
             <button
               onClick={() => setCurrentView(View.MEMBER_CENTER)}
-              className="px-5 py-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+              className="shrink-0 px-5 py-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
             >
               立即升级
             </button>
           </div>
         </div>
 
-        {/* Resume Statistics Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 p-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
-            </div>
-            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-              <span className="text-xl font-bold text-primary">
-                {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
-              </span>
-              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
-            </div>
-          </div>
-        </div>
 
         {/* Menu Items - Unified Colors */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">

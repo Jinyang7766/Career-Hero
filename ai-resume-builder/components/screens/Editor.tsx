@@ -3,6 +3,7 @@ import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
+import { toSkillList, mergeSkills } from '../../src/skill-utils';
 import ImportStep from '../editor/steps/ImportStep';
 import PersonalStep from '../editor/steps/PersonalStep';
 import WorkStep from '../editor/steps/WorkStep';
@@ -228,6 +229,31 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
   }
 
   // --- Handlers ---
+  const triggerManualSave = async (data: ResumeData) => {
+    if (!data.id) return;
+    setIsAutosaving(true);
+    try {
+      const title = `${data.personalInfo.name || '未命名'}的简历`;
+      const result = await DatabaseService.updateResume(String(data.id), {
+        title: title,
+        resume_data: data,
+      });
+
+      if (result.success) {
+        lastAutosavedRef.current = JSON.stringify(data);
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString('zh-CN', {
+          hour: '2-digit', minute: '2-digit'
+        });
+        setLastSavedAt(timeLabel);
+        if (loadUserResumes) loadUserResumes();
+      }
+    } catch (e) {
+      console.error('Manual save triggered by import failed:', e);
+    } finally {
+      setIsAutosaving(false);
+    }
+  };
 
   const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
     console.log('导入简历数据:', importedData);
@@ -296,7 +322,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       });
 
     // 合并导入的数据到当前简历
-    setResumeData(prev => {
+    const computeMergedData = (prev: ResumeData): ResumeData => {
       const mergedData = { ...prev };
 
       // 合并个人信息（保留已有数据的优先级）
@@ -328,10 +354,9 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       }
 
       // 合并技能（去重）
-      if (importedData.skills && importedData.skills.length > 0) {
-        const existingSkills = new Set(prev.skills);
-        const newSkills = importedData.skills.filter(skill => !existingSkills.has(skill));
-        mergedData.skills = [...prev.skills, ...newSkills];
+      const importedSkills = toSkillList(importedData.skills);
+      if (importedSkills.length > 0) {
+        mergedData.skills = mergeSkills(prev.skills, importedSkills);
       }
 
       // Merge summary (top-level)
@@ -345,12 +370,18 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
       }
 
       return mergedData;
-    });
+    };
+
+    const finalData = computeMergedData(resumeData);
+    setResumeData(finalData);
+
     if (importedSummary) {
       setSummary(importedSummary);
     }
 
-    console.log('简历导入完成');
+    console.log('简历导入完成，触发保存');
+    triggerManualSave(finalData);
+
     setTextResume('');
     setTextError('');
     setCurrentStep('personal');

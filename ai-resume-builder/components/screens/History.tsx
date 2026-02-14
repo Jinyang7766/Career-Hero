@@ -241,7 +241,7 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
                           <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{item.filename}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal mt-0.5">
-                              {new Date(item.exportedAt).toLocaleString('zh-CN', { hour12: false })} · {item.type} · {(item.size / 1024 / 1024).toFixed(2)} MB
+                              {new Date(item.exportedAt).toLocaleString('zh-CN', { hour12: false })} · {(item.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                           </div>
                         </div>

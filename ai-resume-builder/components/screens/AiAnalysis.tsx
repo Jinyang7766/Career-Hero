@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import { toSkillList } from '../../src/skill-utils';
 import { AICacheService } from '../../src/ai-cache-service';
 import { buildApiUrl } from '../../src/api-config';
 
@@ -141,109 +142,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       .trim();
     return text;
   };
-  const normalizeSkillToken = (raw: any) => {
-    const text = String(raw ?? '')
-      .replace(/[•·]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    if (!text) return '';
-    return text;
-  };
-  const toNounSkillToken = (raw: string) => {
-    let t = raw.trim();
-    if (!t) return '';
-
-    // 去掉常见动作词/过程词，尽量保留“工具/技术/方法”名词
-    const actionWords = [
-      '搭建', '构建', '设计', '训练', '微调', '精调', '调优', '优化', '执行', '推进', '落地', '管理',
-      '脚本', '自动化', '开发', '实现', '运营', '打造', '分析', '监控', '维护', '产出'
-    ];
-    actionWords.forEach((w) => {
-      t = t.replace(new RegExp(w, 'g'), '');
-    });
-
-    // 清理尾部连接词，避免“模型与”“流程和”这类残留
-    t = t
-      .replace(/[与和及、,\s]+$/g, '')
-      .replace(/^[与和及、,\s]+/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    // 删除仅剩动作残片（如“精调”“优化”“自动化”）
-    if (/^(微调|精调|调优|优化|自动化|搭建|构建|设计|训练|开发|实现|运营|管理)$/.test(t)) {
-      return '';
-    }
-
-    // 语义归一：把泛化表达转成更硬核名词；若无法落到硬技能则在后续过滤
-    t = t
-      .replace(/智能化数据看板/g, '数据可视化')
-      .replace(/数据看板/g, '数据可视化')
-      .replace(/AI短视频分镜/g, '短视频内容策划');
-
-    return t;
-  };
-  const isProfessionalSkillToken = (token: string) => {
-    const t = token.trim();
-    if (!t || t.length < 2) return false;
-
-    const keepPatterns = [
-      /^(sql|python|java|javascript|typescript|excel|tableau|power\s?bi|scrm|crm|ltv|roi|cpc|cpa|cpm|gmv|erp|wms|sap|vba|ga4|seo|sem|a\/b\s?test|ab\s?test)$/i,
-      /(生意参谋|京东商智|万相台|直通车|引力魔方|京东快车|千川|巨量引擎|飞书|钉钉|notion|chatgpt|zapier|make|airtable|supabase|photoshop|figma)/i,
-      /(数据分析|数据建模|数据可视化|用户分层|增长模型|库存预测|供应链scm|供应链管理|定价模型)/i
-    ];
-    if (keepPatterns.some((p) => p.test(t))) return true;
-
-    const rejectPatterns = [
-      /(全链路|运营|打法|策略|构建|打造|推进|落地|执行|管理|策划|复盘|对接|沟通|协同|增长|提效|优化|闭环|主导|负责)/,
-      /(直播间|店群|主播|私域|社群)/,
-      /(体系|方案|流程|SOP)/i,
-      /^(与|和|及).*/,
-      /(微调|精调|调优|自动化)$/,
-      /(短视频分镜|内容策划|智能化|看板)$/
-    ];
-    if (rejectPatterns.some((p) => p.test(t))) return false;
-
-    // 默认保留更像“名词型工具/技术”的短词，过滤长句型表述
-    return t.length <= 12;
-  };
-  const toSkillList = (value: any): string[] => {
-    const rawList = Array.isArray(value)
-      ? value
-      : String(value ?? '')
-        .split(/[\n,，;；、]+/)
-        .map((v) => v.trim())
-        .filter(Boolean);
-    const expanded = rawList.flatMap((item: any) =>
-      String(item)
-        .split(/[\/|｜]+/)
-        .map((v) => v.trim())
-        .filter(Boolean)
-    );
-    const cleaned = expanded
-      .map(normalizeSkillToken)
-      .map(toNounSkillToken)
-      .filter(Boolean)
-      .map((v) => v.length > 24 ? v.slice(0, 24).trim() : v)
-      .filter((v) => isProfessionalSkillToken(v));
-    // De-dupe in a more robust way:
-    // - ignore casing
-    // - ignore whitespace and common separators
-    const makeKey = (s: string) =>
-      s
-        .toLowerCase()
-        .replace(/[\s，,；;（()）\[\]【】"'`]+/g, '')
-        .trim();
-    const seen = new Set<string>();
-    const out: string[] = [];
-    cleaned.forEach((t) => {
-      const k = makeKey(t);
-      if (!k) return;
-      if (seen.has(k)) return;
-      seen.add(k);
-      out.push(t);
-    });
-    return out;
-  };
+  // Skill normalization moved to `src/skill-utils.ts` so resume import and suggestion generation stay consistent.
 
   const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
     const field = (raw?.targetField || '').toString().toLowerCase();
@@ -671,6 +570,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
   const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
   const ANALYSIS_COMPLETED_KEY = 'ai_analysis_completed_once';
+  const ANALYSIS_USER_KEY = 'ai_analysis_user_id';
+  const INPROGRESS_AT_KEY = 'ai_analysis_in_progress_at';
+  const analysisUserIdRef = useRef<string | null>(null);
   const saveLastAnalysis = (payload: {
     resumeId: string | number;
     jdText: string;
@@ -701,9 +603,68 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const setAnalysisInProgress = (value: boolean) => {
     if (value) {
       localStorage.setItem('ai_analysis_in_progress', '1');
+      localStorage.setItem(INPROGRESS_AT_KEY, String(Date.now()));
     } else {
       localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem(INPROGRESS_AT_KEY);
     }
+  };
+
+  // Prevent cross-account leakage: localStorage is shared across sessions, so reset analysis UI state
+  // when the logged-in user changes (e.g. user registers a new account in the same browser).
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        const uid = user?.id || null;
+        analysisUserIdRef.current = uid;
+
+        const storedUid = localStorage.getItem(ANALYSIS_USER_KEY);
+        if (uid && storedUid && storedUid !== uid) {
+          // Clear only AI-analysis related keys.
+          [
+            'ai_analysis_step',
+            'ai_analysis_in_progress',
+            INPROGRESS_AT_KEY,
+            'ai_analysis_resume_id',
+            LAST_ANALYSIS_KEY,
+            ANALYSIS_COMPLETED_KEY,
+            'ai_analysis_entry_source',
+            'ai_analysis_has_activity',
+            'ai_chat_prev_step',
+            'ai_chat_entry_source'
+          ].forEach((k) => localStorage.removeItem(k));
+
+          setStepHistory([]);
+          setChatEntrySource(null);
+          setLastChatStep(null);
+          setCurrentStep('resume_select');
+        }
+
+        if (uid) {
+          localStorage.setItem(ANALYSIS_USER_KEY, uid);
+        }
+      } catch (error) {
+        console.warn('Failed to validate analysis storage against current user:', error);
+      }
+    })();
+  }, []);
+
+  const isAnalysisStillInProgress = () => {
+    const flag = localStorage.getItem('ai_analysis_in_progress') === '1';
+    if (!flag) return false;
+    const atRaw = localStorage.getItem(INPROGRESS_AT_KEY);
+    const at = atRaw ? Number(atRaw) : NaN;
+    // If we don't have a timestamp, keep legacy behavior (treat as in-progress).
+    if (!Number.isFinite(at)) return true;
+    // If stuck for too long (tab closed/crash), auto-clear to avoid permanent "analyzing" state.
+    const MAX_MS = 15 * 60 * 1000;
+    if (Date.now() - at > MAX_MS) {
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem(INPROGRESS_AT_KEY);
+      return false;
+    }
+    return true;
   };
 
   useEffect(() => {
@@ -2185,7 +2146,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
-    const inProgress = localStorage.getItem('ai_analysis_in_progress') === '1';
+    const inProgress = isAnalysisStillInProgress();
     if (currentStep === 'analyzing' && !inProgress) {
       setCurrentStep('jd_input');
     }

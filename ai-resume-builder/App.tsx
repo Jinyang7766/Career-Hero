@@ -276,16 +276,29 @@ function App() {
 
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
+    const makeEmptyResumeData = () => ({
+      personalInfo: {
+        name: '',
+        title: '',
+        email: '',
+        phone: '',
+        location: '',
+        linkedin: '',
+        website: '',
+        summary: '',
+        avatar: ''
+      },
+      workExps: [],
+      educations: [],
+      projects: [],
+      skills: [],
+      summary: '',
+      gender: ''
+    });
+
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
     if (view === View.ALL_RESUMES) {
-      setResumeData({
-        personalInfo: { name: '', title: '', email: '', phone: '' },
-        workExps: [],
-        educations: [],
-        projects: [],
-        skills: [],
-        gender: ''
-      });
+      setResumeData(makeEmptyResumeData());
     }
     if (view === View.AI_ANALYSIS) {
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
@@ -374,14 +387,36 @@ function App() {
         return <ForgotPassword setCurrentView={setCurrentView} goBack={() => setCurrentView(View.LOGIN)} />;
       case View.DASHBOARD:
         return <Dashboard {...commonProps} createNewResume={() => {
-          // Reset resume data for new resume
+          // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
+          // (especially when the user viewed an existing resume but didn't edit).
           setResumeData({
-            personalInfo: { name: '', title: '', email: '', phone: '' },
+            personalInfo: {
+              name: '',
+              title: '',
+              email: '',
+              phone: '',
+              location: '',
+              linkedin: '',
+              website: '',
+              summary: '',
+              avatar: ''
+            },
             workExps: [],
             educations: [],
             projects: [],
             skills: [],
-            gender: ''
+            summary: '',
+            gender: '',
+            templateId: undefined,
+            optimizationStatus: undefined,
+            optimizedResumeId: undefined,
+            optimizedFromId: undefined,
+            lastJdText: '',
+            targetCompany: '',
+            analysisSnapshot: undefined,
+            aiSuggestionFeedback: undefined,
+            interviewSessions: undefined,
+            exportHistory: undefined
           });
           setShowWizard(true);
           handleNavigate(View.EDITOR);

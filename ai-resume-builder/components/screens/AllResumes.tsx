@@ -318,12 +318,12 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
 
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-        {resumes.map((resume) => (
+      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+        {resumes.map((resume, index) => (
           <div
             key={resume.id}
             onClick={() => handlePreview(resume.id)}
-            className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
+            className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <div className="shrink-0 relative">
               <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
@@ -460,7 +460,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-6">
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
         <div className="flex flex-col gap-2">
           {filteredResumes.length === 0 && (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
@@ -477,7 +477,12 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                   onClick={() => setIsOptimizedOpen(v => !v)}
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
-                  <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                  <div className="flex items-center gap-2 ml-4">
+                    <h3 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-400 dark:text-slate-500 font-bold border border-slate-200/50 dark:border-white/5">
+                      {filteredResumes.filter(r => r.optimizationStatus === 'optimized').length}
+                    </span>
+                  </div>
                   <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
                     expand_more
                   </span>
@@ -501,7 +506,12 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
                   onClick={() => setIsUnoptimizedOpen(v => !v)}
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
-                  <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                  <div className="flex items-center gap-2 ml-4">
+                    <h3 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-400 dark:text-slate-500 font-bold border border-slate-200/50 dark:border-white/5">
+                      {filteredResumes.filter(r => r.optimizationStatus !== 'optimized').length}
+                    </span>
+                  </div>
                   <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
                     expand_more
                   </span>

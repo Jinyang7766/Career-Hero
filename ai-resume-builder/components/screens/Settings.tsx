@@ -17,25 +17,6 @@ const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) =
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
-        <div className="mt-4 px-4">
-          <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">账号</h3>
-          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-            <button
-              onClick={() => setCurrentView(View.ACCOUNT_SECURITY)}
-              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined text-[20px]">verified_user</span>
-                </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">账号与安全</span>
-              </div>
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
-            </button>
-          </div>
-          <p className="mt-2 ml-4 text-[12px] text-slate-400 dark:text-slate-500 font-light">管理密码、绑定手机号与第三方账号</p>
-        </div>
-
         <div className="mt-8 px-4">
           <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">通用</h3>
           <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">

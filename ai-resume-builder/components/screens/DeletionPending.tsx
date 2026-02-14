@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
+import { buildApiUrl } from '../../src/api-config';
 
 const DeletionPending: React.FC<ScreenProps> = ({ currentUser, setCurrentView, goBack, onLogout }) => {
     const deletionUntil = currentUser?.deletion_pending_until;
@@ -10,7 +11,7 @@ const DeletionPending: React.FC<ScreenProps> = ({ currentUser, setCurrentView, g
             const { data: { session } } = await supabase.auth.getSession();
             const token = session?.access_token;
 
-            const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/user/cancel-deletion`, {
+            const response = await fetch(buildApiUrl('/api/user/cancel-deletion'), {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,

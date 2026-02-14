@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ResumeData } from '../types';
 import { buildApiUrl } from '../src/api-config';
+import { toSkillList } from '../src/skill-utils';
 
 interface ResumeImportDialogProps {
   isOpen: boolean;
@@ -49,7 +50,11 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
       
       if (result.success && result.data) {
         console.log('简历解析成功:', result.data);
-        onImport(result.data);
+        // Normalize skills consistently with AI suggestion logic.
+        onImport({
+          ...result.data,
+          skills: toSkillList(result.data?.skills)
+        });
         handleClose();
       } else {
         throw new Error('解析结果为空');
@@ -85,7 +90,10 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
 
       const result = await response.json();
       if (result.success && result.data) {
-        onImport(result.data);
+        onImport({
+          ...result.data,
+          skills: toSkillList(result.data?.skills)
+        });
         handleClose();
       } else {
         throw new Error('解析结果为空');
