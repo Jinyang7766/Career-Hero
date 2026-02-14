@@ -74,7 +74,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
       </header>
 
       <main className="flex flex-col gap-4 p-4">
-        {/* Profile Card */}
+        {/* Profile Info Card */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 relative group overflow-hidden">
           <div className="p-4">
             <div className="flex items-center gap-4 relative z-10">
@@ -94,7 +94,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
                   onChange={handleFileChange}
                 />
               </div>
-              <div className="flex flex-col flex-1 min-w-0 pr-24">
+              <div className="flex flex-col flex-1 min-w-0 pr-2">
                 <div className="flex items-center gap-2 mb-0.5">
                   <h2 className="text-lg font-bold truncate text-slate-900 dark:text-white">
                     {displayName || ' '}
@@ -107,51 +107,43 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
                 )}
               </div>
             </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-3 relative z-10">
-              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-                <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
-              </div>
-              <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
-                <span className="text-xl font-bold text-primary">
-                  {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
-                </span>
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Member Center - Seamless Embedded Corner Card */}
-          <div
-            onClick={() => setCurrentView(View.MEMBER_CENTER)}
-            className="absolute top-0 right-0 h-[72px] w-[120px] bg-gradient-to-br from-primary via-blue-600 to-indigo-700 rounded-bl-[28px] flex flex-col items-center justify-center cursor-pointer active:opacity-90 transition-all z-20"
-          >
-            <div className="flex items-center gap-0.5">
-              <span className="text-[13px] font-black text-white tracking-widest leading-none">会员中心</span>
-              <span className="material-symbols-outlined text-white/50 text-[12px]">chevron_right</span>
-            </div>
-            <span className="text-[9px] font-medium text-white/70 mt-1.5 tracking-[0.1em]">解锁特权</span>
           </div>
         </div>
 
-        {/* Upgrade Banner - Unified Style with Dashboard */}
-        <div className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-4 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all">
-          <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
-          <div className="absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl"></div>
-          <div className="relative z-10 flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center backdrop-blur-md border border-white/20 shadow-inner">
-                <span className="material-symbols-outlined text-white" style={{ fontSize: '24px' }}>diamond</span>
-              </div>
-              <div>
-                <h3 className="text-base font-black tracking-tight">升级到 Pro</h3>
-                <p className="text-xs text-blue-100 mt-0.5 font-medium opacity-90">解锁无限 AI 优化与模板</p>
-              </div>
+        {/* Pro Upgrade Glassmorphism Card */}
+        <div className="relative overflow-hidden rounded-2xl bg-slate-900 dark:bg-slate-900/80 backdrop-blur-xl border border-blue-500/20 p-4 shadow-xl shadow-blue-900/20 group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all duration-700"></div>
+          <div className="relative z-10 flex items-center justify-between gap-4">
+            <div className="flex flex-col">
+              <h3 className="text-white text-[15px] font-bold tracking-tight">
+                当前版本：免费版
+              </h3>
+              <p className="text-blue-200/60 text-[11px] mt-1 font-medium">
+                升级以解锁更多AI简历优化次数及模拟面试
+              </p>
             </div>
-            <button className="px-4 py-2 bg-white text-primary rounded-xl text-xs font-black shadow-lg hover:bg-blue-50 transition-all hover:scale-105">
-              立即开启
+            <button
+              onClick={() => setCurrentView(View.MEMBER_CENTER)}
+              className="px-5 py-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all"
+            >
+              立即升级
             </button>
+          </div>
+        </div>
+
+        {/* Resume Statistics Card */}
+        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-xl font-bold text-slate-900 dark:text-white">{allResumes?.length ?? 0}</span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">简历总数</span>
+            </div>
+            <div className="bg-slate-50 dark:bg-white/5 rounded-xl p-3 flex flex-col items-center justify-center border border-slate-100 dark:border-transparent">
+              <span className="text-xl font-bold text-primary">
+                {allResumes?.filter((r: any) => r.optimizationStatus === 'optimized').length || 0}
+              </span>
+              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-0.5 uppercase tracking-wider">已优化</span>
+            </div>
           </div>
         </div>
 
