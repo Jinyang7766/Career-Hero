@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import { confirmDialog } from '../../src/ui/dialogs';
 
 const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes, setAllResumes, currentUser, setResumeData }) => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -22,7 +23,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
     e.stopPropagation();
 
     // 显示确认对话框
-    const confirmed = window.confirm('确定要删除这份简历吗？此操作不可恢复。');
+    const confirmed = await confirmDialog('确定要删除这份简历吗？此操作不可恢复。');
     if (!confirmed) {
       return;
     }

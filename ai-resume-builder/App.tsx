@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, ResumeData, ResumeSummary } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
@@ -26,6 +26,52 @@ function App() {
   const [history, setHistory] = useState<View[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isNavHidden, setIsNavHidden] = useState(false);
+
+  // Global toast + confirm overlays to avoid browser-native alert/confirm (which show the site URL).
+  const toastTimerRef = useRef<number | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
+  const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info', ms: number = 2200) => {
+    const text = String(msg ?? '').trim();
+    if (!text) return;
+    setToast({ msg: text, type });
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, ms);
+  }, []);
+
+  const [confirmState, setConfirmState] = useState<null | { message: string; resolve: (ok: boolean) => void }>(null);
+  const confirmAsync = useCallback((message: string) => {
+    return new Promise<boolean>((resolve) => {
+      const text = String(message ?? '').trim();
+      if (!text) return resolve(false);
+      setConfirmState({ message: text, resolve });
+    });
+  }, []);
+
+  // Intercept browser-native alert() globally to avoid URL-bearing dialogs.
+  useEffect(() => {
+    const originalAlert = window.alert;
+
+    // Expose helpers for any module that wants to call them without prop drilling.
+    (window as any).__careerHeroToast = (msg: string, type?: 'info' | 'success' | 'error', ms?: number) => showToast(msg, type ?? 'info', ms ?? 2200);
+    (window as any).__careerHeroConfirm = (msg: string) => confirmAsync(msg);
+
+    window.alert = (message?: any) => {
+      showToast(String(message ?? ''), 'info', 2600);
+    };
+
+    return () => {
+      window.alert = originalAlert;
+      try {
+        delete (window as any).__careerHeroToast;
+        delete (window as any).__careerHeroConfirm;
+      } catch {
+        // ignore
+      }
+    };
+  }, [showToast, confirmAsync]);
 
   // Show bottom nav on main tabs only (Editor has its own navigation)
   const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
@@ -455,8 +501,68 @@ function App() {
 
 
 
+  const ToastOverlay = () => {
+    if (!toast) return null;
+    const cls =
+      toast.type === 'success'
+        ? 'bg-emerald-600/95 text-white'
+        : toast.type === 'error'
+          ? 'bg-rose-600/95 text-white'
+          : 'bg-slate-900/90 text-white';
+
+    return (
+      <div className="fixed inset-x-0 top-3 z-[9999] flex justify-center px-4 pointer-events-none">
+        <div className={`pointer-events-auto w-full max-w-[520px] rounded-2xl shadow-lg border border-white/10 ${cls}`}>
+          <div className="px-4 py-3">
+            <div className="text-[12px] font-semibold opacity-90">Career Hero</div>
+            <div className="mt-0.5 text-[14px] leading-snug">{toast.msg}</div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const ConfirmModal = () => {
+    if (!confirmState) return null;
+    const onCancel = () => {
+      confirmState.resolve(false);
+      setConfirmState(null);
+    };
+    const onOk = () => {
+      confirmState.resolve(true);
+      setConfirmState(null);
+    };
+    return (
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center px-5">
+        <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
+        <div className="relative w-full max-w-[520px] rounded-2xl border border-white/10 bg-[#0b1220] text-white shadow-2xl">
+          <div className="px-5 pt-4 pb-3">
+            <div className="text-[13px] font-semibold opacity-90">Career Hero</div>
+            <div className="mt-2 text-[15px] leading-relaxed whitespace-pre-wrap">{confirmState.message}</div>
+          </div>
+          <div className="px-5 pb-4 flex gap-3 justify-end">
+            <button
+              onClick={onCancel}
+              className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 transition-colors text-[14px]"
+            >
+              取消
+            </button>
+            <button
+              onClick={onOk}
+              className="h-10 px-4 rounded-xl bg-primary hover:bg-primary/90 transition-colors text-[14px] font-semibold"
+            >
+              确认
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative">
+      <ToastOverlay />
+      <ConfirmModal />
       {renderView()}
       {showBottomNav && <BottomNav currentView={currentView} setCurrentView={handleBottomNavClick} />}
     </div>

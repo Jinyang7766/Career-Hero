@@ -4,6 +4,7 @@ import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
+import { confirmDialog } from '../../src/ui/dialogs';
 
 const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack, currentUser }) => {
   const { userProfile } = useUserProfile();
@@ -195,10 +196,9 @@ const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBa
 
                 <button
                   disabled={isDeleting}
-                  onClick={() => {
-                    if (window.confirm('警告：立即注销将瞬间清空所有简历和账号记录，且绝对无法恢复！确认继续？')) {
-                      handleDeleteAccount(true);
-                    }
+                  onClick={async () => {
+                    const ok = await confirmDialog('警告：立即注销将瞬间清空所有简历和账号记录，且绝对无法恢复！确认继续？');
+                    if (ok) handleDeleteAccount(true);
                   }}
                   className="w-full group flex flex-col items-start p-4 rounded-2xl bg-white dark:bg-black/20 border border-slate-100 dark:border-white/5 hover:border-red-500/30 transition-all text-left"
                 >

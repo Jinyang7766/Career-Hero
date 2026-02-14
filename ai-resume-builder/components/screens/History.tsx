@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import { confirmDialog } from '../../src/ui/dialogs';
 
 type ExportItem = {
   id: string;
@@ -106,7 +107,7 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
   };
 
   const handleDeleteExport = async (item: ExportItem) => {
-    if (!window.confirm('确定要删除这条导出记录吗？')) return;
+    if (!(await confirmDialog('确定要删除这条导出记录吗？'))) return;
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -134,7 +135,7 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
   };
 
   const handleDeleteAllExports = async () => {
-    if (!window.confirm('确定要清空所有导出记录吗？此操作无法撤销。')) return;
+    if (!(await confirmDialog('确定要清空所有导出记录吗？此操作无法撤销。'))) return;
 
     try {
       setLoading(true);

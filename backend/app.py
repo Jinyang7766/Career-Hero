@@ -2427,6 +2427,57 @@ def _parse_json_object_from_text(response_text):
         return None
     return None
 
+def _gemini_generate_content_resilient(model_name: str, contents, *, want_json: bool = False):
+    """
+    Gemini SDK sometimes returns 400 INVALID_ARGUMENT depending on model naming ("models/..")
+    or JSON mode support. This helper retries a few safe variants before failing.
+    """
+    if not gemini_client:
+        raise RuntimeError("Gemini client not configured")
+
+    tried = []
+
+    def _variants(name: str):
+        names = [name]
+        if name and not name.startswith("models/"):
+            names.append(f"models/{name}")
+        # Dedup while preserving order.
+        out = []
+        for n in names:
+            if n and n not in out:
+                out.append(n)
+        return out
+
+    last_err = None
+    for mn in _variants(model_name):
+        # 1) Prefer JSON mode when requested.
+        if want_json:
+            try:
+                resp = gemini_client.models.generate_content(
+                    model=mn,
+                    contents=contents,
+                    config=types.GenerateContentConfig(response_mime_type="application/json")
+                )
+                return resp, mn
+            except Exception as e:
+                tried.append(f"{mn} (json)")
+                last_err = e
+
+        # 2) Fallback: no JSON mode (plain text) for broader compatibility.
+        try:
+            resp = gemini_client.models.generate_content(
+                model=mn,
+                contents=contents
+            )
+            return resp, mn
+        except Exception as e:
+            tried.append(f"{mn} (text)")
+            last_err = e
+            continue
+
+    # Include variants for easier debugging in logs.
+    raise RuntimeError(f"Gemini generate_content failed after variants={tried}. last_error={last_err}")
+
 
 def _is_missing_resume_core_fields(parsed_data):
     personal = parsed_data.get('personalInfo', {}) or {}
@@ -3134,14 +3185,11 @@ def analyze_resume(current_user_id):
                 used_model = None
                 for model_name in analysis_models_tried:
                     try:
-                        response = gemini_client.models.generate_content(
-                            model=model_name,
-                            contents=prompt,
-                            config=types.GenerateContentConfig(
-                                response_mime_type="application/json"
-                            )
+                        response, used_model = _gemini_generate_content_resilient(
+                            model_name,
+                            prompt,
+                            want_json=True
                         )
-                        used_model = model_name
                         break
                     except Exception as model_error:
                         last_model_error = model_error
@@ -3295,13 +3343,15 @@ def ai_chat(current_user_id):
     try:
         data = request.get_json()
         message = data.get('message', '')
+        audio = data.get('audio')
         resume_data = data.get('resumeData')
         job_description = data.get('jobDescription', '')
         chat_history = data.get('chatHistory', [])
         score = data.get('score', 0)
         suggestions = data.get('suggestions', [])
 
-        if not message:
+        has_audio = isinstance(audio, dict) and bool(audio.get('data'))
+        if (not message) and (not has_audio):
             return jsonify({'error': '消息内容不能为空'}), 400
 
         clean_message = message.replace('[INTERVIEW_MODE]', '').strip()
@@ -3321,12 +3371,33 @@ def ai_chat(current_user_id):
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
 对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
-候选人回答：{clean_message}
+候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
-                response = gemini_client.models.generate_content(
-                    model=GEMINI_INTERVIEW_MODEL,
-                    contents=prompt
+                contents = prompt
+                if has_audio:
+                    try:
+                        from base64 import b64decode
+                        mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
+                        base64_data = audio.get('data') or ''
+
+                        # Support data URL: data:audio/webm;base64,...
+                        m = re.match(r'^data:(audio/[a-zA-Z0-9.+-]+);base64,(.*)$', base64_data, flags=re.DOTALL)
+                        if m:
+                            mime_type = (m.group(1) or mime_type).strip().lower()
+                            base64_data = m.group(2)
+
+                        audio_bytes = b64decode(base64_data)
+                        contents = [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)]
+                    except Exception as dec_err:
+                        logger.warning("Audio decode failed, continuing without audio: %s", dec_err)
+                        contents = prompt
+
+                # Use resilient helper to avoid INVALID_ARGUMENT due to model naming / modality constraints.
+                response, _used = _gemini_generate_content_resilient(
+                    GEMINI_INTERVIEW_MODEL,
+                    contents,
+                    want_json=False
                 )
 
                 raw_text = (response.text or "").strip()

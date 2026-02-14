@@ -7,6 +7,7 @@
 - 🤖 **AI智能分析** - 基于 **Google Gemini 3** 的多维度简历评估
 - 🔍 **Vector RAG 增强** - 集成 Supabase `pgvector` 与语义检索，根据行业案例精准优化
 - 🎙️ **AI模拟面试** - 沉浸式模拟面试体验，针对性问题提问与实时反馈
+- 🔔 **统一提示框** - 全局 Toast/Confirm 提示，不使用浏览器原生弹窗（避免展示网址）
 - 🎯 **猎头策略** - 专业的求职指导和面试技巧
 - 📝 **智能编辑** - 实时验证和完成度追踪
 - 🖼️ **头像支持** - 支持上传和裁剪个人头像，打造个性化简历
@@ -38,7 +39,7 @@ Career-Hero/
 ## 🛠️ 技术栈
 
 ### 前端技术
-- **React 19.2.4** - 现代化UI框架
+- **React 18** - 现代化UI框架
 - **TypeScript** - 类型安全的JavaScript
 - **Vite** - 快速构建工具
 - **Tailwind CSS** - 实用优先的CSS框架
@@ -198,6 +199,25 @@ backend/
 ### 用户体验
 - **响应式设计** - 完美适配各种设备
 - **实时验证** - 表单即时反馈
+
+## 🔔 提示框（不显示网址）
+
+浏览器原生的 `alert()/confirm()` 通常会在弹窗里展示当前站点的 URL。Career Hero 统一使用应用内提示框。
+
+- 兼容兜底：`ai-resume-builder/App.tsx` 会全局拦截 `window.alert`，把遗留的 `alert()` 转成 Toast。
+- 新代码规范：不要再直接调用 `window.alert/window.confirm`，统一使用：`ai-resume-builder/src/ui/dialogs.ts`
+
+示例：
+
+```ts
+import { toast, confirmDialog } from '../../src/ui/dialogs';
+
+toast('已保存', 'success');
+
+if (await confirmDialog('确定要删除吗？此操作不可恢复。')) {
+  // ...do delete
+}
+```
 - **进度追踪** - 可视化完成度
 - **数据同步** - 云端自动保存
 

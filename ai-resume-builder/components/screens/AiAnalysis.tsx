@@ -24,6 +24,8 @@ interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
+  audioUrl?: string;
+  audioMime?: string;
   suggestion?: Suggestion; // Embedded suggestion for interactive chat
 }
 
@@ -503,8 +505,57 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputBarRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [inputBarHeight, setInputBarHeight] = useState(76);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const recordChunksRef = useRef<BlobPart[]>([]);
+  const [audioSupported, setAudioSupported] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [pendingAudio, setPendingAudio] = useState<{ blob: Blob; url: string; mime: string } | null>(null);
+  const [audioError, setAudioError] = useState<string>('');
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const holdStartRef = useRef<{ x: number; y: number } | null>(null);
+  const [holdCancel, setHoldCancel] = useState(false);
+  const autoSendOnStopRef = useRef(false);
+  const discardOnStopRef = useRef(false);
+  const toastTimerRef = useRef<number | null>(null);
+  const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'info' | 'success' | 'error' = 'info', ms: number = 2200) => {
+    const text = String(msg || '').trim();
+    if (!text) return;
+    setToast({ msg: text, type });
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+    toastTimerRef.current = window.setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, ms);
+  };
+
+  const ToastOverlay = () => {
+    if (!toast) return null;
+    const tone =
+      toast.type === 'success'
+        ? 'bg-emerald-600/95 text-white'
+        : toast.type === 'error'
+          ? 'bg-rose-600/95 text-white'
+          : 'bg-slate-900/90 text-white';
+    return (
+      <div className="fixed left-1/2 top-16 -translate-x-1/2 z-[220] px-4 pointer-events-none">
+        <div className={`pointer-events-auto max-w-[90vw] rounded-2xl px-4 py-3 shadow-lg border border-white/10 ${tone}`}>
+          <div className="text-[12px] font-semibold opacity-90">Career Hero</div>
+          <div className="mt-0.5 text-[14px] leading-snug font-semibold">{toast.msg}</div>
+        </div>
+      </div>
+    );
+  };
 
   // Cache State
   const [isFromCache, setIsFromCache] = useState(false);
@@ -1205,7 +1256,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           message: '读取失败：用户未登录或登录已过期'
         });
         // 已经切换到下一步，这里只需要显示错误提示
-        alert('请先登录');
+        showToast('请先登录', 'error');
         return;
       }
 
@@ -1221,7 +1272,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             status: 'error',
             message: `读取失败：${result.error?.message || '加载简历失败'}`
           });
-          alert(`加载简历失败: ${result.error?.message || '请重试'}`);
+          showToast(`加载简历失败: ${result.error?.message || '请重试'}`, 'error');
           return;
         }
         resume = result.data.find((r: any) => String(r.id) === String(id));
@@ -1241,7 +1292,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           status: 'error',
           message: `读取失败：未找到该简历（ID: ${id}）`
         });
-        alert(`简历不存在 (ID: ${id})`);
+        showToast(`简历不存在 (ID: ${id})`, 'error');
         return;
       }
 
@@ -1253,7 +1304,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           status: 'error',
           message: '读取失败：简历内容为空'
         });
-        alert('简历数据为空，请重新创建简历');
+        showToast('简历数据为空，请重新创建简历', 'error');
         return;
       }
 
@@ -1263,7 +1314,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           status: 'error',
           message: '读取失败：简历内容为空对象'
         });
-        alert('简历数据为空，请重新创建简历');
+        showToast('简历数据为空，请重新创建简历', 'error');
         return;
       }
 
@@ -1316,7 +1367,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         status: 'error',
         message: '读取失败：网络异常或服务不可用'
       });
-      alert('加载简历失败，请检查网络连接');
+      showToast('加载简历失败，请检查网络连接', 'error');
     }
   };
 
@@ -1345,7 +1396,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       const token = await getBackendAuthToken();
       if (!token) {
-        alert('登录已过期，请重新登录');
+        showToast('登录已过期，请重新登录', 'error');
         window.location.href = '/login'; // 或者你的登录路由
         return null;
       }
@@ -1571,7 +1622,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     } catch (error) {
       console.error('AI analysis failed:', error);
       // 显示错误提示，不回退到模拟数据
-      alert(`AI 分析失败：${error.message || '网络连接异常，请稍后重试'}`);
+      showToast(`AI 分析失败：${(error as any)?.message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       navigateToStep('jd_input');
     } finally {
       setAnalysisInProgress(false);
@@ -1933,7 +1984,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         updateScore(5);
       } catch (error) {
         console.error('Error in handleAcceptSuggestionInChat:', error);
-        alert(`采纳失败：${(error as any)?.message || '请稍后重试'}`);
+        showToast(`采纳失败：${(error as any)?.message || '请稍后重试'}`, 'error');
       }
     }).catch((error) => {
       console.error('Error in accept suggestion queue:', error);
@@ -2086,6 +2137,206 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       scrollToBottom();
     }
   }, [chatMessages.length]);
+
+  // Mobile keyboard handling: translate the fixed input bar above the keyboard and keep
+  // enough bottom padding for message list so the latest message isn't covered.
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+
+    const vv = (window as any).visualViewport as VisualViewport | undefined;
+    if (!vv) return;
+
+    const compute = () => {
+      const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+      setKeyboardOffset(overlap);
+    };
+
+    compute();
+    vv.addEventListener('resize', compute);
+    vv.addEventListener('scroll', compute);
+    window.addEventListener('resize', compute);
+
+    return () => {
+      vv.removeEventListener('resize', compute);
+      vv.removeEventListener('scroll', compute);
+      window.removeEventListener('resize', compute);
+    };
+  }, [currentStep]);
+
+  // Track input bar height (textarea grows), so paddingBottom stays correct.
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    const el = inputBarRef.current;
+    if (!el) return;
+
+    const update = () => {
+      const rect = el.getBoundingClientRect();
+      setInputBarHeight(Math.max(60, Math.round(rect.height)));
+    };
+
+    update();
+    const ResizeObs = (window as any).ResizeObserver as any;
+    if (!ResizeObs) {
+      window.addEventListener('resize', update);
+      return () => window.removeEventListener('resize', update);
+    }
+
+    const ro = new ResizeObs(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [currentStep]);
+
+  // When keyboard opens/closes, keep the latest message visible.
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    scrollToBottom();
+  }, [keyboardOffset, inputBarHeight, currentStep]);
+
+  // Voice input (send audio directly): MediaRecorder + Gemini audio understanding on backend.
+  useEffect(() => {
+    const supported =
+      typeof window !== 'undefined' &&
+      typeof (window as any).MediaRecorder !== 'undefined' &&
+      !!navigator.mediaDevices?.getUserMedia;
+    setAudioSupported(!!supported);
+  }, []);
+
+  useEffect(() => {
+    // Cleanup object URL to avoid leaks.
+    return () => {
+      if (pendingAudio?.url) {
+        try { URL.revokeObjectURL(pendingAudio.url); } catch { }
+      }
+    };
+  }, [pendingAudio?.url]);
+
+  const stopRecording = ({ discard = false, autoSend = false }: { discard?: boolean; autoSend?: boolean } = {}) => {
+    discardOnStopRef.current = discard;
+    autoSendOnStopRef.current = autoSend;
+    try {
+      mediaRecorderRef.current?.stop();
+    } catch { }
+    try {
+      mediaStreamRef.current?.getTracks()?.forEach(t => t.stop());
+    } catch { }
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current = null;
+    setIsRecording(false);
+  };
+
+  const startRecording = async () => {
+    setAudioError('');
+    if (!audioSupported) {
+      setAudioError('当前浏览器不支持语音录制');
+      return;
+    }
+    if (isRecording) return;
+    if (pendingAudio?.url) {
+      try { URL.revokeObjectURL(pendingAudio.url); } catch { }
+    }
+    setPendingAudio(null);
+
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e: any) {
+      const name = String(e?.name || '').toLowerCase();
+      if (name.includes('notallowed') || name.includes('permission')) {
+        setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
+      } else {
+        setAudioError('麦克风启动失败，请重试');
+      }
+      return;
+    }
+
+    const MR = (window as any).MediaRecorder as typeof MediaRecorder;
+    const preferredTypes = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+    ];
+    const mime =
+      preferredTypes.find((t) => (MR as any).isTypeSupported?.(t)) ||
+      '';
+
+    recordChunksRef.current = [];
+    mediaStreamRef.current = stream;
+    let recorder: MediaRecorder;
+    try {
+      recorder = mime ? new MR(stream, { mimeType: mime } as any) : new MR(stream);
+    } catch (e) {
+      setAudioError('录音初始化失败，请更换浏览器或重试');
+      try { stream.getTracks().forEach(t => t.stop()); } catch { }
+      mediaStreamRef.current = null;
+      return;
+    }
+
+    recorder.ondataavailable = (ev: BlobEvent) => {
+      if (ev.data && ev.data.size > 0) recordChunksRef.current.push(ev.data);
+    };
+    recorder.onerror = () => {
+      setAudioError('录音失败，请重试');
+      stopRecording();
+    };
+    recorder.onstop = () => {
+      try {
+        const finalMime = (recorder as any).mimeType || mime || 'audio/webm';
+        const blob = new Blob(recordChunksRef.current, { type: finalMime });
+        if (discardOnStopRef.current) {
+          // Discard the recorded audio (cancelled).
+        } else {
+          const url = URL.createObjectURL(blob);
+          // Auto-send for WeChat-style voice mode.
+          if (autoSendOnStopRef.current) {
+            // Send with empty text; backend will use audio.
+            setTimeout(() => {
+              try {
+                handleSendMessage('', { blob, url, mime: finalMime });
+              } catch { }
+            }, 0);
+          } else {
+            // Non-auto-send mode (unused in current UI): keep as pending.
+            setPendingAudio({ blob, url, mime: finalMime });
+          }
+        }
+      } catch {
+        setAudioError('录音保存失败，请重试');
+      } finally {
+        recordChunksRef.current = [];
+        try { stream.getTracks().forEach(t => t.stop()); } catch { }
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        setIsRecording(false);
+        discardOnStopRef.current = false;
+        autoSendOnStopRef.current = false;
+      }
+    };
+
+    mediaRecorderRef.current = recorder;
+    try {
+      recorder.start();
+      setIsRecording(true);
+      scrollToBottom();
+    } catch (e) {
+      setAudioError('录音启动失败，请重试');
+      stopRecording();
+    }
+  };
+
+  // (Deprecated) old hold handlers were replaced by WeChat-style hold button in the input UI.
+
+  const setMode = (mode: 'text' | 'voice') => {
+    setInputMode(mode);
+    setAudioError('');
+    // Hide keyboard when switching to voice; focus when switching back to text.
+    if (mode === 'voice') {
+      try { textareaRef.current?.blur(); } catch { }
+    } else {
+      setTimeout(() => {
+        try { textareaRef.current?.focus(); } catch { }
+      }, 0);
+    }
+  };
 
   // 状态变量，用于跟踪是否已经初始化了聊天消息
   const [chatInitialized, setChatInitialized] = useState(false);
@@ -2417,19 +2668,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   }, [currentStep, suggestions, score, resumeData, chatInitialized, jdText, chatMessages.length]);
 
-  const handleSendMessage = async (textOverride?: string) => {
-    const textToSend = textOverride || inputMessage;
-    if (!textToSend.trim()) return;
+  const blobToBase64 = (blob: Blob) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const res = String(reader.result || '');
+        const idx = res.indexOf('base64,');
+        resolve(idx >= 0 ? res.slice(idx + 7) : res);
+      };
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
 
-    if (isChatPrefill && textToSend === CHAT_PREFILL_TEXT) {
+  const handleSendMessage = async (
+    textOverride?: string,
+    audioOverride?: { blob: Blob; url: string; mime: string } | null
+  ) => {
+    const textToSend = (textOverride ?? inputMessage ?? '').toString();
+    const hasText = !!textToSend.trim();
+    const audioObj = audioOverride || pendingAudio;
+    const hasAudio = !!audioObj?.blob;
+    if (!hasText && !hasAudio) return;
+    if (isRecording) return;
+
+    if (isChatPrefill && hasText && textToSend === CHAT_PREFILL_TEXT) {
       setIsChatPrefill(false);
     }
 
-    // Add user message
+    // Add user message (audio is kept client-side as an object URL).
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      text: textToSend
+      text: hasText ? textToSend : '（语音）',
+      audioUrl: hasAudio ? audioObj!.url : undefined,
+      audioMime: hasAudio ? audioObj!.mime : undefined,
     };
     setChatMessages(prev => [...prev, userMessage]);
     setInputMessage('');
@@ -2464,7 +2736,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         }
       }
 
-      // 优先尝试使用后端 API
       console.log('Trying backend API for chat...');
 
       const token = await getBackendAuthToken();
@@ -2476,16 +2747,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';
-      const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(textToSend) && !isNegative(textToSend);
-      const isStartPhase = chatMessages.length > 0 && (chatMessages[chatMessages.length - 1].id === 'ai-ask' || chatMessages[chatMessages.length - 1].text.includes('准备好'));
+      const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
+      const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(cleanTextForWrap) && !isNegative(cleanTextForWrap);
+      const isStartPhase =
+        chatMessages.length > 0 &&
+        (chatMessages[chatMessages.length - 1].id === 'ai-ask' || chatMessages[chatMessages.length - 1].text.includes('准备好'));
+
       const interviewWrapped = isInterviewChat
         ? (isQaMode
-          ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${textToSend}`
-          : (isStartPhase && isAffirmative(textToSend)
+          ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${cleanTextForWrap}`
+          : (isStartPhase && isAffirmative(cleanTextForWrap)
             ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请根据简历和JD，提出与岗位匹配的第一个专业面试问题。直接提问，不要加任何前缀或标签。】`
-            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。】\n\n候选人回答：${textToSend}`)
+            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。】\n\n候选人回答：${cleanTextForWrap}`)
         )
-        : textToSend;
+        : (hasText ? textToSend : (hasAudio ? '（语音）' : ''));
+
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
       const maskedChatHistory = chatMessages.map((m) => ({
@@ -2494,14 +2770,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }));
       const maskedJdText = masker.maskText(jdText || '');
 
-      console.log('API Endpoint:', apiEndpoint);
-      console.log('Request Data:', {
-        message: maskedMessage,
-        resumeData: maskedResumeData,
-        chatHistory: maskedChatHistory,
-        score: score,
-        suggestions: suggestions
-      });
+      const audioPayload = hasAudio
+        ? {
+          mime_type: audioObj!.mime,
+          data: await blobToBase64(audioObj!.blob),
+        }
+        : null;
 
       const response = await fetch(apiEndpoint, {
         method: 'POST',
@@ -2511,22 +2785,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         },
         body: JSON.stringify({
           message: maskedMessage,
+          audio: audioPayload,
           resumeData: maskedResumeData,
-          jobDescription: maskedJdText,  // Send JD for interview context
+          jobDescription: maskedJdText,
           chatHistory: maskedChatHistory,
           score: score,
           suggestions: isInterviewChat ? [] : suggestions
         })
       });
 
-      console.log('Response Status:', response.status);
-
       if (response.ok) {
         const result = await response.json();
-        console.log('Backend API success');
-        console.log('API Response:', result);
-
-        // 普通聊天响应
         const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
         const { cleaned, next } = splitNextQuestion(unmaskedText);
         const aiMessage: ChatMessage = {
@@ -2547,7 +2816,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         }
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
-
+        // Clear pending audio after successful send (only if it came from pending state)
+        if (!audioOverride) {
+          setPendingAudio(null);
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Backend API failed:', errorData);
@@ -2555,7 +2827,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
     } catch (error) {
       console.error('API failed:', error);
-      // 显示 Toast 提示，不回退到模拟响应
+      // WeChat-style: voice send failed should not leave traces.
+      if (hasAudio && !hasText) {
+        setChatMessages(prev => prev.filter(m => m.id !== userMessage.id));
+        if (audioObj?.url) {
+          try { URL.revokeObjectURL(audioObj.url); } catch { }
+        }
+        if (!audioOverride) {
+          setPendingAudio(null);
+        }
+      }
       alert('AI 连接暂时中断');
     } finally {
       setIsSending(false);
@@ -3291,7 +3572,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         </div>
 
         {/* Chat Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219] pb-24">
+        <div
+          className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219]"
+          style={{
+            paddingBottom: `${Math.max(96, inputBarHeight + 16) + keyboardOffset}px`,
+          }}
+        >
           {chatMessages.map((msg) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
@@ -3329,7 +3615,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       );
                     })()
                   ) : (
-                    <div>{msg.text}</div>
+                    <div className="space-y-2">
+                      {msg.role === 'user' && msg.audioUrl && (
+                        <audio
+                          controls
+                          src={msg.audioUrl}
+                          className="w-[220px] max-w-full"
+                        />
+                      )}
+                      <div>{msg.text}</div>
+                    </div>
                   )}
                 </div>
               </div>
@@ -3352,11 +3647,30 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Voice hold overlay */}
+        {inputMode === 'voice' && isRecording && (
+          <div className="fixed inset-x-0 bottom-24 z-[120] flex items-center justify-center px-6 pointer-events-none">
+            <div className={`w-full max-w-md rounded-2xl px-4 py-3 text-center text-sm font-semibold shadow-lg border ${
+              holdCancel
+                ? 'bg-red-600 text-white border-red-500/40'
+                : 'bg-slate-900/90 text-white border-white/10'
+            }`}>
+              <div className="flex items-center justify-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">{holdCancel ? 'close' : 'mic'}</span>
+                <span>{holdCancel ? '松手取消' : '松手发送，上滑取消'}</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Input Area - Fixed at bottom, browser handles keyboard via interactive-widget */}
         <div
+          ref={inputBarRef}
           className="fixed left-0 right-0 bottom-0 z-[110] px-4 py-2 bg-slate-50 dark:bg-[#1c2936] border-t border-slate-200 dark:border-white/5"
           style={{
-            paddingBottom: 'max(8px, env(safe-area-inset-bottom))'
+            paddingBottom: 'max(8px, env(safe-area-inset-bottom))',
+            transform: keyboardOffset > 0 ? `translateY(-${keyboardOffset}px)` : undefined,
+            willChange: keyboardOffset > 0 ? 'transform' : undefined,
           }}
         >
 
@@ -3364,41 +3678,120 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
 
           {/* Input controls */}
-          <div className="flex gap-2 items-end max-w-md mx-auto">
-            <textarea
-              value={inputMessage}
-              onChange={(e) => {
-                if (isChatPrefill) setIsChatPrefill(false);
-                setInputMessage(e.target.value);
-              }}
-              onBlur={() => {
-                const canShowReadyPrefill =
-                  !chatInitialized &&
-                  chatMessages.length === 0 &&
-                  !hasInterviewHistoryForCurrentResumeAndJd();
-                if (!inputMessage.trim() && canShowReadyPrefill) {
-                  setInputMessage(CHAT_PREFILL_TEXT);
-                  setIsChatPrefill(true);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  if (!isSending) handleSendMessage();
-                }
-              }}
-              placeholder="输入您的问题..."
-              className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}
-              rows={1}
-              style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
-            />
-            <button
-              onClick={() => handleSendMessage()}
-              disabled={!inputMessage.trim() || isSending}
-              className="size-11 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-all shadow-md shrink-0"
-            >
-              <span className="material-symbols-outlined text-[20px]">send</span>
-            </button>
+          <div className="max-w-md mx-auto">
+            {audioError && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-xl bg-white/70 dark:bg-white/5 border border-slate-200 dark:border-white/10 px-3 py-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-red-600 dark:text-red-400">{audioError}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2 items-end">
+              {/* WeChat-style mode toggle (left) */}
+              <button
+                onClick={() => setMode(inputMode === 'text' ? 'voice' : 'text')}
+                disabled={isSending || (inputMode === 'voice' && !audioSupported)}
+                className="size-11 rounded-full flex items-center justify-center transition-all shadow-md shrink-0 bg-slate-200 dark:bg-[#111a22] text-slate-700 dark:text-white hover:bg-slate-300 dark:hover:bg-white/10 disabled:opacity-50"
+                aria-label={inputMode === 'text' ? '切换语音输入' : '切换键盘输入'}
+                type="button"
+              >
+                <span className="material-symbols-outlined text-[22px]">
+                  {inputMode === 'text' ? 'mic' : 'keyboard'}
+                </span>
+              </button>
+
+              {inputMode === 'voice' ? (
+                <button
+                  onPointerDown={(e) => {
+                    // Hide keyboard and start recording on hold.
+                    setMode('voice');
+                    holdStartRef.current = { x: e.clientX, y: e.clientY };
+                    setHoldCancel(false);
+                    setAudioError('');
+                    startRecording();
+                  }}
+                  onPointerMove={(e) => {
+                    const start = holdStartRef.current;
+                    if (!start) return;
+                    const dy = start.y - e.clientY;
+                    setHoldCancel(dy > 60);
+                  }}
+                  onPointerUp={() => {
+                    const cancel = holdCancel;
+                    holdStartRef.current = null;
+                    setHoldCancel(false);
+                    if (!isRecording) return;
+                    stopRecording({ discard: cancel, autoSend: !cancel });
+                  }}
+                  onPointerLeave={() => {
+                    // Leaving the button while holding indicates cancel intent.
+                    if (!isRecording) return;
+                    setHoldCancel(true);
+                  }}
+                  onPointerCancel={() => {
+                    holdStartRef.current = null;
+                    setHoldCancel(false);
+                    if (!isRecording) return;
+                    stopRecording({ discard: true, autoSend: false });
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  disabled={!audioSupported || isSending}
+                  className={`flex-1 h-[46px] rounded-2xl px-4 flex items-center justify-center border transition-all select-none ${
+                    isRecording
+                      ? (holdCancel
+                        ? 'bg-red-600 text-white border-red-600'
+                        : 'bg-primary text-white border-primary')
+                      : 'bg-slate-100 dark:bg-[#111a22] text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
+                  } disabled:opacity-50`}
+                  type="button"
+                >
+                  {isRecording ? (holdCancel ? '松手取消' : '松手发送') : '按住 说话'}
+                </button>
+              ) : (
+                <>
+                  <textarea
+                    ref={textareaRef}
+                    value={inputMessage}
+                    onChange={(e) => {
+                      if (isChatPrefill) setIsChatPrefill(false);
+                      setInputMessage(e.target.value);
+                    }}
+                    onBlur={() => {
+                      const canShowReadyPrefill =
+                        !chatInitialized &&
+                        chatMessages.length === 0 &&
+                        !hasInterviewHistoryForCurrentResumeAndJd();
+                      if (!inputMessage.trim() && canShowReadyPrefill) {
+                        setInputMessage(CHAT_PREFILL_TEXT);
+                        setIsChatPrefill(true);
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        if (!isSending) handleSendMessage();
+                      }
+                    }}
+                    placeholder="输入您的问题..."
+                    className={`flex-1 bg-slate-100 dark:bg-[#111a22] border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none transition-all resize-none ${isChatPrefill ? 'text-slate-500 dark:text-slate-500' : 'text-slate-900 dark:text-white'}`}
+                    rows={1}
+                    style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
+                  />
+                  <button
+                    onClick={() => handleSendMessage()}
+                    disabled={!inputMessage.trim() || isSending || isRecording}
+                    className="size-11 rounded-full bg-primary text-white flex items-center justify-center hover:bg-blue-600 disabled:opacity-50 transition-all shadow-md shrink-0"
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">send</span>
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       </div>

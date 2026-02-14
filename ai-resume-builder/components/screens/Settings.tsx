@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScreenProps } from '../../types';
 import { AICacheService } from '../../src/ai-cache-service';
+import { confirmDialog } from '../../src/ui/dialogs';
 
 const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) => {
   const [cacheSize, setCacheSize] = useState<string>('0 B');
@@ -33,7 +34,7 @@ const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) =
   }, []);
 
   const handleClearCache = async () => {
-    if (!window.confirm('确定要清除缓存吗？这会清理本地分析记录。')) return;
+    if (!(await confirmDialog('确定要清除缓存吗？这会清理本地分析记录。'))) return;
 
     setIsClearing(true);
     try {
