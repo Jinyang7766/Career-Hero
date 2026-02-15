@@ -150,7 +150,10 @@ function App() {
     }
   }, [isAuthenticated]);
 
-  // Check authentication status on mount
+  // Check authentication status on mount.
+  // IMPORTANT: This effect only sets auth state. It does NOT navigate to /dashboard.
+  // All routing decisions are handled by the route-guard effect above.
+  // The only exception is /deletion-pending, which is a forced redirect.
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -165,20 +168,19 @@ function App() {
           // because session.user.user_metadata might be stale
           const profileResult = await DatabaseService.getUser(session.user.id);
           if (profileResult.success && profileResult.data?.deletion_pending_until) {
-            // Update local user object with latest deletion status
             const updatedUser = { ...session.user, deletion_pending_until: profileResult.data.deletion_pending_until };
             setCurrentUser(updatedUser);
             navigate(viewToPath(View.DELETION_PENDING), { replace: true });
-          } else {
-            navigate(viewToPath(View.DASHBOARD), { replace: true });
           }
+          // Do NOT navigate to /dashboard here — the route guard effect handles
+          // redirecting from root "/" or public paths after authChecked becomes true.
         } else {
           console.log('No active session');
-          navigate(viewToPath(View.LOGIN), { replace: true });
+          // No session → route guard will redirect non-public paths to /login.
         }
       } catch (error) {
         console.error('Error checking auth status:', error);
-        navigate(viewToPath(View.LOGIN), { replace: true });
+        // On error, leave isAuthenticated=false; route guard will redirect.
       } finally {
         setAuthChecked(true);
       }
