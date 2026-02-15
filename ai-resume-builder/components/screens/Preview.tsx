@@ -725,9 +725,13 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
               <div className="absolute -left-4 -bottom-4 size-20 bg-blue-400/10 rounded-full blur-2xl"></div>
 
               <div className="flex items-center gap-4 relative z-10">
-                <div className="relative size-12 rounded-full overflow-hidden border-2 border-white/40 bg-white shadow-md">
-                  <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Interviewer" className="w-full h-full object-cover" />
-                  <span className="absolute bottom-0.5 right-0.5 size-3 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
+                <div className="relative size-12 rounded-full overflow-hidden shadow-md">
+                  <img
+                    src="/ai-avatar.png"
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt"; }}
+                    alt="AI Interviewer"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div className="text-left space-y-0.5">
                   <p className="text-base font-extrabold tracking-tight">查看AI评分</p>

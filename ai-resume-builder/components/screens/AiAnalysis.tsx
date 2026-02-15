@@ -53,6 +53,10 @@ type ResumeReadState = {
 };
 
 const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden }) => {
+  const AI_AVATAR_URL = '/ai-avatar.png';
+  const AI_AVATAR_FALLBACK =
+    'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
+
   const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
 
   const normalizeScoreBreakdown = (raw: ScoreBreakdown, totalScore?: number): ScoreBreakdown => {
@@ -552,6 +556,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const holdStartRef = useRef<{ x: number; y: number } | null>(null);
   // Track whether the user is still holding the "press to talk" button.
   const holdActiveRef = useRef(false);
+  const holdPointerIdRef = useRef<number | null>(null);
+  const holdMaxTimerRef = useRef<number | null>(null);
+  const holdTalkBtnRef = useRef<HTMLButtonElement | null>(null);
   const holdSessionRef = useRef(0);
   const [holdCancel, setHoldCancel] = useState(false);
   const holdCancelRef = useRef(false);
@@ -2720,6 +2727,42 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Avoid sending accidental taps as voice messages.
   const MIN_VOICE_HOLD_MS = 600;
+  const MAX_VOICE_HOLD_MS = 3 * 60 * 1000;
+
+  const INTERVIEW_ANSWER_LIMIT_SUFFIX = '请将回答控制在3分钟内';
+  const SELF_INTRO_REMINDER = '自我介绍时间为1分钟';
+
+  const isSelfIntroQuestion = (q: string) => {
+    const t = String(q || '').trim();
+    if (!t) return false;
+    return /自我介绍|介绍一下你自己|简单介绍一下自己|请介绍一下你自己/.test(t);
+  };
+
+  const formatInterviewQuestion = (q: string) => {
+    let t = String(q || '').trim();
+    if (!t) return t;
+
+    const isSelf = isSelfIntroQuestion(t);
+    const hasSelf = t.includes(SELF_INTRO_REMINDER) || t.includes('自我介绍建议控制在1分钟') || t.includes('自我介绍时间为1分钟');
+
+    // Self-intro: only remind 1 minute; do NOT append the generic 3-minute suffix.
+    if (isSelf) {
+      t = t.replaceAll(INTERVIEW_ANSWER_LIMIT_SUFFIX, '').trim();
+      if (!hasSelf) t = `${t}\n${SELF_INTRO_REMINDER}`;
+      return t.trim();
+    }
+
+    const hasLimit = t.includes(INTERVIEW_ANSWER_LIMIT_SUFFIX);
+    if (!hasLimit) t = `${t}\n${INTERVIEW_ANSWER_LIMIT_SUFFIX}`;
+    return t;
+  };
+
+  const clearHoldMaxTimer = () => {
+    if (holdMaxTimerRef.current) {
+      try { window.clearTimeout(holdMaxTimerRef.current); } catch { }
+      holdMaxTimerRef.current = null;
+    }
+  };
 
   // SpeechRecognition STT flow removed: we always send audio to LLM, and transcription is manual ("转文字").
 
@@ -3192,10 +3235,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       if (currentStep === 'chat' && pendingNextQuestion) {
         if (isAffirmative(textToSend)) {
+          const formattedQ = formatInterviewQuestion(pendingNextQuestion);
           const nextMsg: ChatMessage = {
             id: `ai-next-${Date.now()}`,
             role: 'model',
-            text: `下一题：${pendingNextQuestion}`
+            text: `下一题：${formattedQ}`
           };
           const newMessages = [...baseMessages, nextMsg];
           chatMessagesRef.current = newMessages;
@@ -3246,7 +3290,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         ? (isQaMode
           ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${cleanTextForWrap}`
           : (isStartPhase && isAffirmative(cleanTextForWrap)
-            ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请根据简历和JD，提出与岗位匹配的第一个专业面试问题。直接提问，不要加任何前缀或标签。】`
+            ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请先让候选人做自我介绍，并提醒：自我介绍时间为1分钟。随后进入正常面试提问。】`
             : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。】\n\n候选人回答：${cleanTextForWrap}`)
         )
         : (hasText ? textToSend : (hasAudio ? '（语音）' : ''));
@@ -3297,7 +3341,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         const newMessages = [...baseMessages, aiMessage];
         let finalMessages = newMessages;
         if (next) {
-          setPendingNextQuestion(next);
+          setPendingNextQuestion(formatInterviewQuestion(next));
           const askNext: ChatMessage = {
             id: `ai-ask-next-${Date.now()}`,
             role: 'model',
@@ -4020,9 +4064,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
           >
             <div className="flex items-center gap-3">
-              <div className="relative size-10 rounded-full overflow-hidden border-2 border-white/30 bg-white">
-                <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Advisor" className="w-full h-full object-cover" />
-                <span className="absolute bottom-0 right-0 size-2.5 bg-green-500 rounded-full border-2 border-white"></span>
+              <div className="relative size-10 rounded-full overflow-hidden">
+                <img
+                  src={AI_AVATAR_URL}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+                  alt="AI Advisor"
+                  className="w-full h-full object-cover"
+                />
               </div>
               <div className="text-left">
                 <p className="text-[13px] font-bold">AI 模拟面试官</p>
@@ -4050,14 +4098,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <button onClick={handleStepBack} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
               <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
             </button>
-            <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white">
-              <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+            <div className="size-10 rounded-full overflow-hidden">
+              <img
+                src={AI_AVATAR_URL}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+                alt="AI Agent"
+              />
             </div>
             <div>
               <h3 className="font-bold text-slate-900 dark:text-white leading-tight">AI 模拟面试官</h3>
               <div className="flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">在线</span>
+                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">在线</span>
               </div>
             </div>
           </div>
@@ -4086,8 +4137,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           {chatMessages.map((msg) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full items-start`}>
-                <div className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3 bg-white border border-slate-100 dark:border-slate-700'}`}>
-                  <img src={msg.role === 'user' ? userAvatar : "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
+                <div className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}>
+                  <img
+                    src={msg.role === 'user' ? userAvatar : AI_AVATAR_URL}
+                    onError={(e) => {
+                      if (msg.role !== 'user') (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
+                    }}
+                    alt="Avatar"
+                    className="w-full h-full object-cover"
+                  />
                 </div>
 
                 <div className="flex flex-col max-w-[75%] gap-2">
@@ -4216,8 +4274,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           ))}
           {isSending && (
             <div className="flex justify-start">
-              <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
-                <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+              <div className="size-8 rounded-full overflow-hidden shrink-0 mr-2 mt-1 shadow-sm">
+                <img
+                  src={AI_AVATAR_URL}
+                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+                  alt="AI Agent"
+                />
               </div>
               <div className="bg-white dark:bg-[#1c2936] rounded-2xl rounded-bl-none px-4 py-3 border border-slate-200 dark:border-white/5 shadow-sm">
                 <div className="flex gap-1.5">
@@ -4294,12 +4356,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     )}
 
                     <button
+                      ref={holdTalkBtnRef}
                       onPointerDown={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
                         setMode('voice');
                         try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
                         holdActiveRef.current = true;
+                        holdPointerIdRef.current = e.pointerId;
+                        clearHoldMaxTimer();
                         holdSessionRef.current += 1;
                         const token = holdSessionRef.current;
                         holdAwaitAudioSendRef.current = false;
@@ -4313,6 +4378,56 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         // Start waveform in the user-gesture context (Android may block AudioContext otherwise).
                         setRecording(true);
                         startAudioRecorder(token);
+
+                        // Max duration: auto-send after 3 minutes even if the user keeps holding.
+                        holdMaxTimerRef.current = window.setTimeout(() => {
+                          if (!holdActiveRef.current) return;
+
+                          // Create the same placeholder bubble as on normal release, then stop recorder.
+                          holdActiveRef.current = false;
+                          holdStartRef.current = null;
+                          holdCancelRef.current = false;
+                          setHoldCancel(false);
+
+                          const heldMs = Date.now() - (holdStartTimeRef.current || Date.now());
+                          if (heldMs < MIN_VOICE_HOLD_MS) {
+                            voicePendingUserMsgIdRef.current = null;
+                            holdAwaitAudioSendRef.current = false;
+                            stopAudioRecorder(true);
+                            setRecording(false);
+                            cleanupVoiceMeter();
+                            showToast('按键时间太短，请按住说话', 'info');
+                            return;
+                          }
+
+                          const userMsgId = `user-voice-${Date.now()}`;
+                          voicePendingUserMsgIdRef.current = userMsgId;
+                          const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
+                          const placeholder: ChatMessage = {
+                            id: userMsgId,
+                            role: 'user',
+                            text: '',
+                            audioPending: true,
+                            audioDuration: duration,
+                          };
+                          const next = [...chatMessagesRef.current, placeholder];
+                          chatMessagesRef.current = next;
+                          setChatMessages(next);
+
+                          holdAwaitAudioSendRef.current = true;
+                          stopAudioRecorder(false);
+                          setRecording(false);
+                          cleanupVoiceMeter();
+                          showToast('已达到3分钟上限，已自动发送', 'info');
+
+                          // Best effort release pointer capture so subsequent pointerup doesn't interfere.
+                          try {
+                            const pid = holdPointerIdRef.current;
+                            if (pid !== null) holdTalkBtnRef.current?.releasePointerCapture?.(pid);
+                          } catch { }
+                          holdPointerIdRef.current = null;
+                          clearHoldMaxTimer();
+                        }, MAX_VOICE_HOLD_MS);
                       }}
                       onPointerMove={(e) => {
                         e.preventDefault();
@@ -4335,6 +4450,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       }}
                       onPointerUp={(e) => {
                         try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                        clearHoldMaxTimer();
+                        holdPointerIdRef.current = null;
+                        if (!holdActiveRef.current) return;
                         const cancel = holdCancelRef.current;
                         holdActiveRef.current = false;
                         holdStartRef.current = null;
@@ -4377,6 +4495,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       }}
                       onPointerCancel={(e) => {
                         try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                        clearHoldMaxTimer();
+                        holdPointerIdRef.current = null;
                         holdActiveRef.current = false;
                         holdStartRef.current = null;
                         holdCancelRef.current = false;

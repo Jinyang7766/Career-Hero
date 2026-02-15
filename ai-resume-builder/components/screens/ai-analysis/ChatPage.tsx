@@ -3,6 +3,9 @@ import type { ChatMessage } from './types';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
+const AI_AVATAR_URL = '/ai-avatar.png';
+const AI_AVATAR_FALLBACK = 'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
+
 export type ChatPageProps = {
   ToastOverlay: React.ComponentType;
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
@@ -78,14 +81,17 @@ const ChatPage: React.FC<ChatPageProps> = ({
           <button onClick={handleStepBack} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
             <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
           </button>
-          <div className="size-10 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white">
-            <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+          <div className="size-10 rounded-full overflow-hidden">
+            <img
+              src={AI_AVATAR_URL}
+              onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+              alt="AI Agent"
+            />
           </div>
           <div>
             <h3 className="font-bold text-slate-900 dark:text-white leading-tight">AI 模拟面试官</h3>
             <div className="flex items-center gap-1.5">
-              <span className="size-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-xs text-slate-500 dark:text-slate-400">在线</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">在线</span>
             </div>
           </div>
         </div>
@@ -101,16 +107,19 @@ const ChatPage: React.FC<ChatPageProps> = ({
           <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
             <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
               {msg.role === 'model' && (
-                <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
-                  <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+                <div className="size-8 rounded-full overflow-hidden shrink-0 mr-2 mt-1 shadow-sm">
+                  <img
+                    src={AI_AVATAR_URL}
+                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+                    alt="AI Agent"
+                  />
                 </div>
               )}
               <div
-                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
-                  msg.role === 'user'
-                    ? 'bg-primary text-white rounded-br-none'
-                    : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
-                }`}
+                className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
+                  ? 'bg-primary text-white rounded-br-none'
+                  : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
+                  }`}
               >
                 {msg.role === 'model' ? (
                   (() => {
@@ -156,8 +165,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
         {isSending && (
           <div className="flex justify-start">
-            <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
-              <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
+            <div className="size-8 rounded-full overflow-hidden shrink-0 mr-2 mt-1 shadow-sm">
+              <img
+                src={AI_AVATAR_URL}
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
+                alt="AI Agent"
+              />
             </div>
             <div className="bg-white dark:bg-[#1c2936] rounded-2xl rounded-bl-none px-4 py-3 border border-slate-200 dark:border-white/5 shadow-sm">
               <div className="flex gap-1.5">
@@ -217,9 +230,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 <div className={`flex flex-col items-center transition-all duration-300 ${isRecording ? 'relative z-[110]' : ''}`}>
                   {isRecording && (
                     <div
-                      className={`mb-6 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
-                        holdCancel ? 'text-red-400' : 'text-white/90'
-                      }`}
+                      className={`mb-6 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel ? 'text-red-400' : 'text-white/90'
+                        }`}
                     >
                       {holdCancel ? '松手取消' : '松手发送 上移取消'}
                     </div>
@@ -232,13 +244,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
                     onPointerCancel={onHoldPointerCancel}
                     onContextMenu={(e) => e.preventDefault()}
                     disabled={!audioSupported || isSending}
-                    className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${
-                      isRecording
-                        ? holdCancel
-                          ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
-                          : 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]'
-                        : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
-                    } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
+                    className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
+                      ? holdCancel
+                        ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
+                        : 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]'
+                      : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
+                      } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
                     type="button"
                   >
                     {isRecording ? (
