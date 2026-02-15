@@ -8,6 +8,9 @@ import { buildApiUrl } from '../../src/api-config';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPage from './ai-analysis/ChatPage';
 import { useAppContext } from '../../src/app-context';
+import ResumeSelectPage from './ai-analysis/pages/ResumeSelectPage';
+import JdInputPage from './ai-analysis/pages/JdInputPage';
+import ReportPage from './ai-analysis/pages/ReportPage';
 
 interface Suggestion {
   id: string;
@@ -3508,672 +3511,92 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     const t = text.trim().toLowerCase();
     return ['好', '好的', '可以', '继续', '继续吧', '开始', '开始吧', '行', '嗯', 'ok', 'yes'].some(k => t === k || t.includes(k));
   };
-
   // ================= RENDER STEPS =================
   if (currentStep === 'resume_select') {
-    const filteredResumesSelection = (allResumes || []).filter(resume =>
-      resume.title.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    const renderSelectionList = (resumes: typeof allResumes) => (
-      <div className="px-4 mt-1">
-        <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-          {resumes!.map((resume) => (
-            <div
-              key={resume.id}
-              onClick={() => handleResumeSelect(resume.id, false)}
-              className="group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
-            >
-              <div className="shrink-0 relative">
-                <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
-                  {resume.thumbnail}
-                </div>
-              </div>
-              <div className="flex flex-col flex-1 justify-center min-w-0">
-                <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight mb-1">{resume.title}</p>
-                <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
-                  上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
-                </p>
-              </div>
-              <button className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors">
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-
     return (
-      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-        <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
-          <div className="flex items-center justify-between h-14 px-4 relative">
-            <button
-              onClick={handleStepBack}
-              className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white z-10"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
-            </button>
-            <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-              选择简历
-            </h1>
-            <div className="w-10"></div>
-          </div>
-        </header>
-
-        <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
-          <div className="relative group">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-slate-200/50 dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-transparent focus:border-primary/20 focus:ring-4 focus:ring-primary/5 placeholder-slate-500 dark:placeholder-slate-400 transition-all"
-              placeholder="搜索简历名称..."
-              type="text"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
-              </button>
-            )}
-          </div>
-        </div>
-
-        <main className="flex-1 overflow-y-auto pb-32 no-scrollbar">
-          <div className="flex flex-col gap-2">
-            {filteredResumesSelection.length === 0 && (
-              <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">search_off</span>
-                <p className="text-slate-900 dark:text-white font-medium mb-1">未找到相关简历</p>
-                <p className="text-slate-500 dark:text-slate-400 text-sm">尝试搜索其他关键词</p>
-              </div>
-            )}
-
-            {filteredResumesSelection.length > 0 && (
-              <>
-                {/* 已优化 */}
-                <div className="flex flex-col pt-2 bg-transparent">
-                  <button
-                    onClick={() => setIsOptimizedOpen(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-2 group"
-                  >
-                    <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
-                    <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
-                      expand_more
-                    </span>
-                  </button>
-                  {isOptimizedOpen && (() => {
-                    const optimizedResumes = filteredResumesSelection.filter(r => r.optimizationStatus === 'optimized');
-                    return optimizedResumes.length > 0 ? (
-                      renderSelectionList(optimizedResumes)
-                    ) : (
-                      <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无已优化简历
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* 未优化 */}
-                <div className="flex flex-col pt-2 bg-transparent">
-                  <button
-                    onClick={() => setIsUnoptimizedOpen(v => !v)}
-                    className="w-full flex items-center justify-between px-4 py-2 group"
-                  >
-                    <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
-                    <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
-                      expand_more
-                    </span>
-                  </button>
-                  {isUnoptimizedOpen && (() => {
-                    const unoptimizedResumes = filteredResumesSelection.filter(r => r.optimizationStatus !== 'optimized');
-                    return unoptimizedResumes.length > 0 ? (
-                      renderSelectionList(unoptimizedResumes)
-                    ) : (
-                      <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无未优化简历
-                      </div>
-                    );
-                  })()}
-                </div>
-              </>
-            )}
-          </div>
-
-          {filteredResumesSelection.length > 0 && (
-            <div className="h-12 flex items-center justify-center mt-4">
-              <p className="text-xs text-slate-400 dark:text-slate-600">
-                {filteredResumesSelection.length === (allResumes?.length || 0) ? '已加载全部内容' : `显示 ${filteredResumesSelection.length} 条结果`}
-              </p>
-            </div>
-          )}
-        </main>
-      </div>
+      <ResumeSelectPage
+        allResumes={allResumes}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        isOptimizedOpen={isOptimizedOpen}
+        setIsOptimizedOpen={setIsOptimizedOpen}
+        isUnoptimizedOpen={isUnoptimizedOpen}
+        setIsUnoptimizedOpen={setIsUnoptimizedOpen}
+        onBack={handleStepBack}
+        onSelectResume={(resumeId) => handleResumeSelect(resumeId, false)}
+      />
     );
   }
-
   // 2. JD Input
   if (currentStep === 'jd_input') {
-    const selectedResumeLabel = (() => {
-      const selected = (allResumes || []).find((item) => isSameResumeId(item.id, selectedResumeId));
-      if (selected?.title) return selected.title;
-      if (resumeData?.resumeTitle) return resumeData.resumeTitle;
-      const name = (resumeData?.personalInfo?.name || '').trim();
-      if (name) return `${name}的简历`;
-      return '当前简历';
-    })();
-    const statusTone = (() => {
-      if (resumeReadState.status === 'success') {
-        return {
-          bg: 'bg-emerald-50/50 dark:bg-emerald-500/5',
-          border: 'border-emerald-100 dark:border-emerald-500/20',
-          text: 'text-emerald-700 dark:text-emerald-400',
-          icon: 'check_circle',
-          badge: '已就绪'
-        };
-      }
-      if (resumeReadState.status === 'loading') {
-        return {
-          bg: 'bg-blue-50/50 dark:bg-blue-500/5',
-          border: 'border-blue-100 dark:border-blue-500/20',
-          text: 'text-blue-700 dark:text-blue-400',
-          icon: 'sync',
-          badge: '读取中'
-        };
-      }
-      if (resumeReadState.status === 'error') {
-        return {
-          bg: 'bg-rose-50/50 dark:bg-rose-500/5',
-          border: 'border-rose-100 dark:border-rose-500/20',
-          text: 'text-rose-700 dark:text-rose-400',
-          icon: 'error',
-          badge: '读取失败'
-        };
-      }
-      return {
-        bg: 'bg-slate-50/50 dark:bg-slate-500/5',
-        border: 'border-slate-100 dark:border-slate-500/20',
-        text: 'text-slate-600 dark:text-slate-400',
-        icon: 'info',
-        badge: '初始化'
-      };
-    })();
-    const statusMessage =
-      resumeReadState.status === 'idle'
-        ? `尚未读取简历，请先返回上一步选择简历（当前：${selectedResumeLabel}）`
-        : resumeReadState.message;
-
     return (
-      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
-        <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
-          <div className="flex items-center justify-between h-14 px-4 relative">
-            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
-            <h1 className="text-lg font-bold tracking-tight">添加职位描述</h1>
-            <div className="w-8"></div>
-          </div>
-        </header>
-        <main className="p-4 flex flex-col gap-6">
-          <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`size-10 rounded-full flex items-center justify-center ${statusTone.bg} ${statusTone.border}`}>
-                  <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
-                </div>
-                <div className="flex flex-col">
-                  <h4 className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
-                </div>
-              </div>
-              <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${statusTone.bg} ${statusTone.border} ${statusTone.text}`}>
-                <span className={`material-symbols-outlined text-[14px] ${resumeReadState.status === 'loading' ? 'animate-spin' : ''}`}>{statusTone.icon}</span>
-                <span className="whitespace-nowrap">{statusTone.badge}</span>
-              </div>
-            </div>
-            {resumeReadState.status !== 'success' && (
-              <p className={`mt-3 text-xs leading-relaxed ${statusTone.text}`}>
-                {statusMessage}
-              </p>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="material-symbols-outlined text-primary">description</span>
-              <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
-            </div>
-            <div className="mb-3">
-              <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
-              <input
-                value={targetCompany}
-                onChange={(e) => setTargetCompany(e.target.value)}
-                placeholder="例如：字节跳动 / 腾讯"
-                className="mt-2 w-full rounded-xl bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm"
-                type="text"
-              />
-            </div>
-            <textarea
-              value={jdText}
-              onChange={(e) => setJdText(e.target.value)}
-              placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
-              className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
-              maxLength={1000}
-            ></textarea>
-
-            {/* 截图上传按钮 */}
-            <div className="mt-3">
-              <button
-                onClick={() => !isUploading && document.getElementById('jd-screenshot-upload')?.click()}
-                disabled={isUploading}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isUploading ? (
-                  <span className="size-4 border-2 border-slate-400 border-t-primary rounded-full animate-spin"></span>
-                ) : (
-                  <span className="material-symbols-outlined text-[20px]">image</span>
-                )}
-                <span className="text-sm">{isUploading ? '正在解析...' : '上传JD截图'}</span>
-              </button>
-              <input
-                type="file"
-                id="jd-screenshot-upload"
-                accept="image/*"
-                onChange={handleScreenshotUpload}
-                className="hidden"
-              />
-            </div>
-
-          </div>
-
-          <div className="flex gap-3 mt-2">
-            <button
-              onClick={() => setCurrentStep('resume_select')}
-              className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
-            >
-              上一步
-            </button>
-            <button
-              onClick={handleStartAnalysisClick}
-              className="flex-[2] py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
-            >
-              开始分析
-            </button>
-          </div>
-
-          {showJdEmptyModal && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
-              <div className="w-full max-w-sm rounded-[32px] bg-red-500/90 backdrop-blur-xl border border-red-400/30 shadow-2xl p-8 text-white animate-in zoom-in-95 duration-200">
-                <div className="flex flex-col items-center text-center gap-4">
-                  <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
-                    <span className="material-symbols-outlined text-white text-[32px]">warning</span>
-                  </div>
-                  <p className="text-base text-white/95 leading-relaxed font-bold px-2">
-                    您未填写 JD，无法进行岗位定向匹配。是否坚持继续通用分析？
-                  </p>
-                </div>
-                <div className="mt-8 flex flex-col gap-3">
-                  <button
-                    onClick={() => {
-                      setShowJdEmptyModal(false);
-                      startAnalysis();
-                    }}
-                    className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
-                  >
-                    坚持继续分析
-                  </button>
-                  <button
-                    onClick={() => setShowJdEmptyModal(false)}
-                    className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
-                  >
-                    返回填写 JD
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
+      <JdInputPage
+        allResumes={allResumes}
+        selectedResumeId={selectedResumeId}
+        isSameResumeId={isSameResumeId}
+        resumeData={resumeData}
+        resumeReadState={resumeReadState}
+        targetCompany={targetCompany}
+        setTargetCompany={setTargetCompany}
+        jdText={jdText}
+        setJdText={setJdText}
+        isUploading={isUploading}
+        onScreenshotUpload={handleScreenshotUpload}
+        onBack={handleStepBack}
+        onPrev={() => setCurrentStep('resume_select')}
+        onStart={handleStartAnalysisClick}
+        showJdEmptyModal={showJdEmptyModal}
+        setShowJdEmptyModal={setShowJdEmptyModal}
+        startAnalysis={startAnalysis}
+      />
     );
   }
-
   // 3. Analyzing
   if (currentStep === 'analyzing') {
     return (
-      <div className="flex flex-col min-h-screen items-center justify-center bg-background-light dark:bg-background-dark">
-        <div className="relative size-28 mb-8">
-          <div className="absolute inset-0 rounded-full border-4 border-slate-200 dark:border-white/10"></div>
-          <div className="absolute inset-0 rounded-full border-4 border-primary border-t-transparent animate-spin"></div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="flex flex-col items-center">
-              <span className="material-symbols-outlined text-4xl text-primary animate-pulse mb-1">compare_arrows</span>
-              {hasJdInput() && <span className="text-[10px] font-bold text-primary uppercase">JD Match</span>}
-            </div>
-          </div>
-        </div>
-        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
-          {hasJdInput() ? '正在进行人岗匹配...' : '正在深度诊断简历...'}
-        </h3>
-        <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs leading-relaxed">
-          {hasJdInput()
-            ? 'AI 正在对比您的简历与目标职位描述，分析关键词覆盖率与核心能力差距。'
-            : 'AI 正在检查您的简历内容完整性、格式规范以及语言表达的专业度。'}
-        </p>
-      </div>
+      <ReportPage
+        mode="analyzing"
+        hasJdInput={hasJdInput}
+        handleStepBack={handleStepBack}
+        score={score}
+        originalScore={originalScore}
+        report={report}
+        suggestions={suggestions as any[]}
+        setSuggestions={setSuggestions as any}
+        getScoreColor={getScoreColor}
+        getSuggestionModuleLabel={getSuggestionModuleLabel}
+        getDisplayOriginalValue={getDisplayOriginalValue}
+        persistSuggestionFeedback={persistSuggestionFeedback as any}
+        handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
+        handleAnalyzeOtherResume={handleAnalyzeOtherResume}
+        handleExportPDF={handleExportPDF}
+        openChat={openChat}
+      />
     );
   }
-
   // 4. Report View (Simplified, focus on Chat Entry)
   if (currentStep === 'report') {
-    const hasAcceptedSuggestion = suggestions.some(s => s.status === 'accepted');
-
     return (
-      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
-        <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
-          <div className="flex items-center justify-between h-14 px-4 relative">
-            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white">
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
-            <h1 className="text-base font-bold tracking-tight">诊断报告</h1>
-            <div className="w-8"></div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-4">
-          {/* Score Card with Breakdown */}
-          <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 mb-6 relative overflow-hidden">
-            <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${score >= 80 ? 'from-green-400 to-emerald-600' : 'from-orange-400 to-red-500'}`}></div>
-
-            {/* Total Score */}
-            <div className="text-center mb-6">
-              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
-                {hasJdInput() ? '人岗匹配度' : '简历综合评分'}
-              </p>
-              <div className={`text-7xl font-black tracking-tight transition-all duration-500 ${getScoreColor(originalScore || score)}`}>
-                {score}
-                <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
-              </div>
-            </div>
-
-            {/* Score Breakdown */}
-            {report?.scoreBreakdown && (
-              <div className="grid gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-600 dark:text-slate-300">经验匹配</span>
-                    <span className="text-slate-900 dark:text-white">{report.scoreBreakdown.experience}分</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-black/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500 rounded-full" style={{ width: `${report.scoreBreakdown.experience}%` }}></div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-600 dark:text-slate-300">技能相关</span>
-                    <span className="text-slate-900 dark:text-white">{report.scoreBreakdown.skills}分</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-black/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full" style={{ width: `${report.scoreBreakdown.skills}%` }}></div>
-                  </div>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <div className="flex justify-between text-xs font-medium">
-                    <span className="text-slate-600 dark:text-slate-300">格式规范</span>
-                    <span className="text-slate-900 dark:text-white">{report.scoreBreakdown.format}分</span>
-                  </div>
-                  <div className="h-1.5 w-full bg-slate-100 dark:bg-black/20 rounded-full overflow-hidden">
-                    <div className="h-full bg-amber-500 rounded-full" style={{ width: `${report.scoreBreakdown.format}%` }}></div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* AI Analysis Summary - NEW POSITION */}
-          {report?.summary && (
-            <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20 mb-6">
-              <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
-                <span className="material-symbols-outlined text-[20px]">psychology</span>
-                AI 深度诊断总结
-              </h3>
-              <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                {report.summary}
-              </p>
-            </div>
-          )}
-
-          {/* AI Optimization Suggestions - Editable */}
-          {suggestions.filter(s => s.status === 'pending').length > 0 && (
-            <div className="mb-6">
-              <h3 className="flex items-center gap-2 font-bold text-slate-800 dark:text-white text-base mb-1">
-                <span className="material-symbols-outlined text-primary">auto_fix_high</span>
-                AI 优化建议 ({suggestions.filter(s => s.status === 'pending').length})
-              </h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-4 ml-7">
-                提示：AI 可能会根据行业模型润色细节，请注意核实关键数据。
-              </p>
-              <div className="space-y-4">
-                {suggestions.filter(s => s.status === 'pending').map((suggestion) => (
-                  <div key={suggestion.id} className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm">
-                    {/* Header */}
-                    <div className="px-4 py-3 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5">
-                      <div className="flex justify-between items-start mb-1">
-                        <span className="text-xs font-bold text-primary uppercase tracking-wider">{suggestion.title}</span>
-                        <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                          {getSuggestionModuleLabel(suggestion)}
-                        </span>
-                      </div>
-                      <p className="text-sm text-slate-600 dark:text-slate-300">{suggestion.reason}</p>
-
-                    </div>
-
-                    {/* Original and Suggested Content - Stacked for better mobile view */}
-                    <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
-                      {/* Original */}
-                      <div className="p-4 bg-red-50/30 dark:bg-red-900/5">
-                        <p className="text-xs font-bold text-red-400 mb-2 uppercase">修改前</p>
-                        <div className="text-sm text-slate-500 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[80px]">
-                          {getDisplayOriginalValue(suggestion) || <span className="italic text-slate-400">无内容</span>}
-                        </div>
-                      </div>
-
-                      {/* Suggested (Editable) */}
-                      <div className="p-4 bg-green-50/30 dark:bg-green-900/5">
-                        <p className="text-xs font-bold text-green-500 mb-2 uppercase flex justify-between items-center">
-                          修改建议 (可编辑)
-                          <span className="material-symbols-outlined text-[14px]">
-                            {suggestion.targetSection === 'skills' ? 'extension' : 'edit'}
-                          </span>
-                        </p>
-                        {suggestion.targetSection === 'skills' ? (
-                          <div className="p-3 bg-white dark:bg-black/20 rounded-lg border border-green-200 dark:border-green-900/30">
-                            <div className="flex flex-wrap gap-2 min-h-[44px]">
-                              {toSkillList(suggestion.suggestedValue).map((skill: string, idx: number) => (
-                                <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs font-medium border border-primary/20">
-                                  {skill}
-                                  <button
-                                    onClick={() => {
-                                      setSuggestions(prev => prev.map(s => {
-                                        if (s.id !== suggestion.id) return s;
-                                        const list = toSkillList(s.suggestedValue);
-                                        list.splice(idx, 1);
-                                        return { ...s, suggestedValue: list };
-                                      }));
-                                    }}
-                                    className="text-primary/70 hover:text-primary"
-                                    aria-label="remove-skill"
-                                    type="button"
-                                  >
-                                    <span className="material-symbols-outlined text-[12px]">close</span>
-                                  </button>
-                                </span>
-                              ))}
-                              {(!suggestion.suggestedValue || (Array.isArray(suggestion.suggestedValue) && suggestion.suggestedValue.length === 0)) && (
-                                <span className="text-slate-400 italic text-xs">建议补充相关技能</span>
-                              )}
-                            </div>
-                            <div className="mt-3 flex items-center gap-2">
-                              <input
-                                type="text"
-                                placeholder=""
-                                className="flex-1 text-xs text-slate-800 dark:text-slate-200 bg-white/80 dark:bg-black/30 px-3 py-2 rounded-md border border-slate-200 dark:border-white/10 focus:ring-2 focus:ring-green-500/30 outline-none"
-                                onKeyDown={(e) => {
-                                  if (e.key !== 'Enter') return;
-                                  const value = e.currentTarget.value.trim();
-                                  if (!value) return;
-                                  setSuggestions(prev => prev.map(s => {
-                                    if (s.id !== suggestion.id) return s;
-                                    const list = toSkillList(s.suggestedValue);
-                                    if (!list.includes(value)) list.push(value);
-                                    return { ...s, suggestedValue: toSkillList(list) };
-                                  }));
-                                  e.currentTarget.value = '';
-                                }}
-                              />
-                              <button
-                                type="button"
-                                className="px-3 py-2 text-xs font-semibold text-white bg-primary rounded-md hover:bg-primary/90"
-                                onClick={(e) => {
-                                  const input = (e.currentTarget.previousElementSibling as HTMLInputElement | null);
-                                  if (!input) return;
-                                  const value = input.value.trim();
-                                  if (!value) return;
-                                  setSuggestions(prev => prev.map(s => {
-                                    if (s.id !== suggestion.id) return s;
-                                    const list = toSkillList(s.suggestedValue);
-                                    if (!list.includes(value)) list.push(value);
-                                    return { ...s, suggestedValue: toSkillList(list) };
-                                  }));
-                                  input.value = '';
-                                }}
-                              >
-                                添加
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
-                          <textarea
-                            value={Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue.join(', ') : suggestion.suggestedValue}
-                            onChange={(e) => {
-                              setSuggestions(prev => prev.map(s =>
-                                s.id === suggestion.id ? { ...s, suggestedValue: e.target.value } : s
-                              ));
-                            }}
-                            className="w-full text-sm text-slate-800 dark:text-slate-200 bg-white dark:bg-black/20 p-3 rounded-lg border border-green-200 dark:border-green-900/30 min-h-[120px] focus:ring-2 focus:ring-green-500/30 outline-none resize-y transition-all"
-                          />
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Action Buttons */}
-                    <div className="p-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
-                      <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 min-w-0">
-                        <span className="truncate">有帮助吗？</span>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <button
-                            onClick={() => persistSuggestionFeedback(suggestion, 'up')}
-                            className={`inline-flex items-center justify-center size-7 rounded-full border transition-colors ${suggestion.rating === 'up'
-                              ? 'border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20'
-                              : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-green-600 hover:border-green-400'
-                              }`}
-                            aria-label="点赞"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">thumb_up</span>
-                          </button>
-                          <button
-                            onClick={() => persistSuggestionFeedback(suggestion, 'down')}
-                            className={`inline-flex items-center justify-center size-7 rounded-full border transition-colors ${suggestion.rating === 'down'
-                              ? 'border-rose-500 text-rose-600 bg-rose-50 dark:bg-rose-900/20'
-                              : 'border-slate-200 dark:border-white/10 text-slate-400 hover:text-rose-600 hover:border-rose-400'
-                              }`}
-                            aria-label="点踩"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">thumb_down</span>
-                          </button>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-auto">
-                        <button
-                          onClick={() => {
-                            setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, status: 'ignored' as const } : s));
-                          }}
-                          className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
-                        >
-                          忽略
-                        </button>
-                        <button
-                          onClick={() => handleAcceptSuggestionInChat(suggestion)}
-                          className="px-4 py-2 text-xs bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap"
-                        >
-                          <span className="material-symbols-outlined text-[16px]">check</span>
-                          采纳优化
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-
-
-          {/* Export PDF & Analyze Other Buttons - Arranged side-by-side */}
-          <div className="mb-40 flex gap-3">
-            <button
-              onClick={handleAnalyzeOtherResume}
-              className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
-            >
-              <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-              <span className="text-[13px] font-bold tracking-wide">分析其他简历</span>
-            </button>
-            <button
-              onClick={handleExportPDF}
-              disabled={!hasAcceptedSuggestion}
-              className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
-                ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
-                : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
-                }`}
-            >
-              <span className="material-symbols-outlined text-[18px]">download</span>
-              <span className="text-[13px] font-bold tracking-wide">前往预览导出</span>
-            </button>
-
-          </div>
-        </main>
-
-        {/* Fixed AI Advisor Button - Above Navigation Bar */}
-        <div className="fixed bottom-[48px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
-          <button
-            onClick={() => openChat('internal')}
-            className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
-          >
-            <div className="flex items-center gap-3">
-              <div className="relative size-10 rounded-full overflow-hidden">
-                <img
-                  src={AI_AVATAR_URL}
-                  onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
-                  alt="AI Advisor"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div className="text-left">
-                <p className="text-[13px] font-bold">AI 模拟面试官</p>
-                <p className="text-[10px] text-blue-100 italic opacity-80">点击开始模拟面试</p>
-              </div>
-            </div>
-            <div className="size-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-              <span className="material-symbols-outlined text-xl">arrow_forward</span>
-            </div>
-          </button>
-        </div>
-      </div>
+      <ReportPage
+        mode="report"
+        hasJdInput={hasJdInput}
+        handleStepBack={handleStepBack}
+        score={score}
+        originalScore={originalScore}
+        report={report}
+        suggestions={suggestions as any[]}
+        setSuggestions={setSuggestions as any}
+        getScoreColor={getScoreColor}
+        getSuggestionModuleLabel={getSuggestionModuleLabel}
+        getDisplayOriginalValue={getDisplayOriginalValue}
+        persistSuggestionFeedback={persistSuggestionFeedback as any}
+        handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
+        handleAnalyzeOtherResume={handleAnalyzeOtherResume}
+        handleExportPDF={handleExportPDF}
+        openChat={openChat}
+      />
     );
   }
-
   const toggleChatInputMode = () => setMode(inputMode === 'text' ? 'voice' : 'text');
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
   const hasVoiceBlobForMsg = (msgId: string) => !!voiceBlobByMsgIdRef.current.get(msgId)?.blob;
@@ -4364,5 +3787,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 };
 
 export default AiAnalysis;
+
 
 
