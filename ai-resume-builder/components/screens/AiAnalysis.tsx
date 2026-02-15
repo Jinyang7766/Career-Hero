@@ -529,7 +529,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     isRecordingRef.current = v;
     setIsRecording(v);
   };
-  const micPreflightOkRef = useRef(false);
   const [pendingAudio, setPendingAudio] = useState<{ blob: Blob; url: string; mime: string } | null>(null);
   const [audioError, setAudioError] = useState<string>('');
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
@@ -554,6 +553,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const audioCtxRef = useRef<AudioContext | null>(null);
   const voiceMeterStreamRef = useRef<MediaStream | null>(null);
   const audioRafRef = useRef<number | null>(null);
+  const fakeMeterTimerRef = useRef<number | null>(null);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const toastTimerRef = useRef<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
@@ -2262,6 +2262,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   }, [pendingAudio?.url]);
 
   const cleanupVoiceMeter = () => {
+    if (fakeMeterTimerRef.current) {
+      try { window.clearInterval(fakeMeterTimerRef.current); } catch { }
+      fakeMeterTimerRef.current = null;
+    }
     if (audioRafRef.current) {
       try { cancelAnimationFrame(audioRafRef.current); } catch { }
       audioRafRef.current = null;
@@ -2279,51 +2283,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const startVoiceMeter = async () => {
     cleanupVoiceMeter();
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      voiceMeterStreamRef.current = stream;
-      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AC) {
-        try { stream.getTracks().forEach(t => t.stop()); } catch { }
-        voiceMeterStreamRef.current = null;
-        return;
+
+    // NOTE: Using getUserMedia here can conflict with SpeechRecognition on some Android devices
+    // (mic contention => always "no-speech"). Use a synthetic waveform animation instead.
+    const tick = () => {
+      const base = 6;
+      const amp = 38;
+      const now = Date.now();
+      const phase = (now % 1200) / 1200;
+      const arr: number[] = [];
+      for (let i = 0; i < 12; i++) {
+        const t = (i / 12 + phase) * Math.PI * 2;
+        const v = Math.abs(Math.sin(t)) * (0.55 + 0.45 * Math.random());
+        arr.push(base + v * amp);
       }
-      const ctx = new AC();
-      audioCtxRef.current = ctx;
-      // On mobile, AudioContext often starts suspended until explicitly resumed.
-      try { await ctx.resume?.(); } catch { }
-      const source = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.5;
-      source.connect(analyser);
+      const mirrored = [...[...arr].reverse(), ...arr];
+      setVisualizerData(mirrored);
+    };
 
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let lastUpdate = 0;
-
-      const loop = (now: number) => {
-        try {
-          analyser.getByteFrequencyData(dataArray);
-          if (now - lastUpdate > 50) {
-            lastUpdate = now;
-            // Symmetrical waveform: 12 unique points, mirrored to 24
-            const newData = [];
-            const step = Math.floor(dataArray.length / 12);
-            for (let i = 0; i < 12; i++) {
-              const val = dataArray[i * step] || 0;
-              newData.push(4 + (val / 255) * 44); // Max height 48px
-            }
-            // Mirror it [11...0, 0...11] or just duplicate for simplicity
-            const mirrored = [...[...newData].reverse(), ...newData];
-            setVisualizerData(mirrored);
-          }
-        } catch { }
-        audioRafRef.current = requestAnimationFrame(loop);
-      };
-      audioRafRef.current = requestAnimationFrame(loop);
-    } catch (e) {
-      console.warn('Voice meter failed:', e);
-    }
+    tick();
+    fakeMeterTimerRef.current = window.setInterval(tick, 80);
   };
 
   const stopRecording = ({ discard = false, autoSend = false }: { discard?: boolean; autoSend?: boolean } = {}) => {
@@ -2411,27 +2390,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
     } catch { }
 
-    // Preflight mic permission to avoid immediate SpeechRecognition failure on some mobile browsers.
-    // Do not await here: on some Android builds, SpeechRecognition.start() must happen synchronously
-    // in the same user gesture chain, otherwise it may never start / return results.
-    if (!micPreflightOkRef.current) {
-      try {
-        navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
-          try { s.getTracks().forEach(t => t.stop()); } catch { }
-          micPreflightOkRef.current = true;
-        }).catch((e: any) => {
-          micPreflightOkRef.current = false;
-          const name = String(e?.name || '').toLowerCase();
-          if (name.includes('notallowed') || name.includes('permission')) {
-            setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
-          } else {
-            setAudioError('麦克风启动失败，请重试');
-          }
-          try { cleanupVoiceMeter(); } catch { }
-          setRecording(false);
-        });
-      } catch { }
-    }
+    // Avoid getUserMedia preflight: it can contend with SpeechRecognition mic capture on Android,
+    // resulting in persistent "no-speech"/empty results even while the waveform shows activity.
 
     // If this was triggered by a hold gesture, ensure the user is still holding.
     if (typeof holdToken === 'number') {
