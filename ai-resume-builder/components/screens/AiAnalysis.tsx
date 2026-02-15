@@ -558,6 +558,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const audioRafRef = useRef<number | null>(null);
   const fakeMeterTimerRef = useRef<number | null>(null);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
+  // Peak level during the current hold session, used for fast silence detection (no decode).
+  const holdVoicePeakRef = useRef(0);
   const toastTimerRef = useRef<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -2439,6 +2441,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try {
       voiceMeterStreamRef.current = streamOverride;
       voiceMeterOwnsStreamRef.current = false;
+      holdVoicePeakRef.current = 0;
 
       const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
       if (!AC) return;
@@ -2460,6 +2463,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           analyser.getByteFrequencyData(dataArray);
           if (now - lastUpdate > 50) {
             lastUpdate = now;
+            // Track a rough peak to detect "almost silent" holds.
+            let maxByte = 0;
+            for (let i = 0; i < dataArray.length; i++) {
+              const v = dataArray[i] || 0;
+              if (v > maxByte) maxByte = v;
+            }
+            const peak = maxByte / 255;
+            if (peak > holdVoicePeakRef.current) holdVoicePeakRef.current = peak;
             const newData: number[] = [];
             const step = Math.floor(dataArray.length / 12);
             for (let i = 0; i < 12; i++) {
@@ -2552,14 +2563,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           return;
         }
 
-        const url = URL.createObjectURL(blob);
-        const audioObj = { blob, url, mime: blob.type || mime || 'audio/webm' };
-
         if (voiceDebugEnabled()) {
           console.debug('[voice] audio recorder stopped', {
             token,
             size: blob.size,
-            mime: audioObj.mime,
+            mime: blob.type || mime || 'audio/webm',
+            peak: holdVoicePeakRef.current,
           });
         }
 
@@ -2569,27 +2578,53 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         voicePendingUserMsgIdRef.current = null;
         const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
 
-        // Persist blob for "transcribe" button later (scheme A: update same message text on demand).
-        try { voiceBlobByMsgIdRef.current.set(userMsgId, { blob: audioObj.blob, mime: audioObj.mime }); } catch { }
+        // If the hold is likely silent, don't send audio to backend; instead show an AI chat hint.
+        // Use a fast peak heuristic first; optionally confirm with decode-based check for low peaks.
+        (async () => {
+          const peak = holdVoicePeakRef.current;
+          let silentVerdict: boolean | null = null;
+          // Do NOT hard-block based on the live meter peak alone: on some mobile browsers AudioContext
+          // may be suspended, producing a near-zero peak even when the recorder captured valid audio.
+          // Only block if we can confirm silence by decoding the recorded blob.
+          if (peak < 0.08) silentVerdict = await isAudioLikelySilent(blob);
 
-        // Attach audio to the placeholder message and send immediately as an audio message.
-        const updated = chatMessagesRef.current.map(m => (
-          m.id === userMsgId
-            // Keep a minimal text marker so chatHistory contains this turn (LLM already listened to the audio).
-            ? { ...m, text: '（语音）', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
-            : m
-        ));
-        chatMessagesRef.current = updated;
-        setChatMessages(updated);
+          if (silentVerdict === true) {
+            try { voiceSilenceByMsgIdRef.current.set(userMsgId, true); } catch { }
+            // Remove user placeholder voice bubble.
+            const filtered = chatMessagesRef.current.filter(m => m.id !== userMsgId);
+            const aiMsg: ChatMessage = { id: `ai-${Date.now()}`, role: 'model', text: '未识别到语音内容' };
+            const next = [...filtered, aiMsg];
+            chatMessagesRef.current = next;
+            setChatMessages(next);
+            holdAwaitAudioSendRef.current = false;
+            return;
+          }
 
-        if (holdAwaitAudioSendRef.current) {
-          holdAwaitAudioSendRef.current = false;
-          (async () => {
+          // Not silent (or undetermined): proceed to attach audio + allow manual "转文字".
+          const url = URL.createObjectURL(blob);
+          const audioObj = { blob, url, mime: blob.type || mime || 'audio/webm' };
+
+          // Persist blob for "transcribe" button later (scheme A: update same message text on demand).
+          try { voiceBlobByMsgIdRef.current.set(userMsgId, { blob: audioObj.blob, mime: audioObj.mime }); } catch { }
+          try { voiceSilenceByMsgIdRef.current.set(userMsgId, false); } catch { }
+
+          // Attach audio to the placeholder message and send immediately as an audio message.
+          const updated = chatMessagesRef.current.map(m => (
+            m.id === userMsgId
+              // Keep a minimal text marker so chatHistory contains this turn (LLM already listened to the audio).
+              ? { ...m, text: '（语音）', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
+              : m
+          ));
+          chatMessagesRef.current = updated;
+          setChatMessages(updated);
+
+          if (holdAwaitAudioSendRef.current) {
+            holdAwaitAudioSendRef.current = false;
             try {
               await handleSendMessage('', { ...audioObj, duration } as any, { skipAddUserMessage: true, existingUserMessageId: userMsgId });
             } catch { }
-          })();
-        }
+          }
+        })();
       };
 
       rec.onerror = (e: any) => {
@@ -4183,9 +4218,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div className={`relative flex flex-col items-center transition-all duration-300 ${isRecording
                     ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
                     : 'relative'}`}>
-                    {/* Full-width dark gradient mask behind the hint text. Starts solid at the text level and fades out upwards. */}
+                    {/* Full-width dark gradient mask. Remains solid black up to the hint text level, then fades out upwards. */}
                     {isRecording && (
-                      <div className="absolute -left-4 -right-4 -bottom-8 h-64 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
+                      <div className="absolute -left-20 -right-20 -bottom-24 h-96 bg-gradient-to-t from-black via-black via-50% to-transparent pointer-events-none" />
                     )}
                     {isRecording && (
                       <div className={`relative z-[1] mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
@@ -4210,6 +4245,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdStartRef.current = { x: e.clientX, y: e.clientY };
                         holdStartTimeRef.current = Date.now();
                         holdCancelRef.current = false;
+                        holdVoicePeakRef.current = 0;
                         setHoldCancel(false);
                         setAudioError('');
                         // Start waveform in the user-gesture context (Android may block AudioContext otherwise).
