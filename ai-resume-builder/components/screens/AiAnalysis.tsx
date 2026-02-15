@@ -2889,10 +2889,21 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }
   };
 
-  // 当步骤发生变化时，重置聊天初始化状态
+  // 当步骤发生变化时，重置聊天初始化状态并清理录音
   useEffect(() => {
     if (currentStep !== 'chat') {
       setChatInitialized(false);
+      // Force-stop any active recording to prevent the global recording overlay
+      // (disabled text selection, hold-to-talk mask) from leaking to other pages.
+      if (isRecordingRef.current) {
+        setRecording(false);
+        holdActiveRef.current = false;
+        try {
+          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+            mediaRecorderRef.current.stop();
+          }
+        } catch { /* ignore */ }
+      }
     }
   }, [currentStep]);
 
