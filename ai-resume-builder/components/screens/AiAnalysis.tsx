@@ -3400,6 +3400,19 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     return String(unmaskedText || '').trim();
   };
 
+  // The UI renders chat text as plain text; markdown table separator rows like `|:---|:---|:---|`
+  // show up as "meaningless fields". Strip those rows for readability.
+  const stripMarkdownTableSeparators = (text: string) => {
+    const lines = String(text || '').split(/\r?\n/);
+    const isSepLine = (line: string) => {
+      const s = String(line || '').trim();
+      if (!s) return false;
+      // Matches: | --- | --- |, |:---|:---|, :---|---:, etc.
+      return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(s);
+    };
+    return lines.filter((l) => !isSepLine(l)).join('\n').trim();
+  };
+
   const handleSendMessage = async (
     textOverride?: string,
     audioOverride?: { blob: Blob; url: string; mime: string } | null,
@@ -3444,7 +3457,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     try {
       // End interview command: generate a comprehensive summary instead of continuing Q&A.
       if (!opts?.skipAddUserMessage && currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend)) {
-        const summary = await generateInterviewSummary(baseMessages);
+        const summaryRaw = await generateInterviewSummary(baseMessages);
+        const summary = stripMarkdownTableSeparators(summaryRaw);
         const aiMessage: ChatMessage = {
           id: `ai-summary-${Date.now()}`,
           role: 'model',
