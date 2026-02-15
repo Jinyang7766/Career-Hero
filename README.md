@@ -44,11 +44,11 @@ Career-Hero/
 - **TypeScript** - 类型安全的JavaScript
 - **Vite** - 快速构建工具
 - **Tailwind CSS** - 实用优先的CSS框架
-- **Google Gemini 3 Pro** - 顶尖智能分析引擎
-- **html2pdf.js** - PDF生成库
+- **Google Gemini 3** - 顶尖智能分析引擎
 
 ### 后端技术
-- **Flask 2.3.3** - 轻量级Web框架
+- **Flask 3.0** - 轻量级Web框架
+- **Playwright** - 高动态 PDF 生成引擎 (替代 html2pdf 以获得完美排版)
 - **Supabase** - 现代化数据库服务
 - **JWT认证** - 安全的用户认证
 - **Flask-CORS** - 跨域资源共享

@@ -538,10 +538,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [chatInitialized, setChatInitialized] = useState(false);
   const speechRecRef = useRef<any>(null);
   const speechStartingRef = useRef(false);
+  const speechCarryRef = useRef('');
   const speechFinalRef = useRef('');
   const speechInterimRef = useRef('');
   const speechShouldSendRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const voiceMeterStreamRef = useRef<MediaStream | null>(null);
   const audioRafRef = useRef<number | null>(null);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const toastTimerRef = useRef<number | null>(null);
@@ -549,10 +551,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const WaveformVisualizer = ({ active, cancel }: { active: boolean; cancel: boolean }) => {
     return (
-      <div className="flex items-center justify-center gap-[4px] h-12 px-4 overflow-hidden">
+      <div className="flex items-center justify-center gap-[3px] h-8 overflow-hidden">
         {visualizerData.map((val, i) => {
           // If canceled, make bars very small
-          const height = cancel ? 4 : (active ? Math.max(4, val) : 4);
+          const height = cancel ? 4 : (active ? Math.max(4, val / 1.5) : 4);
           return (
             <div
               key={i}
@@ -2256,6 +2258,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       try { cancelAnimationFrame(audioRafRef.current); } catch { }
       audioRafRef.current = null;
     }
+    if (voiceMeterStreamRef.current) {
+      try { voiceMeterStreamRef.current.getTracks().forEach(t => t.stop()); } catch { }
+      voiceMeterStreamRef.current = null;
+    }
     if (audioCtxRef.current) {
       try { audioCtxRef.current.close(); } catch { }
       audioCtxRef.current = null;
@@ -2267,8 +2273,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     cleanupVoiceMeter();
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      voiceMeterStreamRef.current = stream;
       const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return;
+      if (!AC) {
+        try { stream.getTracks().forEach(t => t.stop()); } catch { }
+        voiceMeterStreamRef.current = null;
+        return;
+      }
       const ctx = new AC();
       audioCtxRef.current = ctx;
       const source = ctx.createMediaStreamSource(stream);
@@ -2313,7 +2324,36 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     const rec = speechRecRef.current;
     if (!rec) {
+      // We may be between auto-restart runs: no active recognition instance to stop.
+      // If the user asked to send, send whatever we have buffered so far.
+      const shouldSend = !!speechShouldSendRef.current;
+      speechShouldSendRef.current = false;
       setRecording(false);
+
+      if (discard) {
+        speechCarryRef.current = '';
+        speechFinalRef.current = '';
+        speechInterimRef.current = '';
+        discardOnStopRef.current = false;
+        autoSendOnStopRef.current = false;
+        return;
+      }
+
+      if (shouldSend) {
+        const text = `${speechCarryRef.current} ${speechInterimRef.current}`.trim();
+        speechCarryRef.current = '';
+        speechFinalRef.current = '';
+        speechInterimRef.current = '';
+        discardOnStopRef.current = false;
+        autoSendOnStopRef.current = false;
+        if (!text) {
+          showToast('未识别到语音内容', 'info');
+          return;
+        }
+        try { handleSendMessage(text, null); } catch { }
+      }
+      discardOnStopRef.current = false;
+      autoSendOnStopRef.current = false;
       return;
     }
     try {
@@ -2377,9 +2417,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     const rec = new SR();
     speechRecRef.current = rec;
-    speechFinalRef.current = '';
     speechInterimRef.current = '';
-    speechShouldSendRef.current = false;
+    // Do not reset carry/shouldSend here: we may auto-restart multiple runs during one hold session.
 
     rec.lang = 'zh-CN';
     rec.interimResults = true;
@@ -2397,7 +2436,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           const res = event.results[i];
           const txt = String(res?.[0]?.transcript || '');
           if (!txt) continue;
-          if (res.isFinal) speechFinalRef.current += txt;
+          if (res.isFinal) {
+            // Accumulate across possible auto-restart runs while holding.
+            speechCarryRef.current += txt;
+            speechFinalRef.current = speechCarryRef.current;
+          }
           else interim += txt;
         }
         speechInterimRef.current = interim;
@@ -2424,6 +2467,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       setRecording(false);
       speechShouldSendRef.current = false;
+      speechCarryRef.current = '';
       speechFinalRef.current = '';
       speechInterimRef.current = '';
       try { rec.abort?.(); } catch { }
@@ -2434,15 +2478,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const shouldSend = !!speechShouldSendRef.current;
       speechShouldSendRef.current = false;
       const stillHolding = holdActiveRef.current;
+      const discard = !!discardOnStopRef.current;
+      discardOnStopRef.current = false;
 
-      const text = `${speechFinalRef.current} ${speechInterimRef.current}`.trim();
-      speechFinalRef.current = '';
+      const text = `${speechCarryRef.current} ${speechInterimRef.current}`.trim();
+      // Interim shouldn't carry across runs.
       speechInterimRef.current = '';
       speechRecRef.current = null;
+
+      if (discard) {
+        setRecording(false);
+        speechCarryRef.current = '';
+        speechFinalRef.current = '';
+        return;
+      }
 
       // When holding to talk, SpeechRecognition may end quickly (e.g. "no-speech").
       // If the user is still holding and we weren't asked to send, restart recognition.
       if (!shouldSend && stillHolding) {
+        if (text) {
+          // Preserve any interim text across restarts.
+          speechCarryRef.current = text;
+          speechFinalRef.current = text;
+        }
         // Keep UI in "recording" state during auto-restart to prevent flicker.
         setRecording(true);
         const token = holdSessionRef.current;
@@ -2458,13 +2516,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
 
       setRecording(false);
+      if (!shouldSend) {
+        // Avoid leaking transcript into the next run/session when nothing should be sent.
+        speechCarryRef.current = '';
+        speechFinalRef.current = '';
+        return;
+      }
       if (!text) {
         showToast('未识别到语音内容', 'info');
+        speechCarryRef.current = '';
+        speechFinalRef.current = '';
         return;
       }
 
       // Send as plain text (do NOT send audio to the LLM).
       try { handleSendMessage(text, null); } catch { }
+      speechCarryRef.current = '';
+      speechFinalRef.current = '';
     };
 
     try {
@@ -3786,30 +3854,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Voice hold overlay */}
-        {inputMode === 'voice' && isRecording && (
-          <div className="fixed inset-x-0 bottom-[140px] z-[200] flex flex-col items-center justify-center px-8 pointer-events-none mb-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {/* Status Text */}
-            <div className={`mb-8 px-4 py-1.5 rounded-full backdrop-blur-md text-[14px] font-bold tracking-wide transition-all ${holdCancel
-              ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-              : 'bg-black/20 text-slate-800 dark:text-slate-400'
-              }`}>
-              {holdCancel ? '松手取消' : '松手发送 上移取消'}
-            </div>
-
-            {/* Waveform Visualization Box */}
-            <div className={`w-full max-w-[340px] h-[80px] rounded-[40px] flex items-center justify-center transition-all duration-300 shadow-2xl relative overflow-hidden ring-4 ring-white/10 ${holdCancel
-              ? 'bg-[#f85149] scale-105'
-              : 'bg-[#217aff] scale-100'
-              }`}>
-              <div className="flex items-center justify-center gap-[4px]">
-                <WaveformVisualizer active={isRecording && !holdCancel} cancel={holdCancel} />
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none" />
-            </div>
-          </div>
-        )}
-
         {/* Input Area */}
         <div
           ref={inputBarRef}
@@ -3844,71 +3888,95 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               </button>
 
               {inputMode === 'voice' ? (
-                <button
-                  onPointerDown={(e) => {
-                    setMode('voice');
-                    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
-                    holdActiveRef.current = true;
-                    holdSessionRef.current += 1;
-                    const token = holdSessionRef.current;
-                    holdStartRef.current = { x: e.clientX, y: e.clientY };
-                    holdCancelRef.current = false;
-                    setHoldCancel(false);
-                    setAudioError('');
-                    startRecording(token);
-                  }}
+                <div className="flex-1 relative flex flex-col items-center">
+                  {isRecording && (
+                    <div className={`absolute bottom-full mb-3 px-3 py-1.5 rounded-full backdrop-blur-md text-[13px] font-bold tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
+                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
+                      : 'bg-black/60 text-white shadow-lg shadow-black/10'
+                      }`}>
+                      {holdCancel ? '松手取消' : '松手发送 上移取消'}
+                    </div>
+                  )}
+                  <button
+                    onPointerDown={(e) => {
+                      setMode('voice');
+                      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
+                      holdActiveRef.current = true;
+                      holdSessionRef.current += 1;
+                      const token = holdSessionRef.current;
+                      // New hold session: reset buffered transcript and sending intent.
+                      speechCarryRef.current = '';
+                      speechFinalRef.current = '';
+                      speechInterimRef.current = '';
+                      speechShouldSendRef.current = false;
+                      holdStartRef.current = { x: e.clientX, y: e.clientY };
+                      holdCancelRef.current = false;
+                      setHoldCancel(false);
+                      setAudioError('');
+                      startRecording(token);
+                    }}
                   onPointerMove={(e) => {
-                    const start = holdStartRef.current;
-                    if (!start) return;
-                    const dy = start.y - e.clientY;
-                    const cancel = dy > 90;
+                    if (!holdStartRef.current) return;
+
+                    // Only enter "cancel" state when the finger slides OUT of the button area
+                    // and sufficiently upward. Small movements within the button should never
+                    // flip to cancel.
+                    const el = e.currentTarget as HTMLElement;
+                    const rect = el.getBoundingClientRect();
+                    const insideX = e.clientX >= rect.left && e.clientX <= rect.right;
+                    const insideY = e.clientY >= rect.top && e.clientY <= rect.bottom;
+                    const startY = holdStartRef.current.y;
+                    const dy = startY - e.clientY; // positive when moving up
+                    const screenDy = typeof window !== 'undefined' ? window.innerHeight / 3 : 240;
+                    const cancelThreshold = Math.max(120, Math.floor(screenDy));
+                    const cancel = (insideX && insideY) ? false : (dy > cancelThreshold);
                     if (cancel !== holdCancelRef.current) {
                       holdCancelRef.current = cancel;
                       setHoldCancel(cancel);
                     }
                   }}
-                  onPointerUp={(e) => {
-                    try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-                    const cancel = holdCancelRef.current;
-                    holdActiveRef.current = false;
-                    holdStartRef.current = null;
-                    holdCancelRef.current = false;
-                    setHoldCancel(false);
-                    if (!isRecording) return;
-                    stopRecording({ discard: cancel, autoSend: !cancel });
-                  }}
-                  onPointerCancel={(e) => {
-                    try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-                    holdActiveRef.current = false;
-                    holdStartRef.current = null;
-                    holdCancelRef.current = false;
-                    setHoldCancel(false);
-                    if (!isRecording) return;
-                    stopRecording({ discard: true, autoSend: false });
-                  }}
-                  onContextMenu={(e) => e.preventDefault()}
-                  disabled={!audioSupported || isSending}
-                  className={`flex-1 h-[46px] rounded-2xl px-4 flex items-center justify-center border transition-all select-none font-bold text-[15px] ${isRecording
-                    ? (holdCancel
-                      ? 'bg-[#f85149] text-white border-[#f85149] shadow-lg shadow-red-500/20'
-                      : 'bg-[#217aff] text-white border-[#217aff] shadow-lg shadow-primary/30')
-                    : 'bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
-                    } disabled:opacity-50 active:scale-[0.98]`}
-                  type="button"
-                >
-                  {isRecording ? (holdCancel ? '松手取消' : '松手发送') : '按住 说话'}
-                </button>
+                    onPointerUp={(e) => {
+                      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                      const cancel = holdCancelRef.current;
+                      holdActiveRef.current = false;
+                      holdStartRef.current = null;
+                      holdCancelRef.current = false;
+                      setHoldCancel(false);
+                      stopRecording({ discard: cancel, autoSend: !cancel });
+                    }}
+                    onPointerCancel={(e) => {
+                      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                      holdActiveRef.current = false;
+                      holdStartRef.current = null;
+                      holdCancelRef.current = false;
+                      setHoldCancel(false);
+                      stopRecording({ discard: true, autoSend: false });
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
+                    disabled={!audioSupported || isSending}
+                    className={`w-full h-[46px] rounded-2xl flex items-center justify-center border transition-all select-none font-bold text-[15px] overflow-hidden ${isRecording
+                      ? (holdCancel
+                        ? 'bg-[#f85149] text-white border-[#f85149] shadow-lg shadow-red-500/20'
+                        : 'bg-[#217aff] text-white border-[#217aff] shadow-lg shadow-primary/30')
+                      : 'bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
+                      } disabled:opacity-50 active:scale-[0.98]`}
+                    type="button"
+                  >
+                    {isRecording ? (
+                      <div className="flex items-center justify-center w-full px-4">
+                        <WaveformVisualizer active={isRecording && !holdCancel} cancel={holdCancel} />
+                      </div>
+                    ) : (
+                      '按住 说话'
+                    )}
+                  </button>
+                </div>
               ) : (
                 <>
                   <textarea
                     ref={textareaRef}
                     value={inputMessage}
-                    onChange={(e) => {
-                      setInputMessage(e.target.value);
-                    }}
-                    onBlur={() => {
-                      // Handled manually by user if needed
-                    }}
+                    onChange={(e) => setInputMessage(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -3941,4 +4009,3 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 };
 
 export default AiAnalysis;
-
