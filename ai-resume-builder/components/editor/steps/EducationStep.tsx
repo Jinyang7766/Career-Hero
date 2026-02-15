@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { ResumeData, ExperienceItem } from '../../../types';
+import { ResumeData, Education } from '../../../types';
 
 type EducationStepProps = {
   resumeData: ResumeData;
@@ -7,7 +7,7 @@ type EducationStepProps = {
   wizardMode: boolean;
   onAdd: () => void;
   onRemove: (id: number) => void;
-  onUpdate: (id: number, field: keyof ExperienceItem, value: string) => void;
+  onUpdate: (id: number, field: keyof Education, value: string) => void;
   showValidation?: boolean;
 };
 

@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from 'react';
-import { View, ScreenProps, ResumeData, ExperienceItem } from '../../types';
+import { View, ScreenProps, ResumeData, WorkExperience, Education, Project } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
@@ -532,11 +532,16 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
     }));
   };
 
+  type EditableSection = 'workExps' | 'educations' | 'projects';
+  type ItemBySection = { workExps: WorkExperience; educations: Education; projects: Project };
+
   // Helper for updating fields in array items
-  const updateItem = (section: 'workExps' | 'educations' | 'projects', id: number, field: keyof ExperienceItem, value: string) => {
+  const updateItem = <S extends EditableSection>(section: S, id: number, field: keyof ItemBySection[S], value: string) => {
     setResumeData(prev => ({
       ...prev,
-      [section]: prev[section].map(item => item.id === id ? { ...item, [field]: value } : item)
+      [section]: (prev[section] as Array<ItemBySection[S]>).map(item =>
+        item.id === id ? ({ ...item, [field]: value } as ItemBySection[S]) : item
+      ),
     }));
   };
 

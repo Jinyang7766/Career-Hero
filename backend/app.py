@@ -3464,14 +3464,17 @@ def ai_chat(current_user_id):
 """
                 else:
                     prompt = f"""
-【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
-禁止提及任何评分，禁止给出建议，保持面试官角色。
-职位描述：{job_description if job_description else '未提供'}
-简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
-对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
-候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
-请直接输出面试官回答：简短点评 + 下一道具体问题。
-"""
+ 【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
+ 禁止提及任何评分，禁止给出建议，保持面试官角色。
+ 规则：
+ - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
+ - 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
+ 职位描述：{job_description if job_description else '未提供'}
+ 简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
+ 对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
+ 候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
+ 请直接输出面试官回答：简短点评 + 下一道具体问题。
+ """
                 contents = prompt
                 if has_audio and mode != 'interview_summary':
                     try:

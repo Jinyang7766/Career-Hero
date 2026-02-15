@@ -18,6 +18,7 @@ export interface ChatMessage {
   text: string;
   audioUrl?: string;
   audioMime?: string;
+  audioDuration?: number;
+  audioPending?: boolean;
   suggestion?: Suggestion;
 }
-
