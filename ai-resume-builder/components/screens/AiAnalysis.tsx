@@ -4398,7 +4398,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               )}
             </div>
             {/* AI Generation Disclaimer - Hidden when keyboard is up or input is focused */}
-            {keyboardOffset < 20 && !isInputFocused && (
+            {keyboardOffset < 60 && !isInputFocused && (
               <div className="mt-2 text-center animate-in fade-in duration-300">
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium opacity-80">
                   内容由AI生成，请注意核实
