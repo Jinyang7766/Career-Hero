@@ -408,9 +408,22 @@ function App() {
     }
     if (view === View.AI_ANALYSIS) {
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
-      // Only reset if user has not started any AI assistant flow yet
+      // If user has active progress, restore them to the last step via sub-route URL.
+      // The AiAnalysis component derives its initial step from the URL, so navigating
+      // to the correct sub-route keeps everything in sync without flash.
       const hasActivity = localStorage.getItem('ai_analysis_has_activity') === '1';
-      if (!hasActivity) {
+      if (hasActivity) {
+        const savedStep = localStorage.getItem('ai_analysis_step');
+        const stepToPath: Record<string, string> = {
+          'jd_input': '/ai-analysis/jd',
+          'report': '/ai-analysis/report',
+          'chat': '/ai-analysis/chat',
+          'comparison': '/ai-analysis/comparison',
+        };
+        const targetPath = (savedStep && stepToPath[savedStep]) || '/ai-analysis';
+        navigate(targetPath, { replace: true });
+        return;
+      } else {
         localStorage.removeItem('ai_analysis_step');
         localStorage.removeItem('ai_analysis_in_progress');
       }
