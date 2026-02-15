@@ -4070,12 +4070,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     </div>
                   )}
 
-                  {/* Transcribed text (one grey line under voice bubble; not a separate bubble) */}
+                  {/* Transcribed text bubble (WeChat style) */}
                   {msg.role === 'user' && (msg.audioUrl || msg.audioPending) && (msg.text && msg.text.trim() !== '' && msg.text !== '（语音）') && (
-                    <div className={`text-[12px] leading-snug text-slate-500 dark:text-slate-400 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
-                      {msg.text.replace(/[【\[（]\s*$/, '').trim()}
+                    <div className="flex flex-col items-end animate-in fade-in slide-in-from-top-1 duration-200 drop-shadow-sm">
+                      <div className="px-4 py-2.5 bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-lg text-[15px] leading-relaxed shadow-sm max-w-full break-words">
+                        {msg.text.replace(/[【\[（]\s*$/, '').trim()}
+                      </div>
                     </div>
                   )}
+
 
                   {/* Text Message Bubble (WeChat style) */}
                   {(msg.text && msg.text !== '（语音）' && msg.text.trim() !== '' && !(msg.role === 'user' && (msg.audioUrl || msg.audioPending))) && (
