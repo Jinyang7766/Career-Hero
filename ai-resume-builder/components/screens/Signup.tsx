@@ -19,13 +19,13 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
 
     try {
       console.log('Attempting signup with:', { email, name });
-      
+
       // 使用AuthService进行注册
       const result = await AuthService.signUp(email, password, name);
-      
+
       if (!result.success) {
         console.error('Signup failed:', result.error);
-        
+
         // 显示具体错误原因
         let errorMessage = '注册失败';
         if (result.error?.message?.includes('User already registered')) {
@@ -41,20 +41,20 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
         } else {
           errorMessage = `注册失败: ${result.error?.message || '未知错误'}`;
         }
-        
+
         setError(errorMessage);
         return;
       }
 
       console.log('Signup successful:', result.data);
-      
+
       if (result.data?.user) {
         // 注册成功，但可能需要邮箱验证
         if (result.data.session) {
           // 直接登录成功
           localStorage.setItem('supabase_session', JSON.stringify(result.data.session));
           localStorage.setItem('user', JSON.stringify(result.data.user));
-          
+
           console.log('Signup and login successful:', result.data.user);
           if (onLogin) onLogin(result.data.user);
         } else {
@@ -85,14 +85,14 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
       <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-8 relative">
         <div className="absolute top-0 right-0 p-4 z-20">
-            <button 
-              onClick={() => setCurrentView(View.LOGIN)}
-              className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
-            >
-                登录
-            </button>
+          <button
+            onClick={() => setCurrentView(View.LOGIN)}
+            className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
+          >
+            登录
+          </button>
         </div>
-        
+
         <div className="sm:mx-auto sm:w-full sm:max-w-sm z-10">
           <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
             <span className="material-symbols-outlined text-[28px]">person_add</span>
@@ -156,17 +156,20 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
               </div>
               <p className="mt-1 text-xs text-slate-500">密码长度至少 8 位，包含字母和数字。</p>
             </div>
-            
+
             <div className="flex items-center gap-2">
-                <input id="terms" type="checkbox" className="w-4 h-4 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5" required />
-                <label htmlFor="terms" className="text-xs text-slate-500 dark:text-slate-400">
-                    我已阅读并同意 <a href="#" className="text-primary hover:underline">服务条款</a> 和 <a href="#" className="text-primary hover:underline">隐私政策</a>
-                </label>
+              <input id="terms" type="checkbox" className="w-4 h-4 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5" required />
+              <label htmlFor="terms" className="text-xs text-slate-500 dark:text-slate-400">
+                我已阅读并同意 <a href="#" className="text-primary hover:underline">服务条款</a> 和 <a href="#" className="text-primary hover:underline">隐私政策</a>
+              </label>
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <div className="mb-4 flex items-center gap-3 p-4 bg-red-500/80 backdrop-blur-md border border-red-400/30 rounded-2xl shadow-lg shadow-red-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="size-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-white text-[16px]">error</span>
+                </div>
+                <p className="text-sm text-white font-bold leading-tight">{error}</p>
               </div>
             )}
 

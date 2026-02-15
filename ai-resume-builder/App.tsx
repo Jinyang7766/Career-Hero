@@ -503,19 +503,20 @@ function App() {
 
   const ToastOverlay = () => {
     if (!toast) return null;
-    const cls =
-      toast.type === 'success'
-        ? 'bg-emerald-600/95 text-white'
-        : toast.type === 'error'
-          ? 'bg-rose-600/95 text-white'
-          : 'bg-slate-900/90 text-white';
+    // 使用磨砂红色 (Frosted Red: translucent red + backdrop blur)
+    const cls = 'bg-red-500/85 backdrop-blur-xl text-white border-red-400/30';
 
     return (
       <div className="fixed inset-x-0 top-3 z-[9999] flex justify-center px-4 pointer-events-none">
-        <div className={`pointer-events-auto w-full max-w-[520px] rounded-2xl shadow-lg border border-white/10 ${cls}`}>
-          <div className="px-4 py-3">
-            <div className="text-[12px] font-semibold opacity-90">Career Hero</div>
-            <div className="mt-0.5 text-[14px] leading-snug">{toast.msg}</div>
+        <div className={`pointer-events-auto w-full max-w-[480px] rounded-3xl shadow-2xl shadow-red-500/40 border ${cls} animate-in slide-in-from-top duration-300`}>
+          <div className="px-5 py-4 flex items-center gap-3">
+            <div className="size-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[20px]">notifications</span>
+            </div>
+            <div className="flex-1">
+              <div className="text-[10px] uppercase tracking-widest font-black opacity-60 leading-none mb-1">System</div>
+              <div className="text-[14px] leading-snug font-bold">{toast.msg}</div>
+            </div>
           </div>
         </div>
       </div>
@@ -533,25 +534,30 @@ function App() {
       setConfirmState(null);
     };
     return (
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center px-5">
-        <div className="absolute inset-0 bg-black/60" onClick={onCancel} />
-        <div className="relative w-full max-w-[520px] rounded-2xl border border-white/10 bg-[#0b1220] text-white shadow-2xl">
-          <div className="px-5 pt-4 pb-3">
-            <div className="text-[13px] font-semibold opacity-90">Career Hero</div>
-            <div className="mt-2 text-[15px] leading-relaxed whitespace-pre-wrap">{confirmState.message}</div>
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center px-6">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" onClick={onCancel} />
+        <div className="relative w-full max-w-[360px] rounded-[32px] border border-red-400/30 bg-red-500/90 backdrop-blur-2xl text-white shadow-2xl p-8 animate-in zoom-in-95 duration-200">
+          <div className="flex flex-col items-center text-center gap-4">
+            <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
+              <span className="material-symbols-outlined text-white text-[32px]">warning</span>
+            </div>
+            <h3 className="text-xl font-bold tracking-tight">确认操作</h3>
+            <p className="text-sm text-white/90 leading-relaxed font-medium mb-2">
+              {confirmState.message}
+            </p>
           </div>
-          <div className="px-5 pb-4 flex gap-3 justify-end">
-            <button
-              onClick={onCancel}
-              className="h-10 px-4 rounded-xl bg-white/10 hover:bg-white/15 transition-colors text-[14px]"
-            >
-              取消
-            </button>
+          <div className="mt-8 flex flex-col gap-3">
             <button
               onClick={onOk}
-              className="h-10 px-4 rounded-xl bg-primary hover:bg-primary/90 transition-colors text-[14px] font-semibold"
+              className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
             >
-              确认
+              确定
+            </button>
+            <button
+              onClick={onCancel}
+              className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
+            >
+              取消
             </button>
           </div>
         </div>

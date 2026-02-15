@@ -589,17 +589,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const ToastOverlay = () => {
     if (!toast) return null;
-    const tone =
-      toast.type === 'success'
-        ? 'bg-emerald-600/95 text-white'
-        : toast.type === 'error'
-          ? 'bg-rose-600/95 text-white'
-          : 'bg-slate-900/90 text-white';
+    // 使用磨砂红色 (Frosted Red: translucent red + backdrop blur)
+    const tone = 'bg-red-500/80 backdrop-blur-md text-white border-red-400/30';
     return (
       <div className="fixed left-1/2 top-16 -translate-x-1/2 z-[220] px-4 pointer-events-none">
-        <div className={`pointer-events-auto max-w-[90vw] rounded-2xl px-4 py-3 shadow-lg border border-white/10 ${tone}`}>
-          <div className="text-[12px] font-semibold opacity-90">Career Hero</div>
-          <div className="mt-0.5 text-[14px] leading-snug font-semibold">{toast.msg}</div>
+        <div className={`pointer-events-auto max-w-[90vw] rounded-2xl px-5 py-3 shadow-xl shadow-red-500/20 border ${tone}`}>
+          <div className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-0.5 whitespace-nowrap">Notification</div>
+          <div className="text-[14px] leading-snug font-bold">{toast.msg}</div>
         </div>
       </div>
     );
@@ -3433,30 +3429,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           </div>
 
           {showJdEmptyModal && (
-            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 px-6">
-              <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-[#324d67] shadow-xl p-6">
-                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 mb-2">
-                  <span className="material-symbols-outlined">warning</span>
-                  <h3 className="text-base font-semibold">未填写职位描述</h3>
+            <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
+              <div className="w-full max-w-sm rounded-[32px] bg-red-500/90 backdrop-blur-xl border border-red-400/30 shadow-2xl p-8 text-white animate-in zoom-in-95 duration-200">
+                <div className="flex flex-col items-center text-center gap-4">
+                  <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
+                    <span className="material-symbols-outlined text-white text-[32px]">warning</span>
+                  </div>
+                  <h3 className="text-xl font-bold tracking-tight">如果您未填写职位描述</h3>
+                  <p className="text-sm text-white/90 leading-relaxed font-medium">
+                    分析结果将基于通用简历优化逻辑，无法进行岗位定向匹配。是否坚持继续？
+                  </p>
                 </div>
-                <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  当前未填写 JD，分析结果将基于通用简历优化逻辑，无法进行岗位定向匹配。是否继续？
-                </p>
-                <div className="mt-5 flex gap-3">
-                  <button
-                    onClick={() => setShowJdEmptyModal(false)}
-                    className="flex-1 rounded-xl border border-slate-300 dark:border-slate-600 py-2.5 text-slate-700 dark:text-slate-200 font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-all"
-                  >
-                    去填写JD
-                  </button>
+                <div className="mt-8 flex flex-col gap-3">
                   <button
                     onClick={() => {
                       setShowJdEmptyModal(false);
                       startAnalysis();
                     }}
-                    className="flex-1 rounded-xl bg-primary text-white py-2.5 font-semibold hover:bg-blue-600 transition-all"
+                    className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
                   >
-                    继续分析
+                    坚持继续分析
+                  </button>
+                  <button
+                    onClick={() => setShowJdEmptyModal(false)}
+                    className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
+                  >
+                    返回填写 JD
                   </button>
                 </div>
               </div>
@@ -3909,11 +3907,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         >
           <div className="max-w-md mx-auto">
             {audioError && (
-              <div className="mb-3 flex items-center justify-between gap-2 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20 px-3 py-2 animate-in fade-in slide-in-from-bottom-2">
-                <span className="material-symbols-outlined text-red-500 text-[18px]">error</span>
-                <p className="flex-1 text-xs text-red-600 dark:text-red-400 font-medium">{audioError}</p>
-                <button onClick={() => setAudioError('')} className="p-1 rounded-full hover:bg-black/5 dark:hover:bg-white/5">
-                  <span className="material-symbols-outlined text-[16px]">close</span>
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-xl bg-red-500/80 backdrop-blur-md border border-red-400/30 px-4 py-3 animate-in fade-in slide-in-from-bottom-2 shadow-lg shadow-red-500/10">
+                <div className="size-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-white text-[16px]">error</span>
+                </div>
+                <p className="flex-1 text-xs text-white font-bold">{audioError}</p>
+                <button onClick={() => setAudioError('')} className="p-1 rounded-full hover:bg-white/10 transition-colors">
+                  <span className="material-symbols-outlined text-white text-[18px]">close</span>
                 </button>
               </div>
             )}
@@ -3936,12 +3936,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 <div className="flex-1 relative">
                   {/* Local Gradient Overlay */}
                   {isRecording && (
-                    <div className="fixed inset-0 z-[-1] bg-gradient-to-t from-black/80 via-black/40 to-transparent animate-in fade-in duration-300 pointer-events-none" />
+                    <div className="fixed inset-0 z-[105] bg-gradient-to-t from-black/80 via-black/40 to-transparent animate-in fade-in duration-300 pointer-events-none" />
                   )}
 
-                  <div className={`flex flex-col items-center transition-all duration-300 ${isRecording ? 'relative z-[110]' : ''}`}>
+                  <div className={`flex flex-col items-center transition-all duration-300 ${isRecording
+                    ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
+                    : 'relative'}`}>
                     {isRecording && (
-                      <div className={`mb-6 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
+                      <div className={`mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
                         ? 'text-red-500'
                         : 'text-slate-400'
                         }`}>
@@ -4008,8 +4010,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                       disabled={!audioSupported || isSending}
                       className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
                         ? (holdCancel
-                          ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
-                          : 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]')
+                          ? 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
+                          : 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]')
                         : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
                         } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
                       type="button"

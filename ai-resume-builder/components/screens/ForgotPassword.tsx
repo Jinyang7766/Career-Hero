@@ -18,7 +18,7 @@ const ForgotPassword: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
   return (
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
       <div className="flex items-center p-4">
-        <button 
+        <button
           onClick={goBack}
           className="flex size-10 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white"
         >
@@ -68,20 +68,20 @@ const ForgotPassword: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
               </button>
             </form>
           ) : (
-            <div className="bg-green-50 dark:bg-green-500/10 border border-green-200 dark:border-green-500/20 rounded-xl p-4 flex flex-col items-center text-center animate-in zoom-in-95 duration-300">
-                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 flex items-center justify-center mb-3">
-                    <span className="material-symbols-outlined">check</span>
-                </div>
-                <h3 className="text-green-800 dark:text-green-400 font-bold mb-1">邮件已发送</h3>
-                <p className="text-sm text-green-700 dark:text-green-500/80 mb-4">
-                    请检查您的收件箱，按照说明重置密码。
-                </p>
-                <button 
-                    onClick={() => setCurrentView(View.LOGIN)}
-                    className="text-sm font-semibold text-green-700 dark:text-green-400 hover:underline"
-                >
-                    返回登录
-                </button>
+            <div className="bg-red-500/80 backdrop-blur-md border border-red-400/30 rounded-2xl p-6 flex flex-col items-center text-center animate-in zoom-in-95 duration-300 shadow-xl shadow-red-500/10">
+              <div className="h-12 w-12 rounded-full bg-white/20 text-white flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-[28px]">check</span>
+              </div>
+              <h3 className="text-white font-black text-lg mb-1 tracking-tight">邮件已发送</h3>
+              <p className="text-sm text-white/90 font-medium mb-6 leading-relaxed">
+                请检查您的收件箱，按照说明重置密码。
+              </p>
+              <button
+                onClick={() => setCurrentView(View.LOGIN)}
+                className="w-full py-3 rounded-xl bg-white text-red-600 font-bold hover:bg-white/90 transition-all active:scale-[0.98] shadow-lg"
+              >
+                返回登录
+              </button>
             </div>
           )}
         </div>

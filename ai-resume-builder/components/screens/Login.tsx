@@ -18,7 +18,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
 
     try {
       console.log('Attempting login with:', { email });
-      
+
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -32,7 +32,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
           status: error.status,
           code: error.code
         });
-        
+
         // 显示具体错误原因
         let errorMessage = '登录失败';
         if (error.message.includes('Invalid login credentials')) {
@@ -44,7 +44,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
         } else {
           errorMessage = `登录失败: ${error.message}`;
         }
-        
+
         setError(errorMessage);
         return;
       }
@@ -53,9 +53,9 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
         // Store user session
         localStorage.setItem('supabase_session', JSON.stringify(data.session));
         localStorage.setItem('user', JSON.stringify(data.user));
-        
+
         console.log('Login successful:', data.user);
-        
+
         // Login successful
         if (onLogin) onLogin(data.user);
       }
@@ -111,7 +111,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
                   密码
                 </label>
                 <div className="text-sm">
-                  <button 
+                  <button
                     type="button"
                     onClick={() => setCurrentView(View.FORGOT_PASSWORD)}
                     className="font-semibold text-primary hover:text-primary/80 transition-colors"
@@ -134,8 +134,11 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+              <div className="mb-4 flex items-center gap-3 p-4 bg-red-500/80 backdrop-blur-md border border-red-400/30 rounded-2xl shadow-lg shadow-red-500/10 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="size-6 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-white text-[16px]">error</span>
+                </div>
+                <p className="text-sm text-white font-bold leading-tight">{error}</p>
               </div>
             )}
 
@@ -172,8 +175,8 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
             <div className="mt-6 grid grid-cols-2 gap-4">
               <button className="flex w-full items-center justify-center gap-3 rounded-xl bg-white dark:bg-white/5 px-3 py-2.5 text-sm font-semibold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
                 <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                  <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/>
-                  <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z"/>
+                  <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                  <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z" />
                 </svg>
                 <span className="text-sm">微信</span>
               </button>
@@ -186,7 +189,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
 
           <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             还没有账号？{' '}
-            <button 
+            <button
               onClick={() => setCurrentView(View.SIGNUP)}
               className="font-semibold leading-6 text-primary hover:text-blue-500 transition-colors"
             >
