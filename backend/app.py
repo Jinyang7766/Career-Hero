@@ -3342,6 +3342,7 @@ def parse_screenshot(current_user_id):
 def ai_chat(current_user_id):
     try:
         data = request.get_json()
+        mode = (data.get('mode') or '').strip().lower()
         message = data.get('message', '')
         audio = data.get('audio')
         resume_data = data.get('resumeData')
@@ -3354,7 +3355,12 @@ def ai_chat(current_user_id):
         if (not message) and (not has_audio):
             return jsonify({'error': '消息内容不能为空'}), 400
 
-        clean_message = message.replace('[INTERVIEW_MODE]', '').strip()
+        clean_message = (
+            message
+            .replace('[INTERVIEW_MODE]', '')
+            .replace('[INTERVIEW_SUMMARY]', '')
+            .strip()
+        )
 
         if gemini_client and check_gemini_quota():
             try:
@@ -3365,7 +3371,27 @@ def ai_chat(current_user_id):
                     if msg_text and not msg_text.startswith('SYSTEM_'):
                         formatted_chat += f"{role}: {msg_text}\n"
 
-                prompt = f"""
+                if mode == 'interview_summary':
+                    prompt = f"""
+【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
+要求：
+- 用中文输出；不要提出下一题。
+- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 输出结构：
+1) 综合评价（3-5句）
+2) 表现亮点（3-6条）
+3) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
+4) JD 匹配度与缺口（分点说明）
+5) 简历可改进点（3-6条，针对表达与证据补强）
+6) 1-2 周训练计划（按天/按主题）
+
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
+对话记录：{formatted_chat if formatted_chat else '无'}
+候选人结束指令：{clean_message if clean_message else '（无）'}
+"""
+                else:
+                    prompt = f"""
 【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
 禁止提及任何评分，禁止给出建议，保持面试官角色。
 职位描述：{job_description if job_description else '未提供'}
@@ -3375,7 +3401,7 @@ def ai_chat(current_user_id):
 请直接输出面试官回答：简短点评 + 下一道具体问题。
 """
                 contents = prompt
-                if has_audio:
+                if has_audio and mode != 'interview_summary':
                     try:
                         from base64 import b64decode
                         mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
@@ -3463,8 +3489,9 @@ def ai_transcribe(current_user_id):
         prompt = f"""
 你是语音转文字引擎。请将用户的语音内容转写为纯文本。
 要求：
-- 只输出转写文本，不要解释，不要加标点说明标签。
-- 如有明显口头语可适度保留；如听不清请尽量根据上下文推断，不要输出“听不清/无法识别”。
+- 只输出转写文本，不要解释，不要加任何标签或前后缀。
+- 不要编造、不要根据上下文猜测未明确听到的内容。
+- 如果音频中没有清晰可辨的语音，或无法确定具体文字，请返回空字符串。
 - 语言：{lang}
 """
         contents = [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)]

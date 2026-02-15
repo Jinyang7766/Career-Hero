@@ -549,6 +549,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const holdAwaitAudioSendRef = useRef(false);
   const voicePendingUserMsgIdRef = useRef<string | null>(null);
   const voiceBlobByMsgIdRef = useRef<Map<string, { blob: Blob; mime: string }>>(new Map());
+  const voiceSilenceByMsgIdRef = useRef<Map<string, boolean>>(new Map());
   const [transcribingByMsgId, setTranscribingByMsgId] = useState<Record<string, boolean>>({});
   const [chatInitialized, setChatInitialized] = useState(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -636,12 +637,94 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     return String(json?.text || '').trim();
   };
 
+  const isAudioLikelySilent = async (blob: Blob): Promise<boolean | null> => {
+    // Returns:
+    // - true: very likely silence
+    // - false: likely has meaningful audio energy
+    // - null: can't determine (format decode not supported etc.)
+    try {
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return null;
+
+      const buf = await blob.arrayBuffer();
+      const ctx: AudioContext = new AC();
+      try { await (ctx as any).resume?.(); } catch { }
+
+      // Some browsers require the buffer to be detached from the original.
+      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
+        try {
+          const ab = buf.slice(0);
+          ctx.decodeAudioData(
+            ab,
+            (decoded) => resolve(decoded),
+            (err) => reject(err)
+          );
+        } catch (e) {
+          reject(e);
+        }
+      });
+
+      const ch = audioBuffer.numberOfChannels || 1;
+      const len = audioBuffer.length || 0;
+      if (!len) {
+        try { ctx.close(); } catch { }
+        return true;
+      }
+
+      // Compute RMS and peak across channels with light subsampling for speed.
+      const step = Math.max(1, Math.floor(len / 48000)); // ~1s worth of samples max
+      let sumSq = 0;
+      let count = 0;
+      let peak = 0;
+      for (let c = 0; c < ch; c++) {
+        const data = audioBuffer.getChannelData(c);
+        for (let i = 0; i < len; i += step) {
+          const v = data[i] || 0;
+          const av = Math.abs(v);
+          if (av > peak) peak = av;
+          sumSq += v * v;
+          count++;
+        }
+      }
+      const rms = Math.sqrt(sumSq / Math.max(1, count));
+
+      try { ctx.close(); } catch { }
+
+      // Heuristics:
+      // - Very low RMS and low peak => likely silence (or near silence).
+      // Thresholds are conservative to avoid false "silent" on quiet speech.
+      const silent = (rms < 0.006) && (peak < 0.03);
+      return silent;
+    } catch {
+      return null;
+    }
+  };
+
   const transcribeExistingVoiceMessage = async (msgId: string) => {
     if (transcribingByMsgId[msgId]) return;
     const audio = voiceBlobByMsgIdRef.current.get(msgId);
     if (!audio?.blob) {
       showToast('该语音无法转写（可能已过期），请重新发送', 'info');
       return;
+    }
+
+    // Frontend silence detection: if likely silent, do not call backend AI transcribe.
+    const cachedSilent = voiceSilenceByMsgIdRef.current.get(msgId);
+    if (cachedSilent === true) {
+      showToast('未识别到语音内容', 'info');
+      return;
+    }
+    if (cachedSilent === undefined) {
+      const verdict = await isAudioLikelySilent(audio.blob);
+      if (verdict === true) {
+        try { voiceSilenceByMsgIdRef.current.set(msgId, true); } catch { }
+        showToast('未识别到语音内容', 'info');
+        return;
+      }
+      if (verdict === false) {
+        try { voiceSilenceByMsgIdRef.current.set(msgId, false); } catch { }
+      }
+      // verdict === null => can't determine, fall through to backend.
     }
 
     setTranscribingByMsgId(prev => ({ ...prev, [msgId]: true }));
@@ -2492,7 +2575,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         // Attach audio to the placeholder message and send immediately as an audio message.
         const updated = chatMessagesRef.current.map(m => (
           m.id === userMsgId
-            ? { ...m, text: '', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
+            // Keep a minimal text marker so chatHistory contains this turn (LLM already listened to the audio).
+            ? { ...m, text: '（语音）', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
             : m
         ));
         chatMessagesRef.current = updated;
@@ -2883,6 +2967,78 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       reader.readAsDataURL(blob);
     });
 
+  const isEndInterviewCommand = (text: string) => {
+    const t = String(text || '').trim().toLowerCase();
+    if (!t) return false;
+    const hits = [
+      '结束面试',
+      '面试结束',
+      '结束',
+      '结束了',
+      '结束吧',
+      'stop',
+      'end',
+      'finish',
+    ];
+    return hits.some(k => t === k || t.includes(k));
+  };
+
+  const generateInterviewSummary = async (baseMessages: ChatMessage[]) => {
+    const token = await getBackendAuthToken();
+    if (!token) throw new Error('请先登录以使用 AI 功能');
+
+    const apiEndpoint = buildApiUrl('/api/ai/chat');
+    const masker = createMasker();
+    const maskedResumeData = masker.maskObject(resumeData);
+    const maskedJdText = masker.maskText(jdText || '');
+    const maskedChatHistory = (baseMessages || []).map((m) => ({
+      ...m,
+      text: masker.maskText(m.text || '')
+    }));
+
+    const summaryPrompt = masker.maskText(
+      `[INTERVIEW_SUMMARY]\n请基于候选人简历、职位描述（JD）与完整对话记录，输出一份“面试综合分析”。\n` +
+      `要求：\n` +
+      `- 用中文输出。\n` +
+      `- 不要提出下一题。\n` +
+      `- 重点结合：回答质量（结构、深度、证据、数据/影响）、简历内容匹配度、JD匹配度。\n` +
+      `- 输出结构：\n` +
+      `1) 综合评价（3-5句）\n` +
+      `2) 表现亮点（3-6条）\n` +
+      `3) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）\n` +
+      `4) JD 匹配度与缺口（分点说明）\n` +
+      `5) 简历可改进点（3-6条，针对表达与证据补强）\n` +
+      `6) 1-2 周训练计划（按天/按主题）\n`
+    );
+
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`
+      },
+      body: JSON.stringify({
+        mode: 'interview_summary',
+        message: summaryPrompt,
+        audio: null,
+        resumeData: maskedResumeData,
+        jobDescription: maskedJdText,
+        chatHistory: maskedChatHistory,
+        score: score,
+        suggestions: []
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData?.error || '总结生成失败');
+    }
+
+    const result = await response.json().catch(() => ({} as any));
+    const unmaskedText = masker.unmaskText(result?.response || '');
+    return String(unmaskedText || '').trim();
+  };
+
   const handleSendMessage = async (
     textOverride?: string,
     audioOverride?: { blob: Blob; url: string; mime: string } | null,
@@ -2925,6 +3081,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setIsSending(true);
 
     try {
+      // End interview command: generate a comprehensive summary instead of continuing Q&A.
+      if (!opts?.skipAddUserMessage && currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend)) {
+        setPendingNextQuestion(null);
+        const summary = await generateInterviewSummary(baseMessages);
+        const aiMessage: ChatMessage = {
+          id: `ai-summary-${Date.now()}`,
+          role: 'model',
+          text: summary || '已结束面试，但总结生成失败，请稍后重试。'
+        };
+        const finalMessages = [...baseMessages, aiMessage];
+        chatMessagesRef.current = finalMessages;
+        setChatMessages(finalMessages);
+        await persistInterviewSession(finalMessages, jdText);
+        return;
+      }
+
       if (currentStep === 'chat' && pendingNextQuestion) {
         if (isAffirmative(textToSend)) {
           const nextMsg: ChatMessage = {
@@ -3796,6 +3968,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               </div>
             </div>
           </div>
+
+          <button
+            type="button"
+            disabled={isSending || isRecording}
+            onClick={() => {
+              if (isSending || isRecording) return;
+              try { handleSendMessage('结束面试', null); } catch { }
+            }}
+            className="h-9 px-3 rounded-lg text-[13px] font-bold border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            title="结束面试并生成综合分析"
+          >
+            结束面试
+          </button>
         </div>
 
         {/* Chat Messages */}
@@ -3873,8 +4058,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                               disabled={isTranscribing}
                               onClick={() => transcribeExistingVoiceMessage(msg.id)}
                               className={`h-7 px-2.5 rounded-md text-[12px] font-bold border transition-colors ${isTranscribing
-                                  ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
-                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
+                                ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
                                 }`}
                             >
                               {isTranscribing ? '转写中…' : '转文字'}
@@ -3995,9 +4180,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div className={`relative flex flex-col items-center transition-all duration-300 ${isRecording
                     ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
                     : 'relative'}`}>
-                    {/* Subtle dark gradient mask behind the hint text to ensure contrast against chat messages. */}
+                    {/* Full-width dark gradient mask behind the hint text. Starts solid at the text level and fades out upwards. */}
                     {isRecording && (
-                      <div className="absolute left-0 right-0 -top-20 h-40 bg-gradient-to-t from-black/60 via-black/30 to-transparent pointer-events-none opacity-80" />
+                      <div className="absolute -left-4 -right-4 -bottom-8 h-64 bg-gradient-to-t from-black via-black/90 to-transparent pointer-events-none" />
                     )}
                     {isRecording && (
                       <div className={`relative z-[1] mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
@@ -4150,15 +4335,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             </div>
           </div>
         </div>
+
+        <audio
+          ref={audioPlayerRef}
+          className="hidden"
+          onEnded={() => setPlayingAudioId(null)}
+          onPause={() => setPlayingAudioId(null)}
+        />
       </div>
     );
   }
-  <audio
-    ref={audioPlayerRef}
-    className='hidden'
-    onEnded={() => setPlayingAudioId(null)}
-    onPause={() => setPlayingAudioId(null)}
-  />
 
   return null;
 };
