@@ -23,6 +23,7 @@ import MemberCenter from './components/screens/MemberCenter';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authChecked, setAuthChecked] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isNavHidden, setIsNavHidden] = useState(false);
 
@@ -124,7 +125,11 @@ function App() {
   const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
 
   // Basic route guards / root redirects.
+  // IMPORTANT: Only run after the initial auth check completes to avoid
+  // prematurely redirecting to /login while Supabase session is still loading.
   useEffect(() => {
+    if (!authChecked) return; // Wait for checkAuth to finish
+
     const p = (location.pathname || '').toLowerCase();
     const publicPaths = ['/login', '/signup', '/forgot-password'];
 
@@ -136,7 +141,7 @@ function App() {
     if (!isAuthenticated && !publicPaths.some((x) => p.startsWith(x))) {
       navigate(viewToPath(View.LOGIN), { replace: true });
     }
-  }, [isAuthenticated, location.pathname, navigate]);
+  }, [authChecked, isAuthenticated, location.pathname, navigate]);
 
   // Load user resumes when authenticated
   useEffect(() => {
@@ -174,6 +179,8 @@ function App() {
       } catch (error) {
         console.error('Error checking auth status:', error);
         navigate(viewToPath(View.LOGIN), { replace: true });
+      } finally {
+        setAuthChecked(true);
       }
     };
 
@@ -459,6 +466,18 @@ function App() {
   };
 
   const renderView = () => {
+    // Show loading state while auth is being checked to prevent flash of login page
+    if (!authChecked) {
+      return (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="flex flex-col items-center gap-3">
+            <div className="size-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-sm text-slate-400 font-medium">加载中...</span>
+          </div>
+        </div>
+      );
+    }
+
     switch (currentView) {
       case View.LOGIN:
         return <Login />;
@@ -613,7 +632,6 @@ function App() {
             handleBottomNavClick(view);
             return;
           }
-          // Non-root navigation: keep any "reset" logic inside `handleBottomNavClick` only.
           navigate(viewToPath(view), { replace: !!opts?.replace });
         },
         goBack: handleGoBack,
