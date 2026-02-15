@@ -508,6 +508,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const chatMessagesRef = useRef<ChatMessage[]>([]);
+  useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
 
@@ -547,6 +551,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const discardOnStopRef = useRef(false);
   const holdAudioRef = useRef<{ blob: Blob; url: string; mime: string } | null>(null);
   const holdAwaitAudioSendRef = useRef(false);
+  const voicePendingUserMsgIdRef = useRef<string | null>(null);
   const [chatInitialized, setChatInitialized] = useState(false);
   const speechRecRef = useRef<any>(null);
   const speechStartingRef = useRef(false);
@@ -564,6 +569,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
+  const DEFAULT_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa';
+  const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('user_avatar');
+    if (saved) setUserAvatar(saved);
+  }, []);
 
   const WaveformVisualizer = ({ active, cancel }: { active: boolean; cancel: boolean }) => {
     return (
@@ -2455,30 +2467,51 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           });
         }
 
-        // If user released and is waiting for send: transcribe -> send as text.
-        if (holdAwaitAudioSendRef.current) {
-          holdAwaitAudioSendRef.current = false;
-          (async () => {
-            try {
-              const text = await transcribeAudioOnBackend(audioObj);
-              if (text) {
-                try {
-                  handleSendMessage(text, { ...audioObj, duration: Math.round((Date.now() - holdStartTimeRef.current) / 1000) } as any);
-                } catch { }
-                try { URL.revokeObjectURL(audioObj.url); } catch { }
-                holdAudioRef.current = null;
-                return;
-              }
-            } catch (e) {
-              if (voiceDebugEnabled()) console.debug('[voice] transcribe failed, fallback to audio', e);
-            }
-
-            // Fallback: send as audio message if transcription is unavailable/empty.
-            try {
-              handleSendMessage('', { ...audioObj, duration: Math.round((Date.now() - holdStartTimeRef.current) / 1000) } as any);
-            } catch { }
-          })();
+        const userMsgId = voicePendingUserMsgIdRef.current;
+        if (!userMsgId) {
+          // No pending UI message to attach to (e.g. canceled, or state mismatch).
+          return;
         }
+
+        const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
+        voicePendingUserMsgIdRef.current = null;
+
+        (async () => {
+          let text = '';
+          try {
+            text = await transcribeAudioOnBackend(audioObj);
+          } catch (e) {
+            if (voiceDebugEnabled()) console.debug('[voice] transcribe failed, fallback to audio', e);
+          }
+
+          if (text) {
+            // Update placeholder user message to final text (and do NOT send audio).
+            const updated = chatMessagesRef.current.map(m => (
+              m.id === userMsgId
+                ? { ...m, text, audioUrl: undefined, audioMime: undefined, audioDuration: undefined }
+                : m
+            ));
+            chatMessagesRef.current = updated;
+            setChatMessages(updated);
+
+            try { await handleSendMessage(text, null, { skipAddUserMessage: true, existingUserMessageId: userMsgId }); } catch { }
+
+            try { URL.revokeObjectURL(audioObj.url); } catch { }
+            holdAudioRef.current = null;
+            return;
+          }
+
+          // Fallback: attach audio to the same user message and send as audio.
+          const updated = chatMessagesRef.current.map(m => (
+            m.id === userMsgId
+              ? { ...m, text: '', audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
+              : m
+          ));
+          chatMessagesRef.current = updated;
+          setChatMessages(updated);
+
+          try { await handleSendMessage('', { ...audioObj, duration } as any, { skipAddUserMessage: true, existingUserMessageId: userMsgId }); } catch { }
+        })();
       };
 
       rec.onerror = (e: any) => {
@@ -2486,7 +2519,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       };
 
       // Collect small chunks to avoid losing data on some devices.
-      try { rec.start(250); } catch { rec.start(); }
+      try { rec.start(120); } catch { rec.start(); }
     } catch (e: any) {
       const name = String(e?.name || '').toLowerCase();
       if (name.includes('notallowed') || name.includes('permission')) {
@@ -2510,6 +2543,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       holdAudioRef.current = null;
       holdAwaitAudioSendRef.current = false;
     }
+    // Best-effort flush to reduce perceived delay on release.
+    try { (rec as any).requestData?.(); } catch { }
     try { rec.stop(); } catch { }
   };
 
@@ -3128,7 +3163,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const handleSendMessage = async (
     textOverride?: string,
-    audioOverride?: { blob: Blob; url: string; mime: string } | null
+    audioOverride?: { blob: Blob; url: string; mime: string } | null,
+    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string }
   ) => {
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
@@ -3136,21 +3172,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const hasAudio = !!audioObj?.blob;
     if (!hasText && !hasAudio) return;
     // Allow "speech-to-text then send" flow: it may call this in the same tick that recording ends.
-    if (isRecording && !textOverride) return;
+    if (isRecording && !textOverride && !opts?.skipAddUserMessage) return;
 
-
-
-    // Add user message (audio is kept client-side as an object URL).
-    const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      text: hasText ? textToSend : '',
-      audioUrl: hasAudio ? audioObj!.url : undefined,
-      audioMime: hasAudio ? audioObj!.mime : undefined,
-      audioDuration: hasAudio ? (audioOverride as any)?.duration : undefined,
+    const getExistingUserMessage = () => {
+      const id = opts?.existingUserMessageId;
+      if (!id) return null;
+      const found = chatMessagesRef.current.find(m => m.id === id);
+      return found && found.role === 'user' ? found : null;
     };
-    setChatMessages(prev => [...prev, userMessage]);
-    setInputMessage('');
+
+    // Add user message unless caller says it already exists in chat history.
+    const userMessage: ChatMessage = (opts?.skipAddUserMessage && getExistingUserMessage())
+      ? (getExistingUserMessage() as ChatMessage)
+      : {
+        id: `user-${Date.now()}`,
+        role: 'user',
+        text: hasText ? textToSend : '',
+        audioUrl: hasAudio ? audioObj!.url : undefined,
+        audioMime: hasAudio ? audioObj!.mime : undefined,
+        audioDuration: hasAudio ? (audioOverride as any)?.duration : undefined,
+      };
+
+    const baseMessages = opts?.skipAddUserMessage ? chatMessagesRef.current : [...chatMessagesRef.current, userMessage];
+    if (!opts?.skipAddUserMessage) {
+      chatMessagesRef.current = baseMessages;
+      setChatMessages(baseMessages);
+      setInputMessage('');
+    }
+
     setIsSending(true);
 
     try {
@@ -3161,7 +3210,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             role: 'model',
             text: `下一题：${pendingNextQuestion}`
           };
-          const newMessages = [...chatMessages, userMessage, nextMsg];
+          const newMessages = [...baseMessages, nextMsg];
+          chatMessagesRef.current = newMessages;
           setChatMessages(newMessages);
           setPendingNextQuestion(null);
           await persistInterviewSession(newMessages, jdText);
@@ -3174,7 +3224,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             role: 'model',
             text: '好的，我们先继续讨论。有需要再告诉我“继续下一题”。'
           };
-          const newMessages = [...chatMessages, userMessage, holdMsg];
+          const newMessages = [...baseMessages, holdMsg];
+          chatMessagesRef.current = newMessages;
           setChatMessages(newMessages);
           await persistInterviewSession(newMessages, jdText);
           setIsSending(false);
@@ -3195,9 +3246,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const isInterviewChat = currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
       const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(cleanTextForWrap) && !isNegative(cleanTextForWrap);
+      const lastMsgBeforeUser = (() => {
+        const last = baseMessages[baseMessages.length - 1];
+        if (last && last.id === userMessage.id && baseMessages.length >= 2) return baseMessages[baseMessages.length - 2];
+        return last;
+      })();
       const isStartPhase =
-        chatMessages.length > 0 &&
-        (chatMessages[chatMessages.length - 1].id === 'ai-ask' || chatMessages[chatMessages.length - 1].text.includes('准备好'));
+        !!lastMsgBeforeUser &&
+        (lastMsgBeforeUser.id === 'ai-ask' || lastMsgBeforeUser.text.includes('准备好'));
 
       const interviewWrapped = isInterviewChat
         ? (isQaMode
@@ -3210,7 +3266,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
-      const maskedChatHistory = chatMessages.map((m) => ({
+      // Keep history excluding the current user message; "message" already contains the latest input.
+      const historyForBackend = baseMessages.filter(m => m.id !== userMessage.id);
+      const maskedChatHistory = historyForBackend.map((m) => ({
         ...m,
         text: masker.maskText(m.text)
       }));
@@ -3249,7 +3307,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           role: 'model',
           text: cleaned || unmaskedText
         };
-        const newMessages = [...chatMessages, userMessage, aiMessage];
+        const newMessages = [...baseMessages, aiMessage];
         let finalMessages = newMessages;
         if (next) {
           setPendingNextQuestion(next);
@@ -3260,6 +3318,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           };
           finalMessages = [...newMessages, askNext];
         }
+        chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
         // Clear pending audio after successful send (only if it came from pending state)
@@ -3274,8 +3333,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     } catch (error) {
       console.error('API failed:', error);
       // WeChat-style: voice send failed should not leave traces.
-      if (hasAudio && !hasText) {
-        setChatMessages(prev => prev.filter(m => m.id !== userMessage.id));
+      if (hasAudio && !hasText && !opts?.skipAddUserMessage) {
+        const filtered = chatMessagesRef.current.filter(m => m.id !== userMessage.id);
+        chatMessagesRef.current = filtered;
+        setChatMessages(filtered);
         if (audioObj?.url) {
           try { URL.revokeObjectURL(audioObj.url); } catch { }
         }
@@ -4033,7 +4094,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full items-start`}>
                 <div className={`size-9 rounded-lg overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}>
-                  <img src={msg.role === 'user' ? "https://api.dicebear.com/9.x/avataaars/svg?seed=User" : "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
+                  <img src={msg.role === 'user' ? userAvatar : "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
 
                 <div className="flex flex-col max-w-[75%] gap-2">
@@ -4052,12 +4113,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                           }
                         }}
                         style={{ width: `${Math.min(180, 70 + (msg.audioDuration || 1) * 4)}px` }}
-                        className={`group relative flex items-center justify-between px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
-                          ? 'bg-primary text-white rounded-tr-none'
+                        className={`group relative flex items-center px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
+                          ? 'bg-primary text-white rounded-tr-none flex-row-reverse'
                           : 'bg-white dark:bg-[#2c2c2c] text-[#191919] dark:text-white rounded-tl-none border border-slate-200 dark:border-white/5'
                           }`}
                       >
-                        <span className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${msg.role === 'user' ? 'rotate-180 translate-x-1' : '-translate-x-1'}`}>
+                        <span className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${msg.role === 'user' ? 'rotate-180 -translate-x-1' : '-translate-x-1'}`}>
                           {playingAudioId === msg.id ? 'volume_up' : 'signal_cellular_alt'}
                         </span>
                         {playingAudioId === msg.id && (
@@ -4203,6 +4264,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         speechShouldSendRef.current = false;
                         holdAudioRef.current = null;
                         holdAwaitAudioSendRef.current = false;
+                        voicePendingUserMsgIdRef.current = null;
                         holdStartRef.current = { x: e.clientX, y: e.clientY };
                         holdStartTimeRef.current = Date.now();
                         holdCancelRef.current = false;
@@ -4238,15 +4300,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdStartRef.current = null;
                         holdCancelRef.current = false;
                         setHoldCancel(false);
-                        stopAudioRecorder(!!cancel);
-                        if (!cancel) {
-                          // onstop will transcribe->send; if it doesn't arrive quickly, show the usual toast.
-                          holdAwaitAudioSendRef.current = true;
-                          setTimeout(() => {
-                            if (!holdAwaitAudioSendRef.current) return;
-                            holdAwaitAudioSendRef.current = false;
-                            showToast('未识别到语音内容', 'info');
-                          }, 1600);
+                        if (cancel) {
+                          voicePendingUserMsgIdRef.current = null;
+                          stopAudioRecorder(true);
+                        } else {
+                          // Immediately append a "transcribing" message so UX feels instant on release.
+                          const userMsgId = `user-voice-${Date.now()}`;
+                          voicePendingUserMsgIdRef.current = userMsgId;
+                          const placeholder: ChatMessage = { id: userMsgId, role: 'user', text: '（转写中…）' };
+                          const next = [...chatMessagesRef.current, placeholder];
+                          chatMessagesRef.current = next;
+                          setChatMessages(next);
+
+                          stopAudioRecorder(false);
                         }
                         setRecording(false);
                         cleanupVoiceMeter();
@@ -4257,6 +4323,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdStartRef.current = null;
                         holdCancelRef.current = false;
                         setHoldCancel(false);
+                        voicePendingUserMsgIdRef.current = null;
                         stopAudioRecorder(true);
                         setRecording(false);
                         cleanupVoiceMeter();

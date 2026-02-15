@@ -25,8 +25,17 @@ const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, col
 );
 
 const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, currentUser, allResumes }) => {
-  const [avatar, setAvatar] = useState('https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa');
+  const DEFAULT_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa';
+  const [avatar, setAvatar] = React.useState(DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Load avatar from localStorage
+  React.useEffect(() => {
+    const savedAvatar = localStorage.getItem('user_avatar');
+    if (savedAvatar) {
+      setAvatar(savedAvatar);
+    }
+  }, []);
 
   // Get user profile with real name
   const { userProfile, loading, error } = useUserProfile();
@@ -58,7 +67,9 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result) {
-          setAvatar(e.target.result as string);
+          const newAvatar = e.target.result as string;
+          setAvatar(newAvatar);
+          localStorage.setItem('user_avatar', newAvatar);
         }
       };
       reader.readAsDataURL(file);
