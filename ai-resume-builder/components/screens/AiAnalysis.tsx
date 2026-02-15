@@ -4155,7 +4155,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
                                 }`}
                             >
-                              {isTranscribing ? '转写中…' : '转文字'}
+                              {isTranscribing ? (
+                                <span className="material-symbols-outlined text-[16px] animate-spin h-4 flex items-center justify-center">sync</span>
+                              ) : '转文字'}
                             </button>
                           );
                         })()}
