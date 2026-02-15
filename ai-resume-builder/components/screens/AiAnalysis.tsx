@@ -1571,6 +1571,9 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setSelectedResumeId(id);
     sourceResumeIdRef.current = id;
     setAnalysisResumeId(id);
+    // Reset JD content when switching resumes to avoid stale data from previous analysis
+    setJdText('');
+    setTargetCompany('');
     const selectedTitle = (allResumes || []).find((item) => isSameResumeId(item.id, id))?.title || '当前简历';
     setResumeReadState({
       status: 'loading',
