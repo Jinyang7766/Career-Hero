@@ -516,6 +516,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   }, [chatMessages]);
   const [inputMessage, setInputMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const sendingCountRef = useRef(0);
+  const beginSending = () => {
+    sendingCountRef.current += 1;
+    setIsSending(true);
+  };
+  const endSending = () => {
+    sendingCountRef.current = Math.max(0, sendingCountRef.current - 1);
+    setIsSending(sendingCountRef.current > 0);
+  };
 
 
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
@@ -571,6 +580,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const saved = localStorage.getItem('user_avatar');
     if (saved) setUserAvatar(saved);
   }, []);
+
+  // Intentionally keep input usable while AI is replying.
 
   const WaveformVisualizer = ({ active, cancel }: { active: boolean; cancel: boolean }) => {
     return (
@@ -694,8 +705,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
       // Heuristics:
       // - Very low RMS and low peak => likely silence (or near silence).
-      // Thresholds are conservative to avoid false "silent" on quiet speech.
-      const silent = (rms < 0.006) && (peak < 0.03);
+      // Keep thresholds conservative to avoid false "silent" on quiet speech, especially on mobile.
+      const silent = (rms < 0.003) && (peak < 0.02);
       return silent;
     } catch {
       return null;
@@ -742,7 +753,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       chatMessagesRef.current = updated;
       setChatMessages(updated);
     } catch (e) {
-      showToast('转写失败，请稍后重试', 'error');
+      const msg =
+        (e && typeof e === 'object' && 'message' in (e as any) && String((e as any).message || '').trim())
+          ? String((e as any).message).trim()
+          : '转写失败，请稍后重试';
+      showToast(msg, 'error');
       if (voiceDebugEnabled()) console.debug('[voice] transcribeExistingVoiceMessage failed', e);
     } finally {
       setTranscribingByMsgId(prev => {
@@ -2592,7 +2607,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             try { voiceSilenceByMsgIdRef.current.set(userMsgId, true); } catch { }
             // Remove user placeholder voice bubble.
             const filtered = chatMessagesRef.current.filter(m => m.id !== userMsgId);
-            const aiMsg: ChatMessage = { id: `ai-${Date.now()}`, role: 'model', text: '未识别到语音内容' };
+            const aiMsg: ChatMessage = {
+              id: `ai-${Date.now()}`,
+              role: 'model',
+              text: '未识别到语音内容。请检查：是否已允许麦克风权限、是否连接了蓝牙耳机、是否有其他应用占用麦克风。'
+            };
             const next = [...filtered, aiMsg];
             chatMessagesRef.current = next;
             setChatMessages(next);
@@ -3113,7 +3132,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       setInputMessage('');
     }
 
-    setIsSending(true);
+    beginSending();
 
     try {
       // End interview command: generate a comprehensive summary instead of continuing Q&A.
@@ -3144,7 +3163,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           setChatMessages(newMessages);
           setPendingNextQuestion(null);
           await persistInterviewSession(newMessages, jdText);
-          setIsSending(false);
+          endSending();
           return;
         }
         if (isNegative(textToSend)) {
@@ -3157,7 +3176,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           chatMessagesRef.current = newMessages;
           setChatMessages(newMessages);
           await persistInterviewSession(newMessages, jdText);
-          setIsSending(false);
+          endSending();
           return;
         }
       }
@@ -3268,7 +3287,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
       alert('AI 连接暂时中断');
     } finally {
-      setIsSending(false);
+      endSending();
     }
   };
 
@@ -4006,9 +4025,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
           <button
             type="button"
-            disabled={isSending || isRecording}
+            disabled={isRecording}
             onClick={() => {
-              if (isSending || isRecording) return;
+              if (isRecording) return;
               try { handleSendMessage('结束面试', null); } catch { }
             }}
             className="h-9 px-3 rounded-lg text-[13px] font-bold border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
@@ -4028,7 +4047,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           {chatMessages.map((msg) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div className={`flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full items-start`}>
-                <div className={`size-9 rounded-lg overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}>
+                <div className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3 bg-white border border-slate-100 dark:border-slate-700'}`}>
                   <img src={msg.role === 'user' ? userAvatar : "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
                 </div>
 
@@ -4197,8 +4216,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <div className="flex gap-3 items-end">
               {!isRecording && (
                 <button
-                  onClick={() => setMode(inputMode === 'text' ? 'voice' : 'text')}
-                  disabled={isSending || (inputMode === 'voice' && !audioSupported)}
+                  onClick={() => {
+                    setMode(inputMode === 'text' ? 'voice' : 'text');
+                  }}
+                  disabled={inputMode === 'voice' && !audioSupported}
                   className="size-11 rounded-full flex items-center justify-center transition-all shadow-sm shrink-0 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
                   type="button"
                 >
@@ -4325,7 +4346,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         cleanupVoiceMeter();
                       }}
                       onContextMenu={(e) => e.preventDefault()}
-                      disabled={!audioSupported || isSending}
+                      disabled={!audioSupported}
                       className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
                         ? (holdCancel
                           ? 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
@@ -4353,17 +4374,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        if (!isSending) handleSendMessage();
+                        handleSendMessage();
                       }
                     }}
                     placeholder="输入您的问题..."
-                    className="flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none text-slate-900 dark:text-white"
+                    disabled={isRecording}
+                    className="flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none text-slate-900 dark:text-white disabled:opacity-60"
                     rows={1}
                     style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
                   />
                   <button
                     onClick={() => handleSendMessage()}
-                    disabled={!inputMessage.trim() || isSending || isRecording}
+                    disabled={!inputMessage.trim() || isRecording}
                     className="size-11 rounded-full bg-primary text-white flex items-center justify-center hover:bg-primary/90 disabled:opacity-50 transition-all shadow-lg shadow-primary/20 shrink-0"
                     type="button"
                   >

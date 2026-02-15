@@ -31,6 +31,7 @@ from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
+import requests
 import google.genai as genai
 from google.genai import types
 
@@ -104,6 +105,11 @@ GEMINI_RESUME_PARSE_MODEL = os.getenv('GEMINI_RESUME_PARSE_MODEL', 'gemini-2.5-f
 GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
+# 语音转写模型（优先选择更快更便宜的 Flash/Lite 型号）
+GEMINI_TRANSCRIBE_MODEL = os.getenv('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash-lite')
+
+# Google Cloud Speech-to-Text (REST API key). This is NOT the Gemini key.
+GOOGLE_SPEECH_API_KEY = (os.getenv('GOOGLE_SPEECH_API_KEY') or '').strip()
 GEMINI_VISION_MODELS = [
     GEMINI_RESUME_PARSE_MODEL,
     os.getenv('GEMINI_VISION_MODEL', '').strip(),
@@ -2479,6 +2485,63 @@ def _gemini_generate_content_resilient(model_name: str, contents, *, want_json: 
     raise RuntimeError(f"Gemini generate_content failed after variants={tried}. last_error={last_err}")
 
 
+def _google_speech_transcribe(audio_bytes: bytes, mime_type: str, lang: str) -> str:
+    """
+    Transcribe with Google Cloud Speech-to-Text v1 REST API.
+    Only supports a subset of formats without server-side transcoding.
+    """
+    if not GOOGLE_SPEECH_API_KEY:
+        raise RuntimeError("GOOGLE_SPEECH_API_KEY is not configured")
+
+    mt = (mime_type or '').lower()
+    # We record mainly Opus in WebM on Chrome/Android, and sometimes Ogg Opus.
+    if 'webm' in mt:
+        encoding = 'WEBM_OPUS'
+    elif 'ogg' in mt:
+        encoding = 'OGG_OPUS'
+    else:
+        # MP4/AAC etc would require transcoding to LINEAR16/FLAC which we don't do here.
+        raise ValueError(f"Unsupported audio mime_type for STT: {mime_type}")
+
+    url = f"https://speech.googleapis.com/v1/speech:recognize?key={GOOGLE_SPEECH_API_KEY}"
+    payload = {
+        "config": {
+            "encoding": encoding,
+            "languageCode": (lang or "zh-CN").strip() or "zh-CN",
+            "enableAutomaticPunctuation": True,
+            # Favor fast short-utterance model when available.
+            "model": "latest_short",
+        },
+        "audio": {
+            "content": base64.b64encode(audio_bytes).decode("utf-8")
+        }
+    }
+
+    resp = requests.post(url, json=payload, timeout=30)
+    data = {}
+    try:
+        data = resp.json()
+    except Exception:
+        data = {}
+
+    if resp.status_code >= 400:
+        # Surface API error message if present.
+        msg = (data.get("error", {}) or {}).get("message") or f"speech api http {resp.status_code}"
+        raise RuntimeError(msg)
+
+    results = data.get("results") or []
+    transcripts = []
+    for r in results:
+        alts = (r or {}).get("alternatives") or []
+        if not alts:
+            continue
+        t = (alts[0] or {}).get("transcript") or ""
+        t = str(t).strip()
+        if t:
+            transcripts.append(t)
+    return " ".join(transcripts).strip()
+
+
 def _is_missing_resume_core_fields(parsed_data):
     personal = parsed_data.get('personalInfo', {}) or {}
     work_exps = parsed_data.get('workExps', []) or []
@@ -3467,9 +3530,6 @@ def ai_transcribe(current_user_id):
         if not isinstance(audio, dict) or not audio.get('data'):
             return jsonify({'success': False, 'text': '', 'error': '缺少音频数据'}), 400
 
-        if not (gemini_client and check_gemini_quota()):
-            return jsonify({'success': False, 'text': '', 'error': 'AI服务不可用'}), 200
-
         try:
             from base64 import b64decode
             mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
@@ -3486,28 +3546,21 @@ def ai_transcribe(current_user_id):
             logger.warning("Transcribe audio decode failed: %s", dec_err)
             return jsonify({'success': False, 'text': '', 'error': '音频解码失败'}), 400
 
-        prompt = f"""
-你是语音转文字引擎。请将用户的语音内容转写为纯文本。
-要求：
-- 只输出转写文本，不要解释，不要加任何标签或前后缀。
-- 不要编造、不要根据上下文猜测未明确听到的内容。
-- 如果音频中没有清晰可辨的语音，或无法确定具体文字，请返回空字符串。
-- 语言：{lang}
-"""
-        contents = [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)]
+        # Dedicated STT (non-LLM). Gemini fallback is intentionally disabled.
+        if not GOOGLE_SPEECH_API_KEY:
+            return jsonify({'success': False, 'text': '', 'error': '转写未配置（缺少 GOOGLE_SPEECH_API_KEY）'}), 200
 
-        response, used_model = _gemini_generate_content_resilient(
-            GEMINI_INTERVIEW_MODEL,
-            contents,
-            want_json=False
-        )
-
-        text = (response.text or '').strip()
-        # Defensive: strip enclosing quotes/newlines
-        if text.startswith('"') and text.endswith('"') and len(text) >= 2:
-            text = text[1:-1].strip()
-
-        return jsonify({'success': True, 'text': text, 'model': used_model}), 200
+        try:
+            text = _google_speech_transcribe(audio_bytes, mime_type, lang)
+            return jsonify({'success': True, 'text': text, 'provider': 'google_speech_v1'}), 200
+        except ValueError as ve:
+            # Unsupported format (e.g., audio/mp4 on some browsers).
+            msg = str(ve) or '当前录音格式不支持转文字'
+            return jsonify({'success': False, 'text': '', 'error': msg}), 200
+        except Exception as stt_err:
+            logger.warning("Google Speech transcribe failed: %s", stt_err)
+            msg = str(stt_err) or '转写失败'
+            return jsonify({'success': False, 'text': '', 'error': msg}), 200
     except Exception as e:
         logger.error("AI transcribe failed: %s", e)
         return jsonify({'success': False, 'text': '', 'error': '服务器内部错误'}), 500
