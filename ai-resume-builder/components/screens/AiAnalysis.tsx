@@ -27,6 +27,8 @@ interface ChatMessage {
   audioUrl?: string;
   audioMime?: string;
   audioDuration?: number;
+  // Immediately show a voice bubble on release (without any "sending..." text) until audioUrl is ready.
+  audioPending?: boolean;
   suggestion?: Suggestion;
 }
 
@@ -534,31 +536,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     isRecordingRef.current = v;
     setIsRecording(v);
   };
-  const [pendingAudio, setPendingAudio] = useState<{ blob: Blob; url: string; mime: string } | null>(null);
   const [audioError, setAudioError] = useState<string>('');
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const holdStartRef = useRef<{ x: number; y: number } | null>(null);
   // Track whether the user is still holding the "press to talk" button.
-  // SpeechRecognition can end quickly (e.g. "no-speech") when continuous=false;
-  // while holding, we auto-restart to keep the UX stable.
   const holdActiveRef = useRef(false);
   const holdSessionRef = useRef(0);
   const [holdCancel, setHoldCancel] = useState(false);
   const holdCancelRef = useRef(false);
   const holdStartTimeRef = useRef<number>(0);
-  const autoSendOnStopRef = useRef(false);
-  const discardOnStopRef = useRef(false);
-  const holdAudioRef = useRef<{ blob: Blob; url: string; mime: string } | null>(null);
   const holdAwaitAudioSendRef = useRef(false);
   const voicePendingUserMsgIdRef = useRef<string | null>(null);
+  const voiceBlobByMsgIdRef = useRef<Map<string, { blob: Blob; mime: string }>>(new Map());
+  const [transcribingByMsgId, setTranscribingByMsgId] = useState<Record<string, boolean>>({});
   const [chatInitialized, setChatInitialized] = useState(false);
-  const speechRecRef = useRef<any>(null);
-  const speechStartingRef = useRef(false);
-  const speechCarryRef = useRef('');
-  const speechFinalRef = useRef('');
-  const speechInterimRef = useRef('');
-  const speechShouldSendRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const voiceMeterStreamRef = useRef<MediaStream | null>(null);
   const voiceMeterOwnsStreamRef = useRef(false);
@@ -615,18 +607,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
   };
 
-  const shouldUseAudioFallback = () => {
-    // Android Chrome often has broken/unavailable SpeechRecognition; fallback to sending audio.
-    try {
-      const forced = localStorage.getItem('voice_force_audio') === '1';
-      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-      const isAndroid = /Android/i.test(ua);
-      return forced || isAndroid;
-    } catch {
-      return false;
-    }
-  };
-
   const transcribeAudioOnBackend = async (audioObj: { blob: Blob; url: string; mime: string }) => {
     const token = await getBackendAuthToken();
     if (!token) throw new Error('请先登录以使用 AI 功能');
@@ -654,6 +634,38 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       throw new Error(json?.error || '转写失败');
     }
     return String(json?.text || '').trim();
+  };
+
+  const transcribeExistingVoiceMessage = async (msgId: string) => {
+    if (transcribingByMsgId[msgId]) return;
+    const audio = voiceBlobByMsgIdRef.current.get(msgId);
+    if (!audio?.blob) {
+      showToast('该语音无法转写（可能已过期），请重新发送', 'info');
+      return;
+    }
+
+    setTranscribingByMsgId(prev => ({ ...prev, [msgId]: true }));
+    try {
+      const text = await transcribeAudioOnBackend({ blob: audio.blob, url: '', mime: audio.mime });
+      if (!text) {
+        showToast('未识别到语音内容', 'info');
+        return;
+      }
+      const updated = chatMessagesRef.current.map(m => (
+        m.id === msgId ? { ...m, text } : m
+      ));
+      chatMessagesRef.current = updated;
+      setChatMessages(updated);
+    } catch (e) {
+      showToast('转写失败，请稍后重试', 'error');
+      if (voiceDebugEnabled()) console.debug('[voice] transcribeExistingVoiceMessage failed', e);
+    } finally {
+      setTranscribingByMsgId(prev => {
+        const next = { ...prev };
+        delete next[msgId];
+        return next;
+      });
+    }
   };
 
   const ToastOverlay = () => {
@@ -2304,7 +2316,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     scrollToBottom();
   }, [keyboardOffset, inputBarHeight, currentStep]);
 
-  // Voice input: we record audio (MediaRecorder), transcribe on backend, then send as plain text.
+  // Voice input: we record audio (MediaRecorder) and send it to the backend chat endpoint.
+  // The LLM will listen to the audio and reply directly. Transcription is user-triggered via "转文字".
   useEffect(() => {
     const ok =
       typeof window !== 'undefined' &&
@@ -2313,15 +2326,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       !!((window as any).MediaRecorder);
     setAudioSupported(ok);
   }, []);
-
-  useEffect(() => {
-    // Cleanup object URL to avoid leaks.
-    return () => {
-      if (pendingAudio?.url) {
-        try { URL.revokeObjectURL(pendingAudio.url); } catch { }
-      }
-    };
-  }, [pendingAudio?.url]);
 
   const cleanupVoiceMeter = () => {
     if (fakeMeterTimerRef.current) {
@@ -2408,8 +2412,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
 
   const startAudioRecorder = async (token: number) => {
-    // For Android fallback: capture audio and send to backend (no SpeechRecognition).
-    holdAudioRef.current = null;
+    // Capture audio and send to backend (LLM listens to the audio).
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -2435,7 +2438,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           mediaStreamRef.current = null;
           mediaRecorderRef.current = null;
           recordChunksRef.current = [];
-          holdAudioRef.current = null;
           return;
         }
 
@@ -2452,12 +2454,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
         if (!blob || !blob.size) {
           if (voiceDebugEnabled()) console.debug('[voice] audio recorder stopped: empty blob');
+          // If we already inserted a placeholder bubble, clean it up to avoid a stuck "pending" UI.
+          try {
+            const pendingId = voicePendingUserMsgIdRef.current;
+            voicePendingUserMsgIdRef.current = null;
+            holdAwaitAudioSendRef.current = false;
+            if (pendingId) {
+              const filtered = chatMessagesRef.current.filter(m => m.id !== pendingId);
+              chatMessagesRef.current = filtered;
+              setChatMessages(filtered);
+            }
+          } catch { }
+          showToast('录音失败，请重试', 'error');
           return;
         }
 
         const url = URL.createObjectURL(blob);
         const audioObj = { blob, url, mime: blob.type || mime || 'audio/webm' };
-        holdAudioRef.current = audioObj;
 
         if (voiceDebugEnabled()) {
           console.debug('[voice] audio recorder stopped', {
@@ -2468,50 +2481,31 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         }
 
         const userMsgId = voicePendingUserMsgIdRef.current;
-        if (!userMsgId) {
-          // No pending UI message to attach to (e.g. canceled, or state mismatch).
-          return;
-        }
+        if (!userMsgId) return;
 
-        const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
         voicePendingUserMsgIdRef.current = null;
+        const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
 
-        (async () => {
-          let text = '';
-          try {
-            text = await transcribeAudioOnBackend(audioObj);
-          } catch (e) {
-            if (voiceDebugEnabled()) console.debug('[voice] transcribe failed, fallback to audio', e);
-          }
+        // Persist blob for "transcribe" button later (scheme A: update same message text on demand).
+        try { voiceBlobByMsgIdRef.current.set(userMsgId, { blob: audioObj.blob, mime: audioObj.mime }); } catch { }
 
-          if (text) {
-            // Update placeholder user message to final text (and do NOT send audio).
-            const updated = chatMessagesRef.current.map(m => (
-              m.id === userMsgId
-                ? { ...m, text, audioUrl: undefined, audioMime: undefined, audioDuration: undefined }
-                : m
-            ));
-            chatMessagesRef.current = updated;
-            setChatMessages(updated);
+        // Attach audio to the placeholder message and send immediately as an audio message.
+        const updated = chatMessagesRef.current.map(m => (
+          m.id === userMsgId
+            ? { ...m, text: '', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
+            : m
+        ));
+        chatMessagesRef.current = updated;
+        setChatMessages(updated);
 
-            try { await handleSendMessage(text, null, { skipAddUserMessage: true, existingUserMessageId: userMsgId }); } catch { }
-
-            try { URL.revokeObjectURL(audioObj.url); } catch { }
-            holdAudioRef.current = null;
-            return;
-          }
-
-          // Fallback: attach audio to the same user message and send as audio.
-          const updated = chatMessagesRef.current.map(m => (
-            m.id === userMsgId
-              ? { ...m, text: '', audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
-              : m
-          ));
-          chatMessagesRef.current = updated;
-          setChatMessages(updated);
-
-          try { await handleSendMessage('', { ...audioObj, duration } as any, { skipAddUserMessage: true, existingUserMessageId: userMsgId }); } catch { }
-        })();
+        if (holdAwaitAudioSendRef.current) {
+          holdAwaitAudioSendRef.current = false;
+          (async () => {
+            try {
+              await handleSendMessage('', { ...audioObj, duration } as any, { skipAddUserMessage: true, existingUserMessageId: userMsgId });
+            } catch { }
+          })();
+        }
       };
 
       rec.onerror = (e: any) => {
@@ -2540,7 +2534,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     holdAudioDiscardRef.current = !!discard;
     if (discard) {
       // Just stop and drop anything recorded.
-      holdAudioRef.current = null;
       holdAwaitAudioSendRef.current = false;
     }
     // Best-effort flush to reduce perceived delay on release.
@@ -2548,281 +2541,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try { rec.stop(); } catch { }
   };
 
-  const stopRecording = ({ discard = false, autoSend = false }: { discard?: boolean; autoSend?: boolean } = {}) => {
-    discardOnStopRef.current = discard;
-    autoSendOnStopRef.current = autoSend;
-    speechShouldSendRef.current = !!autoSend && !discard;
-    cleanupVoiceMeter();
+  // Avoid sending accidental taps as voice messages.
+  const MIN_VOICE_HOLD_MS = 600;
 
-    const rec = speechRecRef.current;
-    if (!rec) {
-      if (voiceDebugEnabled()) {
-        console.debug('[voice] stopRecording: no active rec', {
-          discard,
-          autoSend,
-          speechStarting: speechStartingRef.current,
-          carryLen: speechCarryRef.current.length,
-          interimLen: speechInterimRef.current.length,
-        });
-      }
-
-      // If user released while recognition was still starting up, avoid false "no content" toast.
-      // The in-flight startRecording() will self-cancel when it notices holdActiveRef=false.
-      if (speechStartingRef.current) {
-        speechShouldSendRef.current = false;
-        discardOnStopRef.current = false;
-        autoSendOnStopRef.current = false;
-        setRecording(false);
-        return;
-      }
-
-      // We may be between auto-restart runs: no active recognition instance to stop.
-      // If the user asked to send, send whatever we have buffered so far.
-      const shouldSend = !!speechShouldSendRef.current;
-      speechShouldSendRef.current = false;
-      setRecording(false);
-
-      if (discard) {
-        speechCarryRef.current = '';
-        speechFinalRef.current = '';
-        speechInterimRef.current = '';
-        discardOnStopRef.current = false;
-        autoSendOnStopRef.current = false;
-        return;
-      }
-
-      if (shouldSend) {
-        const text = `${speechCarryRef.current} ${speechInterimRef.current}`.trim();
-        speechCarryRef.current = '';
-        speechFinalRef.current = '';
-        speechInterimRef.current = '';
-        discardOnStopRef.current = false;
-        autoSendOnStopRef.current = false;
-        if (!text) {
-          showToast('未识别到语音内容', 'info');
-          return;
-        }
-        try { handleSendMessage(text, null); } catch { }
-      }
-      discardOnStopRef.current = false;
-      autoSendOnStopRef.current = false;
-      return;
-    }
-    try {
-      if (discard) rec.abort?.();
-      else rec.stop?.();
-    } catch { }
-  };
-
-  const startRecording = async (holdToken?: number) => {
-    setAudioError('');
-    if (!audioSupported) {
-      setAudioError('当前浏览器不支持语音转文字，请切换 Chrome 或使用键盘输入');
-      return;
-    }
-    if (speechStartingRef.current) return;
-    if (speechRecRef.current) return;
-    speechStartingRef.current = true;
-
-    // Some browsers require a secure context for speech recognition and mic access.
-    try {
-      if (typeof window !== 'undefined' && !window.isSecureContext && location.hostname !== 'localhost') {
-        setAudioError('语音识别需要在 HTTPS 环境下使用');
-        speechStartingRef.current = false;
-        return;
-      }
-    } catch { }
-
-    // Avoid getUserMedia preflight: it can contend with SpeechRecognition mic capture on Android,
-    // resulting in persistent "no-speech"/empty results even while the waveform shows activity.
-
-    // If this was triggered by a hold gesture, ensure the user is still holding.
-    if (typeof holdToken === 'number') {
-      if (!holdActiveRef.current) {
-        speechStartingRef.current = false;
-        return;
-      }
-      if (holdToken !== holdSessionRef.current) {
-        speechStartingRef.current = false;
-        return;
-      }
-    }
-
-    // (Re)create recognition instance for this run to ensure handlers use latest closures.
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    const rec = new SR();
-    speechRecRef.current = rec;
-    speechInterimRef.current = '';
-    // Do not reset carry/shouldSend here: we may auto-restart multiple runs during one hold session.
-
-    rec.lang = 'zh-CN';
-    rec.interimResults = true;
-    // Mobile browsers are often unstable with continuous=true. We don't need it for "hold to talk".
-    rec.continuous = false;
-    rec.onstart = () => {
-      if (voiceDebugEnabled()) console.debug('[voice] rec.onstart');
-      setRecording(true);
-      scrollToBottom();
-    };
-
-    rec.onresult = (event: any) => {
-      try {
-        if (voiceDebugEnabled()) {
-          console.debug('[voice] rec.onresult', {
-            resultIndex: event?.resultIndex,
-            resultsLen: event?.results?.length,
-          });
-        }
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-          const res = event.results[i];
-          const txt = String(res?.[0]?.transcript || '');
-          if (!txt) continue;
-          if (res.isFinal) {
-            // Accumulate across possible auto-restart runs while holding.
-            speechCarryRef.current += txt;
-            speechFinalRef.current = speechCarryRef.current;
-          }
-          else interim += txt;
-        }
-        speechInterimRef.current = interim;
-      } catch { }
-    };
-
-    rec.onerror = (ev: any) => {
-      const code = String(ev?.error || '').toLowerCase();
-      if (voiceDebugEnabled()) console.debug('[voice] rec.onerror', { code, ev });
-
-      // "no-speech" is common when user didn't speak; don't show as an error.
-      if (code === 'no-speech' || code === 'aborted') {
-        return;
-      }
-
-      if (code === 'not-allowed' || code === 'service-not-allowed') {
-        setAudioError('语音识别被拒绝：请允许麦克风权限后重试');
-      } else if (code === 'audio-capture') {
-        setAudioError('未检测到可用麦克风设备');
-      } else if (code === 'network') {
-        setAudioError('语音识别服务不可用：请检查网络后重试');
-      } else {
-        setAudioError('语音识别失败，请重试');
-      }
-
-      setRecording(false);
-      speechShouldSendRef.current = false;
-      speechCarryRef.current = '';
-      speechFinalRef.current = '';
-      speechInterimRef.current = '';
-      try { rec.abort?.(); } catch { }
-    };
-
-    rec.onend = () => {
-      speechStartingRef.current = false;
-      const shouldSend = !!speechShouldSendRef.current;
-      speechShouldSendRef.current = false;
-      const stillHolding = holdActiveRef.current;
-      const discard = !!discardOnStopRef.current;
-      discardOnStopRef.current = false;
-
-      const text = `${speechCarryRef.current} ${speechInterimRef.current}`.trim();
-      // Interim shouldn't carry across runs.
-      speechInterimRef.current = '';
-      speechRecRef.current = null;
-
-      if (voiceDebugEnabled()) {
-        console.debug('[voice] rec.onend', {
-          shouldSend,
-          stillHolding,
-          discard,
-          textLen: text.length,
-          textPreview: text.slice(0, 80),
-        });
-      }
-
-      if (discard) {
-        setRecording(false);
-        speechCarryRef.current = '';
-        speechFinalRef.current = '';
-        return;
-      }
-
-      // When holding to talk, SpeechRecognition may end quickly (e.g. "no-speech").
-      // If the user is still holding and we weren't asked to send, restart recognition.
-      if (!shouldSend && stillHolding) {
-        if (text) {
-          // Preserve any interim text across restarts.
-          speechCarryRef.current = text;
-          speechFinalRef.current = text;
-        }
-        // Keep UI in "recording" state during auto-restart to prevent flicker.
-        setRecording(true);
-        const token = holdSessionRef.current;
-        setTimeout(() => {
-          // Only restart if it's still the same hold session and nothing else is recording.
-          if (!holdActiveRef.current) return;
-          if (token !== holdSessionRef.current) return;
-          if (speechRecRef.current) return;
-          if (isRecordingRef.current && speechRecRef.current) return;
-          startRecording(token);
-        }, 60);
-        return;
-      }
-
-      setRecording(false);
-      if (!shouldSend) {
-        // Avoid leaking transcript into the next run/session when nothing should be sent.
-        speechCarryRef.current = '';
-        speechFinalRef.current = '';
-        return;
-      }
-      if (!text) {
-        // If we're using audio fallback (or audio is already captured), send audio instead of toasting.
-        const audioObj = holdAudioRef.current;
-        if (audioObj?.blob) {
-          const duration = Math.round((Date.now() - holdStartTimeRef.current) / 1000);
-          try { handleSendMessage('', { ...audioObj, duration } as any); } catch { }
-          speechCarryRef.current = '';
-          speechFinalRef.current = '';
-          holdAudioRef.current = null;
-          return;
-        }
-        // Otherwise, wait briefly for audio recorder onstop to produce the blob.
-        if (shouldUseAudioFallback()) {
-          holdAwaitAudioSendRef.current = true;
-          setTimeout(() => {
-            if (!holdAwaitAudioSendRef.current) return;
-            holdAwaitAudioSendRef.current = false;
-            showToast('未识别到语音内容', 'info');
-            speechCarryRef.current = '';
-            speechFinalRef.current = '';
-          }, 1200);
-          return;
-        }
-
-        showToast('未识别到语音内容', 'info');
-        speechCarryRef.current = '';
-        speechFinalRef.current = '';
-        return;
-      }
-
-      // Send as plain text (do NOT send audio to the LLM).
-      try { handleSendMessage(text, null); } catch { }
-      speechCarryRef.current = '';
-      speechFinalRef.current = '';
-    };
-
-    try {
-      rec.start();
-      speechStartingRef.current = false;
-    } catch {
-      setAudioError('语音识别启动失败，请重试');
-      setRecording(false);
-      speechRecRef.current = null;
-      speechStartingRef.current = false;
-    }
-  };
-
-  // (Deprecated) old hold handlers were replaced by WeChat-style hold button in the input UI.
+  // SpeechRecognition STT flow removed: we always send audio to LLM, and transcription is manual ("转文字").
 
   const setMode = (mode: 'text' | 'voice') => {
     setInputMode(mode);
@@ -3168,10 +2890,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   ) => {
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
-    const audioObj = audioOverride || pendingAudio;
+    const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
     if (!hasText && !hasAudio) return;
-    // Allow "speech-to-text then send" flow: it may call this in the same tick that recording ends.
+    // Voice send is driven by MediaRecorder.onstop, which may run right after the UI releases the hold gesture.
     if (isRecording && !textOverride && !opts?.skipAddUserMessage) return;
 
     const getExistingUserMessage = () => {
@@ -3321,10 +3043,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
-        // Clear pending audio after successful send (only if it came from pending state)
-        if (!audioOverride) {
-          setPendingAudio(null);
-        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         console.error('Backend API failed:', errorData);
@@ -3339,9 +3057,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         setChatMessages(filtered);
         if (audioObj?.url) {
           try { URL.revokeObjectURL(audioObj.url); } catch { }
-        }
-        if (!audioOverride) {
-          setPendingAudio(null);
         }
       }
       alert('AI 连接暂时中断');
@@ -4099,11 +3814,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
                 <div className="flex flex-col max-w-[75%] gap-2">
                   {/* Voice Message Bubble (WeChat style) */}
-                  {msg.audioUrl && (
+                  {(msg.audioUrl || msg.audioPending) && (
                     <div className={`flex items-center gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                       <button
                         onClick={() => {
                           if (!audioPlayerRef.current) return;
+                          if (!msg.audioUrl) return;
                           if (playingAudioId === msg.id) {
                             audioPlayerRef.current.pause();
                           } else {
@@ -4112,6 +3828,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                             audioPlayerRef.current.play();
                           }
                         }}
+                        disabled={!msg.audioUrl}
                         style={{ width: `${Math.min(180, 70 + (msg.audioDuration || 1) * 4)}px` }}
                         className={`group relative flex items-center px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
                           ? 'bg-primary text-white rounded-tr-none flex-row-reverse'
@@ -4119,7 +3836,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                           }`}
                       >
                         <span className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${msg.role === 'user' ? 'rotate-180 -translate-x-1' : '-translate-x-1'}`}>
-                          {playingAudioId === msg.id ? 'volume_up' : 'signal_cellular_alt'}
+                          {!msg.audioUrl ? 'hourglass_top' : (playingAudioId === msg.id ? 'volume_up' : 'signal_cellular_alt')}
                         </span>
                         {playingAudioId === msg.id && (
                           <div className="absolute inset-0 bg-black/5 flex items-center justify-center">
@@ -4130,15 +3847,53 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                             </div>
                           </div>
                         )}
+                        {!msg.audioUrl && (
+                          <div className="absolute inset-0 bg-black/0 flex items-center justify-center">
+                            <div className="flex gap-0.5 opacity-80">
+                              {[1, 2, 3].map(i => (
+                                <div key={i} className="w-0.5 h-3 bg-current animate-bounce" style={{ animationDelay: `${i * 0.12}s` }} />
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </button>
-                      <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
-                        {msg.audioDuration || 1}"
-                      </span>
+                      <div className={`flex items-center gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                          {msg.audioDuration || 1}"
+                        </span>
+                        {(() => {
+                          const hasVoiceBlob = !!voiceBlobByMsgIdRef.current.get(msg.id)?.blob;
+                          const hasText = !!(msg.text && msg.text.trim() !== '' && msg.text !== '（语音）');
+                          const isTranscribing = !!transcribingByMsgId[msg.id];
+                          // Scheme A: user-triggered transcription; after we have text, hide the button.
+                          if (msg.role !== 'user' || !hasVoiceBlob || hasText) return null;
+                          return (
+                            <button
+                              type="button"
+                              disabled={isTranscribing}
+                              onClick={() => transcribeExistingVoiceMessage(msg.id)}
+                              className={`h-7 px-2.5 rounded-md text-[12px] font-bold border transition-colors ${isTranscribing
+                                  ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
+                                }`}
+                            >
+                              {isTranscribing ? '转写中…' : '转文字'}
+                            </button>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transcribed text (one grey line under voice bubble; not a separate bubble) */}
+                  {msg.role === 'user' && (msg.audioUrl || msg.audioPending) && (msg.text && msg.text.trim() !== '' && msg.text !== '（语音）') && (
+                    <div className={`text-[12px] leading-snug text-slate-500 dark:text-slate-400 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}>
+                      {msg.text.replace(/[【\[（]\s*$/, '').trim()}
                     </div>
                   )}
 
                   {/* Text Message Bubble (WeChat style) */}
-                  {(msg.text && msg.text !== '（语音）' && msg.text.trim() !== '') && (
+                  {(msg.text && msg.text !== '（语音）' && msg.text.trim() !== '' && !(msg.role === 'user' && (msg.audioUrl || msg.audioPending))) && (
                     <div className={`px-4 py-2.5 text-[15px] leading-relaxed shadow-sm rounded-lg whitespace-pre-wrap break-words ${msg.role === 'user'
                       ? 'bg-primary text-white rounded-tr-none'
                       : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
@@ -4237,13 +3992,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     <div className="fixed inset-0 z-[105] bg-gradient-to-t from-black/80 via-black/40 to-transparent animate-in fade-in duration-300 pointer-events-none" />
                   )}
 
-                  <div className={`flex flex-col items-center transition-all duration-300 ${isRecording
+                  <div className={`relative flex flex-col items-center transition-all duration-300 ${isRecording
                     ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
                     : 'relative'}`}>
+                    {/* Subtle dark gradient mask behind the hint text to ensure contrast against chat messages. */}
                     {isRecording && (
-                      <div className={`mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
+                      <div className="absolute left-0 right-0 -top-20 h-40 bg-gradient-to-t from-black/60 via-black/30 to-transparent pointer-events-none opacity-80" />
+                    )}
+                    {isRecording && (
+                      <div className={`relative z-[1] mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
                         ? 'text-red-500'
-                        : 'text-slate-400'
+                        : 'text-white/90 shadow-sm'
                         }`}>
                         {holdCancel ? '松手取消' : '松手发送 上移取消'}
                       </div>
@@ -4258,11 +4017,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdActiveRef.current = true;
                         holdSessionRef.current += 1;
                         const token = holdSessionRef.current;
-                        speechCarryRef.current = '';
-                        speechFinalRef.current = '';
-                        speechInterimRef.current = '';
-                        speechShouldSendRef.current = false;
-                        holdAudioRef.current = null;
                         holdAwaitAudioSendRef.current = false;
                         voicePendingUserMsgIdRef.current = null;
                         holdStartRef.current = { x: e.clientX, y: e.clientY };
@@ -4304,14 +4058,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                           voicePendingUserMsgIdRef.current = null;
                           stopAudioRecorder(true);
                         } else {
-                          // Immediately append a "transcribing" message so UX feels instant on release.
+                          const heldMs = Date.now() - (holdStartTimeRef.current || Date.now());
+                          if (heldMs < MIN_VOICE_HOLD_MS) {
+                            voicePendingUserMsgIdRef.current = null;
+                            holdAwaitAudioSendRef.current = false;
+                            stopAudioRecorder(true);
+                            setRecording(false);
+                            cleanupVoiceMeter();
+                            showToast('按键时间太短，请按住说话', 'info');
+                            return;
+                          }
+                          // Immediately append a voice bubble placeholder so UX feels instant on release (no "sending..." text).
                           const userMsgId = `user-voice-${Date.now()}`;
                           voicePendingUserMsgIdRef.current = userMsgId;
-                          const placeholder: ChatMessage = { id: userMsgId, role: 'user', text: '（转写中…）' };
+                          const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
+                          const placeholder: ChatMessage = {
+                            id: userMsgId,
+                            role: 'user',
+                            text: '',
+                            audioPending: true,
+                            audioDuration: duration,
+                          };
                           const next = [...chatMessagesRef.current, placeholder];
                           chatMessagesRef.current = next;
                           setChatMessages(next);
 
+                          holdAwaitAudioSendRef.current = true;
                           stopAudioRecorder(false);
                         }
                         setRecording(false);
