@@ -414,9 +414,20 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     return { maskText, maskObject, unmaskText, unmaskObject };
   };
   // Navigation State
+  // Derive initial step from URL path to prevent flash (localStorage may conflict with URL).
   const [currentStep, setCurrentStep] = useState<Step>(() => {
-    const saved = localStorage.getItem('ai_analysis_step') as Step | null;
-    return saved || 'resume_select';
+    const path = (window.location.pathname || '').toLowerCase();
+    if (path.startsWith('/ai-analysis')) {
+      const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
+      const sub = (rest.split('/').filter(Boolean)[0] || '');
+      if (sub === 'jd') return 'jd_input';
+      if (sub === 'analyzing') return 'analyzing';
+      if (sub === 'report') return 'report';
+      if (sub === 'chat') return 'chat';
+      if (sub === 'comparison') return 'comparison';
+    }
+    // Base route /ai-analysis or non-matching: always start at resume_select
+    return 'resume_select';
   });
   const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -451,52 +462,50 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }
   };
 
-  // Router sync: allow refresh/deep-link to restore step, and keep URL updated as step changes.
+  // Keep URL in sync when currentStep changes (outward sync only).
+  // IMPORTANT: Do NOT include location.pathname in deps — otherwise navigating
+  // AWAY from AI Analysis (e.g. to /dashboard) would trigger this effect, which
+  // would force-navigate back to /ai-analysis, creating an infinite redirect loop.
   useEffect(() => {
-    const path = (location.pathname || '').toLowerCase();
-    if (!path.startsWith('/ai-analysis')) return;
+    // Guard: only sync if we're still on an /ai-analysis path.
+    // When the user navigates away, the component may briefly remain mounted;
+    // we must not hijack the new route.
+    const currentPath = window.location.pathname.toLowerCase();
+    if (!currentPath.startsWith('/ai-analysis')) return;
 
+    const base = '/ai-analysis';
+    const targetPath = (() => {
+      switch (currentStep) {
+        case 'resume_select': return base;
+        case 'jd_input': return `${base}/jd`;
+        case 'analyzing': return `${base}/analyzing`;
+        case 'report': return selectedResumeId ? `${base}/report/${selectedResumeId}` : `${base}/report`;
+        case 'chat': return `${base}/chat`;
+        case 'comparison': return selectedResumeId ? `${base}/comparison/${selectedResumeId}` : `${base}/comparison`;
+        default: return base;
+      }
+    })();
+    if (currentPath !== targetPath.toLowerCase()) {
+      navigate(targetPath, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, selectedResumeId]);
+
+  // Handle deep-link: extract resume ID from URL on mount (for report/comparison sub-routes).
+  useEffect(() => {
+    const path = (window.location.pathname || '').toLowerCase();
+    if (!path.startsWith('/ai-analysis')) return;
     const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
     const parts = rest ? rest.split('/').filter(Boolean) : [];
     const sub = parts[0] || '';
     const id = parts[1] || '';
-
-    if (sub === 'jd') {
-      navigateToStep('jd_input', true);
-      return;
+    if ((sub === 'report' || sub === 'comparison') && id) {
+      setSelectedResumeId(id);
+      sourceResumeIdRef.current = id;
+      setAnalysisResumeId(id);
     }
-    if (sub === 'analyzing') {
-      navigateToStep('analyzing', true);
-      return;
-    }
-    if (sub === 'chat') {
-      navigateToStep('chat', true);
-      return;
-    }
-    if (sub === 'comparison') {
-      if (id) {
-        setSelectedResumeId(id);
-        sourceResumeIdRef.current = id;
-        setAnalysisResumeId(id);
-      }
-      navigateToStep('comparison', true);
-      return;
-    }
-    if (sub === 'report') {
-      if (id) {
-        setSelectedResumeId(id);
-        sourceResumeIdRef.current = id;
-        setAnalysisResumeId(id);
-      }
-      navigateToStep('report', true);
-      return;
-    }
-
-    // Base route: /ai-analysis
-    if (!sub) {
-      navigateToStep('resume_select', true);
-    }
-  }, [location.pathname]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const openChat = (source: 'internal' | 'preview') => {
     if (source === 'internal') {
