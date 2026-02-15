@@ -543,6 +543,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const holdCancelRef = useRef(false);
   const autoSendOnStopRef = useRef(false);
   const discardOnStopRef = useRef(false);
+  const holdAudioRef = useRef<{ blob: Blob; url: string; mime: string } | null>(null);
+  const holdAwaitAudioSendRef = useRef(false);
   const [chatInitialized, setChatInitialized] = useState(false);
   const speechRecRef = useRef<any>(null);
   const speechStartingRef = useRef(false);
@@ -552,6 +554,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const speechShouldSendRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const voiceMeterStreamRef = useRef<MediaStream | null>(null);
+  const voiceMeterOwnsStreamRef = useRef(false);
   const audioRafRef = useRef<number | null>(null);
   const fakeMeterTimerRef = useRef<number | null>(null);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
@@ -594,6 +597,47 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   const voiceDebugEnabled = () => {
     try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
+  };
+
+  const shouldUseAudioFallback = () => {
+    // Android Chrome often has broken/unavailable SpeechRecognition; fallback to sending audio.
+    try {
+      const forced = localStorage.getItem('voice_force_audio') === '1';
+      const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+      const isAndroid = /Android/i.test(ua);
+      return forced || isAndroid;
+    } catch {
+      return false;
+    }
+  };
+
+  const transcribeAudioOnBackend = async (audioObj: { blob: Blob; url: string; mime: string }) => {
+    const token = await getBackendAuthToken();
+    if (!token) throw new Error('请先登录以使用 AI 功能');
+
+    const apiEndpoint = buildApiUrl('/api/ai/transcribe');
+    const audioPayload = {
+      mime_type: audioObj.mime,
+      data: await blobToBase64(audioObj.blob),
+    };
+
+    const resp = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`
+      },
+      body: JSON.stringify({ audio: audioPayload, lang: 'zh-CN' })
+    });
+
+    const json = await resp.json().catch(() => ({} as any));
+    if (!resp.ok) {
+      throw new Error(json?.error || '转写失败');
+    }
+    if (!json?.success) {
+      throw new Error(json?.error || '转写失败');
+    }
+    return String(json?.text || '').trim();
   };
 
     const ToastOverlay = () => {
@@ -2244,12 +2288,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     scrollToBottom();
   }, [keyboardOffset, inputBarHeight, currentStep]);
 
-  // Voice input (speech-to-text): convert speech to text locally and send text to AI.
+  // Voice input: we record audio (MediaRecorder), transcribe on backend, then send as plain text.
   useEffect(() => {
-    const SR = typeof window !== 'undefined'
-      ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-      : null;
-    setAudioSupported(!!SR);
+    const ok =
+      typeof window !== 'undefined' &&
+      typeof navigator !== 'undefined' &&
+      !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
+      !!((window as any).MediaRecorder);
+    setAudioSupported(ok);
   }, []);
 
   useEffect(() => {
@@ -2270,10 +2316,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       try { cancelAnimationFrame(audioRafRef.current); } catch { }
       audioRafRef.current = null;
     }
-    if (voiceMeterStreamRef.current) {
+    if (voiceMeterStreamRef.current && voiceMeterOwnsStreamRef.current) {
       try { voiceMeterStreamRef.current.getTracks().forEach(t => t.stop()); } catch { }
-      voiceMeterStreamRef.current = null;
     }
+    voiceMeterStreamRef.current = null;
+    voiceMeterOwnsStreamRef.current = false;
     if (audioCtxRef.current) {
       try { audioCtxRef.current.close(); } catch { }
       audioCtxRef.current = null;
@@ -2281,28 +2328,181 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setVisualizerData(new Array(24).fill(4));
   };
 
-  const startVoiceMeter = async () => {
+  const startVoiceMeter = async (streamOverride?: MediaStream) => {
     cleanupVoiceMeter();
 
-    // NOTE: Using getUserMedia here can conflict with SpeechRecognition on some Android devices
-    // (mic contention => always "no-speech"). Use a synthetic waveform animation instead.
-    const tick = () => {
-      const base = 6;
-      const amp = 38;
-      const now = Date.now();
-      const phase = (now % 1200) / 1200;
-      const arr: number[] = [];
-      for (let i = 0; i < 12; i++) {
-        const t = (i / 12 + phase) * Math.PI * 2;
-        const v = Math.abs(Math.sin(t)) * (0.55 + 0.45 * Math.random());
-        arr.push(base + v * amp);
-      }
-      const mirrored = [...[...arr].reverse(), ...arr];
-      setVisualizerData(mirrored);
-    };
+    if (!streamOverride) return;
 
-    tick();
-    fakeMeterTimerRef.current = window.setInterval(tick, 80);
+    try {
+      voiceMeterStreamRef.current = streamOverride;
+      voiceMeterOwnsStreamRef.current = false;
+
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      audioCtxRef.current = ctx;
+      try { await ctx.resume?.(); } catch { }
+
+      const source = ctx.createMediaStreamSource(streamOverride);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.5;
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let lastUpdate = 0;
+
+      const loop = (now: number) => {
+        try {
+          analyser.getByteFrequencyData(dataArray);
+          if (now - lastUpdate > 50) {
+            lastUpdate = now;
+            const newData: number[] = [];
+            const step = Math.floor(dataArray.length / 12);
+            for (let i = 0; i < 12; i++) {
+              const val = dataArray[i * step] || 0;
+              newData.push(4 + (val / 255) * 44);
+            }
+            const mirrored = [...[...newData].reverse(), ...newData];
+            setVisualizerData(mirrored);
+          }
+        } catch { }
+        audioRafRef.current = requestAnimationFrame(loop);
+      };
+      audioRafRef.current = requestAnimationFrame(loop);
+    } catch (e) {
+      console.warn('Voice meter failed:', e);
+    }
+  };
+
+  const pickRecorderMime = () => {
+    const MR: any = typeof window !== 'undefined' ? (window as any).MediaRecorder : null;
+    const isSupported = (t: string) => {
+      try { return !!MR?.isTypeSupported?.(t); } catch { return false; }
+    };
+    const candidates = [
+      'audio/webm;codecs=opus',
+      'audio/webm',
+      'audio/mp4',
+    ];
+    for (const c of candidates) {
+      if (isSupported(c)) return c;
+    }
+    return '';
+  };
+
+  const startAudioRecorder = async (token: number) => {
+    // For Android fallback: capture audio and send to backend (no SpeechRecognition).
+    holdAudioRef.current = null;
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      // Reuse recorder stream for real waveform (no extra mic request).
+      startVoiceMeter(stream);
+
+      const mime = pickRecorderMime();
+      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      mediaRecorderRef.current = rec;
+      recordChunksRef.current = [];
+
+      rec.ondataavailable = (e: any) => {
+        try {
+          if (e?.data && e.data.size > 0) recordChunksRef.current.push(e.data);
+        } catch { }
+      };
+
+      rec.onstop = () => {
+        if (holdAudioDiscardRef.current) {
+          holdAudioDiscardRef.current = false;
+          try { mediaStreamRef.current?.getTracks().forEach(t => t.stop()); } catch { }
+          mediaStreamRef.current = null;
+          mediaRecorderRef.current = null;
+          recordChunksRef.current = [];
+          holdAudioRef.current = null;
+          return;
+        }
+
+        let blob: Blob | null = null;
+        try {
+          const chunks = recordChunksRef.current;
+          blob = new Blob(chunks, { type: mime || 'audio/webm' });
+        } catch { }
+
+        try { mediaStreamRef.current?.getTracks().forEach(t => t.stop()); } catch { }
+        mediaStreamRef.current = null;
+        mediaRecorderRef.current = null;
+        recordChunksRef.current = [];
+
+        if (!blob || !blob.size) {
+          if (voiceDebugEnabled()) console.debug('[voice] audio recorder stopped: empty blob');
+          return;
+        }
+
+        const url = URL.createObjectURL(blob);
+        const audioObj = { blob, url, mime: blob.type || mime || 'audio/webm' };
+        holdAudioRef.current = audioObj;
+
+        if (voiceDebugEnabled()) {
+          console.debug('[voice] audio recorder stopped', {
+            token,
+            size: blob.size,
+            mime: audioObj.mime,
+          });
+        }
+
+        // If user released and is waiting for send: transcribe -> send as text.
+        if (holdAwaitAudioSendRef.current) {
+          holdAwaitAudioSendRef.current = false;
+          (async () => {
+            try {
+              const text = await transcribeAudioOnBackend(audioObj);
+              if (text) {
+                try { handleSendMessage(text, null); } catch { }
+                try { URL.revokeObjectURL(audioObj.url); } catch { }
+                holdAudioRef.current = null;
+                return;
+              }
+            } catch (e) {
+              if (voiceDebugEnabled()) console.debug('[voice] transcribe failed, fallback to audio', e);
+            }
+
+            // Fallback: send as audio message if transcription is unavailable/empty.
+            try { handleSendMessage('', audioObj); } catch { }
+          })();
+        }
+      };
+
+      rec.onerror = (e: any) => {
+        if (voiceDebugEnabled()) console.debug('[voice] audio recorder error', e);
+      };
+
+      // Collect small chunks to avoid losing data on some devices.
+      try { rec.start(250); } catch { rec.start(); }
+    } catch (e: any) {
+      const name = String(e?.name || '').toLowerCase();
+      if (name.includes('notallowed') || name.includes('permission')) {
+        setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
+      } else {
+        setAudioError('麦克风启动失败，请重试');
+      }
+      setRecording(false);
+      cleanupVoiceMeter();
+      if (voiceDebugEnabled()) console.debug('[voice] startAudioRecorder failed', e);
+    }
+  };
+
+  const holdAudioDiscardRef = useRef(false);
+  const stopAudioRecorder = (discard: boolean) => {
+    const rec = mediaRecorderRef.current;
+    if (!rec) return;
+    holdAudioDiscardRef.current = !!discard;
+    if (discard) {
+      // Just stop and drop anything recorded.
+      holdAudioRef.current = null;
+      holdAwaitAudioSendRef.current = false;
+    }
+    try { rec.stop(); } catch { }
   };
 
   const stopRecording = ({ discard = false, autoSend = false }: { discard?: boolean; autoSend?: boolean } = {}) => {
@@ -2533,6 +2733,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         return;
       }
       if (!text) {
+        // If we're using audio fallback (or audio is already captured), send audio instead of toasting.
+        const audioObj = holdAudioRef.current;
+        if (audioObj?.blob) {
+          try { handleSendMessage('', audioObj); } catch { }
+          speechCarryRef.current = '';
+          speechFinalRef.current = '';
+          holdAudioRef.current = null;
+          return;
+        }
+        // Otherwise, wait briefly for audio recorder onstop to produce the blob.
+        if (shouldUseAudioFallback()) {
+          holdAwaitAudioSendRef.current = true;
+          setTimeout(() => {
+            if (!holdAwaitAudioSendRef.current) return;
+            holdAwaitAudioSendRef.current = false;
+            showToast('未识别到语音内容', 'info');
+            speechCarryRef.current = '';
+            speechFinalRef.current = '';
+          }, 1200);
+          return;
+        }
+
         showToast('未识别到语音内容', 'info');
         speechCarryRef.current = '';
         speechFinalRef.current = '';
@@ -3932,14 +4154,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         speechFinalRef.current = '';
                         speechInterimRef.current = '';
                         speechShouldSendRef.current = false;
+                        holdAudioRef.current = null;
+                        holdAwaitAudioSendRef.current = false;
                         holdStartRef.current = { x: e.clientX, y: e.clientY };
                         holdCancelRef.current = false;
                         setHoldCancel(false);
                         setAudioError('');
                         // Start waveform in the user-gesture context (Android may block AudioContext otherwise).
                         setRecording(true);
-                        startVoiceMeter();
-                        startRecording(token);
+                        startAudioRecorder(token);
                       }}
                       onPointerMove={(e) => {
                         e.preventDefault();
@@ -3967,7 +4190,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdStartRef.current = null;
                         holdCancelRef.current = false;
                         setHoldCancel(false);
-                        stopRecording({ discard: cancel, autoSend: !cancel });
+                        stopAudioRecorder(!!cancel);
+                        if (!cancel) {
+                          // onstop will transcribe->send; if it doesn't arrive quickly, show the usual toast.
+                          holdAwaitAudioSendRef.current = true;
+                          setTimeout(() => {
+                            if (!holdAwaitAudioSendRef.current) return;
+                            holdAwaitAudioSendRef.current = false;
+                            showToast('未识别到语音内容', 'info');
+                          }, 1600);
+                        }
+                        setRecording(false);
+                        cleanupVoiceMeter();
                       }}
                       onPointerCancel={(e) => {
                         try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
@@ -3975,7 +4209,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdStartRef.current = null;
                         holdCancelRef.current = false;
                         setHoldCancel(false);
-                        stopRecording({ discard: true, autoSend: false });
+                        stopAudioRecorder(true);
+                        setRecording(false);
+                        cleanupVoiceMeter();
                       }}
                       onContextMenu={(e) => e.preventDefault()}
                       disabled={!audioSupported || isSending}

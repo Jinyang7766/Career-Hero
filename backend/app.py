@@ -3420,6 +3420,71 @@ def ai_chat(current_user_id):
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
 
+
+@app.route('/api/ai/transcribe', methods=['POST', 'OPTIONS'])
+@token_required
+def ai_transcribe(current_user_id):
+    """
+    Speech-to-text for short user voice answers.
+
+    Input:
+      { audio: { mime_type: "audio/webm", data: "<base64 or data:...>" }, lang?: "zh-CN" }
+
+    Output:
+      { success: true, text: "...", model: "models/..." }
+    """
+    try:
+        data = request.get_json() or {}
+        audio = data.get('audio') or {}
+        lang = (data.get('lang') or 'zh-CN').strip() or 'zh-CN'
+
+        if not isinstance(audio, dict) or not audio.get('data'):
+            return jsonify({'success': False, 'text': '', 'error': '缺少音频数据'}), 400
+
+        if not (gemini_client and check_gemini_quota()):
+            return jsonify({'success': False, 'text': '', 'error': 'AI服务不可用'}), 200
+
+        try:
+            from base64 import b64decode
+            mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
+            base64_data = audio.get('data') or ''
+
+            # Support data URL: data:audio/webm;base64,...
+            m = re.match(r'^data:(audio/[a-zA-Z0-9.+-]+);base64,(.*)$', base64_data, flags=re.DOTALL)
+            if m:
+                mime_type = (m.group(1) or mime_type).strip().lower()
+                base64_data = m.group(2)
+
+            audio_bytes = b64decode(base64_data)
+        except Exception as dec_err:
+            logger.warning("Transcribe audio decode failed: %s", dec_err)
+            return jsonify({'success': False, 'text': '', 'error': '音频解码失败'}), 400
+
+        prompt = f"""
+你是语音转文字引擎。请将用户的语音内容转写为纯文本。
+要求：
+- 只输出转写文本，不要解释，不要加标点说明标签。
+- 如有明显口头语可适度保留；如听不清请尽量根据上下文推断，不要输出“听不清/无法识别”。
+- 语言：{lang}
+"""
+        contents = [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)]
+
+        response, used_model = _gemini_generate_content_resilient(
+            GEMINI_INTERVIEW_MODEL,
+            contents,
+            want_json=False
+        )
+
+        text = (response.text or '').strip()
+        # Defensive: strip enclosing quotes/newlines
+        if text.startswith('"') and text.endswith('"') and len(text) >= 2:
+            text = text[1:-1].strip()
+
+        return jsonify({'success': True, 'text': text, 'model': used_model}), 200
+    except Exception as e:
+        logger.error("AI transcribe failed: %s", e)
+        return jsonify({'success': False, 'text': '', 'error': '服务器内部错误'}), 500
+
 def format_resume_for_ai(resume_data):
     """用于 AI 的简历格式化文本"""
     def _text(v):
