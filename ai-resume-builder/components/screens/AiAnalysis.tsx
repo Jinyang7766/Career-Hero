@@ -515,37 +515,51 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const recordChunksRef = useRef<BlobPart[]>([]);
   const [audioSupported, setAudioSupported] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
+  const isRecordingRef = useRef(false);
+  const setRecording = (v: boolean) => {
+    isRecordingRef.current = v;
+    setIsRecording(v);
+  };
+  const micPreflightOkRef = useRef(false);
   const [pendingAudio, setPendingAudio] = useState<{ blob: Blob; url: string; mime: string } | null>(null);
   const [audioError, setAudioError] = useState<string>('');
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const holdStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Track whether the user is still holding the "press to talk" button.
+  // SpeechRecognition can end quickly (e.g. "no-speech") when continuous=false;
+  // while holding, we auto-restart to keep the UX stable.
+  const holdActiveRef = useRef(false);
+  const holdSessionRef = useRef(0);
   const [holdCancel, setHoldCancel] = useState(false);
   const holdCancelRef = useRef(false);
   const autoSendOnStopRef = useRef(false);
   const discardOnStopRef = useRef(false);
+  const [chatInitialized, setChatInitialized] = useState(false);
   const speechRecRef = useRef<any>(null);
+  const speechStartingRef = useRef(false);
   const speechFinalRef = useRef('');
   const speechInterimRef = useRef('');
   const speechShouldSendRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const audioRafRef = useRef<number | null>(null);
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const toastTimerRef = useRef<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
 
   const WaveformVisualizer = ({ active, cancel }: { active: boolean; cancel: boolean }) => {
     return (
-      <div className="flex items-center justify-center gap-[3px] h-8 px-4 overflow-hidden">
+      <div className="flex items-center justify-center gap-[4px] h-12 px-4 overflow-hidden">
         {visualizerData.map((val, i) => {
-          // Add some randomness/variation to make it look organic even with simple volume input
-          const height = active ? Math.max(4, val) : 4;
+          // If canceled, make bars very small
+          const height = cancel ? 4 : (active ? Math.max(4, val) : 4);
           return (
             <div
               key={i}
-              className={`w-1 rounded-full transition-all duration-75 ${cancel ? 'bg-white/40' : 'bg-white'
-                }`}
+              className={`w-1 rounded-full transition-all duration-75 bg-white`}
               style={{
                 height: `${height}px`,
-                opacity: active ? 1 : 0.3,
+                opacity: cancel ? 0.3 : (active ? 1 : 0.3),
               }}
             />
           );
@@ -2237,14 +2251,69 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     };
   }, [pendingAudio?.url]);
 
+  const cleanupVoiceMeter = () => {
+    if (audioRafRef.current) {
+      try { cancelAnimationFrame(audioRafRef.current); } catch { }
+      audioRafRef.current = null;
+    }
+    if (audioCtxRef.current) {
+      try { audioCtxRef.current.close(); } catch { }
+      audioCtxRef.current = null;
+    }
+    setVisualizerData(new Array(24).fill(4));
+  };
+
+  const startVoiceMeter = async () => {
+    cleanupVoiceMeter();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return;
+      const ctx = new AC();
+      audioCtxRef.current = ctx;
+      const source = ctx.createMediaStreamSource(stream);
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.5;
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      let lastUpdate = 0;
+
+      const loop = (now: number) => {
+        try {
+          analyser.getByteFrequencyData(dataArray);
+          if (now - lastUpdate > 50) {
+            lastUpdate = now;
+            // Symmetrical waveform: 12 unique points, mirrored to 24
+            const newData = [];
+            const step = Math.floor(dataArray.length / 12);
+            for (let i = 0; i < 12; i++) {
+              const val = dataArray[i * step] || 0;
+              newData.push(4 + (val / 255) * 44); // Max height 48px
+            }
+            // Mirror it [11...0, 0...11] or just duplicate for simplicity
+            const mirrored = [...[...newData].reverse(), ...newData];
+            setVisualizerData(mirrored);
+          }
+        } catch { }
+        audioRafRef.current = requestAnimationFrame(loop);
+      };
+      audioRafRef.current = requestAnimationFrame(loop);
+    } catch (e) {
+      console.warn('Voice meter failed:', e);
+    }
+  };
+
   const stopRecording = ({ discard = false, autoSend = false }: { discard?: boolean; autoSend?: boolean } = {}) => {
     discardOnStopRef.current = discard;
     autoSendOnStopRef.current = autoSend;
     speechShouldSendRef.current = !!autoSend && !discard;
+    cleanupVoiceMeter();
 
     const rec = speechRecRef.current;
     if (!rec) {
-      setIsRecording(false);
+      setRecording(false);
       return;
     }
     try {
@@ -2253,34 +2322,55 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     } catch { }
   };
 
-  const startRecording = async () => {
+  const startRecording = async (holdToken?: number) => {
     setAudioError('');
     if (!audioSupported) {
       setAudioError('当前浏览器不支持语音转文字，请切换 Chrome 或使用键盘输入');
       return;
     }
-    if (isRecording) return;
+    if (speechStartingRef.current) return;
+    if (speechRecRef.current) return;
+    speechStartingRef.current = true;
+    startVoiceMeter();
 
     // Some browsers require a secure context for speech recognition and mic access.
     try {
       if (typeof window !== 'undefined' && !window.isSecureContext && location.hostname !== 'localhost') {
         setAudioError('语音识别需要在 HTTPS 环境下使用');
+        speechStartingRef.current = false;
         return;
       }
     } catch { }
 
     // Preflight mic permission to avoid immediate SpeechRecognition failure on some mobile browsers.
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-      try { s.getTracks().forEach(t => t.stop()); } catch { }
-    } catch (e: any) {
-      const name = String(e?.name || '').toLowerCase();
-      if (name.includes('notallowed') || name.includes('permission')) {
-        setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
-      } else {
-        setAudioError('麦克风启动失败，请重试');
+    if (!micPreflightOkRef.current) {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+        try { s.getTracks().forEach(t => t.stop()); } catch { }
+        micPreflightOkRef.current = true;
+      } catch (e: any) {
+        micPreflightOkRef.current = false;
+        const name = String(e?.name || '').toLowerCase();
+        if (name.includes('notallowed') || name.includes('permission')) {
+          setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
+        } else {
+          setAudioError('麦克风启动失败，请重试');
+        }
+        speechStartingRef.current = false;
+        return;
       }
-      return;
+    }
+
+    // If this was triggered by a hold gesture, ensure the user is still holding.
+    if (typeof holdToken === 'number') {
+      if (!holdActiveRef.current) {
+        speechStartingRef.current = false;
+        return;
+      }
+      if (holdToken !== holdSessionRef.current) {
+        speechStartingRef.current = false;
+        return;
+      }
     }
 
     // (Re)create recognition instance for this run to ensure handlers use latest closures.
@@ -2295,6 +2385,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     rec.interimResults = true;
     // Mobile browsers are often unstable with continuous=true. We don't need it for "hold to talk".
     rec.continuous = false;
+    rec.onstart = () => {
+      setRecording(true);
+      scrollToBottom();
+    };
 
     rec.onresult = (event: any) => {
       try {
@@ -2328,7 +2422,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         setAudioError('语音识别失败，请重试');
       }
 
-      setIsRecording(false);
+      setRecording(false);
       speechShouldSendRef.current = false;
       speechFinalRef.current = '';
       speechInterimRef.current = '';
@@ -2336,16 +2430,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     };
 
     rec.onend = () => {
+      speechStartingRef.current = false;
       const shouldSend = !!speechShouldSendRef.current;
       speechShouldSendRef.current = false;
-      setIsRecording(false);
+      const stillHolding = holdActiveRef.current;
 
       const text = `${speechFinalRef.current} ${speechInterimRef.current}`.trim();
       speechFinalRef.current = '';
       speechInterimRef.current = '';
       speechRecRef.current = null;
 
-      if (!shouldSend) return;
+      // When holding to talk, SpeechRecognition may end quickly (e.g. "no-speech").
+      // If the user is still holding and we weren't asked to send, restart recognition.
+      if (!shouldSend && stillHolding) {
+        // Keep UI in "recording" state during auto-restart to prevent flicker.
+        setRecording(true);
+        const token = holdSessionRef.current;
+        setTimeout(() => {
+          // Only restart if it's still the same hold session and nothing else is recording.
+          if (!holdActiveRef.current) return;
+          if (token !== holdSessionRef.current) return;
+          if (speechRecRef.current) return;
+          if (isRecordingRef.current && speechRecRef.current) return;
+          startRecording(token);
+        }, 60);
+        return;
+      }
+
+      setRecording(false);
       if (!text) {
         showToast('未识别到语音内容', 'info');
         return;
@@ -2357,12 +2469,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     try {
       rec.start();
-      setIsRecording(true);
+      setRecording(true);
       scrollToBottom();
+      speechStartingRef.current = false;
     } catch {
       setAudioError('语音识别启动失败，请重试');
-      setIsRecording(false);
+      setRecording(false);
       speechRecRef.current = null;
+      speechStartingRef.current = false;
     }
   };
 
@@ -2380,9 +2494,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }, 0);
     }
   };
-
-  // 状态变量，用于跟踪是否已经初始化了聊天消息
-  const [chatInitialized, setChatInitialized] = useState(false);
 
   // 当步骤发生变化时，重置聊天初始化状态
   useEffect(() => {
@@ -3737,11 +3848,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   onPointerDown={(e) => {
                     setMode('voice');
                     try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
+                    holdActiveRef.current = true;
+                    holdSessionRef.current += 1;
+                    const token = holdSessionRef.current;
                     holdStartRef.current = { x: e.clientX, y: e.clientY };
                     holdCancelRef.current = false;
                     setHoldCancel(false);
                     setAudioError('');
-                    startRecording();
+                    startRecording(token);
                   }}
                   onPointerMove={(e) => {
                     const start = holdStartRef.current;
@@ -3756,6 +3870,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   onPointerUp={(e) => {
                     try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
                     const cancel = holdCancelRef.current;
+                    holdActiveRef.current = false;
                     holdStartRef.current = null;
                     holdCancelRef.current = false;
                     setHoldCancel(false);
@@ -3764,6 +3879,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   }}
                   onPointerCancel={(e) => {
                     try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                    holdActiveRef.current = false;
                     holdStartRef.current = null;
                     holdCancelRef.current = false;
                     setHoldCancel(false);
@@ -3774,8 +3890,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   disabled={!audioSupported || isSending}
                   className={`flex-1 h-[46px] rounded-2xl px-4 flex items-center justify-center border transition-all select-none font-bold text-[15px] ${isRecording
                     ? (holdCancel
-                      ? 'bg-red-500 text-white border-red-500 shadow-lg shadow-red-500/20'
-                      : 'bg-primary text-white border-primary shadow-lg shadow-primary/30')
+                      ? 'bg-[#f85149] text-white border-[#f85149] shadow-lg shadow-red-500/20'
+                      : 'bg-[#217aff] text-white border-[#217aff] shadow-lg shadow-primary/30')
                     : 'bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
                     } disabled:opacity-50 active:scale-[0.98]`}
                   type="button"
