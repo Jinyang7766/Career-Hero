@@ -55,7 +55,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     if (resumeData?.resumeTitle) return resumeData.resumeTitle;
     const name = (resumeData?.personalInfo?.name || '').trim();
     if (name) return `${name}的简历`;
-    return '当前简历';
+    return '无';
   })();
 
   const statusTone = (() => {
@@ -97,7 +97,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
   const statusMessage =
     resumeReadState.status === 'idle'
-      ? `尚未读取简历，请先返回上一步选择简历（当前：${selectedResumeLabel}）`
+      ? `尚未读取简历，请先返回上一步选择简历`
       : resumeReadState.message;
 
   return (
@@ -151,13 +151,16 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               type="text"
             />
           </div>
-          <textarea
-            value={jdText}
-            onChange={(e) => setJdText(e.target.value)}
-            placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
-            className="w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
-            maxLength={1000}
-          />
+          <div className="mb-3">
+            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">JD内容</label>
+            <textarea
+              value={jdText}
+              onChange={(e) => setJdText(e.target.value)}
+              placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
+              className="mt-2 w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
+              maxLength={1000}
+            />
+          </div>
 
           <div className="mt-3">
             <button
