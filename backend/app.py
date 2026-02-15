@@ -3424,6 +3424,14 @@ def ai_chat(current_user_id):
         suggestions = data.get('suggestions', [])
 
         has_audio = isinstance(audio, dict) and bool(audio.get('data'))
+        audio_duration_sec = None
+        try:
+            if isinstance(audio, dict):
+                v = audio.get('duration_sec')
+                if v is not None and str(v).strip() != '':
+                    audio_duration_sec = float(v)
+        except Exception:
+            audio_duration_sec = None
         if (not message) and (not has_audio):
             return jsonify({'error': '消息内容不能为空'}), 400
 
@@ -3434,13 +3442,105 @@ def ai_chat(current_user_id):
             .strip()
         )
 
+        def _is_voice_placeholder_text(t: str) -> bool:
+            s = str(t or '').strip()
+            if not s:
+                return False
+            return s in {'（语音）', '(语音)', '[语音]', '语音', 'voice'}
+
+        def _extract_question_from_interviewer_text(t: str) -> str:
+            s = str(t or '').strip()
+            if not s:
+                return ''
+            # Prefer the part after "下一题：" if present.
+            m = re.search(r'下一题[:：]\s*(.*)$', s, flags=re.DOTALL)
+            if m:
+                q = (m.group(1) or '').strip()
+                return q
+            return s
+
+        def _get_last_interviewer_question(chat_history_list) -> str:
+            if not isinstance(chat_history_list, list):
+                return ''
+            for it in reversed(chat_history_list):
+                if not isinstance(it, dict):
+                    continue
+                if it.get('role') != 'model':
+                    continue
+                txt = str(it.get('text') or '').replace('[INTERVIEW_MODE]', '').strip()
+                if not txt or txt.startswith('SYSTEM_'):
+                    continue
+                return _extract_question_from_interviewer_text(txt)
+            return ''
+
+        def _is_low_information_answer(t: str) -> bool:
+            s = str(t or '').strip()
+            if not s:
+                return True
+            if _is_voice_placeholder_text(s):
+                return True
+
+            # Strip whitespace and common punctuation/symbols.
+            compact = re.sub(r'[\s\.,;:!?\-—_·~`"\'“”‘’（）()\[\]{}<>《》【】|/\\\\]+', '', s)
+            if len(compact) < 6:
+                return True
+
+            # Common non-answers / filler.
+            low = compact.lower()
+            if low in {
+                '不知道', '不清楚', '没想过', '随便', '都可以', '没有', '没了', '嗯', '啊', '额', 'emmm', 'ok', 'okay',
+                '是的', '不是', '还行', '一般', '差不多', '就那样'
+            }:
+                return True
+
+            return False
+
+        if _is_voice_placeholder_text(clean_message):
+            clean_message = ''
+
+        # Interview guardrails: do not praise/advance when the answer is empty, silent, or low-information.
+        # We enforce this server-side so the model cannot hallucinate a "good" answer from silence.
+        if mode != 'interview_summary':
+            last_q = _get_last_interviewer_question(chat_history)
+            is_self_intro_q = bool(re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', last_q or ''))
+
+            # If the user sent audio but no text (common for voice messages), try STT to validate there is content.
+            if has_audio and not clean_message:
+                transcript = ''
+                try:
+                    if GOOGLE_SPEECH_API_KEY:
+                        from base64 import b64decode
+                        mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
+                        base64_data = audio.get('data') or ''
+                        m = re.match(r'^data:(audio/[a-zA-Z0-9.+-]+);base64,(.*)$', base64_data, flags=re.DOTALL)
+                        if m:
+                            mime_type = (m.group(1) or mime_type).strip().lower()
+                            base64_data = m.group(2)
+                        audio_bytes = b64decode(base64_data)
+                        # Use zh-CN by default; if you later add language switching, pass it here.
+                        transcript = _google_speech_transcribe(audio_bytes, mime_type, 'zh-CN')
+                except Exception as stt_err:
+                    logger.warning("Interview STT check failed, continuing without transcript: %s", stt_err)
+                    transcript = ''
+
+                if not str(transcript or '').strip():
+                    q = last_q or '请再说一遍你的回答。'
+                    return jsonify({'response': f"我没有识别到有效的语音内容。请重新回答：{q}"}), 200
+
+                clean_message = str(transcript).strip()
+
+            # If still empty or clearly low-information, ask the user to answer again and do not advance.
+            if _is_low_information_answer(clean_message):
+                q = last_q or '请把你的回答说得更具体一些。'
+                return jsonify({'response': f"你的回答信息量不足或未能回答到问题。请补充并重新回答：{q}"}), 200
+
         if gemini_client and check_gemini_quota():
             try:
                 formatted_chat = ""
                 for msg in chat_history:
                     role = "候选人" if msg.get('role') == 'user' else "面试官"
                     msg_text = msg.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
-                    if msg_text and not msg_text.startswith('SYSTEM_'):
+                    if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):
                         formatted_chat += f"{role}: {msg_text}\n"
 
                 if mode == 'interview_summary':
@@ -3467,12 +3567,16 @@ def ai_chat(current_user_id):
  【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
  禁止提及任何评分，禁止给出建议，保持面试官角色。
  规则：
+ - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
+ - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
+ - 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
  - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
  - 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
  职位描述：{job_description if job_description else '未提供'}
  简历信息：{format_resume_for_ai(resume_data) if resume_data else '未提供'}
  对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
  候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
+ 候选人语音时长（秒）：{audio_duration_sec if audio_duration_sec is not None else '未知'}
  请直接输出面试官回答：简短点评 + 下一道具体问题。
  """
                 contents = prompt
@@ -3512,6 +3616,21 @@ def ai_chat(current_user_id):
                         or parsed.get('reply')
                         or raw_text
                     )
+
+                raw_text = (raw_text or '').replace('*', '').strip()
+
+                # If the self-intro is too long, enforce a time-control reminder.
+                try:
+                    too_long = False
+                    if is_self_intro_q:
+                        if audio_duration_sec is not None and audio_duration_sec > 60:
+                            too_long = True
+                        elif audio_duration_sec is None and len(str(clean_message or '')) > 360:
+                            too_long = True
+                    if too_long and ('1分钟' not in raw_text):
+                        raw_text = f"提醒：你的自我介绍偏长，后续请控制在1分钟内。\n{raw_text}".strip()
+                except Exception:
+                    pass
 
                 return jsonify({'response': raw_text if isinstance(raw_text, str) and raw_text.strip() else '感谢你的回答，我们继续下一题。'})
             except Exception as ai_error:

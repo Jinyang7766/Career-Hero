@@ -537,7 +537,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputBarRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
-  const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [inputBarHeight, setInputBarHeight] = useState(76);
@@ -1720,7 +1719,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     // Reset Chat State for new analysis
     setChatMessages([]);
     setChatInitialized(false);
-    setPendingNextQuestion(null);
 
     // Snapshot original data for comparison later
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
@@ -2263,7 +2261,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     setScore(0);
     setOriginalScore(0);
     setChatMessages([]);
-    setPendingNextQuestion(null);
     setIsFromCache(false);
     setOptimizedResumeId(null);
     setAnalysisInProgress(false);
@@ -3220,7 +3217,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try {
       // End interview command: generate a comprehensive summary instead of continuing Q&A.
       if (!opts?.skipAddUserMessage && currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend)) {
-        setPendingNextQuestion(null);
         const summary = await generateInterviewSummary(baseMessages);
         const aiMessage: ChatMessage = {
           id: `ai-summary-${Date.now()}`,
@@ -3232,37 +3228,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
         return;
-      }
-
-      if (currentStep === 'chat' && pendingNextQuestion) {
-        if (isAffirmative(textToSend)) {
-          const formattedQ = formatInterviewQuestion(pendingNextQuestion);
-          const nextMsg: ChatMessage = {
-            id: `ai-next-${Date.now()}`,
-            role: 'model',
-            text: `下一题：${formattedQ}`
-          };
-          const newMessages = [...baseMessages, nextMsg];
-          chatMessagesRef.current = newMessages;
-          setChatMessages(newMessages);
-          setPendingNextQuestion(null);
-          await persistInterviewSession(newMessages, jdText);
-          endSending();
-          return;
-        }
-        if (isNegative(textToSend)) {
-          const holdMsg: ChatMessage = {
-            id: `ai-hold-${Date.now()}`,
-            role: 'model',
-            text: '好的，我们先继续讨论。有需要再告诉我“继续下一题”。'
-          };
-          const newMessages = [...baseMessages, holdMsg];
-          chatMessagesRef.current = newMessages;
-          setChatMessages(newMessages);
-          await persistInterviewSession(newMessages, jdText);
-          endSending();
-          return;
-        }
       }
 
       console.log('Trying backend API for chat...');
@@ -3277,7 +3242,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
-      const isQaMode = isInterviewChat && !!pendingNextQuestion && !isAffirmative(cleanTextForWrap) && !isNegative(cleanTextForWrap);
       const lastMsgBeforeUser = (() => {
         const last = baseMessages[baseMessages.length - 1];
         if (last && last.id === userMessage.id && baseMessages.length >= 2) return baseMessages[baseMessages.length - 2];
@@ -3288,12 +3252,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         (lastMsgBeforeUser.id === 'ai-ask' || lastMsgBeforeUser.text.includes('准备好'));
 
       const interviewWrapped = isInterviewChat
-        ? (isQaMode
-          ? `[INTERVIEW_MODE]\n【答疑阶段：请就候选人问题进行讨论答疑，不要给出下一题或简历优化建议。】\n\n候选人问题：${cleanTextForWrap}`
-          : (isStartPhase && isAffirmative(cleanTextForWrap)
-            ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请先让候选人做自我介绍，并提醒：自我介绍时间为1分钟。随后进入正常面试提问。】`
-            : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。】\n\n候选人回答：${cleanTextForWrap}`)
-        )
+        ? (isStartPhase && isAffirmative(cleanTextForWrap)
+          ? `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请先让候选人做自我介绍，并提醒：自我介绍时间为1分钟。随后进入正常面试提问。】`
+          : `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。输出为纯文本，不要使用任何 Markdown 标记，尤其不要出现 * 号。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。并且：下一题必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。】\n\n候选人回答：${cleanTextForWrap}`)
         : (hasText ? textToSend : (hasAudio ? '（语音）' : ''));
 
       const maskedMessage = masker.maskText(interviewWrapped);
@@ -3307,11 +3268,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       const maskedJdText = masker.maskText(jdText || '');
 
       const audioPayload = hasAudio
-        ? {
-          mime_type: audioObj!.mime,
-          data: await blobToBase64(audioObj!.blob),
-        }
+        ? (() => {
+          const durRaw = (audioOverride as any)?.duration ?? userMessage.audioDuration;
+          const dur = Number(durRaw);
+          const payload: any = {
+            mime_type: audioObj!.mime,
+            data: null as any,
+          };
+          if (Number.isFinite(dur) && dur > 0) payload.duration_sec = Math.round(dur);
+          return payload;
+        })()
         : null;
+
+      if (audioPayload) {
+        audioPayload.data = await blobToBase64(audioObj!.blob);
+      }
 
       const response = await fetch(apiEndpoint, {
         method: 'POST',
@@ -3333,22 +3304,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       if (response.ok) {
         const result = await response.json();
         const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
-        const { cleaned, next } = splitNextQuestion(unmaskedText);
+        const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
+        const { cleaned, next } = splitNextQuestion(safeText);
         const aiMessage: ChatMessage = {
           id: `ai-${Date.now()}`,
           role: 'model',
-          text: cleaned || unmaskedText
+          text: (cleaned || safeText).trim()
         };
-        const newMessages = [...baseMessages, aiMessage];
-        let finalMessages = newMessages;
+        let finalMessages: ChatMessage[] = [...baseMessages, aiMessage];
         if (next) {
-          setPendingNextQuestion(formatInterviewQuestion(next));
-          const askNext: ChatMessage = {
-            id: `ai-ask-next-${Date.now()}`,
+          const formattedQ = formatInterviewQuestion(next);
+          const nextMsg: ChatMessage = {
+            id: `ai-next-${Date.now()}`,
             role: 'model',
-            text: '要继续下一题吗？'
+            text: `下一题：${formattedQ}`
           };
-          finalMessages = [...newMessages, askNext];
+          finalMessages = [...finalMessages, nextMsg];
         }
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
@@ -3395,24 +3366,20 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
 
   const splitNextQuestion = (text: string) => {
-    const nextLabel = '下一题：';
-    const nextIndex = text.indexOf(nextLabel);
-    if (nextIndex === -1) return { cleaned: text, next: null };
-    let cleaned = text.slice(0, nextIndex).trim();
+    const s = String(text || '');
+    const m = s.match(/(下一题|下一道问题|下一道具体问题|下一个问题)\s*[:：]/);
+    if (!m || m.index === undefined) return { cleaned: s, next: null };
+    const nextIndex = m.index;
+    let cleaned = s.slice(0, nextIndex).trim();
     // Remove trailing incomplete brackets like 【 or [
     cleaned = cleaned.replace(/[【\[（]\s*$/, '').trim();
-    const next = text.slice(nextIndex + nextLabel.length).trim();
+    const next = s.slice(nextIndex + m[0].length).trim();
     return { cleaned, next: next || null };
   };
 
   const isAffirmative = (text: string) => {
     const t = text.trim().toLowerCase();
     return ['好', '好的', '可以', '继续', '继续吧', '开始', '开始吧', '行', '嗯', 'ok', 'yes'].some(k => t === k || t.includes(k));
-  };
-
-  const isNegative = (text: string) => {
-    const t = text.trim().toLowerCase();
-    return ['不要', '不', '不想', '先不', '稍后', '等等', '暂停', '不是', 'no'].some(k => t === k || t.includes(k));
   };
 
   // ================= RENDER STEPS =================
@@ -3463,14 +3430,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
               选择简历
             </h1>
-            <div className="flex w-10 justify-end z-10">
-              <button
-                onClick={() => setCurrentView(View.TEMPLATES)}
-                className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
-              </button>
-            </div>
+            <div className="w-10"></div>
           </div>
         </header>
 
