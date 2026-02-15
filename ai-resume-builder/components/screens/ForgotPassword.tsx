@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
+import { useAppContext } from '../../src/app-context';
 
-const ForgotPassword: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
+const ForgotPassword: React.FC<ScreenProps> = () => {
+  const { navigateToView, goBack } = useAppContext();
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -77,7 +79,7 @@ const ForgotPassword: React.FC<ScreenProps> = ({ setCurrentView, goBack }) => {
                 请检查您的收件箱，按照说明重置密码。
               </p>
               <button
-                onClick={() => setCurrentView(View.LOGIN)}
+                onClick={() => navigateToView(View.LOGIN, { replace: true })}
                 className="w-full py-3 rounded-xl bg-white text-red-600 font-bold hover:bg-white/90 transition-all active:scale-[0.98] shadow-lg"
               >
                 返回登录

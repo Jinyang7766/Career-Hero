@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { View, ScreenProps } from '../../types';
 import { AICacheService } from '../../src/ai-cache-service';
 import { confirmDialog } from '../../src/ui/dialogs';
+import { useAppContext } from '../../src/app-context';
 
-const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) => {
+const Settings: React.FC<ScreenProps> = () => {
+  const { logout, goBack } = useAppContext();
   const [cacheSize, setCacheSize] = useState<string>('0 B');
   const [isClearing, setIsClearing] = useState(false);
 
@@ -131,7 +133,7 @@ const Settings: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack }) =
 
         <div className="mt-8 px-4 mb-4">
           <button
-            onClick={onLogout}
+            onClick={logout}
             className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-400 hover:bg-black/5 dark:hover:bg-white/5 transition-all active:scale-[0.98]"
           >
             <span className="text-[16px] font-semibold">退出登录</span>

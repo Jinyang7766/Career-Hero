@@ -4,6 +4,7 @@ import { supabase } from '../../src/supabase-client';
 import { DatabaseService } from '../../src/database-service';
 import { buildApiUrl } from '../../src/api-config';
 import BottomNav from '../BottomNav';
+import { useAppContext } from '../../src/app-context';
 
 // --- Helper Functions ---
 
@@ -495,7 +496,8 @@ const buildExportHtml = (templateId: string): string | null => {
   `.trim();
 };
 
-const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, setResumeData }) => {
+const Preview: React.FC<ScreenProps> = () => {
+  const { navigateToView, goBack, resumeData, setResumeData } = useAppContext();
   const [isGenerating, setIsGenerating] = useState(false);
   const isOptimized = resumeData?.optimizationStatus === 'optimized';
   const currentTemplateId = resumeData?.templateId || 'modern';
@@ -631,7 +633,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
         </button>
         <h2 className="text-white text-lg font-bold tracking-tight opacity-90">简历预览</h2>
         <button
-          onClick={() => setCurrentView(View.EDITOR)}
+          onClick={() => navigateToView(View.EDITOR)}
           className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 transition-all text-white text-xs font-semibold"
         >
           <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -716,7 +718,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
                     resume_data: resumeData
                   }));
                 }
-                setCurrentView(View.AI_ANALYSIS);
+                navigateToView(View.AI_ANALYSIS);
               }}
               className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-br from-primary via-blue-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-500/25 active:scale-[0.98] transition-all group overflow-hidden relative"
             >
@@ -766,7 +768,7 @@ const Preview: React.FC<ScreenProps> = ({ setCurrentView, goBack, resumeData, se
           </p>
         </div>
       </main>
-      <BottomNav currentView={View.PREVIEW} setCurrentView={setCurrentView} />
+      <BottomNav />
     </div>
   );
 };

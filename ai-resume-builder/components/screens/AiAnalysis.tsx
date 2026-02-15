@@ -5,7 +5,9 @@ import { supabase } from '../../src/supabase-client';
 import { toSkillList } from '../../src/skill-utils';
 import { AICacheService } from '../../src/ai-cache-service';
 import { buildApiUrl } from '../../src/api-config';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPage from './ai-analysis/ChatPage';
+import { useAppContext } from '../../src/app-context';
 
 interface Suggestion {
   id: string;
@@ -53,7 +55,11 @@ type ResumeReadState = {
   message: string;
 };
 
-const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden }) => {
+const AiAnalysis: React.FC<ScreenProps> = () => {
+  const { navigateToView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden } = useAppContext();
+  const navigate = useNavigate();
+  const location = useLocation();
+
   const AI_AVATAR_URL = '/ai-avatar.png';
   const AI_AVATAR_FALLBACK =
     'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
@@ -442,6 +448,53 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }
   };
 
+  // Router sync: allow refresh/deep-link to restore step, and keep URL updated as step changes.
+  useEffect(() => {
+    const path = (location.pathname || '').toLowerCase();
+    if (!path.startsWith('/ai-analysis')) return;
+
+    const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
+    const parts = rest ? rest.split('/').filter(Boolean) : [];
+    const sub = parts[0] || '';
+    const id = parts[1] || '';
+
+    if (sub === 'jd') {
+      navigateToStep('jd_input', true);
+      return;
+    }
+    if (sub === 'analyzing') {
+      navigateToStep('analyzing', true);
+      return;
+    }
+    if (sub === 'chat') {
+      navigateToStep('chat', true);
+      return;
+    }
+    if (sub === 'comparison') {
+      if (id) {
+        setSelectedResumeId(id);
+        sourceResumeIdRef.current = id;
+        setAnalysisResumeId(id);
+      }
+      navigateToStep('comparison', true);
+      return;
+    }
+    if (sub === 'report') {
+      if (id) {
+        setSelectedResumeId(id);
+        sourceResumeIdRef.current = id;
+        setAnalysisResumeId(id);
+      }
+      navigateToStep('report', true);
+      return;
+    }
+
+    // Base route: /ai-analysis
+    if (!sub) {
+      navigateToStep('resume_select', true);
+    }
+  }, [location.pathname]);
+
   const openChat = (source: 'internal' | 'preview') => {
     if (source === 'internal') {
       setIsInterviewEntry(false);
@@ -550,6 +603,53 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     isRecordingRef.current = v;
     setIsRecording(v);
   };
+
+  // Android Chrome long-press may trigger text selection + "网页搜索" UI while holding to record.
+  // While recording, disable selection/callout globally to keep the hold-to-talk UX stable.
+  useEffect(() => {
+    if (!isRecording) return;
+
+    const docEl = document.documentElement;
+    const body = document.body;
+
+    const prev = {
+      docUserSelect: docEl.style.userSelect,
+      docWebkitUserSelect: (docEl.style as any).webkitUserSelect,
+      bodyUserSelect: body.style.userSelect,
+      bodyWebkitUserSelect: (body.style as any).webkitUserSelect,
+      bodyWebkitTouchCallout: (body.style as any).webkitTouchCallout,
+    };
+
+    docEl.style.userSelect = 'none';
+    (docEl.style as any).webkitUserSelect = 'none';
+    body.style.userSelect = 'none';
+    (body.style as any).webkitUserSelect = 'none';
+    (body.style as any).webkitTouchCallout = 'none';
+
+    const prevent = (e: Event) => {
+      try {
+        e.preventDefault();
+      } catch {
+        // ignore
+      }
+    };
+
+    document.addEventListener('contextmenu', prevent, true);
+    document.addEventListener('selectstart', prevent, true);
+    document.addEventListener('dragstart', prevent, true);
+
+    return () => {
+      document.removeEventListener('contextmenu', prevent, true);
+      document.removeEventListener('selectstart', prevent, true);
+      document.removeEventListener('dragstart', prevent, true);
+
+      docEl.style.userSelect = prev.docUserSelect;
+      (docEl.style as any).webkitUserSelect = prev.docWebkitUserSelect;
+      body.style.userSelect = prev.bodyUserSelect;
+      (body.style as any).webkitUserSelect = prev.bodyWebkitUserSelect;
+      (body.style as any).webkitTouchCallout = prev.bodyWebkitTouchCallout;
+    };
+  }, [isRecording]);
   const [audioError, setAudioError] = useState<string>('');
   const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -2244,7 +2344,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   };
 
   const handleExportPDF = () => {
-    setCurrentView(View.PREVIEW);
+    navigateToView(View.PREVIEW);
   };
 
   const handleAnalyzeOtherResume = () => {
@@ -2816,7 +2916,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (currentStep !== 'resume_select') {
       localStorage.setItem('ai_analysis_has_activity', '1');
     }
-  }, [currentStep]);
+
+    // Keep URL in sync for refresh/back behavior.
+    try {
+      const base = '/ai-analysis';
+      const resumeIdHint =
+        (localStorage.getItem('ai_analysis_resume_id') || '').trim() ||
+        (selectedResumeId !== null && selectedResumeId !== undefined ? String(selectedResumeId) : '').trim() ||
+        (resumeData && (resumeData as any).id ? String((resumeData as any).id) : '').trim();
+
+      const targetPath = (() => {
+        switch (currentStep) {
+          case 'resume_select': return base;
+          case 'jd_input': return `${base}/jd`;
+          case 'analyzing': return `${base}/analyzing`;
+          case 'chat': return `${base}/chat`;
+          case 'comparison': return resumeIdHint ? `${base}/comparison/${encodeURIComponent(resumeIdHint)}` : `${base}/comparison`;
+          case 'report': return resumeIdHint ? `${base}/report/${encodeURIComponent(resumeIdHint)}` : `${base}/report`;
+          default: return base;
+        }
+      })();
+
+      if (location.pathname !== targetPath) {
+        navigate(targetPath, { replace: true });
+      }
+    } catch {
+      // ignore URL sync errors (e.g., SSR/non-browser)
+    }
+  }, [currentStep, selectedResumeId, resumeData, navigate, location.pathname]);
 
   // 统一恢复逻辑：优先使用最近一次分析快照（切换页面再回来时）
   useEffect(() => {
@@ -3317,7 +3444,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
           const nextMsg: ChatMessage = {
             id: `ai-next-${Date.now()}`,
             role: 'model',
-            text: `下一题：${formattedQ}`
+            text: isSelfIntroQuestion(formattedQ) ? formattedQ : `下一题：${formattedQ}`
           };
           finalMessages = [...finalMessages, nextMsg];
         }

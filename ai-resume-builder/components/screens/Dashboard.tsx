@@ -3,6 +3,7 @@ import { ScreenProps, View } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
+import { useAppContext } from '../../src/app-context';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力。",
@@ -15,7 +16,8 @@ const CAREER_TIPS = [
   "不要忽视你的业余项目，它们也能展示能力。",
 ];
 
-const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ currentUser, createNewResume, allResumes, setCurrentView, setResumeData }) => {
+const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
+  const { currentUser, allResumes, navigateToView, setResumeData } = useAppContext();
   const [greeting, setGreeting] = useState('');
   const [dailyTip, setDailyTip] = useState('');
 
@@ -119,7 +121,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               }
             });
           }
-          setCurrentView(View.PREVIEW);
+          navigateToView(View.PREVIEW);
         } else {
           console.error('Resume data is empty');
           alert('简历数据为空');
@@ -207,7 +209,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                 最近编辑
               </h3>
               <button
-                onClick={() => setCurrentView(View.ALL_RESUMES)}
+                onClick={() => navigateToView(View.ALL_RESUMES)}
                 className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-0.5 hover:text-slate-700 dark:hover:text-slate-200"
               >
                 全部

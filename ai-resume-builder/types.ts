@@ -120,7 +120,8 @@ export interface ResumeSummary {
 }
 
 export interface ScreenProps {
-  setCurrentView: (view: View) => void;
+  // Legacy prop-based navigation. Prefer using `useAppContext().navigateToView(...)`.
+  setCurrentView?: (view: View) => void;
   goBack?: () => void;
   onLogin?: (user: any) => void;
   onLogout?: () => void;

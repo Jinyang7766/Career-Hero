@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, NavProps } from '../types';
+import { View } from '../types';
+import { useAppContext } from '../src/app-context';
 
-const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
+const BottomNav: React.FC = () => {
+  const { currentView, navigateToView } = useAppContext();
+
   const getIconClass = (view: View, baseIcon: string) => {
     const isActive = currentView === view;
     return `material-symbols-outlined text-[22px] leading-none transition-transform duration-200 ${isActive ? 'fill-1' : ''}`;
@@ -22,7 +25,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
     >
       <div className="flex justify-around items-center h-full leading-none">
         <button
-          onClick={() => setCurrentView(View.DASHBOARD)}
+          onClick={() => navigateToView(View.DASHBOARD, { root: true, replace: true })}
           className={getButtonClass(View.DASHBOARD)}
         >
           <span className={getIconClass(View.DASHBOARD, 'home')}>home</span>
@@ -30,7 +33,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
         </button>
 
         <button
-          onClick={() => setCurrentView(View.ALL_RESUMES)}
+          onClick={() => navigateToView(View.ALL_RESUMES, { root: true, replace: true })}
           className={getButtonClass(View.ALL_RESUMES)}
         >
           <span className={getIconClass(View.ALL_RESUMES, 'edit_document')}>edit_document</span>
@@ -38,7 +41,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
         </button>
 
         <button
-          onClick={() => setCurrentView(View.AI_ANALYSIS)}
+          onClick={() => navigateToView(View.AI_ANALYSIS, { root: true, replace: true })}
           className={getButtonClass(View.AI_ANALYSIS)}
         >
           <div className="flex items-center justify-center rounded-xl transition-colors">
@@ -56,7 +59,7 @@ const BottomNav: React.FC<NavProps> = ({ currentView, setCurrentView }) => {
         </button>
 
         <button
-          onClick={() => setCurrentView(View.PROFILE)}
+          onClick={() => navigateToView(View.PROFILE, { root: true, replace: true })}
           className={getButtonClass(View.PROFILE)}
         >
           <span className={getIconClass(View.PROFILE, 'person')}>person</span>

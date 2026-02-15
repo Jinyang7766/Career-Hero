@@ -2,8 +2,10 @@ import React from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
+import { useAppContext } from '../../src/app-context';
 
-const DeletionPending: React.FC<ScreenProps> = ({ currentUser, setCurrentView, goBack, onLogout }) => {
+const DeletionPending: React.FC<ScreenProps> = () => {
+    const { currentUser, navigateToView, logout } = useAppContext();
     const deletionUntil = currentUser?.deletion_pending_until;
 
     const handleRestore = async () => {
@@ -26,7 +28,7 @@ const DeletionPending: React.FC<ScreenProps> = ({ currentUser, setCurrentView, g
                 if (currentUser) {
                     currentUser.deletion_pending_until = null;
                 }
-                setCurrentView(View.DASHBOARD);
+                navigateToView(View.DASHBOARD, { root: true, replace: true });
             } else {
                 alert(result.error || '恢复失败');
             }
@@ -71,7 +73,7 @@ const DeletionPending: React.FC<ScreenProps> = ({ currentUser, setCurrentView, g
                 </button>
 
                 <button
-                    onClick={onLogout}
+                    onClick={logout}
                     className="w-full py-4 bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl font-medium border border-slate-200 dark:border-white/10 active:scale-[0.98] transition-all"
                 >
                     退出登录

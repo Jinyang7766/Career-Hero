@@ -5,8 +5,10 @@ import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
 import { confirmDialog } from '../../src/ui/dialogs';
+import { useAppContext } from '../../src/app-context';
 
-const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBack, currentUser }) => {
+const AccountSecurity: React.FC<ScreenProps> = () => {
+  const { logout, goBack, currentUser } = useAppContext();
   const { userProfile } = useUserProfile();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -49,7 +51,7 @@ const AccountSecurity: React.FC<ScreenProps> = ({ setCurrentView, onLogout, goBa
       }
 
       alert(payload?.message || (immediate ? '账号已立即注销' : '已提交注销申请'));
-      onLogout();
+      logout();
     } catch (err) {
       console.error('Delete account error:', err);
       alert(`注销操作失败：${err instanceof Error ? err.message : '请稍后重试'}`);

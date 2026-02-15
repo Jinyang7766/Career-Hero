@@ -12,6 +12,7 @@ import ProjectsStep from '../editor/steps/ProjectsStep';
 import SkillsStep from '../editor/steps/SkillsStep';
 import SummaryStep from '../editor/steps/SummaryStep';
 // Popup import removed; inline import UI only
+import { useAppContext } from '../../src/app-context';
 
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
@@ -26,7 +27,9 @@ const WIZARD_STEPS: { key: WizardStep; label: string; icon: string }[] = [
   { key: 'summary', label: '个人总结', icon: 'auto_awesome' },
 ];
 
-const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentView, goBack, resumeData, setResumeData, setAllResumes, completeness = 0, createResume, loadUserResumes, wizardMode: initialWizardMode = false, hasBottomNav = false }) => {
+const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: initialWizardMode = false }) => {
+  const { navigateToView, goBack, resumeData, setResumeData, setAllResumes, completeness, createResume, loadUserResumes } = useAppContext();
+  const hasBottomNav = false;
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [isPdfProcessing, setIsPdfProcessing] = useState(false);
@@ -692,7 +695,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ setCurrentVi
 
         console.log('Resume saved successfully, navigating to preview');
         // Navigate to preview
-        setCurrentView(View.PREVIEW);
+        navigateToView(View.PREVIEW);
       } else {
         console.error('Failed to save resume:', result.error);
         alert(`保存失败: ${result.error?.message || '请重试'}`);

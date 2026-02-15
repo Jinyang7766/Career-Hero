@@ -3,8 +3,10 @@ import { View, ScreenProps } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
+import { useAppContext } from '../../src/app-context';
 
-const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes, setAllResumes, currentUser, setResumeData }) => {
+const AllResumes: React.FC<ScreenProps> = () => {
+  const { navigateToView, goBack, allResumes, setAllResumes, currentUser, setResumeData } = useAppContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
@@ -158,7 +160,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
             setResumeData(finalResumeData);
           }
 
-          setCurrentView(View.EDITOR);
+          navigateToView(View.EDITOR);
         } else {
           console.error('❌ Resume not found');
           console.error('Available resume IDs:', result.data.map(r => r.id));
@@ -253,7 +255,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
           setResumeData(finalResumeData);
         }
 
-        setCurrentView(View.PREVIEW);
+        navigateToView(View.PREVIEW);
       } else {
         console.error('❌ Resume not found for preview');
         alert(`简历不存在 (ID: ${resumeId})`);
@@ -431,7 +433,7 @@ const AllResumes: React.FC<ScreenProps> = ({ setCurrentView, goBack, allResumes,
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">全部简历</h2>
           <div className="flex w-10 justify-end z-10">
             <button
-              onClick={() => setCurrentView(View.TEMPLATES)}
+              onClick={() => navigateToView(View.TEMPLATES)}
               className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>

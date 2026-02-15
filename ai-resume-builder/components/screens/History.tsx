@@ -3,6 +3,7 @@ import { View, ScreenProps } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
+import { useAppContext } from '../../src/app-context';
 
 type ExportItem = {
   id: string;
@@ -13,7 +14,8 @@ type ExportItem = {
   exportedAt: string;
 };
 
-const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData }) => {
+const History: React.FC<ScreenProps> = () => {
+  const { navigateToView, goBack, setResumeData } = useAppContext();
   const [items, setItems] = useState<ExportItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -87,7 +89,7 @@ const History: React.FC<ScreenProps> = ({ setCurrentView, goBack, setResumeData 
       if (setResumeData) {
         setResumeData({ id: resume.id, ...resume.resume_data, resumeTitle: resume.title });
       }
-      setCurrentView(View.PREVIEW);
+      navigateToView(View.PREVIEW);
     } catch (err) {
       console.error('Failed to open resume for export:', err);
     }

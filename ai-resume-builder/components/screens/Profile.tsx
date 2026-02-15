@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
+import { useAppContext } from '../../src/app-context';
 
 const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
   <button
@@ -24,7 +25,8 @@ const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, col
   </button>
 );
 
-const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, currentUser, allResumes }) => {
+const Profile: React.FC<ScreenProps> = () => {
+  const { navigateToView, completeness, currentUser, allResumes } = useAppContext();
   const DEFAULT_AVATAR = 'https://lh3.googleusercontent.com/aida-public/AB6AXuC8s4f5uzu0hh4pwqKSmSjqt1tMtDC7n86Mb_kOQe3JucH36AycxncXdZMw9jJo7dQ-PFScoQFPuYgyT_qD07UXSgKmtVmdQVOdO-3sGpsztdokYd994UDKhEaykjYLL0WA5Okx_2Ju5iRxWi4dBZQqSSUOc8uqeZpCYOOg30xh1_QW5-Aarlcq_ExUfD8HROn0Jl2UtS443smhWUTXEeZwUSJ_Y9plJ4iDcmWl4UWee3n6u4ojl5SG_Amz2_hnMxziRnIgDNWh8xsa';
   const [avatar, setAvatar] = React.useState(DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -134,7 +136,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
               </p>
             </div>
             <button
-              onClick={() => setCurrentView(View.MEMBER_CENTER)}
+              onClick={() => navigateToView(View.MEMBER_CENTER)}
               className="shrink-0 px-5 py-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
             >
               立即升级
@@ -146,20 +148,20 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
         {/* Menu Items - Unified Colors */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
           <MenuItem
-            onClick={() => setCurrentView(View.HISTORY)}
+            onClick={() => navigateToView(View.HISTORY)}
             icon="history"
             label="导出历史"
             color="primary"
           />
 
           <MenuItem
-            onClick={() => setCurrentView(View.ACCOUNT_SECURITY)}
+            onClick={() => navigateToView(View.ACCOUNT_SECURITY)}
             icon="verified_user"
             label="账号与安全"
             color="primary"
           />
           <MenuItem
-            onClick={() => setCurrentView(View.SETTINGS)}
+            onClick={() => navigateToView(View.SETTINGS)}
             icon="settings"
             label="设置"
             color="primary"
@@ -172,7 +174,7 @@ const Profile: React.FC<ScreenProps> = ({ setCurrentView, completeness = 0, curr
             badge="得会员"
           />
           <MenuItem
-            onClick={() => setCurrentView(View.HELP)}
+            onClick={() => navigateToView(View.HELP)}
             icon="help_center"
             label="帮助与反馈"
             color="primary"

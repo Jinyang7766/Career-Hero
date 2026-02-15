@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { AuthService } from '../../src/auth-service';
 import { supabase } from '../../src/supabase-client';
+import { useAppContext } from '../../src/app-context';
 
-const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
+const Signup: React.FC<ScreenProps> = () => {
+  const { login, navigateToView } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -56,13 +58,13 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
           localStorage.setItem('user', JSON.stringify(result.data.user));
 
           console.log('Signup and login successful:', result.data.user);
-          if (onLogin) onLogin(result.data.user);
+          login(result.data.user);
         } else {
           // 需要邮箱验证
           console.log('Signup successful, email verification required');
           setError('注册成功！请检查邮箱并点击验证链接以完成注册');
           setTimeout(() => {
-            setCurrentView?.(View.LOGIN);
+            navigateToView(View.LOGIN, { replace: true });
           }, 3000);
         }
       } else {
@@ -86,7 +88,7 @@ const Signup: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
       <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-8 relative">
         <div className="absolute top-0 right-0 p-4 z-20">
           <button
-            onClick={() => setCurrentView(View.LOGIN)}
+            onClick={() => navigateToView(View.LOGIN, { replace: true })}
             className="text-sm font-medium text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
           >
             登录

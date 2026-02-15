@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import QqPenguinIcon from '../icons/QqPenguinIcon';
+import { useAppContext } from '../../src/app-context';
 
-const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
+const Login: React.FC<ScreenProps> = () => {
+  const { login, navigateToView } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -57,7 +59,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
         console.log('Login successful:', data.user);
 
         // Login successful
-        if (onLogin) onLogin(data.user);
+        login(data.user);
       }
     } catch (err) {
       console.error('Unexpected login error:', err);
@@ -113,7 +115,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
                 <div className="text-sm">
                   <button
                     type="button"
-                    onClick={() => setCurrentView(View.FORGOT_PASSWORD)}
+                    onClick={() => navigateToView(View.FORGOT_PASSWORD, { replace: true })}
                     className="font-semibold text-primary hover:text-primary/80 transition-colors"
                   >
                     忘记密码？
@@ -190,7 +192,7 @@ const Login: React.FC<ScreenProps> = ({ setCurrentView, onLogin }) => {
           <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400">
             还没有账号？{' '}
             <button
-              onClick={() => setCurrentView(View.SIGNUP)}
+              onClick={() => navigateToView(View.SIGNUP, { replace: true })}
               className="font-semibold leading-6 text-primary hover:text-blue-500 transition-colors"
             >
               立即注册

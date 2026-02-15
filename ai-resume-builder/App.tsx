@@ -2,9 +2,10 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { View, ResumeData, ResumeSummary } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AppProvider } from './src/app-context';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/screens/Dashboard';
-import Templates from './components/screens/Templates';
 import Profile from './components/screens/Profile';
 import Preview from './components/screens/Preview';
 import Editor from './components/screens/Editor';
@@ -22,10 +23,56 @@ import MemberCenter from './components/screens/MemberCenter';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [currentView, setCurrentView] = useState<View>(View.LOGIN);
-  const [history, setHistory] = useState<View[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isNavHidden, setIsNavHidden] = useState(false);
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const viewToPath = (view: View) => {
+    switch (view) {
+      case View.LOGIN: return '/login';
+      case View.SIGNUP: return '/signup';
+      case View.FORGOT_PASSWORD: return '/forgot-password';
+      case View.DASHBOARD: return '/dashboard';
+      case View.ALL_RESUMES: return '/all-resumes';
+      case View.AI_ANALYSIS: return '/ai-analysis';
+      case View.PROFILE: return '/profile';
+      case View.EDITOR: return '/editor';
+      case View.PREVIEW: return '/preview';
+      case View.TEMPLATES: return '/templates';
+      case View.SETTINGS: return '/settings';
+      case View.ACCOUNT_SECURITY: return '/account-security';
+      case View.HELP: return '/help';
+      case View.HISTORY: return '/history';
+      case View.DELETION_PENDING: return '/deletion-pending';
+      case View.MEMBER_CENTER: return '/member-center';
+      default: return '/dashboard';
+    }
+  };
+
+  const pathToView = (pathname: string): View => {
+    const p = (pathname || '').toLowerCase();
+    if (p === '/' || p === '') return isAuthenticated ? View.DASHBOARD : View.LOGIN;
+    if (p.startsWith('/ai-analysis')) return View.AI_ANALYSIS;
+    if (p.startsWith('/dashboard')) return View.DASHBOARD;
+    if (p.startsWith('/all-resumes')) return View.ALL_RESUMES;
+    if (p.startsWith('/profile')) return View.PROFILE;
+    if (p.startsWith('/editor')) return View.EDITOR;
+    if (p.startsWith('/preview')) return View.PREVIEW;
+    if (p.startsWith('/templates')) return View.TEMPLATES;
+    if (p.startsWith('/settings')) return View.SETTINGS;
+    if (p.startsWith('/account-security')) return View.ACCOUNT_SECURITY;
+    if (p.startsWith('/help')) return View.HELP;
+    if (p.startsWith('/history')) return View.HISTORY;
+    if (p.startsWith('/member-center')) return View.MEMBER_CENTER;
+    if (p.startsWith('/deletion-pending')) return View.DELETION_PENDING;
+    if (p.startsWith('/signup')) return View.SIGNUP;
+    if (p.startsWith('/forgot-password')) return View.FORGOT_PASSWORD;
+    return View.LOGIN;
+  };
+
+  const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
 
   // Global toast + confirm overlays to avoid browser-native alert/confirm (which show the site URL).
   const toastTimerRef = useRef<number | null>(null);
@@ -76,6 +123,21 @@ function App() {
   // Show bottom nav on main tabs only (Editor has its own navigation)
   const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
 
+  // Basic route guards / root redirects.
+  useEffect(() => {
+    const p = (location.pathname || '').toLowerCase();
+    const publicPaths = ['/login', '/signup', '/forgot-password'];
+
+    if (p === '/' || p === '') {
+      navigate(viewToPath(isAuthenticated ? View.DASHBOARD : View.LOGIN), { replace: true });
+      return;
+    }
+
+    if (!isAuthenticated && !publicPaths.some((x) => p.startsWith(x))) {
+      navigate(viewToPath(View.LOGIN), { replace: true });
+    }
+  }, [isAuthenticated, location.pathname, navigate]);
+
   // Load user resumes when authenticated
   useEffect(() => {
     if (isAuthenticated) {
@@ -101,22 +163,22 @@ function App() {
             // Update local user object with latest deletion status
             const updatedUser = { ...session.user, deletion_pending_until: profileResult.data.deletion_pending_until };
             setCurrentUser(updatedUser);
-            setCurrentView(View.DELETION_PENDING);
+            navigate(viewToPath(View.DELETION_PENDING), { replace: true });
           } else {
-            setCurrentView(View.DASHBOARD);
+            navigate(viewToPath(View.DASHBOARD), { replace: true });
           }
         } else {
           console.log('No active session');
-          setCurrentView(View.LOGIN);
+          navigate(viewToPath(View.LOGIN), { replace: true });
         }
       } catch (error) {
         console.error('Error checking auth status:', error);
-        setCurrentView(View.LOGIN);
+        navigate(viewToPath(View.LOGIN), { replace: true });
       }
     };
 
     checkAuth();
-  }, []);
+  }, [navigate]);
 
   // Load user resumes from Supabase
   const loadUserResumes = async () => {
@@ -263,20 +325,20 @@ function App() {
     return Math.min(score, 100);
   }, [resumeData]);
 
-  // Check auth state on mount (mocking persistence)
+  // If user is authenticated, don't allow staying on auth pages.
   useEffect(() => {
-    // In a real app, verify token or session here
-    if (isAuthenticated && [View.LOGIN, View.SIGNUP, View.FORGOT_PASSWORD].includes(currentView)) {
-      handleNavigate(View.DASHBOARD, true);
+    if (!isAuthenticated) return;
+    if ([View.LOGIN, View.SIGNUP, View.FORGOT_PASSWORD].includes(currentView)) {
+      navigate(viewToPath(View.DASHBOARD), { replace: true });
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, currentView, navigate]);
 
   const handleLogin = (userData?: any) => {
     if (userData) {
       setCurrentUser(userData);
     }
     setIsAuthenticated(true);
-    handleNavigate(View.DASHBOARD, true);
+    navigate(viewToPath(View.DASHBOARD), { replace: true });
   };
 
   const handleLogout = () => {
@@ -286,38 +348,27 @@ function App() {
 
     setCurrentUser(null);
     setIsAuthenticated(false);
-    setHistory([]);
-    setCurrentView(View.LOGIN);
+    navigate(viewToPath(View.LOGIN), { replace: true });
   };
 
-  // Enhanced navigation handler
+  // Enhanced navigation handler (router-based)
   const handleNavigate = (view: View, isRoot: boolean = false) => {
-    if (isRoot) {
-      setHistory([]); // Clear history for root navigation (like BottomNav tabs)
-    } else {
-      setHistory(prev => [...prev, currentView]); // Push current view to history
-    }
-    setCurrentView(view);
+    navigate(viewToPath(view), { replace: !!isRoot });
   };
 
   // Back button handler
   const handleGoBack = () => {
-    if (history.length > 0) {
-      const newHistory = [...history];
-      const previousView = newHistory.pop();
-      setHistory(newHistory);
-      if (previousView) {
-        setCurrentView(previousView);
-        // Reset wizard mode when going back
-        if (previousView === View.DASHBOARD) {
-          setShowWizard(false);
-        }
+    // Prefer browser history; if none, fall back to dashboard.
+    try {
+      if (window.history.length > 1) {
+        navigate(-1);
+        return;
       }
-    } else {
-      // Fallback if history is empty
-      setShowWizard(false);
-      setCurrentView(View.DASHBOARD);
+    } catch {
+      // ignore
     }
+    setShowWizard(false);
+    navigate(viewToPath(View.DASHBOARD), { replace: true });
   };
 
   // Bottom Nav click handler (resets history and wizard mode)
@@ -397,7 +448,7 @@ function App() {
         localStorage.setItem(`has_created_resume_${currentUser.id}`, 'true');
         setShowWizard(false);
         await loadUserResumes();
-        setCurrentView(View.EDITOR);
+        navigate(viewToPath(View.EDITOR), { replace: true });
       } else {
         alert('保存简历失败: ' + result.error?.message);
       }
@@ -408,31 +459,15 @@ function App() {
   };
 
   const renderView = () => {
-
-    const commonProps = {
-      setCurrentView: (view: View) => handleNavigate(view),
-      goBack: handleGoBack,
-      resumeData,
-      setResumeData,
-      completeness,
-      allResumes,
-      setAllResumes,
-      createResume,
-      loadUserResumes,
-      currentUser,
-      hasBottomNav: showBottomNav,
-      setIsNavHidden
-    };
-
     switch (currentView) {
       case View.LOGIN:
-        return <Login setCurrentView={setCurrentView} onLogin={handleLogin} />;
+        return <Login />;
       case View.SIGNUP:
-        return <Signup setCurrentView={setCurrentView} onLogin={handleLogin} />;
+        return <Signup />;
       case View.FORGOT_PASSWORD:
-        return <ForgotPassword setCurrentView={setCurrentView} goBack={() => setCurrentView(View.LOGIN)} />;
+        return <ForgotPassword />;
       case View.DASHBOARD:
-        return <Dashboard {...commonProps} createNewResume={() => {
+        return <Dashboard createNewResume={() => {
           // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
           // (especially when the user viewed an existing resume but didn't edit).
           setResumeData({
@@ -468,34 +503,36 @@ function App() {
           handleNavigate(View.EDITOR);
         }} />;
       case View.EDITOR:
-        return <Editor {...commonProps} wizardMode={showWizard} />;
+        return <Editor wizardMode={showWizard} />;
       case View.TEMPLATES:
-        return <Editor {...commonProps} />;
+        return <Editor />;
       case View.AI_ANALYSIS:
-        return <AiAnalysis {...commonProps} />;
+        return <AiAnalysis />;
       case View.PROFILE:
-        return <Profile {...commonProps} />;
+        return <Profile />;
       case View.PREVIEW:
-        return <Preview {...commonProps} />;
+        return <Preview />;
       case View.EDITOR:
-        return <Editor {...commonProps} />;
+        return <Editor />;
       case View.SETTINGS:
-        return <Settings {...commonProps} onLogout={handleLogout} />;
+        return <Settings />;
       case View.ACCOUNT_SECURITY:
-        return <AccountSecurity {...commonProps} onLogout={handleLogout} />;
+        return <AccountSecurity />;
       case View.HELP:
-        return <Help {...commonProps} />;
+        return <Help />;
       case View.HISTORY:
-        return <History {...commonProps} />;
+        return <History />;
       case View.ALL_RESUMES:
-        return <AllResumes {...commonProps} />;
+        return <AllResumes />;
       case View.MEMBER_CENTER:
-        return <MemberCenter {...commonProps} />;
+        return <MemberCenter />;
       case View.DELETION_PENDING:
-        return <DeletionPending {...commonProps} onLogout={handleLogout} />;
+        return <DeletionPending />;
       default:
         // Fallback based on auth status
-        return isAuthenticated ? <Dashboard {...commonProps} createNewResume={() => setShowWizard(true)} /> : <Login setCurrentView={setCurrentView} onLogin={handleLogin} />;
+        return isAuthenticated
+          ? <Dashboard createNewResume={() => setShowWizard(true)} />
+          : <Login />;
     }
   };
 
@@ -557,12 +594,40 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative">
-      <ToastOverlay />
-      <ConfirmModal />
-      {renderView()}
-      {showBottomNav && <BottomNav currentView={currentView} setCurrentView={handleBottomNavClick} />}
-    </div>
+    <AppProvider
+      value={{
+        isAuthenticated,
+        currentUser,
+        currentView,
+        resumeData,
+        setResumeData,
+        allResumes,
+        setAllResumes,
+        loadUserResumes,
+        createResume,
+        completeness,
+        isNavHidden,
+        setIsNavHidden,
+        navigateToView: (view, opts) => {
+          if (opts?.root) {
+            handleBottomNavClick(view);
+            return;
+          }
+          // Non-root navigation: keep any "reset" logic inside `handleBottomNavClick` only.
+          navigate(viewToPath(view), { replace: !!opts?.replace });
+        },
+        goBack: handleGoBack,
+        login: handleLogin,
+        logout: handleLogout,
+      }}
+    >
+      <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative">
+        <ToastOverlay />
+        <ConfirmModal />
+        {renderView()}
+        {showBottomNav && <BottomNav />}
+      </div>
+    </AppProvider>
   );
 }
 
