@@ -26,7 +26,8 @@ interface ChatMessage {
   text: string;
   audioUrl?: string;
   audioMime?: string;
-  suggestion?: Suggestion; // Embedded suggestion for interactive chat
+  audioDuration?: number;
+  suggestion?: Suggestion;
 }
 
 interface ScoreBreakdown {
@@ -541,6 +542,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const holdSessionRef = useRef(0);
   const [holdCancel, setHoldCancel] = useState(false);
   const holdCancelRef = useRef(false);
+  const holdStartTimeRef = useRef<number>(0);
   const autoSendOnStopRef = useRef(false);
   const discardOnStopRef = useRef(false);
   const holdAudioRef = useRef<{ blob: Blob; url: string; mime: string } | null>(null);
@@ -560,6 +562,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const toastTimerRef = useRef<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
 
   const WaveformVisualizer = ({ active, cancel }: { active: boolean; cancel: boolean }) => {
     return (
@@ -640,7 +644,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     return String(json?.text || '').trim();
   };
 
-    const ToastOverlay = () => {
+  const ToastOverlay = () => {
     if (!toast) return null;
     const tone = "bg-red-500/80 backdrop-blur-md text-white border-red-400/30";
     return (
@@ -2458,7 +2462,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             try {
               const text = await transcribeAudioOnBackend(audioObj);
               if (text) {
-                try { handleSendMessage(text, null); } catch { }
+                try {
+                  handleSendMessage(text, { ...audioObj, duration: Math.round((Date.now() - holdStartTimeRef.current) / 1000) } as any);
+                } catch { }
                 try { URL.revokeObjectURL(audioObj.url); } catch { }
                 holdAudioRef.current = null;
                 return;
@@ -2468,7 +2474,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             }
 
             // Fallback: send as audio message if transcription is unavailable/empty.
-            try { handleSendMessage('', audioObj); } catch { }
+            try {
+              handleSendMessage('', { ...audioObj, duration: Math.round((Date.now() - holdStartTimeRef.current) / 1000) } as any);
+            } catch { }
           })();
         }
       };
@@ -2736,7 +2744,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         // If we're using audio fallback (or audio is already captured), send audio instead of toasting.
         const audioObj = holdAudioRef.current;
         if (audioObj?.blob) {
-          try { handleSendMessage('', audioObj); } catch { }
+          const duration = Math.round((Date.now() - holdStartTimeRef.current) / 1000);
+          try { handleSendMessage('', { ...audioObj, duration } as any); } catch { }
           speechCarryRef.current = '';
           speechFinalRef.current = '';
           holdAudioRef.current = null;
@@ -3135,9 +3144,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
       role: 'user',
-      text: hasText ? textToSend : '（语音）',
+      text: hasText ? textToSend : '',
       audioUrl: hasAudio ? audioObj!.url : undefined,
       audioMime: hasAudio ? audioObj!.mime : undefined,
+      audioDuration: hasAudio ? (audioOverride as any)?.duration : undefined,
     };
     setChatMessages(prev => [...prev, userMessage]);
     setInputMessage('');
@@ -3302,7 +3312,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     const nextLabel = '下一题：';
     const nextIndex = text.indexOf(nextLabel);
     if (nextIndex === -1) return { cleaned: text, next: null };
-    const cleaned = text.slice(0, nextIndex).trim();
+    let cleaned = text.slice(0, nextIndex).trim();
+    // Remove trailing incomplete brackets like 【 or [
+    cleaned = cleaned.replace(/[【\[（]\s*$/, '').trim();
     const next = text.slice(nextIndex + nextLabel.length).trim();
     return { cleaned, next: next || null };
   };
@@ -4019,49 +4031,84 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
         >
           {chatMessages.map((msg) => (
             <div key={msg.id} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-              <div className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
-                {msg.role === 'model' && (
-                  <div className="size-8 rounded-full border border-slate-200 dark:border-slate-700 overflow-hidden bg-white shrink-0 mr-2 mt-1 shadow-sm">
-                    <img src="https://api.dicebear.com/9.x/avataaars/svg?seed=Felix" alt="AI Agent" />
-                  </div>
-                )}
-                <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed shadow-sm ${msg.role === 'user'
-                  ? 'bg-primary text-white rounded-br-none'
-                  : 'bg-slate-100 dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-bl-none'
-                  }`}>
-                  {msg.role === 'model' ? (
-                    (() => {
-                      const parsed = parseReferenceReply(msg.text);
-                      if (!parsed) return <div className="whitespace-pre-wrap">{msg.text}</div>;
-                      const isExpanded = !!expandedReferences[msg.id];
-                      return (
-                        <div className="space-y-2">
-                          {parsed.before && <div className="whitespace-pre-wrap">{parsed.before}</div>}
-                          <button
-                            onClick={() => setExpandedReferences(prev => ({ ...prev, [msg.id]: !isExpanded }))}
-                            className="text-xs font-semibold text-primary hover:text-primary/80 bg-primary/10 px-2 py-1 rounded-full inline-flex items-center gap-1 transition-colors"
-                          >
-                            <span className="material-symbols-outlined text-[14px]">{isExpanded ? 'visibility_off' : 'visibility'}</span>
-                            {isExpanded ? '收起参考回复' : '查看参考回复'}
-                          </button>
-                          {isExpanded && (
-                            <div className="text-[13px] leading-relaxed text-slate-700 dark:text-slate-200 bg-white/60 dark:bg-white/5 rounded-xl p-3 border border-primary/20 italic">
-                              {parsed.reference}
+              <div className={`flex ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'} w-full items-start`}>
+                <div className={`size-9 rounded-lg overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}>
+                  <img src={msg.role === 'user' ? "https://api.dicebear.com/9.x/avataaars/svg?seed=User" : "https://api.dicebear.com/9.x/avataaars/svg?seed=Felix"} alt="Avatar" className="w-full h-full object-cover" />
+                </div>
+
+                <div className="flex flex-col max-w-[75%] gap-2">
+                  {/* Voice Message Bubble (WeChat style) */}
+                  {msg.audioUrl && (
+                    <div className={`flex items-center gap-2 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
+                      <button
+                        onClick={() => {
+                          if (!audioPlayerRef.current) return;
+                          if (playingAudioId === msg.id) {
+                            audioPlayerRef.current.pause();
+                          } else {
+                            setPlayingAudioId(msg.id);
+                            audioPlayerRef.current.src = msg.audioUrl!;
+                            audioPlayerRef.current.play();
+                          }
+                        }}
+                        style={{ width: `${Math.min(180, 70 + (msg.audioDuration || 1) * 4)}px` }}
+                        className={`group relative flex items-center justify-between px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
+                          ? 'bg-primary text-white rounded-tr-none'
+                          : 'bg-white dark:bg-[#2c2c2c] text-[#191919] dark:text-white rounded-tl-none border border-slate-200 dark:border-white/5'
+                          }`}
+                      >
+                        <span className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${msg.role === 'user' ? 'rotate-180 translate-x-1' : '-translate-x-1'}`}>
+                          {playingAudioId === msg.id ? 'volume_up' : 'signal_cellular_alt'}
+                        </span>
+                        {playingAudioId === msg.id && (
+                          <div className="absolute inset-0 bg-black/5 flex items-center justify-center">
+                            <div className="flex gap-0.5">
+                              {[1, 2, 3].map(i => (
+                                <div key={i} className="w-0.5 h-3 bg-current animate-bounce" style={{ animationDelay: `${i * 0.1}s` }} />
+                              ))}
                             </div>
-                          )}
-                          {parsed.after && <div className="whitespace-pre-wrap">{parsed.after}</div>}
-                        </div>
-                      );
-                    })()
-                  ) : (
-                    <div className="space-y-2">
-                      {msg.audioUrl && (
-                        <div className="flex items-center gap-2 bg-black/10 rounded-lg p-2 mb-1">
-                          <span className="material-symbols-outlined text-[18px]">mic</span>
-                          <audio src={msg.audioUrl} controls className="h-8 max-w-[180px]" />
-                        </div>
+                          </div>
+                        )}
+                      </button>
+                      <span className="text-[13px] font-medium text-slate-400 dark:text-slate-500 whitespace-nowrap">
+                        {msg.audioDuration || 1}"
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Text Message Bubble (WeChat style) */}
+                  {(msg.text && msg.text !== '（语音）' && msg.text.trim() !== '') && (
+                    <div className={`px-4 py-2.5 text-[15px] leading-relaxed shadow-sm rounded-lg whitespace-pre-wrap break-words ${msg.role === 'user'
+                      ? 'bg-primary text-white rounded-tr-none'
+                      : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
+                      }`}>
+                      {msg.role === 'model' ? (
+                        (() => {
+                          const parsed = parseReferenceReply(msg.text);
+                          if (!parsed) return <div className="whitespace-pre-wrap">{msg.text}</div>;
+                          const isExpanded = !!expandedReferences[msg.id];
+                          return (
+                            <div className="space-y-2">
+                              {parsed.before && <div className="whitespace-pre-wrap">{parsed.before}</div>}
+                              <button
+                                onClick={() => setExpandedReferences(prev => ({ ...prev, [msg.id]: !isExpanded }))}
+                                className="text-xs font-semibold text-primary hover:text-primary/80 bg-primary/10 px-2.5 py-1.5 rounded-md inline-flex items-center gap-1.5 transition-colors border border-primary/20"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">{isExpanded ? 'visibility_off' : 'visibility'}</span>
+                                {isExpanded ? '收起参考回复' : '查看参考回复'}
+                              </button>
+                              {isExpanded && (
+                                <div className="text-[13px] leading-relaxed text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-black/20 rounded-lg p-3 border border-slate-200 dark:border-white/5 italic">
+                                  {parsed.reference}
+                                </div>
+                              )}
+                              {parsed.after && <div className="whitespace-pre-wrap">{parsed.after}</div>}
+                            </div>
+                          );
+                        })()
+                      ) : (
+                        msg.text.replace(/[【\[（]\s*$/, '').trim()
                       )}
-                      <div className="whitespace-pre-wrap">{msg.text}</div>
                     </div>
                   )}
                 </div>
@@ -4157,6 +4204,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdAudioRef.current = null;
                         holdAwaitAudioSendRef.current = false;
                         holdStartRef.current = { x: e.clientX, y: e.clientY };
+                        holdStartTimeRef.current = Date.now();
                         holdCancelRef.current = false;
                         setHoldCancel(false);
                         setAudioError('');
@@ -4266,6 +4314,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       </div>
     );
   }
+  <audio
+    ref={audioPlayerRef}
+    className='hidden'
+    onEnded={() => setPlayingAudioId(null)}
+    onPause={() => setPlayingAudioId(null)}
+  />
 
   return null;
 };
