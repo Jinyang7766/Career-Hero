@@ -503,21 +503,13 @@ function App() {
 
   const ToastOverlay = () => {
     if (!toast) return null;
-    // 使用磨砂红色 (Frosted Red: translucent red + backdrop blur)
     const cls = 'bg-red-500/85 backdrop-blur-xl text-white border-red-400/30';
 
     return (
-      <div className="fixed inset-x-0 top-3 z-[9999] flex justify-center px-4 pointer-events-none">
-        <div className={`pointer-events-auto w-full max-w-[480px] rounded-3xl shadow-2xl shadow-red-500/40 border ${cls} animate-in slide-in-from-top duration-300`}>
-          <div className="px-5 py-4 flex items-center gap-3">
-            <div className="size-8 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-              <span className="material-symbols-outlined text-[20px]">notifications</span>
-            </div>
-            <div className="flex-1">
-              <div className="text-[10px] uppercase tracking-widest font-black opacity-60 leading-none mb-1">System</div>
-              <div className="text-[14px] leading-snug font-bold">{toast.msg}</div>
-            </div>
-          </div>
+      <div className="fixed inset-x-0 top-6 z-[9999] flex justify-center px-4 pointer-events-none">
+        <div className={`pointer-events-auto flex items-center gap-3 rounded-full shadow-2xl shadow-red-500/40 border ${cls} px-4 py-2.5 animate-in slide-in-from-top duration-300 max-w-sm`}>
+          <span className="material-symbols-outlined text-[18px] shrink-0 opacity-80">notifications</span>
+          <div className="text-[14px] font-bold whitespace-nowrap overflow-hidden text-ellipsis">{toast.msg}</div>
         </div>
       </div>
     );
@@ -541,8 +533,7 @@ function App() {
             <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
               <span className="material-symbols-outlined text-white text-[32px]">warning</span>
             </div>
-            <h3 className="text-xl font-bold tracking-tight">确认操作</h3>
-            <p className="text-sm text-white/90 leading-relaxed font-medium mb-2">
+            <p className="text-base text-white font-bold leading-relaxed mb-2 px-2">
               {confirmState.message}
             </p>
           </div>

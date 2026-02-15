@@ -484,6 +484,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
   const [jdText, setJdText] = useState('');
   const [targetCompany, setTargetCompany] = useState('');
+  const prevStepRef = useRef<Step | null>(null);
+
+  // UX: when re-entering the JD input step, do not carry over target company from previous sessions.
+  useEffect(() => {
+    if (currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
+      setTargetCompany('');
+    }
+    prevStepRef.current = currentStep;
+  }, [currentStep]);
 
   // Analysis Result State
   const [originalScore, setOriginalScore] = useState(0);
@@ -587,15 +596,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
   };
 
-  const ToastOverlay = () => {
+    const ToastOverlay = () => {
     if (!toast) return null;
-    // 使用磨砂红色 (Frosted Red: translucent red + backdrop blur)
-    const tone = 'bg-red-500/80 backdrop-blur-md text-white border-red-400/30';
+    const tone = "bg-red-500/80 backdrop-blur-md text-white border-red-400/30";
     return (
       <div className="fixed left-1/2 top-16 -translate-x-1/2 z-[220] px-4 pointer-events-none">
-        <div className={`pointer-events-auto max-w-[90vw] rounded-2xl px-5 py-3 shadow-xl shadow-red-500/20 border ${tone}`}>
-          <div className="text-[10px] uppercase tracking-widest font-bold opacity-70 mb-0.5 whitespace-nowrap">Notification</div>
-          <div className="text-[14px] leading-snug font-bold">{toast.msg}</div>
+        <div className={`pointer-events-auto flex items-center gap-2.5 rounded-full px-4 py-2 shadow-xl shadow-red-500/20 border ${tone} max-w-[90vw]`}>
+          <span className="material-symbols-outlined text-[18px] shrink-0 opacity-80">notifications</span>
+          <div className="text-[14px] font-bold whitespace-nowrap overflow-hidden text-ellipsis">{toast.msg}</div>
         </div>
       </div>
     );
@@ -2282,6 +2290,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       }
       const ctx = new AC();
       audioCtxRef.current = ctx;
+      // On mobile, AudioContext often starts suspended until explicitly resumed.
+      try { await ctx.resume?.(); } catch { }
       const source = ctx.createMediaStreamSource(stream);
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 256;
@@ -2402,22 +2412,25 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     } catch { }
 
     // Preflight mic permission to avoid immediate SpeechRecognition failure on some mobile browsers.
+    // Do not await here: on some Android builds, SpeechRecognition.start() must happen synchronously
+    // in the same user gesture chain, otherwise it may never start / return results.
     if (!micPreflightOkRef.current) {
       try {
-        const s = await navigator.mediaDevices.getUserMedia({ audio: true });
-        try { s.getTracks().forEach(t => t.stop()); } catch { }
-        micPreflightOkRef.current = true;
-      } catch (e: any) {
-        micPreflightOkRef.current = false;
-        const name = String(e?.name || '').toLowerCase();
-        if (name.includes('notallowed') || name.includes('permission')) {
-          setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
-        } else {
-          setAudioError('麦克风启动失败，请重试');
-        }
-        speechStartingRef.current = false;
-        return;
-      }
+        navigator.mediaDevices.getUserMedia({ audio: true }).then((s) => {
+          try { s.getTracks().forEach(t => t.stop()); } catch { }
+          micPreflightOkRef.current = true;
+        }).catch((e: any) => {
+          micPreflightOkRef.current = false;
+          const name = String(e?.name || '').toLowerCase();
+          if (name.includes('notallowed') || name.includes('permission')) {
+            setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
+          } else {
+            setAudioError('麦克风启动失败，请重试');
+          }
+          try { cleanupVoiceMeter(); } catch { }
+          setRecording(false);
+        });
+      } catch { }
     }
 
     // If this was triggered by a hold gesture, ensure the user is still holding.
@@ -2447,8 +2460,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       if (voiceDebugEnabled()) console.debug('[voice] rec.onstart');
       setRecording(true);
       scrollToBottom();
-      // Start waveform meter only after SR has started to avoid delaying SR startup.
-      startVoiceMeter();
     };
 
     rec.onresult = (event: any) => {
@@ -2576,8 +2587,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     try {
       rec.start();
-      setRecording(true);
-      scrollToBottom();
       speechStartingRef.current = false;
     } catch {
       setAudioError('语音识别启动失败，请重试');
@@ -3435,9 +3444,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
                     <span className="material-symbols-outlined text-white text-[32px]">warning</span>
                   </div>
-                  <h3 className="text-xl font-bold tracking-tight">如果您未填写职位描述</h3>
-                  <p className="text-sm text-white/90 leading-relaxed font-medium">
-                    分析结果将基于通用简历优化逻辑，无法进行岗位定向匹配。是否坚持继续？
+                  <p className="text-base text-white/95 leading-relaxed font-bold px-2">
+                    您未填写 JD，无法进行岗位定向匹配。是否坚持继续通用分析？
                   </p>
                 </div>
                 <div className="mt-8 flex flex-col gap-3">
@@ -3968,6 +3976,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                         holdCancelRef.current = false;
                         setHoldCancel(false);
                         setAudioError('');
+                        // Start waveform in the user-gesture context (Android may block AudioContext otherwise).
+                        setRecording(true);
+                        startVoiceMeter();
                         startRecording(token);
                       }}
                       onPointerMove={(e) => {
@@ -4064,3 +4075,5 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 };
 
 export default AiAnalysis;
+
+
