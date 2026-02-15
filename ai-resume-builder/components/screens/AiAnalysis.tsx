@@ -3876,100 +3876,110 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
             )}
 
             <div className="flex gap-3 items-end">
-              <button
-                onClick={() => setMode(inputMode === 'text' ? 'voice' : 'text')}
-                disabled={isSending || (inputMode === 'voice' && !audioSupported)}
-                className="size-11 rounded-full flex items-center justify-center transition-all shadow-sm shrink-0 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
-                type="button"
-              >
-                <span className="material-symbols-outlined text-[24px]">
-                  {inputMode === 'text' ? 'mic' : 'keyboard'}
-                </span>
-              </button>
+              {!isRecording && (
+                <button
+                  onClick={() => setMode(inputMode === 'text' ? 'voice' : 'text')}
+                  disabled={isSending || (inputMode === 'voice' && !audioSupported)}
+                  className="size-11 rounded-full flex items-center justify-center transition-all shadow-sm shrink-0 bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 disabled:opacity-50"
+                  type="button"
+                >
+                  <span className="material-symbols-outlined text-[24px]">
+                    {inputMode === 'text' ? 'mic' : 'keyboard'}
+                  </span>
+                </button>
+              )}
 
               {inputMode === 'voice' ? (
-                <div className="flex-1 relative flex flex-col items-center">
+                <div className="flex-1 relative">
+                  {/* Local Gradient Overlay */}
                   {isRecording && (
-                    <div className={`absolute bottom-full mb-3 px-3 py-1.5 rounded-full backdrop-blur-md text-[13px] font-bold tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
-                      ? 'bg-red-500 text-white shadow-lg shadow-red-500/30'
-                      : 'bg-black/60 text-white shadow-lg shadow-black/10'
-                      }`}>
-                      {holdCancel ? '松手取消' : '松手发送 上移取消'}
-                    </div>
+                    <div className="fixed inset-0 z-[-1] bg-gradient-to-t from-black/80 via-black/40 to-transparent animate-in fade-in duration-300 pointer-events-none" />
                   )}
-                  <button
-                    onPointerDown={(e) => {
-                      setMode('voice');
-                      try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
-                      holdActiveRef.current = true;
-                      holdSessionRef.current += 1;
-                      const token = holdSessionRef.current;
-                      // New hold session: reset buffered transcript and sending intent.
-                      speechCarryRef.current = '';
-                      speechFinalRef.current = '';
-                      speechInterimRef.current = '';
-                      speechShouldSendRef.current = false;
-                      holdStartRef.current = { x: e.clientX, y: e.clientY };
-                      holdCancelRef.current = false;
-                      setHoldCancel(false);
-                      setAudioError('');
-                      startRecording(token);
-                    }}
-                  onPointerMove={(e) => {
-                    if (!holdStartRef.current) return;
 
-                    // Only enter "cancel" state when the finger slides OUT of the button area
-                    // and sufficiently upward. Small movements within the button should never
-                    // flip to cancel.
-                    const el = e.currentTarget as HTMLElement;
-                    const rect = el.getBoundingClientRect();
-                    const insideX = e.clientX >= rect.left && e.clientX <= rect.right;
-                    const insideY = e.clientY >= rect.top && e.clientY <= rect.bottom;
-                    const startY = holdStartRef.current.y;
-                    const dy = startY - e.clientY; // positive when moving up
-                    const screenDy = typeof window !== 'undefined' ? window.innerHeight / 3 : 240;
-                    const cancelThreshold = Math.max(120, Math.floor(screenDy));
-                    const cancel = (insideX && insideY) ? false : (dy > cancelThreshold);
-                    if (cancel !== holdCancelRef.current) {
-                      holdCancelRef.current = cancel;
-                      setHoldCancel(cancel);
-                    }
-                  }}
-                    onPointerUp={(e) => {
-                      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-                      const cancel = holdCancelRef.current;
-                      holdActiveRef.current = false;
-                      holdStartRef.current = null;
-                      holdCancelRef.current = false;
-                      setHoldCancel(false);
-                      stopRecording({ discard: cancel, autoSend: !cancel });
-                    }}
-                    onPointerCancel={(e) => {
-                      try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-                      holdActiveRef.current = false;
-                      holdStartRef.current = null;
-                      holdCancelRef.current = false;
-                      setHoldCancel(false);
-                      stopRecording({ discard: true, autoSend: false });
-                    }}
-                    onContextMenu={(e) => e.preventDefault()}
-                    disabled={!audioSupported || isSending}
-                    className={`w-full h-[46px] rounded-2xl flex items-center justify-center border transition-all select-none font-bold text-[15px] overflow-hidden ${isRecording
-                      ? (holdCancel
-                        ? 'bg-[#f85149] text-white border-[#f85149] shadow-lg shadow-red-500/20'
-                        : 'bg-[#217aff] text-white border-[#217aff] shadow-lg shadow-primary/30')
-                      : 'bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border-slate-200 dark:border-white/10'
-                      } disabled:opacity-50 active:scale-[0.98]`}
-                    type="button"
-                  >
-                    {isRecording ? (
-                      <div className="flex items-center justify-center w-full px-4">
-                        <WaveformVisualizer active={isRecording && !holdCancel} cancel={holdCancel} />
+                  <div className={`flex flex-col items-center transition-all duration-300 ${isRecording ? 'relative z-[110]' : ''}`}>
+                    {isRecording && (
+                      <div className={`mb-6 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
+                        ? 'text-red-400'
+                        : 'text-white/90'
+                        }`}>
+                        {holdCancel ? '松手取消' : '松手发送 上移取消'}
                       </div>
-                    ) : (
-                      '按住 说话'
                     )}
-                  </button>
+
+                    <button
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMode('voice');
+                        try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
+                        holdActiveRef.current = true;
+                        holdSessionRef.current += 1;
+                        const token = holdSessionRef.current;
+                        speechCarryRef.current = '';
+                        speechFinalRef.current = '';
+                        speechInterimRef.current = '';
+                        speechShouldSendRef.current = false;
+                        holdStartRef.current = { x: e.clientX, y: e.clientY };
+                        holdCancelRef.current = false;
+                        setHoldCancel(false);
+                        setAudioError('');
+                        startRecording(token);
+                      }}
+                      onPointerMove={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (!holdStartRef.current) return;
+
+                        const el = e.currentTarget as HTMLElement;
+                        const rect = el.getBoundingClientRect();
+                        const insideX = e.clientX >= rect.left && e.clientX <= rect.right;
+                        const insideY = e.clientY >= rect.top && e.clientY <= rect.bottom;
+                        const startY = holdStartRef.current.y;
+                        const dy = startY - e.clientY;
+                        const screenDy = typeof window !== 'undefined' ? window.innerHeight / 3 : 240;
+                        const cancelThreshold = Math.max(120, Math.floor(screenDy));
+                        const cancel = (insideX && insideY) ? false : (dy > cancelThreshold);
+                        if (cancel !== holdCancelRef.current) {
+                          holdCancelRef.current = cancel;
+                          setHoldCancel(cancel);
+                        }
+                      }}
+                      onPointerUp={(e) => {
+                        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                        const cancel = holdCancelRef.current;
+                        holdActiveRef.current = false;
+                        holdStartRef.current = null;
+                        holdCancelRef.current = false;
+                        setHoldCancel(false);
+                        stopRecording({ discard: cancel, autoSend: !cancel });
+                      }}
+                      onPointerCancel={(e) => {
+                        try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
+                        holdActiveRef.current = false;
+                        holdStartRef.current = null;
+                        holdCancelRef.current = false;
+                        setHoldCancel(false);
+                        stopRecording({ discard: true, autoSend: false });
+                      }}
+                      onContextMenu={(e) => e.preventDefault()}
+                      disabled={!audioSupported || isSending}
+                      className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
+                        ? (holdCancel
+                          ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
+                          : 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]')
+                        : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
+                        } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
+                      type="button"
+                    >
+                      {isRecording ? (
+                        <div className="flex items-center justify-center w-full px-8 scale-125">
+                          <WaveformVisualizer active={isRecording && !holdCancel} cancel={holdCancel} />
+                        </div>
+                      ) : (
+                        <span className="text-[15px]">按住 说话</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <>
