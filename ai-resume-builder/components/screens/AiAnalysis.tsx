@@ -583,6 +583,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     }, ms);
   };
 
+  const voiceDebugEnabled = () => {
+    try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
+  };
+
   const ToastOverlay = () => {
     if (!toast) return null;
     const tone =
@@ -2324,6 +2328,26 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     const rec = speechRecRef.current;
     if (!rec) {
+      if (voiceDebugEnabled()) {
+        console.debug('[voice] stopRecording: no active rec', {
+          discard,
+          autoSend,
+          speechStarting: speechStartingRef.current,
+          carryLen: speechCarryRef.current.length,
+          interimLen: speechInterimRef.current.length,
+        });
+      }
+
+      // If user released while recognition was still starting up, avoid false "no content" toast.
+      // The in-flight startRecording() will self-cancel when it notices holdActiveRef=false.
+      if (speechStartingRef.current) {
+        speechShouldSendRef.current = false;
+        discardOnStopRef.current = false;
+        autoSendOnStopRef.current = false;
+        setRecording(false);
+        return;
+      }
+
       // We may be between auto-restart runs: no active recognition instance to stop.
       // If the user asked to send, send whatever we have buffered so far.
       const shouldSend = !!speechShouldSendRef.current;
@@ -2371,7 +2395,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (speechStartingRef.current) return;
     if (speechRecRef.current) return;
     speechStartingRef.current = true;
-    startVoiceMeter();
 
     // Some browsers require a secure context for speech recognition and mic access.
     try {
@@ -2425,12 +2448,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     // Mobile browsers are often unstable with continuous=true. We don't need it for "hold to talk".
     rec.continuous = false;
     rec.onstart = () => {
+      if (voiceDebugEnabled()) console.debug('[voice] rec.onstart');
       setRecording(true);
       scrollToBottom();
+      // Start waveform meter only after SR has started to avoid delaying SR startup.
+      startVoiceMeter();
     };
 
     rec.onresult = (event: any) => {
       try {
+        if (voiceDebugEnabled()) {
+          console.debug('[voice] rec.onresult', {
+            resultIndex: event?.resultIndex,
+            resultsLen: event?.results?.length,
+          });
+        }
         let interim = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const res = event.results[i];
@@ -2449,6 +2481,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
     rec.onerror = (ev: any) => {
       const code = String(ev?.error || '').toLowerCase();
+      if (voiceDebugEnabled()) console.debug('[voice] rec.onerror', { code, ev });
 
       // "no-speech" is common when user didn't speak; don't show as an error.
       if (code === 'no-speech' || code === 'aborted') {
@@ -2485,6 +2518,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
       // Interim shouldn't carry across runs.
       speechInterimRef.current = '';
       speechRecRef.current = null;
+
+      if (voiceDebugEnabled()) {
+        console.debug('[voice] rec.onend', {
+          shouldSend,
+          stillHolding,
+          discard,
+          textLen: text.length,
+          textPreview: text.slice(0, 80),
+        });
+      }
 
       if (discard) {
         setRecording(false);
@@ -3899,8 +3942,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                   <div className={`flex flex-col items-center transition-all duration-300 ${isRecording ? 'relative z-[110]' : ''}`}>
                     {isRecording && (
                       <div className={`mb-6 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel
-                        ? 'text-red-400'
-                        : 'text-white/90'
+                        ? 'text-red-500'
+                        : 'text-slate-400'
                         }`}>
                         {holdCancel ? '松手取消' : '松手发送 上移取消'}
                       </div>
