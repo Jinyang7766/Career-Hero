@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
@@ -971,6 +971,11 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const SESSION_SID_KEY = 'ai_analysis_session_sid';
   const analysisUserIdRef = useRef<string | null>(null);
   const sessionSidRef = useRef<string | null>(null);
+
+  // Tracks the currently running analysis so we can cancel hung fetches (common after app/tab backgrounding)
+  // and ignore late results from an aborted run.
+  const analysisRunIdRef = useRef<string | null>(null);
+  const analysisAbortRef = useRef<AbortController | null>(null);
   const saveLastAnalysis = (payload: {
     resumeId: string | number;
     jdText: string;
@@ -1718,7 +1723,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }
   };
 
-  const generateRealAnalysis = async () => {
+  const generateRealAnalysis = async (runId: string) => {
     if (!resumeData) return null;
 
     try {
@@ -1751,6 +1756,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       console.log('Using authenticated token for AI analyze request');
 
       const controller = new AbortController();
+      analysisAbortRef.current = controller;
       const timeoutId = setTimeout(() => controller.abort(), 60000); // Increase timeout to 60s
 
       const masker = createMasker();
@@ -1817,8 +1823,26 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       console.error('AI Analysis Error:', error);
       // 直接抛出错误，不回退到模拟数据
       throw error;
+    } finally {
+      // Only clear the abort ref if we're still on the same run.
+      if (analysisRunIdRef.current === runId) {
+        analysisAbortRef.current = null;
+      }
     }
   };
+
+  const cancelInFlightAnalysis = useCallback((message?: string) => {
+    analysisRunIdRef.current = null;
+    if (analysisAbortRef.current) {
+      try { analysisAbortRef.current.abort(); } catch { /* ignore */ }
+    }
+    analysisAbortRef.current = null;
+    setAnalysisInProgress(false);
+    if (message) {
+      showToast(message, 'error', 2600);
+    }
+    setCurrentStep('jd_input');
+  }, []);
 
   const startAnalysis = async () => {
     // 检查 resumeData 是否存在
@@ -1830,6 +1854,13 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 
     // 记录当前 resumeData 的内容
     console.log('startAnalysis - Resume data:', resumeData);
+
+    // If a previous run is still around (double click / quick nav), cancel it first.
+    if (analysisRunIdRef.current) {
+      cancelInFlightAnalysis();
+    }
+    const runId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    analysisRunIdRef.current = runId;
 
     // Reset Chat State for new analysis
     setChatMessages([]);
@@ -1843,7 +1874,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 
     try {
       // 直接调用真实AI分析，不回退到模拟数据
-      const aiAnalysisResult = await generateRealAnalysis();
+      const aiAnalysisResult = await generateRealAnalysis(runId);
+      if (analysisRunIdRef.current !== runId) return;
 
       if (aiAnalysisResult) {
         console.log('Using real AI analysis result');
@@ -1966,12 +1998,16 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         navigateToStep('report', true); // Replace 'analyzing' step so back goes to 'jd_input'
       }
     } catch (error) {
+      if (analysisRunIdRef.current !== runId) return;
       console.error('AI analysis failed:', error);
       // 显示错误提示，不回退到模拟数据
       showToast(`AI 分析失败：${(error as any)?.message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       navigateToStep('jd_input');
     } finally {
-      setAnalysisInProgress(false);
+      if (analysisRunIdRef.current === runId) {
+        analysisRunIdRef.current = null;
+        setAnalysisInProgress(false);
+      }
     }
   };
 
@@ -3006,11 +3042,49 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 
   // 如果上次停在 analyzing 且没有进行中的请求，回到 JD 输入页
   useEffect(() => {
-    const inProgress = isAnalysisStillInProgress();
-    if (currentStep === 'analyzing' && !inProgress) {
-      setCurrentStep('jd_input');
-    }
-  }, [currentStep]);
+    if (currentStep !== 'analyzing') return;
+
+    // Fetch can hang after app/tab backgrounding (especially on mobile/iOS). When the user returns,
+    // detect a hung run and cancel it so the UI doesn't get stuck indefinitely.
+    const HUNG_MS = 90 * 1000;
+
+    const getStartedAt = () => {
+      const raw = localStorage.getItem(INPROGRESS_AT_KEY);
+      const at = raw ? Number(raw) : NaN;
+      return Number.isFinite(at) ? at : null;
+    };
+
+    const check = () => {
+      const inProgress = isAnalysisStillInProgress();
+      if (!inProgress) {
+        setCurrentStep('jd_input');
+        return;
+      }
+
+      const at = getStartedAt();
+      if (!at) return;
+      const elapsed = Date.now() - at;
+      if (elapsed > HUNG_MS) {
+        cancelInFlightAnalysis('切换到后台后分析超时，请返回重试。');
+      }
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    const onFocus = () => check();
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+    const intervalId = window.setInterval(check, 5000);
+    check();
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
+      window.clearInterval(intervalId);
+    };
+  }, [currentStep, cancelInFlightAnalysis]);
 
   // 从简历预览页跳转继续面试
   useEffect(() => {
