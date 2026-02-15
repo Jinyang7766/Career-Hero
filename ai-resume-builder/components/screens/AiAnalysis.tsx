@@ -2371,8 +2371,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
     if (!vv) return;
 
     const compute = () => {
+      // Some Android builds report offsetTop=0 and don't reflect keyboard overlap in the old formula.
+      // Use both overlap and height delta as signals.
       const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
-      setKeyboardOffset(overlap);
+      const heightDelta = Math.max(0, window.innerHeight - vv.height);
+      const inferred = Math.max(overlap, heightDelta);
+      setKeyboardOffset(inferred);
     };
 
     compute();
@@ -4395,7 +4399,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               )}
             </div>
             {/* AI Generation Disclaimer - Hidden when keyboard is up */}
-            {keyboardOffset === 0 && (
+            {keyboardOffset < 60 && (
               <div className="mt-2 text-center animate-in fade-in duration-300">
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium opacity-80">
                   内容由AI生成，请注意核实

@@ -2509,13 +2509,22 @@ def _google_speech_transcribe(audio_bytes: bytes, mime_type: str, lang: str) -> 
             "encoding": encoding,
             "languageCode": (lang or "zh-CN").strip() or "zh-CN",
             "enableAutomaticPunctuation": True,
-            # Favor fast short-utterance model when available.
-            "model": "latest_short",
         },
         "audio": {
             "content": base64.b64encode(audio_bytes).decode("utf-8")
         }
     }
+
+    # `model` is optional and not supported for all languages.
+    # Setting an unsupported model causes:
+    # Invalid recognition 'config': The requested model is currently not supported for language : zh-CN
+    # Use the API default for non-English languages.
+    try:
+      lc = payload["config"]["languageCode"].lower()
+      if lc.startswith("en-") or lc == "en":
+          payload["config"]["model"] = "latest_short"
+    except Exception:
+      pass
 
     resp = requests.post(url, json=payload, timeout=30)
     data = {}
