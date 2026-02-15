@@ -534,6 +534,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
   const [inputBarHeight, setInputBarHeight] = useState(76);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -2364,30 +2365,64 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
 
   // Mobile keyboard handling: translate the fixed input bar above the keyboard and keep
   // enough bottom padding for message list so the latest message isn't covered.
+  // Also track keyboard open/close reliably across all devices.
   useEffect(() => {
     if (currentStep !== 'chat') return;
 
     const vv = (window as any).visualViewport as VisualViewport | undefined;
-    if (!vv) return;
+
+    // Baseline height captured once when the chat screen mounts (keyboard closed).
+    const baselineHeight = vv ? vv.height : window.innerHeight;
 
     const compute = () => {
-      // Some Android builds report offsetTop=0 and don't reflect keyboard overlap in the old formula.
-      // Use both overlap and height delta as signals.
+      if (!vv) { setKeyboardOffset(0); return; }
+      // Some Android builds report offsetTop=0 and don't reflect keyboard overlap.
       const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
       const heightDelta = Math.max(0, window.innerHeight - vv.height);
       const inferred = Math.max(overlap, heightDelta);
       setKeyboardOffset(inferred);
+
+      // Keyboard detection: viewport shrunk >100px from baseline => keyboard likely open.
+      // 100px threshold safely ignores address-bar (~60px) but catches any keyboard (>200px).
+      const shrinkage = baselineHeight - vv.height;
+      setIsKeyboardOpen(shrinkage > 100);
+    };
+
+    // Fallback: use focusin/focusout for devices where visualViewport is unreliable.
+    const onFocusIn = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') setIsKeyboardOpen(true);
+    };
+    const onFocusOut = (e: FocusEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea') {
+        // Delay so tapping another input doesn't briefly flash the disclaimer.
+        setTimeout(() => {
+          if (document.activeElement?.tagName?.toLowerCase() !== 'input' &&
+            document.activeElement?.tagName?.toLowerCase() !== 'textarea') {
+            setIsKeyboardOpen(false);
+          }
+        }, 120);
+      }
     };
 
     compute();
-    vv.addEventListener('resize', compute);
-    vv.addEventListener('scroll', compute);
+    if (vv) {
+      vv.addEventListener('resize', compute);
+      vv.addEventListener('scroll', compute);
+    }
     window.addEventListener('resize', compute);
+    document.addEventListener('focusin', onFocusIn, true);
+    document.addEventListener('focusout', onFocusOut, true);
 
     return () => {
-      vv.removeEventListener('resize', compute);
-      vv.removeEventListener('scroll', compute);
+      if (vv) {
+        vv.removeEventListener('resize', compute);
+        vv.removeEventListener('scroll', compute);
+      }
       window.removeEventListener('resize', compute);
+      document.removeEventListener('focusin', onFocusIn, true);
+      document.removeEventListener('focusout', onFocusOut, true);
     };
   }, [currentStep]);
 
@@ -4399,7 +4434,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
               )}
             </div>
             {/* AI Generation Disclaimer - Hidden when keyboard is up */}
-            {keyboardOffset < 60 && (
+            {!isKeyboardOpen && (
               <div className="mt-2 text-center animate-in fade-in duration-300">
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium opacity-80">
                   内容由AI生成，请注意核实
