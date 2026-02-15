@@ -534,6 +534,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [pendingNextQuestion, setPendingNextQuestion] = useState<string | null>(null);
   const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const [isInputFocused, setIsInputFocused] = useState(false);
   const [inputBarHeight, setInputBarHeight] = useState(76);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -4379,6 +4380,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                     }}
                     placeholder="输入您的问题..."
                     disabled={isRecording}
+                    onFocus={() => setIsInputFocused(true)}
+                    onBlur={() => setIsInputFocused(false)}
                     className="flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none text-slate-900 dark:text-white disabled:opacity-60"
                     rows={1}
                     style={{ minHeight: '46px', maxHeight: '120px', lineHeight: '22px' }}
@@ -4394,8 +4397,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ setCurrentView, resumeData, setResu
                 </>
               )}
             </div>
-            {/* AI Generation Disclaimer - Hidden when keyboard is up */}
-            {keyboardOffset < 20 && (
+            {/* AI Generation Disclaimer - Hidden when keyboard is up or input is focused */}
+            {keyboardOffset < 20 && !isInputFocused && (
               <div className="mt-2 text-center animate-in fade-in duration-300">
                 <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium opacity-80">
                   内容由AI生成，请注意核实
