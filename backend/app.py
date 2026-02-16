@@ -2894,6 +2894,26 @@ def _normalize_parsed_resume_result(ai_result):
                 return parts[0].strip(), parts[1].strip()
         return None, None
 
+    def _is_year_only_date(raw_value):
+        raw = str(raw_value or '').strip()
+        if not raw:
+            return False
+        raw = raw.replace('年', '').strip()
+        return bool(re.fullmatch(r'\d{4}', raw))
+
+    def _strip_month_if_year_only(raw_value, normalized_value):
+        normalized = str(normalized_value or '').strip()
+        if not normalized:
+            return normalized
+        if not _is_year_only_date(raw_value):
+            return normalized
+
+        # Keep year-only granularity when original field had no month.
+        m = re.fullmatch(r'(\d{4})[-./年]\s*(0?[1-9]|1[0-2])', normalized)
+        if m:
+            return m.group(1)
+        return normalized
+
     def _fix_messed_up_dates(start, end):
         # Case: start="2022", end="06-2022-12" (User report)
         if start and end and len(start) == 4 and start.isdigit():
@@ -2917,8 +2937,10 @@ def _normalize_parsed_resume_result(ai_result):
         return start, end
 
     def _extract_dates(item):
-        start = _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期'])
-        end = _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期'])
+        raw_start = _pick(item, ['startDate', 'start', 'from', '开始时间', '开始日期'])
+        raw_end = _pick(item, ['endDate', 'end', 'to', '结束时间', '结束日期'])
+        start = raw_start
+        end = raw_end
         
         # If one is empty, try to split the combined 'date' field
         full_range = _pick(item, ['date', 'time', 'duration', '期间', '时间'])
@@ -2931,7 +2953,10 @@ def _normalize_parsed_resume_result(ai_result):
         # Final fix for AI extraction glitches
         if start and end:
             start, end = _fix_messed_up_dates(start, end)
-            
+
+        start = _strip_month_if_year_only(raw_start, start)
+        end = _strip_month_if_year_only(raw_end, end)
+
         return start, end
 
     normalized_work = []
@@ -2993,7 +3018,8 @@ def _normalize_parsed_resume_result(ai_result):
 
 def _extract_skills_from_resume_text(resume_text):
     """
-    Heuristic fallback: extract skills from raw resume text when AI JSON misses skills.
+    Strict extraction: only read skills/certificates from explicit skill-like sections.
+    Do not infer skills from work/project descriptions.
     """
     text = (resume_text or '').strip()
     if not text:
@@ -3001,6 +3027,7 @@ def _extract_skills_from_resume_text(resume_text):
 
     lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if ln and ln.strip()]
     collected = []
+    cert_collected = []
 
     # 1) Prefer explicit skill sections.
     skill_heading_re = re.compile(r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能)\s*[:：]?$')
@@ -3017,30 +3044,45 @@ def _extract_skills_from_resume_text(resume_text):
         parts = [p.strip() for p in re.split(r'[，,、;；|/]+', ln) if p.strip()]
         collected.extend(parts)
 
-    # 2) If no explicit section, pick common skill keywords from full text.
-    if not collected:
-        keyword_patterns = [
-            r'\b(Python|Java|JavaScript|TypeScript|SQL|Excel|Word|PowerPoint|Office|Photoshop|Illustrator|Figma|Tableau|PowerBI|SPSS|R|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring)\b',
-            r'(数据分析|电商运营|直播运营|活动策划|项目管理|产品运营|用户运营|新媒体运营|短视频运营|社群运营|内容运营|A/B测试|可视化|机器学习|深度学习|提示词工程|自动化)',
-            r'(天猫|京东|拼多多|抖音|快手|小红书|微信公众号|钉钉)'
-        ]
-        for pat in keyword_patterns:
-            for m in re.findall(pat, text, flags=re.IGNORECASE):
-                if isinstance(m, tuple):
-                    m = next((x for x in m if x), '')
-                v = str(m).strip()
-                if v:
-                    collected.append(v)
+    # 2) Extract certificate-like terms from certificate sections.
+    cert_heading_re = re.compile(r'^(证书|资格证书|专业证书|职业资格|资质证书)\s*[:：]?$')
+    in_cert_block = False
+    for ln in lines:
+        if cert_heading_re.match(ln):
+            in_cert_block = True
+            continue
+        if in_cert_block and next_section_re.match(ln):
+            in_cert_block = False
+        if not in_cert_block:
+            continue
+        parts = [p.strip() for p in re.split(r'[，,、;；|/\s]+', ln) if p.strip()]
+        cert_collected.extend(parts)
+
+    collected.extend(cert_collected)
 
     # Normalize + deduplicate + filter obvious noise
-    noise = {'技能', '专业技能', '核心技能', '工作经历', '教育经历', '项目经历'}
+    noise = {
+        '技能', '专业技能', '核心技能', '工作经历', '教育经历', '项目经历',
+        '电商', '数据', '运营', '分析', '平台', '工具', '技术', '能力',
+        '天猫', '京东', '钉钉'
+    }
+    cert_re = re.compile(r'(证书|认证|资格证|执业证|从业资格|等级证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格)', re.IGNORECASE)
+    strong_skill_re = re.compile(
+        r'^(Python|Java|JavaScript|TypeScript|SQL|Excel|Tableau|PowerBI|SPSS|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring|SAP|ERP|WMS|GA4|SEO|SEM|A/B测试|A/B Test|SCRM|CRM|LLM|生意参谋|京东商智|万相台|直通车|引力魔方|千川|巨量引擎|数据建模|数据可视化|机器学习|深度学习)$',
+        re.IGNORECASE
+    )
     result = []
     seen = set()
     for item in collected:
         v = re.sub(r'\s+', ' ', str(item)).strip('：:;；,，|/ ').strip()
         if not v or v in noise:
             continue
-        if len(v) > 40:
+        if len(v) > 40 or len(v) < 2:
+            continue
+        # Keep only strong hard-skill nouns or certificate tokens.
+        if not (strong_skill_re.search(v) or cert_re.search(v)):
+            continue
+        if re.search(r'(全链路|策略|流程|方案|运营|沟通|协同|策划|看板|内容|直播间|私域|社群)', v):
             continue
         key = v.lower()
         if key in seen:
@@ -3052,13 +3094,14 @@ def _extract_skills_from_resume_text(resume_text):
     return result
 
 def _fill_skills_if_missing(parsed_data, resume_text):
-    skills = parsed_data.get('skills', [])
-    if isinstance(skills, list) and len([s for s in skills if str(s).strip()]) > 0:
-        return parsed_data
-    fallback_skills = _extract_skills_from_resume_text(resume_text)
-    if fallback_skills:
-        parsed_data['skills'] = fallback_skills
-        logger.info("Skills recovered by fallback extraction, count=%s", len(fallback_skills))
+    # Authoritative source: only explicit skills/certificate sections in original resume.
+    # Never infer from work/project text.
+    strict_skills = _extract_skills_from_resume_text(resume_text)
+    parsed_data['skills'] = strict_skills
+    if strict_skills:
+        logger.info("Skills extracted from explicit skill/certificate sections, count=%s", len(strict_skills))
+    else:
+        logger.info("No explicit skill/certificate sections found; skills left empty by design.")
     return parsed_data
 
 
@@ -3163,7 +3206,8 @@ def parse_resume_text_with_ai(resume_text):
     4. **个人总结**：查找“自我评价”、“Summary”、“个人简介”等，存入 `personalInfo.summary`。
     5. **日期提取**：严格区分“开始”与“结束”日期。严禁将整个时间范围（如 2022.06-2024.12）塞入单一字段，必须分别提取到 `startDate` 和 `endDate`。
     6. **日期格式**：统一为 YYYY-MM 格式（如 2022-06）。仅年份（如 2022）也可。结束时间若为“至今”或“现在”则写为“至今”。
-    7. **纯净输出**：仅返回 JSON 块，不要包含任何 Markdown 语法标记。
+    7. **技能字段来源约束（强制）**：`skills` 只能来自简历里明确的“技能/专业技能/核心技能/工具技能/证书/资格证书”标题区块；严禁从工作经历、项目经历、个人总结中推断或抽取技能。若无上述区块，`skills` 返回空数组 `[]`。
+    8. **纯净输出**：仅返回 JSON 块，不要包含任何 Markdown 语法标记。
 
     **JSON 结构模板：**
     {{
@@ -3417,6 +3461,7 @@ def analyze_resume(current_user_id):
    - 若 JD 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
 11. **技能词条白名单/黑名单规则（强制）**：
    - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
+   - 专业证书可以作为技能词条输出（例如：PMP认证、CFA、FRM、CPA、ACCA、CISP、软考证书、教师资格证），优先使用证书标准名称，禁止冗长描述。
    - **同类合并（强制）**：如果技能候选中出现任意大模型/对话模型/厂商或具体型号（例如：GPT-4/ChatGPT/OpenAI、Claude/Anthropic、Kimi/Moonshot、Gemini/Google、Qwen/通义千问、DeepSeek、Llama、GLM/智谱、文心一言/ERNIE 等），一律合并成单条技能：`LLM`。禁止同时列出多个不同模型名导致技能列表冗余。
    - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
    - 严禁输出动词化/过程化尾词：搭建、构建、设计、训练、微调、精调、调优、优化、执行、推进、落地、管理、脚本、自动化、开发、实现、运营、打造、分析、监控、维护、产出。
