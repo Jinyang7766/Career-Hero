@@ -1589,16 +1589,20 @@ def export_pdf():
                             const hasFonts = !!document.fonts;
                             const size = hasFonts ? document.fonts.size : -1;
                             const ok = hasFonts ? document.fonts.check('14px CustomPDF', '中文测试ABC123') : false;
-                            return { hasFonts, size, ok };
+                            const asciiOk = hasFonts ? document.fonts.check('14px CustomPDF', 'ABC123') : false;
+                            const zhOk = hasFonts ? document.fonts.check('14px CustomPDF', '中文测试简历教育背景') : false;
+                            return { hasFonts, size, ok, asciiOk, zhOk };
                         }
                     """)
                     logger.info(
-                        "PDF font check route_hits=%s font_bytes=%s has_fonts=%s font_set_size=%s custom_ok=%s",
+                        "PDF font check route_hits=%s font_bytes=%s has_fonts=%s font_set_size=%s custom_ok=%s ascii_ok=%s zh_ok=%s",
                         route_state.get("hits", 0),
                         len(font_bytes or b""),
                         font_check.get("hasFonts"),
                         font_check.get("size"),
                         font_check.get("ok"),
+                        font_check.get("asciiOk"),
+                        font_check.get("zhOk"),
                     )
                     # Fallback: if CustomPDF still unavailable, inject inline font bytes and retry readiness.
                     if font_bytes and not font_check.get("ok"):
@@ -1798,7 +1802,7 @@ def get_pdf_font_family() -> str:
     # 1) Prefer user-provided font file for maximum compatibility
     font_path = resolve_pdf_font_path()
     if font_path:
-        font_name = os.getenv("PDF_FONT_NAME", "").strip() or "CustomPDF"
+        font_name = "CustomPDF"
         try:
             pdfmetrics.registerFont(TTFont(font_name, font_path))
             _PDF_FONT_FAMILY_CACHE = font_name
@@ -1866,7 +1870,7 @@ def inject_font_css_into_html(html_content: str) -> str:
     if not font_url:
         return html_content
 
-    font_name = os.getenv("PDF_FONT_NAME", "").strip() or "CustomPDF"
+    font_name = "CustomPDF"
     font_css = f"""
     <style data-pdf-font="1">
       @font-face {{
@@ -1876,8 +1880,11 @@ def inject_font_css_into_html(html_content: str) -> str:
         font-style: normal;
         font-display: swap;
       }}
-      html, body, #resume-root {{
+      html, body, #resume-root, #resume-root * {{
         font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', 'Helvetica Neue', Arial, sans-serif;
+      }}
+      #resume-root * {{
+        font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', 'Helvetica Neue', Arial, sans-serif !important;
       }}
     </style>
     """
