@@ -1527,6 +1527,16 @@ def export_pdf():
         # Always inject font CSS so all templates (modern/classic/minimal)
         # share the same reliable font-loading path.
         html_content = inject_font_css_into_html(html_content)
+        try:
+            resolved_font = resolve_pdf_font_path()
+            resolved_font_url = get_pdf_font_url()
+            logger.info(
+                "PDF font resolved path=%s, url_scheme=%s",
+                resolved_font,
+                (resolved_font_url.split(':', 1)[0] if resolved_font_url else 'none')
+            )
+        except Exception:
+            pass
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
         def _generate_pdf_with_playwright():
@@ -1544,6 +1554,20 @@ def export_pdf():
                 try:
                     page = browser.new_page(viewport={"width": 794, "height": 1123})
                     page.emulate_media(media="print")
+                    font_bytes = get_pdf_font_bytes()
+                    if font_bytes:
+                        page.route(
+                            "**/__pdf_font__.ttf",
+                            lambda route: route.fulfill(
+                                status=200,
+                                body=font_bytes,
+                                headers={
+                                    "Content-Type": "font/ttf",
+                                    "Access-Control-Allow-Origin": "*",
+                                    "Cache-Control": "public, max-age=3600",
+                                },
+                            ),
+                        )
                     page.set_content(html_content, wait_until="networkidle", timeout=30000)
                     # Ensure @font-face resources are fully loaded before printing PDF.
                     page.evaluate("""
@@ -1670,6 +1694,8 @@ def clean_text_for_pdf(text):
 
 _PDF_FONT_FAMILY_CACHE = None
 _PDF_FONT_URL_CACHE = None
+_PDF_FONT_BYTES_CACHE = None
+_PDF_FONT_VIRTUAL_URL = "https://pdf.local/__pdf_font__.ttf"
 
 
 def resolve_pdf_font_path() -> str:
@@ -1735,7 +1761,7 @@ def get_pdf_font_family() -> str:
 
 
 def get_pdf_font_url() -> str:
-    """Return a loadable font URL/data URI for HTML-to-PDF rendering."""
+    """Return a stable virtual URL for HTML-to-PDF font loading."""
     global _PDF_FONT_URL_CACHE
     if _PDF_FONT_URL_CACHE:
         return _PDF_FONT_URL_CACHE
@@ -1743,19 +1769,27 @@ def get_pdf_font_url() -> str:
     font_path = resolve_pdf_font_path()
     if not font_path:
         return ""
+    _PDF_FONT_URL_CACHE = _PDF_FONT_VIRTUAL_URL
+    return _PDF_FONT_URL_CACHE
+
+
+def get_pdf_font_bytes() -> bytes:
+    """Load PDF font bytes once for Playwright route fulfillment."""
+    global _PDF_FONT_BYTES_CACHE
+    if _PDF_FONT_BYTES_CACHE is not None:
+        return _PDF_FONT_BYTES_CACHE
+
+    font_path = resolve_pdf_font_path()
+    if not font_path:
+        _PDF_FONT_BYTES_CACHE = b""
+        return _PDF_FONT_BYTES_CACHE
     try:
         with open(font_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("ascii")
-        _PDF_FONT_URL_CACHE = f"data:font/ttf;base64,{encoded}"
-        return _PDF_FONT_URL_CACHE
+            _PDF_FONT_BYTES_CACHE = f.read()
     except Exception as exc:
-        logger.warning(f"Failed to inline PDF font from {font_path}: {exc}")
-
-    # Fallback: Use file:// URL so Playwright can load local font when possible.
-    if not os.path.isabs(font_path):
-        font_path = os.path.abspath(font_path)
-    _PDF_FONT_URL_CACHE = f"file:///{font_path.replace(os.sep, '/')}"
-    return _PDF_FONT_URL_CACHE
+        logger.warning(f"Failed to read PDF font bytes from {font_path}: {exc}")
+        _PDF_FONT_BYTES_CACHE = b""
+    return _PDF_FONT_BYTES_CACHE
 
 def inject_font_css_into_html(html_content: str) -> str:
     if not html_content:
@@ -1772,7 +1806,7 @@ def inject_font_css_into_html(html_content: str) -> str:
     <style data-pdf-font="1">
       @font-face {{
         font-family: '{font_name}';
-        src: url('{font_url}') format('truetype');
+        src: url('{font_url}');
         font-weight: normal;
         font-style: normal;
         font-display: swap;
@@ -2012,7 +2046,7 @@ def generate_resume_html(resume_data):
       {% if pdf_font_url %}
       @font-face {
         font-family: 'CustomPDF';
-        src: url('{{ pdf_font_url }}') format('truetype');
+        src: url('{{ pdf_font_url }}');
         font-weight: normal;
         font-style: normal;
       }
