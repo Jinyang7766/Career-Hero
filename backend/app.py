@@ -1555,10 +1555,11 @@ def export_pdf():
                     page = browser.new_page(viewport={"width": 794, "height": 1123})
                     page.emulate_media(media="print")
                     font_bytes = get_pdf_font_bytes()
+                    route_state = {"hits": 0}
                     if font_bytes:
-                        page.route(
-                            "**/__pdf_font__.ttf",
-                            lambda route: route.fulfill(
+                        def _handle_font_route(route):
+                            route_state["hits"] += 1
+                            route.fulfill(
                                 status=200,
                                 body=font_bytes,
                                 headers={
@@ -1566,8 +1567,8 @@ def export_pdf():
                                     "Access-Control-Allow-Origin": "*",
                                     "Cache-Control": "public, max-age=3600",
                                 },
-                            ),
-                        )
+                            )
+                        page.route("**/__pdf_font__.ttf", _handle_font_route)
                     page.set_content(html_content, wait_until="networkidle", timeout=30000)
                     # Ensure @font-face resources are fully loaded before printing PDF.
                     page.evaluate("""
@@ -1578,6 +1579,59 @@ def export_pdf():
                             return Promise.resolve();
                         }
                     """)
+                    font_check = page.evaluate("""
+                        () => {
+                            const hasFonts = !!document.fonts;
+                            const size = hasFonts ? document.fonts.size : -1;
+                            const ok = hasFonts ? document.fonts.check('14px CustomPDF', '中文测试ABC123') : false;
+                            return { hasFonts, size, ok };
+                        }
+                    """)
+                    logger.info(
+                        "PDF font check route_hits=%s font_bytes=%s has_fonts=%s font_set_size=%s custom_ok=%s",
+                        route_state.get("hits", 0),
+                        len(font_bytes or b""),
+                        font_check.get("hasFonts"),
+                        font_check.get("size"),
+                        font_check.get("ok"),
+                    )
+                    # Fallback: if CustomPDF still unavailable, inject inline font bytes and retry readiness.
+                    if font_bytes and not font_check.get("ok"):
+                        encoded = base64.b64encode(font_bytes).decode("ascii")
+                        page.add_style_tag(content=f"""
+                          @font-face {{
+                            font-family: 'CustomPDFInline';
+                            src: url('data:font/ttf;base64,{encoded}');
+                            font-weight: normal;
+                            font-style: normal;
+                            font-display: swap;
+                          }}
+                          html, body, #resume-root {{
+                            font-family: 'CustomPDFInline', 'CustomPDF', 'Microsoft YaHei', 'SimHei', sans-serif !important;
+                          }}
+                        """)
+                        page.evaluate("""
+                            () => {
+                                if (document.fonts && document.fonts.ready) {
+                                    return document.fonts.ready;
+                                }
+                                return Promise.resolve();
+                            }
+                        """)
+                        font_check_retry = page.evaluate("""
+                            () => {
+                                const hasFonts = !!document.fonts;
+                                const size = hasFonts ? document.fonts.size : -1;
+                                const ok = hasFonts ? document.fonts.check('14px CustomPDFInline', '中文测试ABC123') : false;
+                                return { hasFonts, size, ok };
+                            }
+                        """)
+                        logger.info(
+                            "PDF font fallback check has_fonts=%s font_set_size=%s inline_ok=%s",
+                            font_check_retry.get("hasFonts"),
+                            font_check_retry.get("size"),
+                            font_check_retry.get("ok"),
+                        )
                     return page.pdf(
                         print_background=True,
                         prefer_css_page_size=False,
@@ -1695,7 +1749,7 @@ def clean_text_for_pdf(text):
 _PDF_FONT_FAMILY_CACHE = None
 _PDF_FONT_URL_CACHE = None
 _PDF_FONT_BYTES_CACHE = None
-_PDF_FONT_VIRTUAL_URL = "https://pdf.local/__pdf_font__.ttf"
+_PDF_FONT_VIRTUAL_URL = "/__pdf_font__.ttf"
 
 
 def resolve_pdf_font_path() -> str:
