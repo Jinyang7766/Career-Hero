@@ -1530,10 +1530,14 @@ def export_pdf():
         try:
             resolved_font = resolve_pdf_font_path()
             resolved_font_url = get_pdf_font_url()
+            html_has_font_face = ('@font-face' in html_content)
+            html_has_font_url = ('__pdf_font__.ttf' in html_content) or ('data:font/ttf;base64,' in html_content)
             logger.info(
-                "PDF font resolved path=%s, url_scheme=%s",
+                "PDF font resolved path=%s, url_scheme=%s, html_has_font_face=%s, html_has_font_url=%s",
                 resolved_font,
-                (resolved_font_url.split(':', 1)[0] if resolved_font_url else 'none')
+                (resolved_font_url.split(':', 1)[0] if resolved_font_url else 'none'),
+                html_has_font_face,
+                html_has_font_url
             )
         except Exception:
             pass
@@ -1849,8 +1853,14 @@ def get_pdf_font_bytes() -> bytes:
 def inject_font_css_into_html(html_content: str) -> str:
     if not html_content:
         return html_content
-    if 'data-pdf-font' in html_content:
-        return html_content
+
+    # Always refresh PDF font style to avoid stale cached css from frontend-provided htmlContent.
+    html_content = re.sub(
+        r'<style[^>]*data-pdf-font[^>]*>.*?</style>',
+        '',
+        html_content,
+        flags=re.IGNORECASE | re.DOTALL
+    )
 
     font_url = get_pdf_font_url()
     if not font_url:
