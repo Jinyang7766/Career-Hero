@@ -62,6 +62,36 @@ def _is_missing_deletion_column_error(err: Exception) -> bool:
         and ('PGRST204' in text or 'schema cache' in text or 'Could not find' in text)
     )
 
+
+def _delete_supabase_auth_user(user_id: str):
+    """
+    Delete Supabase Auth user (auth.users) via Admin REST API.
+    Requires SUPABASE_KEY to be service_role key on backend.
+    """
+    if not SUPABASE_URL or SUPABASE_URL == 'your-supabase-url':
+        raise RuntimeError('SUPABASE_URL 未配置')
+    if not SUPABASE_KEY or SUPABASE_KEY == 'your-supabase-key':
+        raise RuntimeError('SUPABASE_KEY 未配置')
+
+    admin_url = f"{SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{user_id}"
+    headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': f'Bearer {SUPABASE_KEY}',
+        'Content-Type': 'application/json'
+    }
+
+    resp = requests.delete(admin_url, headers=headers, timeout=20)
+    # 200/204: deleted, 404: already absent (treat as success)
+    if resp.status_code in (200, 204, 404):
+        return True
+
+    try:
+        payload = resp.json()
+    except Exception:
+        payload = {'raw': resp.text}
+
+    raise RuntimeError(f"删除 Auth 用户失败(status={resp.status_code}): {payload}")
+
 # Debug: Log environment variable keys (NOT values) to verify injection
 env_keys = list(os.environ.keys())
 logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
@@ -1174,8 +1204,13 @@ def delete_account_immediate(current_user_id):
 
             # Delete user profile row
             result = supabase.table('users').delete().eq('id', current_user_id).execute()
+            if not result.data:
+                logger.warning(f"delete_account_immediate: no profile row deleted for user={current_user_id}")
+
+            # Crucial: delete Supabase Auth user as well; otherwise email remains occupied.
+            _delete_supabase_auth_user(current_user_id)
             
-        if result.data:
+        if result.data or not is_mock_mode():
             return jsonify({'message': '账号已立即永久注销'}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
