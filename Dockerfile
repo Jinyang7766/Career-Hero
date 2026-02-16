@@ -4,16 +4,20 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_ROOT_USER_ACTION=ignore
+    PIP_ROOT_USER_ACTION=ignore \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 COPY backend/requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
+# Install Chromium for Playwright at build time.
+RUN python -m playwright install chromium
+
 COPY backend/ .
 
-RUN useradd -m app && chown -R app:app /app
+RUN useradd -m app && chown -R app:app /app /ms-playwright
 USER app
 
 EXPOSE 5000
