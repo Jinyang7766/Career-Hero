@@ -18,8 +18,6 @@ import re
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4
 from pypdf import PdfReader
 from docx import Document
 import fitz  # PyMuPDF for PDF-to-image
@@ -1447,12 +1445,11 @@ def export_pdf():
         data = request.get_json() or {}
         resume_data = data.get('resumeData')
         jd_text = data.get('jdText', '')
-        pdf_engine = (os.getenv('PDF_EXPORT_ENGINE', 'auto') or 'auto').strip().lower()
         
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
         
-        logger.info("Starting PDF generation, engine=%s", pdf_engine)
+        logger.info("Starting PDF generation with Playwright")
         
         # Generate HTML for PDF
         html_content = data.get('htmlContent')
@@ -1488,26 +1485,14 @@ def export_pdf():
                 finally:
                     browser.close()
 
-        result = None
-        if pdf_engine in ('reportlab', 'simple', 'fallback'):
-            logger.info("PDF engine forced to ReportLab fallback")
-            result = _build_simple_pdf_fallback(resume_data)
-        else:
-            try:
-                pdf_bytes = _generate_pdf_with_playwright()
-                result = io.BytesIO(pdf_bytes)
-                result.seek(0)
-                logger.info("PDF generated successfully with Playwright")
-            except Exception as pw_err:
-                logger.error(f"Playwright PDF generation failed: {pw_err}")
-                if pdf_engine == 'playwright':
-                    return jsonify({'error': f'PDF 生成失败(Playwright): {str(pw_err)}'}), 500
-                logger.info("Falling back to ReportLab PDF generation")
-                try:
-                    result = _build_simple_pdf_fallback(resume_data)
-                except Exception as fb_err:
-                    logger.error(f"ReportLab fallback PDF generation failed: {fb_err}")
-                    return jsonify({'error': f'PDF 生成失败: {str(pw_err)}'}), 500
+        try:
+            pdf_bytes = _generate_pdf_with_playwright()
+            result = io.BytesIO(pdf_bytes)
+            result.seek(0)
+            logger.info("PDF generated successfully with Playwright")
+        except Exception as pw_err:
+            logger.error(f"Playwright PDF generation failed: {pw_err}")
+            return jsonify({'error': f'PDF 生成失败(Playwright): {str(pw_err)}'}), 500
 
         # 处理自定义文件名（来自前端的简历标题）
         custom_title = data.get('resumeTitle') or data.get('filename') or ''
@@ -1737,138 +1722,6 @@ def normalize_date_range(start_date: str, end_date: str) -> str:
         return f"{start} - {end}"
     return start or end
 
-
-def _build_simple_pdf_fallback(resume_data):
-    """
-    Fallback PDF generator when Playwright is unavailable on local/dev environments.
-    Produces a readable single/multi-page PDF via ReportLab.
-    """
-    buffer = io.BytesIO()
-    page_w, page_h = A4
-    c = canvas.Canvas(buffer, pagesize=A4)
-
-    font_name = get_pdf_font_family()
-    font_size_title = 16
-    font_size_h2 = 12
-    font_size_body = 10
-    line_gap = 14
-
-    def set_font(size):
-        try:
-            c.setFont(font_name, size)
-        except Exception:
-            c.setFont('Helvetica', size)
-
-    def draw_line(text, x, y, size=font_size_body):
-        set_font(size)
-        c.drawString(x, y, str(text or ''))
-
-    x_left = 36
-    y = page_h - 48
-
-    personal = resume_data.get('personalInfo', {}) or {}
-    name = personal.get('name') or '未填写姓名'
-    title = personal.get('title') or '求职意向'
-    email = personal.get('email') or ''
-    phone = personal.get('phone') or ''
-    location = personal.get('location') or ''
-    summary = resume_data.get('summary') or personal.get('summary') or ''
-
-    draw_line(name, x_left, y, font_size_title)
-    y -= line_gap + 4
-    draw_line(title, x_left, y, font_size_h2)
-    y -= line_gap
-    draw_line(f"{email}  {phone}  {location}".strip(), x_left, y, font_size_body)
-    y -= line_gap + 4
-
-    def ensure_space(lines_needed=1):
-        nonlocal y
-        if y < 48 + lines_needed * line_gap:
-            c.showPage()
-            y = page_h - 48
-
-    def draw_section_header(text):
-        nonlocal y
-        ensure_space(2)
-        draw_line(text, x_left, y, font_size_h2)
-        y -= line_gap
-
-    def draw_multiline(text, prefix=''):
-        nonlocal y
-        raw = str(text or '').replace('\r', '\n')
-        chunks = []
-        for part in raw.split('\n'):
-            part = part.strip()
-            if not part:
-                continue
-            # very simple wrap by char length for stability
-            width = 70
-            for i in range(0, len(part), width):
-                chunks.append(part[i:i + width])
-        if not chunks:
-            chunks = ['']
-        for i, line in enumerate(chunks):
-            ensure_space(1)
-            draw_line((prefix if i == 0 else '  ') + line, x_left, y, font_size_body)
-            y -= line_gap
-
-    if summary:
-        draw_section_header('个人简介')
-        draw_multiline(summary)
-
-    work_exps = resume_data.get('workExps', []) or []
-    if work_exps:
-        draw_section_header('工作经历')
-        for exp in work_exps:
-            title_text = exp.get('company') or exp.get('title') or '未填写单位'
-            subtitle_text = exp.get('position') or exp.get('subtitle') or ''
-            date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', ''))
-            ensure_space(3)
-            draw_line(f"{title_text}  {subtitle_text}".strip(), x_left, y, font_size_body)
-            y -= line_gap
-            if date_text:
-                draw_line(date_text, x_left, y, font_size_body)
-                y -= line_gap
-            draw_multiline(exp.get('description') or '')
-
-    educations = resume_data.get('educations', []) or []
-    if educations:
-        draw_section_header('教育背景')
-        for edu in educations:
-            school = edu.get('school') or edu.get('title') or '未填写学校'
-            degree = edu.get('degree') or ''
-            major = edu.get('major') or edu.get('subtitle') or ''
-            date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', ''))
-            ensure_space(2)
-            draw_line(f"{school}  {degree} {major}".strip(), x_left, y, font_size_body)
-            y -= line_gap
-            if date_text:
-                draw_line(date_text, x_left, y, font_size_body)
-                y -= line_gap
-
-    projects = resume_data.get('projects', []) or []
-    if projects:
-        draw_section_header('项目经历')
-        for proj in projects:
-            title_text = proj.get('title') or '未填写项目'
-            role = proj.get('role') or proj.get('subtitle') or ''
-            date_text = proj.get('date') or normalize_date_range(proj.get('startDate', ''), proj.get('endDate', ''))
-            ensure_space(3)
-            draw_line(f"{title_text}  {role}".strip(), x_left, y, font_size_body)
-            y -= line_gap
-            if date_text:
-                draw_line(date_text, x_left, y, font_size_body)
-                y -= line_gap
-            draw_multiline(proj.get('description') or '')
-
-    skills = resume_data.get('skills', []) or []
-    if skills:
-        draw_section_header('技能')
-        draw_multiline('、'.join(str(s) for s in skills if str(s).strip()))
-
-    c.save()
-    buffer.seek(0)
-    return buffer
 
 def build_resume_context(resume_data):
     personal_info = resume_data.get('personalInfo', {}) or {}

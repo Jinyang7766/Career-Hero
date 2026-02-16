@@ -790,9 +790,31 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const updateItem = <S extends EditableSection>(section: S, id: number, field: keyof ItemBySection[S], value: string) => {
     setResumeData(prev => ({
       ...prev,
-      [section]: (prev[section] as Array<ItemBySection[S]>).map(item =>
-        item.id === id ? ({ ...item, [field]: value } as ItemBySection[S]) : item
-      ),
+      [section]: (prev[section] as Array<ItemBySection[S]>).map(item => {
+        if (item.id !== id) return item;
+
+        const next: any = { ...item, [field]: value };
+
+        // Keep alias fields in sync so preview/export (which may read company/school)
+        // always reflect latest editor input.
+        if (section === 'workExps') {
+          if (field === 'title') next.company = value;
+          if (field === 'subtitle') next.position = value;
+        } else if (section === 'educations') {
+          if (field === 'title') next.school = value;
+          if (field === 'subtitle') next.major = value;
+        } else if (section === 'projects') {
+          if (field === 'subtitle') next.role = value;
+        }
+
+        if (field === 'startDate' || field === 'endDate') {
+          const s = String(next.startDate || '').trim();
+          const e = String(next.endDate || '').trim();
+          next.date = (s && e) ? `${s} - ${e}` : (s || e || '');
+        }
+
+        return next as ItemBySection[S];
+      }),
     }));
   };
 
