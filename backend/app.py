@@ -2611,7 +2611,8 @@ def extract_text_multimodal(file_bytes):
         max_pages = min(len(doc), 5)
         for i in range(max_pages):
             page = doc.load_page(i)
-            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2)) # 2x zoom for better OCR
+            # Keep resolution moderate to avoid request payload too large.
+            pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5))
             img_bytes = pix.tobytes("png")
             images.append({
                 "mime_type": "image/png",
@@ -2634,20 +2635,49 @@ def extract_text_multimodal(file_bytes):
              # The new SDK supports types.Part.from_bytes
              img_bytes_decoded = base64.b64decode(img['data'])
              contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
-            
+
+        def _ocr_with_model(model_name: str, model_contents):
+            response = gemini_client.models.generate_content(
+                model=model_name,
+                contents=model_contents
+            )
+            return (response.text or "").strip()
+
         for model_name in get_ocr_model_candidates():
             try:
                 logger.info("Trying OCR model: %s", model_name)
-                response = gemini_client.models.generate_content(
-                    model=model_name,
-                    contents=contents
-                )
-                text = (response.text or "").strip()
+                text = _ocr_with_model(model_name, contents)
                 if text:
                     logger.info("OCR success with model=%s, text_len=%s", model_name, len(text))
                     return text
             except Exception as model_err:
-                logger.warning("OCR model failed (%s): %s", model_name, model_err)
+                logger.warning("OCR batch failed (%s): %s", model_name, model_err)
+
+            # Fallback: page-by-page OCR (more robust for large/complex PDFs).
+            try:
+                per_page_texts = []
+                for idx, img in enumerate(images):
+                    try:
+                        page_contents = [
+                            prompt,
+                            types.Part.from_bytes(
+                                data=base64.b64decode(img['data']),
+                                mime_type=img['mime_type']
+                            )
+                        ]
+                        page_text = _ocr_with_model(model_name, page_contents)
+                        if page_text:
+                            per_page_texts.append(page_text)
+                    except Exception as page_err:
+                        logger.warning("OCR page failed model=%s page=%s: %s", model_name, idx + 1, page_err)
+                        continue
+
+                merged = _normalize_extracted_text("\n".join(per_page_texts))
+                if merged:
+                    logger.info("OCR per-page success with model=%s, text_len=%s", model_name, len(merged))
+                    return merged
+            except Exception as per_page_err:
+                logger.warning("OCR per-page fallback failed (%s): %s", model_name, per_page_err)
                 continue
         logger.error("All OCR models failed or returned empty text.")
         return ""

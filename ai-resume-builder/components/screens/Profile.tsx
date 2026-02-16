@@ -6,27 +6,27 @@ import { useAppContext } from '../../src/app-context';
 const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
   <button
     onClick={onClick}
-    className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+    className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-100 dark:active:bg-white/5 transition-colors group"
   >
     <div className="flex items-center gap-3">
-      <div className={`w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary`}>
-        <span className="material-symbols-outlined text-[20px]">{icon}</span>
+      <div className={`w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary`}>
+        <span className="material-symbols-outlined text-[20px] font-medium">{icon}</span>
       </div>
-      <span className="text-sm font-medium text-slate-900 dark:text-white">{label}</span>
+      <span className="text-sm font-semibold text-slate-900 dark:text-white">{label}</span>
     </div>
     <div className="flex items-center gap-2">
       {badge && (
-        <span className="text-[10px] font-bold bg-primary text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-primary/20">
+        <span className="text-[10px] font-bold bg-primary text-white px-2 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-primary/30">
           {badge}
         </span>
       )}
-      <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+      <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
     </div>
   </button>
 );
 
 const Profile: React.FC<ScreenProps> = () => {
-  const { navigateToView, completeness, currentUser, allResumes } = useAppContext();
+  const { navigateToView, completeness, currentUser, allResumes, isDarkMode } = useAppContext();
   const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
   const [avatar, setAvatar] = React.useState(DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -88,7 +88,7 @@ const Profile: React.FC<ScreenProps> = () => {
 
       <main className="flex flex-col gap-4 p-4">
         {/* Profile Info Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 relative group overflow-hidden">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative group overflow-hidden">
           <div className="p-4">
             <div className="flex items-center gap-4 relative z-10">
               <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
@@ -123,21 +123,35 @@ const Profile: React.FC<ScreenProps> = () => {
           </div>
         </div>
 
-        {/* Pro Upgrade Glassmorphism Card */}
-        <div className="relative overflow-hidden rounded-2xl bg-slate-900 dark:bg-slate-900/80 backdrop-blur-xl border border-blue-500/20 p-4 shadow-xl shadow-blue-900/20 group">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-blue-500/20 transition-all duration-700"></div>
+        {/* Pro Upgrade Card - Adaptive Style */}
+        <div className={`relative overflow-hidden rounded-2xl p-4 shadow-xl transition-all duration-500 group ${isDarkMode
+          ? 'bg-slate-900/80 backdrop-blur-xl border border-blue-500/20 shadow-blue-900/40'
+          : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 border-transparent shadow-blue-500/25'
+          }`}>
+          {/* Decorative Orbs */}
+          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16 transition-all duration-700 ${isDarkMode ? 'bg-blue-500/10 group-hover:bg-blue-500/20' : 'bg-white/20 group-hover:bg-white/30'
+            }`}></div>
+          <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl -ml-12 -mb-12 transition-all duration-700 ${isDarkMode ? 'bg-indigo-500/5 group-hover:bg-indigo-500/10' : 'bg-blue-400/10 group-hover:bg-blue-400/20'
+            }`}></div>
+
           <div className="relative z-10 flex items-center justify-between gap-4">
             <div className="flex flex-col min-w-0 flex-1">
-              <h3 className="text-white text-[15px] font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                当前版本：免费版
-              </h3>
-              <p className="text-blue-200/60 text-[11px] mt-1 font-medium line-clamp-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className={`material-symbols-outlined text-[18px] ${isDarkMode ? 'text-primary' : 'text-blue-100'}`}>rocket_launch</span>
+                <h3 className="text-white text-[15px] font-black tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
+                  当前版本：免费版
+                </h3>
+              </div>
+              <p className={`text-[11px] font-medium line-clamp-2 italic ${isDarkMode ? 'text-blue-200/60' : 'text-blue-100/80'}`}>
                 升级以解锁更多AI简历优化次数及模拟面试
               </p>
             </div>
             <button
               onClick={() => navigateToView(View.MEMBER_CENTER)}
-              className="shrink-0 px-5 py-2 bg-gradient-to-r from-blue-500 via-blue-600 to-indigo-700 text-white rounded-xl text-sm font-black shadow-lg shadow-blue-600/40 hover:scale-[1.02] active:scale-[0.98] transition-all whitespace-nowrap"
+              className={`shrink-0 px-5 py-2.5 rounded-xl text-sm font-black shadow-lg transition-all active:scale-95 whitespace-nowrap ${isDarkMode
+                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-blue-600/30'
+                : 'bg-white text-primary shadow-white/10'
+                }`}
             >
               立即升级
             </button>
@@ -146,7 +160,7 @@ const Profile: React.FC<ScreenProps> = () => {
 
 
         {/* Menu Items - Unified Colors */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
           <MenuItem
             onClick={() => navigateToView(View.HISTORY)}
             icon="history"

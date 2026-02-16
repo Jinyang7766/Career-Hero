@@ -177,7 +177,7 @@ const History: React.FC<ScreenProps> = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-100 dark:border-white/5 shrink-0">
+      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center px-4 h-14 relative">
           <button
             onClick={goBack}
@@ -213,7 +213,7 @@ const History: React.FC<ScreenProps> = () => {
             <div className="w-16 h-16 rounded-2xl bg-slate-100 dark:bg-white/5 flex items-center justify-center text-slate-400 dark:text-slate-500 mb-4">
               <span className="material-symbols-outlined text-4xl">history</span>
             </div>
-            <p className="text-slate-900 dark:text-white font-bold text-lg mb-1">暂无导出记录</p>
+            <p className="text-slate-900 dark:text-white font-black text-lg mb-1">暂无导出记录</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm">导出简历后会显示在这里</p>
           </div>
         )}
@@ -226,17 +226,17 @@ const History: React.FC<ScreenProps> = () => {
                 onClick={() => toggleSection(label)}
                 className="w-full flex items-center justify-between px-4 py-2 group"
               >
-                <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">{label}</h3>
-                <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}>
+                <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{label}</h3>
+                <span className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isCollapsed ? 'rotate(-90deg)' : 'none' }}>
                   expand_more
                 </span>
               </button>
 
               {!isCollapsed && (
                 <div className="px-4 mt-1">
-                  <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+                  <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
                     {group.map((item) => (
-                      <div key={item.id} className="relative flex items-center gap-4 px-4 py-3.5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                      <div key={item.id} className="relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
                         <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
                           <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
                         </div>

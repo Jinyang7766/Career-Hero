@@ -30,7 +30,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
   const renderSelectionList = (resumes: ResumeSummary[]) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+      <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
         {resumes.map((resume) => (
           <div
             key={resume.id}
@@ -44,12 +44,12 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
             </div>
             <div className="flex flex-col flex-1 justify-center min-w-0">
               <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight mb-1">{resume.title}</p>
-              <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
+              <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
               </p>
             </div>
             <button
-              className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
+              className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
               type="button"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
@@ -62,7 +62,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-      <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
+      <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <button
             onClick={onBack}
@@ -84,7 +84,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-200/50 dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-transparent focus:border-primary/20 focus:ring-4 focus:ring-primary/5 placeholder-slate-500 dark:placeholder-slate-400 transition-all"
+            className="w-full bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-slate-200 dark:border-transparent focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder-slate-400 dark:placeholder-slate-400 transition-all shadow-sm"
             placeholder="搜索简历名称..."
             type="text"
           />
@@ -124,9 +124,9 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
                   <span
-                    className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4"
+                    className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}
                   >
                     expand_more
@@ -150,9 +150,9 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
                   <span
-                    className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4"
+                    className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}
                   >
                     expand_more

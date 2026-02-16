@@ -85,7 +85,7 @@ const Signup: React.FC<ScreenProps> = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
-      <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-8 relative overflow-hidden">
+      <div className="flex flex-1 flex-col justify-center px-4 py-8 lg:px-8 relative overflow-hidden">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Main Blobs - Soft & Large */}
@@ -102,65 +102,65 @@ const Signup: React.FC<ScreenProps> = () => {
         </div>
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-3xl shadow-2xl shadow-blue-500/5 p-8 sm:p-10 animate-in zoom-in-95 duration-500">
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-4 ring-primary/5">
-                <span className="material-symbols-outlined text-[28px]">person_add</span>
+              <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-4 ring-primary/5">
+                <span className="material-symbols-outlined text-[24px] sm:text-[28px]">person_add</span>
               </div>
-              <h2 className="mt-6 text-center text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
+              <h2 className="mt-4 sm:mt-6 text-center text-xl sm:text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
                 创建新账号
               </h2>
-              <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400 font-medium">
+              <p className="mt-1 sm:mt-2 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
                 开始您的职业生涯新篇章
               </p>
             </div>
 
-            <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-              <form className="space-y-5" onSubmit={handleSubmit}>
+            <div className="mt-6 sm:mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+              <form className="space-y-4 sm:space-y-5" onSubmit={handleSubmit}>
                 <div>
-                  <label htmlFor="name" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                  <label htmlFor="name" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
                     全名
                   </label>
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <input
                       id="name"
                       name="name"
                       type="text"
                       required
-                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                       placeholder="例如: 张三"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="email" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                  <label htmlFor="email" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
                     电子邮箱
                   </label>
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <input
                       id="email"
                       name="email"
                       type="email"
                       autoComplete="email"
                       required
-                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                       placeholder="name@example.com"
                     />
                   </div>
                 </div>
 
                 <div>
-                  <label htmlFor="password" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                  <label htmlFor="password" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
                     密码
                   </label>
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <input
                       id="password"
                       name="password"
                       type="password"
                       required
-                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                       placeholder="请输入密码"
                     />
                   </div>
@@ -168,8 +168,8 @@ const Signup: React.FC<ScreenProps> = () => {
                 </div>
 
                 <div className="flex items-center gap-2 ml-1">
-                  <input id="terms" type="checkbox" className="w-4 h-4 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5" required />
-                  <label htmlFor="terms" className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                  <input id="terms" type="checkbox" className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5" required />
+                  <label htmlFor="terms" className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
                     我已阅读并同意 <a href="#" className="text-primary hover:underline">服务条款</a> 和 <a href="#" className="text-primary hover:underline">隐私政策</a>
                   </label>
                 </div>

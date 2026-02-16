@@ -102,7 +102,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
+      <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -113,15 +113,15 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       </header>
 
       <main className="p-4 flex flex-col gap-6">
-        <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border}`}>
+        <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border} shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className={`size-10 rounded-full flex items-center justify-center ${statusTone.bg} ${statusTone.border}`}>
                 <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
               </div>
               <div className="flex flex-col">
-                <h4 className="text-[10px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
-                <p className="text-sm font-bold text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
+                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
+                <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
               </div>
             </div>
             <div className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 shrink-0 ${statusTone.bg} ${statusTone.border} ${statusTone.text}`}>
@@ -136,28 +136,28 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           )}
         </div>
 
-        <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5">
+        <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-md border border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-primary">description</span>
             <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
           </div>
           <div className="mb-3">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
             <input
               value={targetCompany}
               onChange={(e) => setTargetCompany(e.target.value)}
               placeholder="例如：字节跳动 / 腾讯"
-              className="mt-2 w-full rounded-xl bg-slate-50 dark:bg-[#111a22] border border-slate-200 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm"
+              className="mt-2 w-full rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm shadow-sm"
               type="text"
             />
           </div>
           <div className="mb-3">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">JD内容</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">JD内容</label>
             <textarea
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
               placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
-              className="mt-2 w-full h-40 rounded-xl bg-slate-50 dark:bg-[#111a22] border-0 p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed"
+              className="mt-2 w-full h-40 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
               maxLength={1000}
             />
           </div>

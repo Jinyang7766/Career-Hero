@@ -77,7 +77,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
-      <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
+      <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
             <span className="material-symbols-outlined">arrow_back</span>
@@ -88,7 +88,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
       </header>
 
       <main className="flex-1 overflow-y-auto p-4">
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-white/5 mb-6 relative overflow-hidden">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5 mb-6 relative overflow-hidden">
           <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${score >= 80 ? 'from-green-400 to-emerald-600' : 'from-orange-400 to-red-500'}`}></div>
 
           <div className="text-center mb-6">
@@ -102,9 +102,9 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           </div>
 
           {report?.scoreBreakdown && (
-            <div className="grid gap-3 pt-4 border-t border-slate-100 dark:border-white/5">
+            <div className="grid gap-3 pt-4 border-t border-slate-200 dark:border-white/5">
               <div className="flex flex-col gap-1">
-                <div className="flex justify-between text-xs font-medium">
+                <div className="flex justify-between text-xs font-bold">
                   <span className="text-slate-600 dark:text-slate-300">经验匹配</span>
                   <span className="text-slate-900 dark:text-white">{report.scoreBreakdown.experience}分</span>
                 </div>
@@ -157,8 +157,8 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
             </p>
             <div className="space-y-4">
               {pendingSuggestions.map((suggestion) => (
-                <div key={suggestion.id} className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-sm">
-                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/5 border-b border-slate-100 dark:border-white/5">
+                <div key={suggestion.id} className="bg-white dark:bg-surface-dark rounded-xl border border-slate-200 dark:border-white/10 overflow-hidden shadow-md">
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-white/5 border-b border-slate-200 dark:border-white/5">
                     <div className="flex justify-between items-start mb-1">
                       <span className="text-xs font-bold text-primary uppercase tracking-wider">{suggestion.title}</span>
                       <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
@@ -170,14 +170,14 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
 
                   <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/5">
                     <div className="p-4 bg-red-50/30 dark:bg-red-900/5">
-                      <p className="text-xs font-bold text-red-400 mb-2 uppercase">修改前</p>
-                      <div className="text-sm text-slate-500 bg-white/50 dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[80px]">
+                      <p className="text-xs font-black text-red-500 mb-2 uppercase tracking-wide">修改前</p>
+                      <div className="text-sm text-slate-500 bg-white dark:bg-black/20 p-3 rounded-lg border border-red-100 dark:border-red-900/20 min-h-[80px]">
                         {getDisplayOriginalValue(suggestion) || <span className="italic text-slate-400">无内容</span>}
                       </div>
                     </div>
 
                     <div className="p-4 bg-green-50/30 dark:bg-green-900/5">
-                      <p className="text-xs font-bold text-green-500 mb-2 uppercase flex justify-between items-center">
+                      <p className="text-xs font-black text-green-600 mb-2 uppercase flex justify-between items-center tracking-wide">
                         修改建议 (可编辑)
                         <span className="material-symbols-outlined text-[14px]">
                           {suggestion.targetSection === 'skills' ? 'extension' : 'edit'}
@@ -264,9 +264,9 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
                     </div>
                   </div>
 
-                  <div className="p-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 border-t border-slate-100 dark:border-white/5">
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500 dark:text-slate-400 min-w-0">
-                      <span className="truncate">有帮助吗？</span>
+                  <div className="p-3 flex flex-wrap items-center justify-between gap-3 bg-slate-50 dark:bg-white/5 border-t border-slate-200 dark:border-white/5">
+                    <div className="flex items-center gap-2 text-[11px] text-slate-600 dark:text-slate-400 min-w-0">
+                      <span className="font-bold truncate">有帮助吗？</span>
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           onClick={() => persistSuggestionFeedback(suggestion, 'up')}
@@ -297,7 +297,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
                         onClick={() => {
                           setSuggestions((prev: any[]) => prev.map((s) => s.id === suggestion.id ? { ...s, status: 'ignored' } : s));
                         }}
-                        className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-medium transition-colors"
+                        className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold transition-colors"
                         type="button"
                       >
                         忽略

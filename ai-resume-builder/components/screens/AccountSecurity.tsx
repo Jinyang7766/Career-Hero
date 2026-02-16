@@ -117,7 +117,7 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
 
   return (
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
+      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center px-4 h-14 relative">
           <button
             onClick={goBack}
@@ -132,47 +132,47 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
       <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
         {/* Login Security */}
         <div className="mt-4 px-4">
-          <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">登录与安全</h3>
-          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+          <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">登录与安全</h3>
+          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
             <button
               onClick={() => {
                 resetPasswordModalState();
                 setShowPasswordModal(true);
               }}
-              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group"
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">lock_reset</span>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">修改密码</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">修改密码</span>
               </div>
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+              <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
             </button>
 
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
               <div className="flex items-center gap-3 shrink-0 mr-4">
-                <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">smartphone</span>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">手机号</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap">手机号</span>
               </div>
               <div className="flex items-center gap-2 min-w-0">
                 <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium truncate">{phone || '未绑定'}</span>
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+                <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
               </div>
             </button>
 
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
               <div className="flex items-center gap-3 shrink-0 mr-4">
-                <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
+                <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">mail</span>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white whitespace-nowrap">电子邮箱</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white whitespace-nowrap">电子邮箱</span>
               </div>
               <div className="flex items-center gap-2 min-w-0 text-right">
                 <span className="text-[13px] text-slate-500 dark:text-slate-500 font-medium truncate">{email || '未绑定'}</span>
-                <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform">chevron_right</span>
+                <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] shrink-0 group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
               </div>
             </button>
           </div>
@@ -180,28 +180,28 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
 
         {/* Third-party Binding */}
         <div className="mt-6 px-4">
-          <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">第三方账号绑定</h3>
-          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+          <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">第三方账号绑定</h3>
+          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#07c160]/5 dark:bg-[#07c160]/10 flex items-center justify-center text-[#07c160]">
+                <div className="w-9 h-9 rounded-xl bg-[#07c160]/10 dark:bg-[#07c160]/20 flex items-center justify-center text-[#07c160]">
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
                     <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z" />
                   </svg>
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">微信</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">微信</span>
               </div>
               <button className="text-[14px] font-medium text-primary hover:opacity-80">
                 去绑定
               </button>
             </div>
-            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#12b7f5]/5 dark:bg-[#12b7f5]/10 flex items-center justify-center text-[#12b7f5]">
-                  <QqPenguinIcon className="h-5 w-5" />
+                <div className="w-9 h-9 rounded-xl bg-[#12b7f5]/10 dark:bg-[#12b7f5]/20 flex items-center justify-center text-[#12b7f5]">
+                  <QqPenguinIcon className="h-5 w-5" monochromeWhite={false} />
                 </div>
-                <span className="text-sm font-medium text-slate-900 dark:text-white">QQ</span>
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">QQ</span>
               </div>
               <button className="text-[14px] font-medium text-primary hover:opacity-80">
                 去绑定
@@ -214,7 +214,7 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
           <div className="pt-2">
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-[#ff3b30]/30 text-[#ff3b30] hover:bg-[#ff3b30]/5 active:scale-[0.98] transition-all"
+              className="w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl border border-rose-200 dark:border-[#ff3b30]/30 text-[#ff3b30] hover:bg-rose-50 dark:hover:bg-[#ff3b30]/5 active:scale-[0.98] transition-all shadow-sm"
             >
               <span className="text-[16px] font-semibold">注销账号</span>
             </button>

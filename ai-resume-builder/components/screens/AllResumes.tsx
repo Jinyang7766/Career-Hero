@@ -321,12 +321,12 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
+      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
         {resumes.map((resume, index) => (
           <div
             key={resume.id}
             onClick={() => handlePreview(resume.id)}
-            className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
+            className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
           >
             <div className="shrink-0 relative">
               <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
@@ -428,7 +428,6 @@ const AllResumes: React.FC<ScreenProps> = () => {
             onClick={goBack}
             className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
           >
-            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
           </button>
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">全部简历</h2>
           <div className="flex w-10 justify-end z-10">
@@ -448,7 +447,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-200/50 dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-transparent focus:border-primary/20 focus:ring-4 focus:ring-primary/5 placeholder-slate-500 dark:placeholder-slate-400 transition-all"
+            className="w-full bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-slate-200 dark:border-transparent focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder-slate-400 dark:placeholder-slate-400 transition-all shadow-sm"
             placeholder="搜索简历名称..."
             type="text"
           />
@@ -487,8 +486,8 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
-                    <h3 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-400 dark:text-slate-500 font-bold border border-slate-200/50 dark:border-white/5">
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus === 'optimized').length}
                     </span>
                   </div>
@@ -516,8 +515,8 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
-                    <h3 className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-400 dark:text-slate-500 font-bold border border-slate-200/50 dark:border-white/5">
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus !== 'optimized').length}
                     </span>
                   </div>

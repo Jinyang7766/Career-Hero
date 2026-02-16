@@ -28,7 +28,7 @@ const ForgotPassword: React.FC<ScreenProps> = () => {
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col px-6 pt-10 pb-12 lg:px-8 max-w-sm mx-auto w-full relative overflow-hidden">
+      <div className="flex flex-1 flex-col px-4 pt-6 pb-8 lg:px-8 max-w-md mx-auto w-full relative overflow-hidden">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Main Blobs - Soft & Large */}
@@ -44,34 +44,34 @@ const ForgotPassword: React.FC<ScreenProps> = () => {
           <div className="absolute bottom-[25%] left-[15%] w-16 h-16 border border-blue-400/10 rounded-lg rotate-12"></div>
         </div>
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-3xl shadow-2xl shadow-blue-500/5 p-8 sm:p-10 animate-in zoom-in-95 duration-500">
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary mb-6 ring-4 ring-primary/5">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary mb-4 sm:mb-6 ring-4 ring-primary/5">
                 <span className="material-symbols-outlined text-[24px]">lock_reset</span>
               </div>
-              <h2 className="text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
+              <h2 className="text-xl sm:text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
                 重置密码
               </h2>
-              <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 font-medium">
+              <p className="mt-1 sm:mt-2 text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
                 不用担心，输入您的注册邮箱，我们将向您发送重置说明。
               </p>
             </div>
 
-            <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+            <div className="mt-6 sm:mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
               {!isSent ? (
-                <form className="space-y-6" onSubmit={handleSubmit}>
+                <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
                   <div>
-                    <label htmlFor="email" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                    <label htmlFor="email" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
                       电子邮箱
                     </label>
-                    <div className="mt-2">
+                    <div className="mt-1.5 sm:mt-2">
                       <input
                         id="email"
                         name="email"
                         type="email"
                         autoComplete="email"
                         required
-                        className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                        className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                         placeholder="请输入注册邮箱"
                       />
                     </div>

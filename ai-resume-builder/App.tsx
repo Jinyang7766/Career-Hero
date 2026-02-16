@@ -27,6 +27,10 @@ function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isNavHidden, setIsNavHidden] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    return saved ? saved === 'dark' : true; // Default to dark
+  });
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -189,6 +193,19 @@ function App() {
 
     checkAuth();
   }, [navigate]);
+
+  // Sync theme with HTML class and localStorage
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [isDarkMode]);
+
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   // Load user resumes from Supabase
   const loadUserResumes = async () => {
@@ -676,9 +693,11 @@ function App() {
         goBack: handleGoBack,
         login: handleLogin,
         logout: handleLogout,
+        isDarkMode,
+        toggleTheme,
       }}
     >
-      <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative">
+      <div className={`min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative`}>
         <ToastOverlay />
         <ConfirmModal />
         {renderView()}

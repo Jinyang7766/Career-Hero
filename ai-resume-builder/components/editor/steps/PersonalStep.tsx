@@ -10,7 +10,7 @@ type PersonalStepProps = {
 };
 
 const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onInfoChange, showValidation, formatErrors = {} }) => (
-  <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open>
+  <details className="group bg-white dark:bg-surface-dark rounded-xl shadow-md border border-slate-200 dark:border-[#324d67] overflow-hidden transition-all duration-300" open>
     <summary className="flex cursor-pointer items-center justify-between p-4 bg-white dark:bg-surface-dark hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
       <div className="flex items-center gap-3">
         <div className={`flex items-center justify-center size-8 rounded-full ${isComplete ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400' : 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400'}`}>
@@ -20,13 +20,13 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
       </div>
       <span className="material-symbols-outlined text-slate-400 group-open:rotate-180 transition-transform duration-300">expand_more</span>
     </summary>
-    <div className="p-4 pt-0 border-t border-slate-100 dark:border-white/5 mt-2">
+    <div className="p-4 pt-0 border-t border-slate-200 dark:border-white/5 mt-2">
       <div className="grid gap-4 pt-4">
         {/* Avatar Upload */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">上传证件照（可选）</label>
+          <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">上传证件照（可选）</label>
           <div className="flex items-center gap-4">
-            <div className="relative size-20 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/5 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="relative size-20 rounded-full border border-slate-300 dark:border-white/10 bg-white dark:bg-white/5 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
               {resumeData.personalInfo.avatar ? (
                 <img
                   src={resumeData.personalInfo.avatar}
@@ -61,13 +61,13 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">姓名 *</label>
+          <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">姓名 *</label>
           <input
-            className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 ${showValidation && !resumeData.personalInfo.name
+            className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 shadow-sm ${showValidation && !resumeData.personalInfo.name
               ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
               : formatErrors.name
                 ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                : 'border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
               } text-slate-900 dark:text-white`}
             type="text"
             value={resumeData.personalInfo.name}
@@ -82,13 +82,13 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">求职意向 *</label>
+          <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">求职意向 *</label>
           <input
-            className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 ${showValidation && !resumeData.personalInfo.title
+            className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 shadow-sm ${showValidation && !resumeData.personalInfo.title
               ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
               : formatErrors.title
                 ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                : 'border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
               } text-slate-900 dark:text-white`}
             type="text"
             value={resumeData.personalInfo.title}
@@ -104,14 +104,14 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">性别 *</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">性别 *</label>
             <div className="relative">
               <select
                 value={resumeData.gender || ''}
                 onChange={(e) => onInfoChange('gender', e.target.value)}
-                className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 appearance-none ${showValidation && !resumeData.gender
+                className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 appearance-none shadow-sm ${showValidation && !resumeData.gender
                   ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                  : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                  : 'border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
                   } text-slate-900 dark:text-white pr-10`}
                 required
               >
@@ -129,9 +129,9 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
           </div>
 
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">年龄</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">年龄</label>
             <input
-              className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary text-slate-900 dark:text-white`}
+              className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary text-slate-900 dark:text-white shadow-sm`}
               type="text"
               value={resumeData.personalInfo.age || ''}
               onChange={(e) => onInfoChange('age', e.target.value)}
@@ -141,13 +141,13 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
 
         <div className="grid grid-cols-2 gap-4">
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电子邮箱 *</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">电子邮箱 *</label>
             <input
-              className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 ${showValidation && !resumeData.personalInfo.email
+              className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 shadow-sm ${showValidation && !resumeData.personalInfo.email
                 ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
                 : formatErrors.email
                   ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                  : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                  : 'border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
                 } text-slate-900 dark:text-white`}
               type="email"
               value={resumeData.personalInfo.email}
@@ -161,13 +161,13 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
             )}
           </div>
           <div className="flex flex-col gap-2">
-            <label className="text-xs font-medium text-slate-500 dark:text-text-secondary uppercase tracking-wider">电话号码 *</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">电话号码 *</label>
             <input
-              className={`w-full rounded-lg bg-slate-50 dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 ${showValidation && !resumeData.personalInfo.phone
+              className={`w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 shadow-sm ${showValidation && !resumeData.personalInfo.phone
                 ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
                 : formatErrors.phone
                   ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
-                  : 'border-slate-200 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
+                  : 'border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary'
                 } text-slate-900 dark:text-white`}
               type="tel"
               value={resumeData.personalInfo.phone}

@@ -5,7 +5,7 @@ import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useAppContext } from '../../src/app-context';
 
 const Login: React.FC<ScreenProps> = () => {
-  const { login, navigateToView } = useAppContext();
+  const { login, navigateToView, isDarkMode, toggleTheme } = useAppContext();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -71,7 +71,7 @@ const Login: React.FC<ScreenProps> = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
-      <div className="flex flex-1 flex-col justify-center px-6 py-12 lg:px-8 relative">
+      <div className="flex flex-1 flex-col justify-center px-4 py-8 lg:px-8 relative overflow-hidden">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Main Blobs - Soft & Large */}
@@ -88,34 +88,45 @@ const Login: React.FC<ScreenProps> = () => {
           <div className="absolute top-[40%] right-[10%] w-12 h-12 border-t border-r border-primary/10 rounded-tr-xl"></div>
         </div>
 
+        <div className="absolute top-4 right-4 z-20">
+          <button
+            onClick={toggleTheme}
+            className="flex size-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-slate-900 dark:text-white hover:bg-white/20 transition-all active:scale-95 shadow-lg"
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              {isDarkMode ? 'light_mode' : 'dark_mode'}
+            </span>
+          </button>
+        </div>
+
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-3xl shadow-2xl shadow-blue-500/5 p-8 sm:p-10 animate-in zoom-in-95 duration-500">
+          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-600 shadow-lg shadow-primary/30 ring-4 ring-primary/10">
-                <span className="material-symbols-outlined text-white text-[32px]">description</span>
+              <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-600 shadow-lg shadow-primary/30 ring-4 ring-primary/10">
+                <span className="material-symbols-outlined text-white text-[28px] sm:text-[32px]">description</span>
               </div>
-              <h2 className="mt-8 text-center text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
+              <h2 className="mt-4 sm:mt-8 text-center text-xl sm:text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
                 欢迎回来
               </h2>
-              <p className="mt-2 text-center text-sm text-slate-500 dark:text-slate-400 font-medium">
+              <p className="mt-1 sm:mt-2 text-center text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium">
                 登录您的账号以继续使用
               </p>
             </div>
 
-            <div className="mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
-              <form className="space-y-6" onSubmit={handleSubmit}>
+            <div className="mt-6 sm:mt-10 sm:mx-auto sm:w-full sm:max-w-sm">
+              <form className="space-y-4 sm:space-y-6" onSubmit={handleSubmit}>
                 <div>
-                  <label htmlFor="email" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                  <label htmlFor="email" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
                     电子邮箱
                   </label>
-                  <div className="mt-2">
+                  <div className="mt-1.5 sm:mt-2">
                     <input
                       id="email"
                       name="email"
                       type="email"
                       autoComplete="email"
                       required
-                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                       placeholder="name@example.com"
                     />
                   </div>
@@ -123,10 +134,10 @@ const Login: React.FC<ScreenProps> = () => {
 
                 <div>
                   <div className="flex items-center justify-between ml-1">
-                    <label htmlFor="password" className="block text-sm font-semibold leading-6 text-slate-900 dark:text-white">
+                    <label htmlFor="password" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white">
                       密码
                     </label>
-                    <div className="text-sm">
+                    <div className="text-xs sm:text-sm">
                       <button
                         type="button"
                         onClick={() => navigateToView(View.FORGOT_PASSWORD, { replace: true })}
@@ -136,14 +147,14 @@ const Login: React.FC<ScreenProps> = () => {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-2 relative">
+                  <div className="mt-1.5 sm:mt-2 relative">
                     <input
                       id="password"
                       name="password"
                       type="password"
                       autoComplete="current-password"
                       required
-                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
                       placeholder="请输入密码"
                     />
                   </div>

@@ -17,7 +17,7 @@ const CAREER_TIPS = [
 ];
 
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
-  const { currentUser, allResumes, navigateToView, setResumeData } = useAppContext();
+  const { currentUser, allResumes, navigateToView, setResumeData, isDarkMode, toggleTheme } = useAppContext();
   const [greeting, setGreeting] = useState('');
   const [dailyTip, setDailyTip] = useState('');
 
@@ -146,7 +146,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
           <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
             {greeting}{displayName ? `，${displayName}` : ''}
           </h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+          <p className="text-sm text-slate-600 dark:text-gray-400 mt-1">
             {new Date().toLocaleDateString('zh-CN', {
               weekday: 'long',
               year: 'numeric',
@@ -155,19 +155,28 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
             })}
           </p>
         </div>
+
+        <button
+          onClick={toggleTheme}
+          className="flex size-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all active:scale-95 border border-slate-200 dark:border-white/10 shadow-sm"
+        >
+          <span className="material-symbols-outlined text-[20px]">
+            {isDarkMode ? 'light_mode' : 'dark_mode'}
+          </span>
+        </button>
       </div>
 
       <div className="px-4 space-y-6 pt-2">
 
         {/* Stats Overview */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative">
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">简历总数</p>
-            <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">{stats.total}</p>
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">简历总数</p>
+            <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.total}</p>
           </div>
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 relative">
-            <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">已优化</p>
-            <p className="text-3xl font-bold text-primary dark:text-primary mt-1">{stats.optimized}</p>
+          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已优化</p>
+            <p className="text-3xl font-black text-primary dark:text-primary mt-1">{stats.optimized}</p>
           </div>
         </div>
 
@@ -217,7 +226,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               </button>
             </div>
 
-            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5 flex flex-col">
+            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5 flex flex-col">
               {recentResumes.map(resume => (
                 <div
                   key={resume.id}
@@ -236,12 +245,12 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                   </div>
                   <div className="flex flex-col flex-1 justify-center min-w-0">
                     <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{resume.title}</p>
-                    <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
+                    <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
                       上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                     </p>
                   </div>
                   {resume.optimizationStatus === 'optimized' && (
-                    <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded font-medium shrink-0">
+                    <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded font-bold shrink-0 shadow-sm shadow-emerald-500/10">
                       已优化
                     </span>
                   )}
@@ -252,9 +261,9 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
         )}
 
         {/* Daily Tip */}
-        <div className="bg-slate-50 dark:bg-surface-dark rounded-xl p-5 border border-slate-100 dark:border-white/5 relative overflow-hidden">
-          <p className="text-sm font-bold text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
-          <p className="text-sm text-slate-700 dark:text-slate-200 font-medium relative z-10 leading-relaxed italic">
+        <div className="bg-blue-50/50 dark:bg-surface-dark rounded-xl p-5 border border-blue-100 dark:border-white/5 relative overflow-hidden shadow-sm">
+          <p className="text-sm font-black text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
+          <p className="text-sm text-slate-800 dark:text-slate-200 font-semibold relative z-10 leading-relaxed italic">
             "{dailyTip}"
           </p>
         </div>

@@ -24,6 +24,8 @@ export type AppContextValue = {
 
   login: (userData?: any) => void;
   logout: (opts?: { skipConfirm?: boolean }) => void;
+  isDarkMode: boolean;
+  toggleTheme: () => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);

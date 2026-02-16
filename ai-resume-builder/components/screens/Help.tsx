@@ -92,7 +92,7 @@ const Help: React.FC<ScreenProps> = () => {
 
   return (
     <div className="relative flex h-full min-h-screen w-full flex-col bg-background-light dark:bg-background-dark max-w-[480px] mx-auto animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
+      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center px-4 h-14 relative">
           <button
             onClick={goBack}
@@ -106,13 +106,13 @@ const Help: React.FC<ScreenProps> = () => {
 
       <div className="flex-1 overflow-y-auto pb-24">
         <div className="mt-4 px-4">
-          <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">问题反馈</h3>
+          <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">问题反馈</h3>
 
-          <div className="flex flex-col gap-4 rounded-2xl bg-white dark:bg-surface-dark border border-gray-100 dark:border-white/5 p-5 shadow-sm">
+          <div className="flex flex-col gap-4 rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-white/5 p-5 shadow-md">
             <div className="flex flex-col gap-2">
-              <label className="ml-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">问题描述</label>
+              <label className="ml-1 text-[12px] font-bold text-slate-700 dark:text-slate-400">问题描述</label>
               <textarea
-                className="w-full min-h-[140px] resize-none rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-black/20 p-4 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
+                className="w-full min-h-[140px] resize-none rounded-xl border border-slate-300 dark:border-white/10 bg-slate-50 dark:bg-black/20 p-4 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none transition-all"
                 placeholder="请描述你遇到的问题或建议，我们会尽快处理..."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -120,7 +120,7 @@ const Help: React.FC<ScreenProps> = () => {
             </div>
 
             <div className="flex flex-col gap-2">
-              <label className="ml-1 text-[12px] font-medium text-slate-500 dark:text-slate-400">截图上传（最多 3 张）</label>
+              <label className="ml-1 text-[12px] font-bold text-slate-700 dark:text-slate-400">截图上传（最多 3 张）</label>
               <div className="flex gap-3 overflow-x-auto pb-1 no-scrollbar">
                 <button
                   onClick={handlePickImages}
@@ -138,7 +138,7 @@ const Help: React.FC<ScreenProps> = () => {
                   className="hidden"
                 />
                 {images.map((src, idx) => (
-                  <div key={idx} className="relative h-20 w-20 shrink-0 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-800 overflow-hidden group">
+                  <div key={idx} className="relative h-20 w-20 shrink-0 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-800 overflow-hidden group shadow-sm">
                     <img alt="uploaded" className="h-full w-full object-cover" src={src} />
                     <button
                       onClick={() => removeImage(idx)}

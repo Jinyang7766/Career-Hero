@@ -67,8 +67,8 @@ const DeletionPending: React.FC<ScreenProps> = () => {
                 <div className="absolute bottom-[25%] right-[15%] w-16 h-16 border border-blue-400/10 rounded-lg rotate-12"></div>
             </div>
 
-            <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
-                <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-amber-500/10 border border-amber-200/50 dark:border-amber-700/30">
+            <div className="relative z-10 flex flex-col items-center w-full max-w-sm bg-white/80 dark:bg-black/20 p-8 rounded-3xl backdrop-blur-xl shadow-xl border border-white dark:border-white/5">
+                <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mb-6 shadow-md shadow-amber-500/10 border border-amber-200 dark:border-amber-700/30">
                     <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-4xl">warning</span>
                 </div>
 
@@ -90,7 +90,7 @@ const DeletionPending: React.FC<ScreenProps> = () => {
 
                     <button
                         onClick={() => logout()}
-                        className="w-full py-4 bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl font-medium border border-slate-200 dark:border-white/10 active:scale-[0.98] transition-all"
+                        className="w-full py-4 bg-white dark:bg-white/5 text-slate-700 dark:text-slate-400 rounded-xl font-bold border border-slate-200 dark:border-white/10 active:scale-[0.98] transition-all shadow-sm hover:bg-slate-50 dark:hover:bg-white/10"
                     >
                         退出登录
                     </button>
