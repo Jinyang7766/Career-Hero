@@ -5,15 +5,16 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
-    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright \
+    DEBIAN_FRONTEND=noninteractive
 
 COPY backend/requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Install Chromium for Playwright at build time.
-RUN python -m playwright install chromium
+# Install Chromium and all required system dependencies for Playwright.
+RUN python -m playwright install --with-deps chromium
 
 COPY backend/ .
 
