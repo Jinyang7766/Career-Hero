@@ -106,12 +106,28 @@ export const useSuggestionAcceptance = ({
           resumeTitle: originResult.data.title
         } as ResumeData;
 
-        const targetOptimizedId =
+        const mappedOptimizedId = (originResult.data.resume_data || {}).optimizedResumeId;
+        let targetOptimizedId: string | number | null = null;
+        if (mappedOptimizedId) {
+          const mappedResult = await DatabaseService.getResume(mappedOptimizedId);
+          const mappedData = mappedResult.success ? (mappedResult.data?.resume_data || {}) : null;
+          const mappedValid =
+            !!mappedResult.success &&
+            !!mappedResult.data &&
+            mappedData?.optimizationStatus === 'optimized' &&
+            isSameResumeId(mappedData?.optimizedFromId, originalResumeId);
+          if (mappedValid) {
+            targetOptimizedId = mappedResult.data.id;
+          }
+        }
+
+        targetOptimizedId = targetOptimizedId || (
           (resumeData.optimizationStatus === 'optimized' &&
             resumeData.id &&
             isSameResumeId(resumeData.optimizedFromId, originalResumeId))
             ? resumeData.id
-            : await ensureSingleOptimizedResume(user.id, originalResumeId, originalResume);
+            : await ensureSingleOptimizedResume(user.id, originalResumeId, originalResume)
+        );
 
         const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
         if (!optimizedResult.success || !optimizedResult.data?.resume_data) {
@@ -152,6 +168,7 @@ export const useSuggestionAcceptance = ({
           aiSuggestionFeedback: nextResumeData.aiSuggestionFeedback || baseResume.aiSuggestionFeedback || originalResume.aiSuggestionFeedback,
           optimizationStatus: 'optimized' as const,
           optimizedFromId: originalResumeId as any,
+          optimizedResumeId: targetOptimizedId as any,
           lastJdText: jdText || baseResume.lastJdText || originalResume.lastJdText || '',
           targetCompany: targetCompany || baseResume.targetCompany || originalResume.targetCompany || ''
         };
@@ -208,6 +225,23 @@ export const useSuggestionAcceptance = ({
             snapshot: snapshotForPersist,
             updatedAt: snapshotForPersist.updatedAt || new Date().toISOString()
           });
+        }
+
+        const originalRowData = originResult.data.resume_data || {};
+        if (!isSameResumeId(originalRowData.optimizedResumeId, targetOptimizedId)) {
+          const updatedOriginal = {
+            ...originalRowData,
+            optimizedResumeId: targetOptimizedId,
+            lastJdText: jdText || originalRowData.lastJdText || '',
+            targetCompany: targetCompany || originalRowData.targetCompany || ''
+          };
+          const originalUpdateResult = await DatabaseService.updateResume(String(originalResumeId), {
+            resume_data: updatedOriginal,
+            updated_at: new Date().toISOString()
+          });
+          if (!originalUpdateResult.success) {
+            console.warn('Failed to persist optimized resume mapping on original resume:', originalUpdateResult.error);
+          }
         }
 
         if (loadUserResumes) {

@@ -85,6 +85,25 @@ export const useOptimizedResumeStore = ({
       optimizedResumeIdRef.current = null;
     }
 
+    const originalRow = await DatabaseService.getResume(originalResumeId);
+    const mappedOptimizedId = originalRow.success
+      ? (originalRow.data?.resume_data || {}).optimizedResumeId
+      : null;
+    if (mappedOptimizedId) {
+      const mappedRow = await DatabaseService.getResume(mappedOptimizedId);
+      const mappedData = mappedRow.success ? (mappedRow.data?.resume_data || {}) : null;
+      const mappedValid =
+        !!mappedRow.success &&
+        !!mappedRow.data &&
+        mappedData?.optimizationStatus === 'optimized' &&
+        isSameResumeId(mappedData?.optimizedFromId, normalizedOriginalId);
+      if (mappedValid) {
+        setOptimizedResumeId(mappedRow.data.id);
+        optimizedResumeIdRef.current = mappedRow.data.id;
+        return mappedRow.data.id;
+      }
+    }
+
     const existingId = await findExistingOptimizedResumeId(userId, normalizedOriginalId);
     if (existingId) {
       setOptimizedResumeId(existingId);
