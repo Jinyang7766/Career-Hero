@@ -56,6 +56,7 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+PDF_EXPORT_PATCH_VERSION = "pdf-export-patch-2026-02-16-v3"
 
 
 def _is_missing_deletion_column_error(err: Exception) -> bool:
@@ -1519,7 +1520,7 @@ def export_pdf():
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
         
-        logger.info("Starting PDF generation with Playwright")
+        logger.info("Starting PDF generation with Playwright, patch=%s", PDF_EXPORT_PATCH_VERSION)
         
         # Generate HTML for PDF.
         # Always use backend template to avoid drift with frontend icon-font/runtime CSS.
@@ -1678,12 +1679,14 @@ def export_pdf():
             company = extract_company_name_from_jd(jd_text)
             filename = build_pdf_filename(name=name, direction=direction, company=company)
         
-        return send_file(
+        response = send_file(
             result,
             as_attachment=True,
             download_name=filename,
             mimetype='application/pdf'
         )
+        response.headers['X-PDF-Export-Patch'] = PDF_EXPORT_PATCH_VERSION
+        return response
         
     except Exception as e:
         logger.error(f"PDF generation error: {str(e)}")
