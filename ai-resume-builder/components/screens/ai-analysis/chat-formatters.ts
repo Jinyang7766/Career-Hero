@@ -1,6 +1,29 @@
 const INTERVIEW_ANSWER_LIMIT_SUFFIX = '请将回答控制在3分钟内';
 const SELF_INTRO_REMINDER = '自我介绍时间为1分钟';
 
+const normalizeMixedPunctuation = (input: string) => {
+  let text = String(input || '').trim();
+  if (!text) return '';
+
+  // Normalize common ASCII punctuation into Chinese punctuation for Chinese UI copy.
+  text = text
+    .replace(/,/g, '，')
+    .replace(/;/g, '；')
+    .replace(/!/g, '！')
+    .replace(/\?/g, '？');
+
+  // Collapse mixed punctuation clusters like "。," / "；，" / "！！。".
+  text = text
+    .replace(/([。！？；，])\s*[；，。！？]+/g, '$1')
+    .replace(/([。！？；，]){2,}/g, '$1')
+    .replace(/^[；，。！？\s]+/, '')
+    .replace(/[；，。！？\s]+$/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  return text;
+};
+
 export const sanitizeSuggestedValue = (value: any, targetSection?: string) => {
   if (targetSection === 'skills') return value;
   if (typeof value !== 'string') return value;
@@ -31,22 +54,14 @@ export const sanitizeSuggestedValue = (value: any, targetSection?: string) => {
   }
 
   if (/^(建议|修改建议|修改原因|原因|说明|请|请将|请把|请删除|请去掉)/.test(text) && /[:：]/.test(text)) {
-    return text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim();
+    return normalizeMixedPunctuation(text.replace(/^[^:：]{0,20}[:：]\s*/, '').trim());
   }
 
-  return text;
+  return normalizeMixedPunctuation(text);
 };
 
 export const sanitizeReasonText = (value: any) => {
-  let text = String(value ?? '').trim();
-  if (!text) return '';
-  text = text
-    .replace(/;/g, '；')
-    .replace(/([。！？；，])\s*[；，。！？]+/g, '$1')
-    .replace(/([。！？；，]){2,}/g, '$1')
-    .replace(/\s+/g, ' ')
-    .trim();
-  return text;
+  return normalizeMixedPunctuation(String(value ?? ''));
 };
 
 export const isGenderRelatedSuggestion = (suggestion: any) => {
@@ -70,6 +85,33 @@ export const isGenderRelatedSuggestion = (suggestion: any) => {
   ]
     .map((item) => String(item || ''))
     .join(' ');
+  return keywordPattern.test(combinedText);
+};
+
+export const isEducationRelatedSuggestion = (suggestion: any) => {
+  if (!suggestion) return false;
+  const keywordPattern = /(教育背景|教育经历|教育信息|学历|学位|专业|主修|课程|本科|硕士|博士|学校|院校|学院|education|educations|major|degree|school|university|college|curriculum)/i;
+  const fieldPattern = /(education|educations|edu|major|degree|school|university|college|学历|学位|专业|主修|学校|院校)/i;
+
+  if (typeof suggestion === 'string') return keywordPattern.test(suggestion);
+
+  const targetSection = String(suggestion.targetSection || '').trim().toLowerCase();
+  if (targetSection === 'educations' || targetSection === 'education' || targetSection === 'edu') return true;
+
+  const targetField = String(suggestion.targetField || '').trim();
+  if (fieldPattern.test(targetField)) return true;
+
+  const combinedText = [
+    suggestion.title,
+    suggestion.reason,
+    suggestion.targetField,
+    suggestion.targetSection,
+    Array.isArray(suggestion.suggestedValue) ? suggestion.suggestedValue.join(' ') : suggestion.suggestedValue,
+    suggestion.originalValue,
+  ]
+    .map((item) => String(item || ''))
+    .join(' ');
+
   return keywordPattern.test(combinedText);
 };
 
@@ -99,4 +141,3 @@ export const formatInterviewQuestion = (q: string) => {
   if (!hasLimit) t = `${t}\n${INTERVIEW_ANSWER_LIMIT_SUFFIX}`;
   return t;
 };
-

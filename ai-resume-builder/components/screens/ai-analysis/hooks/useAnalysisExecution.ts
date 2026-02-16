@@ -3,7 +3,7 @@ import { toSkillList } from '../../../../src/skill-utils';
 import { createMasker } from '../chat-payload';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
 import { applySuggestionFeedback, consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
-import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion } from '../chat-formatters';
+import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
 import type { AnalysisReport, Suggestion } from '../types';
 
@@ -139,6 +139,7 @@ export const useAnalysisExecution = ({
 
       backendSuggestions.forEach((suggestion: any, index: number) => {
         if (isGenderRelatedSuggestion(suggestion)) return;
+        if (isEducationRelatedSuggestion(suggestion)) return;
         if (typeof suggestion === 'string') {
           newSuggestions.push({
             id: `ai-suggestion-${index}`,

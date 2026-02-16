@@ -1685,11 +1685,11 @@ def resolve_pdf_font_path() -> str:
             candidates.append(os.path.abspath(os.path.join(os.path.dirname(__file__), env_path)))
 
     base_dir = os.path.dirname(__file__)
-    candidates.extend([
-        os.path.join(base_dir, "font.ttf"),
+    # Strongly prefer project-shipped font.ttf to keep rendering deterministic.
+    candidates = [os.path.join(base_dir, "font.ttf")] + candidates + [
         os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "public", "font.ttf")),
         os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "dist", "font.ttf")),
-    ])
+    ]
 
     seen = set()
     for path in candidates:
@@ -1778,7 +1778,7 @@ def inject_font_css_into_html(html_content: str) -> str:
         font-display: swap;
       }}
       html, body, #resume-root {{
-        font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+        font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', 'Helvetica Neue', Arial, sans-serif;
       }}
     </style>
     """
@@ -2022,7 +2022,7 @@ def generate_resume_html(resume_data):
         margin: {{ layout.page_margin }}; 
       }
         body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'Microsoft YaHei', 'SimHei', Arial, sans-serif; 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', Arial, sans-serif; 
           font-size: {{ layout.body_font_size }}; 
           line-height: {{ layout.body_line_height }}; 
           color: #1f2937; 
@@ -2264,7 +2264,7 @@ def generate_resume_html(resume_data):
         margin: {{ layout.page_margin }}; 
       }
         body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'SimSun', 'Times New Roman', serif; 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'SimSun', 'Noto Serif CJK SC', 'WenQuanYi Zen Hei', 'Times New Roman', serif; 
           font-size: {{ layout.body_font_size }}; 
           line-height: {{ layout.body_line_height }}; 
           color: #111827;
@@ -2457,7 +2457,7 @@ def generate_resume_html(resume_data):
         margin: {{ layout.page_margin }}; 
       }
         body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'Microsoft YaHei', Arial, sans-serif; 
+          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', Arial, sans-serif; 
           font-size: {{ layout.body_font_size }}; 
           line-height: {{ layout.body_line_height }}; 
           color: #111827;

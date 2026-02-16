@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
 import { applySuggestionFeedback, consolidateSkillSuggestions } from '../suggestion-helpers';
+import { isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
@@ -30,8 +31,11 @@ export const useAnalysisSnapshotApplier = ({
     const displayScore = resolveDisplayScore(snapshot.score || 0, normalizedBreakdown);
     setOriginalScore(displayScore);
     setScore(displayScore);
+    const cleanedSuggestions = consolidateSkillSuggestions(snapshot.suggestions || []).filter((s: any) =>
+      !isGenderRelatedSuggestion(s) && !isEducationRelatedSuggestion(s)
+    );
     setSuggestions(applySuggestionFeedback(
-      consolidateSkillSuggestions(snapshot.suggestions || []),
+      cleanedSuggestions,
       resumeFeedback || {}
     ));
     setReport({
