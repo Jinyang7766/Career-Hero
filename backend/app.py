@@ -3850,16 +3850,22 @@ def analyze_resume(current_user_id):
                 raw_suggestions = ai_result.get('suggestions', [])
                 filtered_suggestions = []
                 dropped_gender_suggestions = 0
+                dropped_education_suggestions = 0
                 if isinstance(raw_suggestions, list):
                     for suggestion in raw_suggestions:
                         if is_gender_related_suggestion(suggestion):
                             dropped_gender_suggestions += 1
+                            continue
+                        if is_education_related_suggestion(suggestion):
+                            dropped_education_suggestions += 1
                             continue
                         filtered_suggestions.append(suggestion)
                 else:
                     filtered_suggestions = []
                 if dropped_gender_suggestions > 0:
                     logger.info("Dropped %d gender-related suggestions from AI analyze result", dropped_gender_suggestions)
+                if dropped_education_suggestions > 0:
+                    logger.info("Dropped %d education-related suggestions from AI analyze result", dropped_education_suggestions)
                 ai_result['suggestions'] = filtered_suggestions
                 ensured_summary = ensure_analysis_summary(
                     ai_result.get('summary', ''),
@@ -3895,7 +3901,10 @@ def analyze_resume(current_user_id):
 
                 score = calculate_resume_score(resume_data)
                 suggestions = generate_enhanced_suggestions(resume_data, score, job_description)
-                suggestions = [s for s in (suggestions or []) if not is_gender_related_suggestion(s)]
+                suggestions = [
+                    s for s in (suggestions or [])
+                    if not is_gender_related_suggestion(s) and not is_education_related_suggestion(s)
+                ]
 
                 return jsonify({
                     'score': score,
@@ -3915,7 +3924,10 @@ def analyze_resume(current_user_id):
 
         score = calculate_resume_score(resume_data)
         suggestions = generate_suggestions(resume_data, score)
-        suggestions = [s for s in (suggestions or []) if not is_gender_related_suggestion(s)]
+        suggestions = [
+            s for s in (suggestions or [])
+            if not is_gender_related_suggestion(s) and not is_education_related_suggestion(s)
+        ]
 
         return jsonify({
             'score': score,
@@ -4402,6 +4414,50 @@ def is_gender_related_suggestion(suggestion):
         json.dumps(suggestion.get('originalValue', ''), ensure_ascii=False)
     ])
     return _contains_gender_text(combined)
+
+
+def is_education_related_suggestion(suggestion):
+    if suggestion is None:
+        return False
+
+    edu_tokens = (
+        '教育背景', '教育经历', '教育信息', '学历', '学位', '专业', '主修', '课程',
+        '本科', '硕士', '博士', '学校', '院校', '学院',
+        'education', 'educations', 'major', 'degree', 'school', 'university', 'college', 'curriculum'
+    )
+    edu_fields = (
+        'education', 'educations', 'edu',
+        'major', 'degree', 'school', 'university', 'college',
+        '学历', '学位', '专业', '主修', '学校', '院校'
+    )
+
+    def _contains_edu_text(value):
+        text = str(value or '').strip().lower()
+        if not text:
+            return False
+        return any(token in text for token in edu_tokens)
+
+    if isinstance(suggestion, str):
+        return _contains_edu_text(suggestion)
+    if not isinstance(suggestion, dict):
+        return False
+
+    target_field = str(suggestion.get('targetField') or '').strip().lower()
+    target_section = str(suggestion.get('targetSection') or '').strip().lower()
+    if target_section in ('educations', 'education', 'edu'):
+        return True
+    if any(field in target_field for field in edu_fields):
+        return True
+
+    combined = ' '.join([
+        str(suggestion.get('title') or ''),
+        str(suggestion.get('reason') or ''),
+        str(suggestion.get('targetSection') or ''),
+        str(suggestion.get('targetField') or ''),
+        json.dumps(suggestion.get('suggestedValue', ''), ensure_ascii=False),
+        json.dumps(suggestion.get('originalValue', ''), ensure_ascii=False)
+    ])
+    return _contains_edu_text(combined)
 
 def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_keywords=None, has_jd=False):
     """
