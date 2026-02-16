@@ -890,8 +890,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setIsAutosaving(true);
     try {
       const latestData: ResumeData = {
-        ...latestResumeDataRef.current,
-        summary: summary ?? latestResumeDataRef.current?.summary ?? '',
+        ...resumeData,
+        summary: summary ?? resumeData?.summary ?? '',
       };
       console.log('Saving resume with data:', latestData);
 
