@@ -2322,7 +2322,9 @@ def generate_resume_html(resume_data):
     .name {
       margin: 0 0 4px 0;
       font-size: {{ theme.name_size }};
-      font-weight: bold;
+      font-weight: 800;
+      font-synthesis: weight;
+      text-shadow: 0 0 0 currentColor, 0.35px 0 0 currentColor;
       color: #0f172a;
       letter-spacing: 0.2px;
     }
@@ -2351,7 +2353,9 @@ def generate_resume_html(resume_data):
     }
     .section-title {
       font-size: 12pt;
-      font-weight: bold;
+      font-weight: 800;
+      font-synthesis: weight;
+      text-shadow: 0 0 0 currentColor, 0.3px 0 0 currentColor;
       color: {{ theme.accent }};
       border-bottom: 1px solid {{ theme.section_border }};
       padding-bottom: 3px;
@@ -2372,7 +2376,9 @@ def generate_resume_html(resume_data):
     }
     .item-title {
       font-size: 11pt;
-      font-weight: bold;
+      font-weight: 700;
+      font-synthesis: weight;
+      text-shadow: 0 0 0 currentColor, 0.25px 0 0 currentColor;
       color: #111827;
       min-width: 0;
     }
