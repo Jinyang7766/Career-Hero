@@ -889,7 +889,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setIsSaving(true);
     setIsAutosaving(true);
     try {
-      console.log('Saving resume with data:', resumeData);
+      const latestData: ResumeData = {
+        ...latestResumeDataRef.current,
+        summary: summary ?? latestResumeDataRef.current?.summary ?? '',
+      };
+      console.log('Saving resume with data:', latestData);
 
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -904,35 +908,37 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
       let result;
       const title = buildResumeTitle(
-        resumeData.resumeTitle,
-        resumeData,
-        resumeData.lastJdText || '',
+        latestData.resumeTitle,
+        latestData,
+        latestData.lastJdText || '',
         true,
-        resumeData.targetCompany
+        latestData.targetCompany
       );
 
       // Check if we're updating an existing resume or creating a new one
-      if (resumeData.id) {
+      if (latestData.id) {
         // Update existing resume
-        console.log('Updating existing resume:', resumeData.id);
-        result = await DatabaseService.updateResume(String(resumeData.id), {
+        console.log('Updating existing resume:', latestData.id);
+        result = await DatabaseService.updateResume(String(latestData.id), {
           title: title,
-          resume_data: resumeData,
+          resume_data: latestData,
         });
       } else {
         // Create new resume
         console.log('Creating new resume for user:', user.id);
-        result = await DatabaseService.createResume(user.id, title, resumeData);
+        result = await DatabaseService.createResume(user.id, title, latestData);
       }
 
       console.log('Save result:', result);
 
       if (result.success) {
-        // Update the resume data with the returned ID if it's a new resume
-        if (!resumeData.id && result.data) {
-          setResumeData(prev => ({ ...prev, id: result.data.id }));
-        }
-        setResumeData(prev => ({ ...prev, resumeTitle: title }));
+        const savedId = latestData.id || result.data?.id;
+        const savedData: ResumeData = {
+          ...latestData,
+          ...(savedId ? { id: savedId } : {}),
+          resumeTitle: title,
+        };
+        setResumeData(savedData);
 
         // Reload resumes to get the latest list
         if (loadUserResumes) {
@@ -945,7 +951,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           minute: '2-digit'
         });
         setLastSavedAt(timeLabel);
-        lastAutosavedRef.current = JSON.stringify(resumeData);
+        lastAutosavedRef.current = JSON.stringify(savedData);
         try {
           localStorage.removeItem(editorDraftKey);
         } catch {
