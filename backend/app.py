@@ -35,6 +35,7 @@ from markupsafe import Markup
 import logging
 import requests
 import threading
+import concurrent.futures
 import google.genai as genai
 from google.genai import types
 
@@ -2798,6 +2799,11 @@ def extract_text_multimodal(file_bytes):
              img_bytes_decoded = base64.b64decode(img['data'])
              contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
 
+        try:
+            ocr_call_timeout_seconds = max(5, int(os.getenv('OCR_CALL_TIMEOUT_SECONDS', '35')))
+        except Exception:
+            ocr_call_timeout_seconds = 35
+
         def _ocr_with_model(model_name: str, model_contents):
             response = gemini_client.models.generate_content(
                 model=model_name,
@@ -2805,10 +2811,19 @@ def extract_text_multimodal(file_bytes):
             )
             return (response.text or "").strip()
 
+        def _ocr_with_timeout(model_name: str, model_contents):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_ocr_with_model, model_name, model_contents)
+                try:
+                    return future.result(timeout=ocr_call_timeout_seconds)
+                except concurrent.futures.TimeoutError:
+                    logger.warning("OCR call timeout model=%s timeout=%ss", model_name, ocr_call_timeout_seconds)
+                    return ""
+
         for model_name in get_ocr_model_candidates():
             try:
                 logger.info("Trying OCR model: %s", model_name)
-                text = _ocr_with_model(model_name, contents)
+                text = _ocr_with_timeout(model_name, contents)
                 if text:
                     logger.info("OCR success with model=%s, text_len=%s", model_name, len(text))
                     return text
@@ -2827,7 +2842,7 @@ def extract_text_multimodal(file_bytes):
                                 mime_type=img['mime_type']
                             )
                         ]
-                        page_text = _ocr_with_model(model_name, page_contents)
+                        page_text = _ocr_with_timeout(model_name, page_contents)
                         if page_text:
                             per_page_texts.append(page_text)
                     except Exception as page_err:

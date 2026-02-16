@@ -633,16 +633,20 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setIsProcessing(true);
     setTextError('');
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 90000);
     try {
       const response = await fetch(buildApiUrl('/api/ai/parse-resume'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
         body: JSON.stringify({
           resumeText: textResume
         })
       });
+      window.clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -657,8 +661,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       }
     } catch (err: any) {
       console.error('Resume parse failed:', err);
-      setTextError(err.message || '简历解析失败，请稍后重试。');
+      if (err?.name === 'AbortError') {
+        setTextError('解析超时，请稍后重试或改用 DOCX。');
+      } else {
+        setTextError(err.message || '简历解析失败，请稍后重试。');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setIsProcessing(false);
     }
   };
@@ -670,14 +679,18 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setIsPdfProcessing(true);
     setPdfError('');
 
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 120000);
     try {
       const formData = new FormData();
       formData.append('file', file);
 
       const response = await fetch(buildApiUrl('/api/parse-pdf'), {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
+      window.clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -692,8 +705,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       }
     } catch (err: any) {
       console.error('PDF parse failed:', err);
-      setPdfError(err.message || 'PDF 解析失败，请稍后重试。');
+      if (err?.name === 'AbortError') {
+        setPdfError('解析超时，请稍后重试，或先转 DOCX 再导入。');
+      } else {
+        setPdfError(err.message || 'PDF 解析失败，请稍后重试。');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setIsPdfProcessing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
     }
