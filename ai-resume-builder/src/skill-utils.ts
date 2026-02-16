@@ -12,6 +12,22 @@ const normalizeSkillToken = (raw: any) => {
   return text;
 };
 
+const stripCategoryPrefix = (raw: string) => {
+  const s = String(raw ?? '').trim();
+  const m = s.match(/^([^:：]{1,16})\s*[:：]\s*(.+)$/);
+  if (!m) return s;
+  const left = m[1].trim();
+  const right = m[2].trim();
+  if (!right) return s;
+
+  // Common section/category labels from imported resumes, e.g.:
+  // "AI工具: 熟练使用ChatGPT", "技术栈：Python/SQL".
+  const labelPattern =
+    /(技能|专业技能|工具|AI工具|技术|技术栈|能力|语言|框架|平台|软件|数据库|编程|办公|数据分析|开发)/i;
+  if (labelPattern.test(left)) return right;
+  return s;
+};
+
 const stripEdgeWrappers = (raw: string) => {
   let t = (raw || '').trim();
   if (!t) return '';
@@ -59,6 +75,14 @@ const toNounSkillToken = (raw: string) => {
   let t = String(raw ?? '').trim();
   if (!t) return '';
 
+  // Remove common proficiency/verb prefixes from imported sentence-style skills.
+  // Example: "熟练使用ChatGPT" -> "ChatGPT"
+  t = t
+    .replace(/^[：:]\s*/g, '')
+    .replace(/^(熟练|熟悉|掌握|精通|了解|擅长|能够|会)\s*/g, '')
+    .replace(/^(使用|运用|应用)\s*/g, '')
+    .trim();
+
   // Remove common action/process words and keep noun-like "tool/tech/method" tokens.
   const actionWords = [
     '搭建',
@@ -83,7 +107,17 @@ const toNounSkillToken = (raw: string) => {
     '分析',
     '监控',
     '维护',
-    '产出'
+    '产出',
+    '使用',
+    '运用',
+    '应用',
+    '熟练',
+    '熟悉',
+    '掌握',
+    '精通',
+    '了解',
+    '擅长',
+    '能够'
   ];
   actionWords.forEach((w) => {
     t = t.replace(new RegExp(w, 'g'), '');
@@ -106,6 +140,11 @@ const toNounSkillToken = (raw: string) => {
     .replace(/智能化数据看板/g, '数据可视化')
     .replace(/数据看板/g, '数据可视化')
     .replace(/AI短视频分镜/g, '短视频内容策划');
+
+  // Sentence-like token still containing an LLM provider/model -> normalize to LLM.
+  if (/(chatgpt|gpt[-\s]?(\d+(\.\d+)?|4o|4\.1|3\.5)|claude|kimi|moonshot|gemini|qwen|llama|deepseek|openai|anthropic|通义千问|文心一言|智谱|glm)/i.test(t)) {
+    return 'LLM';
+  }
 
   // Normalize common variants.
   // "A/B Test" often appears as "AB Test" or gets accidentally broken into "B Test".
@@ -215,7 +254,7 @@ export const toSkillList = (value: any): string[] => {
   const expanded = rawList.flatMap((item: any) => {
     const s = String(item ?? '').trim();
     if (!s) return [];
-    return splitByPipes(s).flatMap(splitBySlashes);
+    return splitByPipes(s).flatMap(splitBySlashes).map(stripCategoryPrefix);
   });
 
   const cleaned = expanded
