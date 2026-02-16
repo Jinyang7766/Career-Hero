@@ -22,3 +22,17 @@ export interface ChatMessage {
   audioPending?: boolean;
   suggestion?: Suggestion;
 }
+
+export interface ScoreBreakdown {
+  experience: number;
+  skills: number;
+  format: number;
+}
+
+export interface AnalysisReport {
+  summary: string;
+  strengths: string[];
+  weaknesses: string[];
+  missingKeywords: string[];
+  scoreBreakdown: ScoreBreakdown;
+}
