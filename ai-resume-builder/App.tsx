@@ -26,6 +26,7 @@ function App() {
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isNavHidden, setIsNavHidden] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -338,10 +339,11 @@ function App() {
   // If user is authenticated, don't allow staying on auth pages.
   useEffect(() => {
     if (!isAuthenticated) return;
+    if (isLoggingOut) return;
     if ([View.LOGIN, View.SIGNUP, View.FORGOT_PASSWORD].includes(currentView)) {
       navigate(viewToPath(View.DASHBOARD), { replace: true });
     }
-  }, [isAuthenticated, currentView, navigate]);
+  }, [isAuthenticated, isLoggingOut, currentView, navigate]);
 
   const handleLogin = (userData?: any) => {
     if (userData) {
@@ -352,13 +354,26 @@ function App() {
   };
 
   const handleLogout = () => {
-    // Clear localStorage
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
+    setIsLoggingOut(true);
+    void (async () => {
+      try {
+        // Ensure server/session is actually signed out to avoid auth race.
+        await supabase.auth.signOut();
+      } catch (error) {
+        console.warn('Supabase signOut failed, fallback to local logout:', error);
+      } finally {
+        // Clear local auth caches
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('user');
 
-    setCurrentUser(null);
-    setIsAuthenticated(false);
-    navigate(viewToPath(View.LOGIN), { replace: true });
+        setCurrentUser(null);
+        setIsAuthenticated(false);
+        setAuthChecked(true);
+        navigate(viewToPath(View.LOGIN), { replace: true });
+        // Release on next tick after navigation commit.
+        setTimeout(() => setIsLoggingOut(false), 0);
+      }
+    })();
   };
 
   // Enhanced navigation handler (router-based)

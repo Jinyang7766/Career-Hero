@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScreenProps, ResumeData, WorkExperience, Education, Project } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
@@ -29,7 +29,7 @@ const WIZARD_STEPS: { key: WizardStep; label: string; icon: string }[] = [
 ];
 
 const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: initialWizardMode = false }) => {
-  const { navigateToView, goBack, resumeData, setResumeData, setAllResumes, completeness, createResume, loadUserResumes } = useAppContext();
+  const { navigateToView, goBack, resumeData, setResumeData, setAllResumes, completeness, createResume, loadUserResumes, currentUser } = useAppContext();
   const hasBottomNav = false;
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -52,6 +52,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const [validationReason, setValidationReason] = useState<'missing' | 'format'>('missing');
   const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
   const lastNormalizedResumeIdRef = useRef<number | null>(null);
+  const draftSaveTimerRef = useRef<number | null>(null);
+  const editorDraftKey = useMemo(
+    () => `editor_resume_draft_${currentUser?.id || 'anonymous'}`,
+    [currentUser?.id]
+  );
 
   // Always use wizard mode (no free edit mode)
   const wizardMode = true;
@@ -62,6 +67,37 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   useEffect(() => {
     latestResumeDataRef.current = resumeData;
   }, [resumeData]);
+
+  const hasMeaningfulContent = (data: ResumeData) => {
+    const p = data?.personalInfo || ({} as any);
+    return Boolean(
+      (p.name || '').trim() ||
+      (p.title || '').trim() ||
+      (p.email || '').trim() ||
+      (p.phone || '').trim() ||
+      (data.summary || '').trim() ||
+      (data.skills || []).length > 0 ||
+      (data.workExps || []).length > 0 ||
+      (data.educations || []).length > 0 ||
+      (data.projects || []).length > 0
+    );
+  };
+
+  const persistLocalDraft = (data: ResumeData, options?: { updateStatus?: boolean }) => {
+    try {
+      localStorage.setItem(editorDraftKey, JSON.stringify({
+        updatedAt: new Date().toISOString(),
+        data: { ...data, id: undefined }
+      }));
+      if (options?.updateStatus !== false) {
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        setLastSavedAt(timeLabel);
+      }
+    } catch (error) {
+      console.warn('Failed to persist local editor draft:', error);
+    }
+  };
 
   // Sync summary state to resumeData whenever it changes
   useEffect(() => {
@@ -76,6 +112,31 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       setSummary(resumeData.summary);
     }
   }, [resumeData?.summary]);
+
+  useEffect(() => {
+    // Only restore draft for "new resume" flow.
+    if (resumeData?.id) return;
+    if (hasMeaningfulContent(resumeData)) return;
+    try {
+      const raw = localStorage.getItem(editorDraftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const draftData = parsed?.data;
+      if (!draftData) return;
+      setResumeData((prev) => ({
+        ...prev,
+        ...draftData,
+        id: undefined,
+      }));
+      if (typeof draftData.summary === 'string') {
+        setSummary(draftData.summary);
+      }
+      setHasImportedResume(true);
+      setCurrentStep('personal');
+    } catch (error) {
+      console.warn('Failed to restore local editor draft:', error);
+    }
+  }, [editorDraftKey, resumeData?.id]);
 
   useEffect(() => {
     if (resumeData?.id) {
@@ -225,6 +286,25 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     };
   }, [resumeData?.id]);
 
+  // Draft auto-save for resumes not yet persisted to DB.
+  useEffect(() => {
+    if (resumeData?.id) return;
+    if (!hasMeaningfulContent(resumeData)) return;
+
+    if (draftSaveTimerRef.current) {
+      window.clearTimeout(draftSaveTimerRef.current);
+    }
+    draftSaveTimerRef.current = window.setTimeout(() => {
+      persistLocalDraft({ ...resumeData, summary });
+    }, 800);
+
+    return () => {
+      if (draftSaveTimerRef.current) {
+        window.clearTimeout(draftSaveTimerRef.current);
+      }
+    };
+  }, [resumeData, summary, editorDraftKey]);
+
 
 
 
@@ -236,7 +316,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   // --- Handlers ---
   const triggerManualSave = async (data: ResumeData) => {
-    if (!data.id) return;
+    if (!data.id) {
+      // Import should auto-save fields as draft, without creating a formal resume record.
+      persistLocalDraft(data);
+      return;
+    }
     setIsAutosaving(true);
     try {
       const title = `${data.personalInfo.name || '未命名'}的简历`;
@@ -700,6 +784,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
         });
         setLastSavedAt(timeLabel);
         lastAutosavedRef.current = JSON.stringify(resumeData);
+        try {
+          localStorage.removeItem(editorDraftKey);
+        } catch {
+          // ignore local draft cleanup errors
+        }
 
         console.log('Resume saved successfully, navigating to preview');
         // Navigate to preview
@@ -1058,3 +1147,4 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 };
 
 export default Editor;
+
