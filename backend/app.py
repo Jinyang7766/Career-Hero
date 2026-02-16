@@ -1519,8 +1519,17 @@ def export_pdf():
         
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
+
+        resolved_font = resolve_pdf_font_path()
+        if not resolved_font:
+            logger.error("PDF font missing: backend/font.ttf not found")
+            return jsonify({'error': 'PDF 字体缺失：未找到 font.ttf'}), 500
         
-        logger.info("Starting PDF generation with Playwright, patch=%s", PDF_EXPORT_PATCH_VERSION)
+        logger.info(
+            "Starting PDF generation with Playwright, patch=%s, font_path=%s",
+            PDF_EXPORT_PATCH_VERSION,
+            resolved_font
+        )
         
         # Generate HTML for PDF.
         # Always use backend template to avoid drift with frontend icon-font/runtime CSS.
@@ -1529,7 +1538,6 @@ def export_pdf():
         # share the same reliable font-loading path.
         html_content = inject_font_css_into_html(html_content)
         try:
-            resolved_font = resolve_pdf_font_path()
             resolved_font_url = get_pdf_font_url()
             html_has_font_face = ('@font-face' in html_content)
             html_has_font_url = ('__pdf_font__.ttf' in html_content) or ('data:font/ttf;base64,' in html_content)
@@ -1616,8 +1624,16 @@ def export_pdf():
                             font-style: normal;
                             font-display: swap;
                           }}
+                          @font-face {{
+                            font-family: 'CustomPDFInline';
+                            src: url('data:font/ttf;base64,{encoded}');
+                            font-weight: bold;
+                            font-style: normal;
+                            font-display: swap;
+                          }}
                           html, body, #resume-root {{
                             font-family: 'CustomPDFInline', 'CustomPDF', 'Microsoft YaHei', 'SimHei', sans-serif !important;
+                            font-synthesis: none;
                           }}
                         """)
                         page.evaluate("""
@@ -1686,6 +1702,7 @@ def export_pdf():
             mimetype='application/pdf'
         )
         response.headers['X-PDF-Export-Patch'] = PDF_EXPORT_PATCH_VERSION
+        response.headers['X-PDF-Font-File'] = os.path.basename(resolved_font)
         return response
         
     except Exception as e:
@@ -1924,8 +1941,16 @@ def inject_font_css_into_html(html_content: str) -> str:
         font-style: normal;
         font-display: swap;
       }}
+      @font-face {{
+        font-family: '{font_name}';
+        src: url('{font_url}');
+        font-weight: bold;
+        font-style: normal;
+        font-display: swap;
+      }}
       html, body, #resume-root, #resume-root * {{
         font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', 'Helvetica Neue', Arial, sans-serif;
+        font-synthesis: none;
       }}
       #resume-root * {{
         font-family: '{font_name}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', 'Helvetica Neue', Arial, sans-serif !important;
@@ -2157,695 +2182,340 @@ def build_resume_context(resume_data):
     }
 
 def generate_resume_html(resume_data):
-    """Generate HTML content for resume based on resume data and template selection"""
+    """Generate preview-like HTML for backend PDF export."""
     context = build_resume_context(resume_data)
     context['pdf_font_family'] = get_pdf_font_family()
     context['pdf_font_url'] = get_pdf_font_url()
-    template_id = context.get('template_id', 'modern')
 
-    templates = {
-        'modern': """
+    template_id = (context.get('template_id') or 'modern').lower()
+    if template_id not in ('modern', 'classic', 'minimal'):
+        template_id = 'modern'
+    context['template_id'] = template_id
+
+    themes = {
+        'modern': {
+            'accent': '#1e40af',
+            'section_border': '#dbeafe',
+            'name_size': '18pt',
+            'title_size': '12pt',
+            'title_color': '#4b5563',
+            'header_border': '#e5e7eb',
+            'header_align': 'left',
+            'avatar_size': '96px',
+            'avatar_radius': '8px',
+            'section_bg': 'transparent',
+            'skill_sep': ' · ',
+        },
+        'classic': {
+            'accent': '#111827',
+            'section_border': '#111827',
+            'name_size': '22pt',
+            'title_size': '12pt',
+            'title_color': '#374151',
+            'header_border': '#111827',
+            'header_align': 'center',
+            'avatar_size': '92px',
+            'avatar_radius': '9999px',
+            'section_bg': '#f3f4f6',
+            'skill_sep': ' | ',
+        },
+        'minimal': {
+            'accent': '#111827',
+            'section_border': '#d1d5db',
+            'name_size': '24pt',
+            'title_size': '12pt',
+            'title_color': '#6b7280',
+            'header_border': '#e5e7eb',
+            'header_align': 'left',
+            'avatar_size': '84px',
+            'avatar_radius': '9999px',
+            'section_bg': 'transparent',
+            'skill_sep': ' · ',
+        },
+    }
+    context['theme'] = themes[template_id]
+
+    template_html = """
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
-    <style>
-      {% if pdf_font_url %}
-      @font-face {
-        font-family: 'CustomPDF';
-        src: url('{{ pdf_font_url }}');
-        font-weight: normal;
-        font-style: normal;
-      }
+  <style>
+    {% if pdf_font_url %}
+    @font-face {
+      font-family: 'CustomPDF';
+      src: url('{{ pdf_font_url }}');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+    @font-face {
+      font-family: 'CustomPDF';
+      src: url('{{ pdf_font_url }}');
+      font-weight: bold;
+      font-style: normal;
+      font-display: swap;
+    }
+    {% endif %}
+    @page {
+      size: A4;
+      margin: {{ layout.page_margin }};
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', Arial, sans-serif;
+      font-size: {{ layout.body_font_size }};
+      line-height: {{ layout.body_line_height }};
+      color: #1f2937;
+      font-synthesis: none;
+      word-break: normal;
+      overflow-wrap: anywhere;
+      word-wrap: break-word;
+    }
+    .resume {
+      width: 100%;
+    }
+    .header {
+      width: 100%;
+      border-bottom: 1px solid {{ theme.header_border }};
+      padding-bottom: 10px;
+      margin-bottom: 14px;
+      {% if template_id == 'classic' %}
+      text-align: center;
       {% endif %}
-      @page { 
-        size: A4; 
-        margin: {{ layout.page_margin }}; 
-      }
-        body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', Arial, sans-serif; 
-          font-size: {{ layout.body_font_size }}; 
-          line-height: {{ layout.body_line_height }}; 
-          color: #1f2937; 
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      .page {
-        width: 100%;
-        margin: 0;
-      }
-      .container {
-        width: 100%;
-      }
-      table { 
-        width: 100%; 
-        border-collapse: collapse;
-        table-layout: auto;
-      }
-      .page-table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      .page-table td {
-        padding: 0;
-      }
-    td { 
-      vertical-align: top; 
+    }
+    .header-row {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .header-row td {
+      vertical-align: top;
       padding: 0;
     }
-      .header {
-        width: 100%;
-        border-bottom: 2px solid #e5e7eb; 
-        padding-bottom: 10px; 
-        margin-bottom: 12px; 
-      }
-      .header-top {
-        width: 100%;
-        text-align: left;
-      }
-      .avatar { 
-        width: 96px; 
-        height: 120px; 
-        display: inline-block;
-      }
-      .avatar-placeholder { 
-        width: 96px; 
-        height: 120px; 
-        background-color: #d1d5db; 
-        border: 1px solid #9ca3af;
-        border-radius: 10px;
-        display: inline-block;
-        position: relative;
-      }
-      .avatar-placeholder svg {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 58px;
-        height: 58px;
-        transform: translate(-50%, -50%);
-        fill: #90a0b7;
-      }
-    .header-name { 
-      font-size: 16pt; 
-      font-weight: bold; 
-      margin: 0 0 4px 0; 
+    .avatar {
+      width: {{ theme.avatar_size }};
+      height: {{ theme.avatar_size if template_id != 'modern' else '120px' }};
+      border-radius: {{ theme.avatar_radius }};
+      object-fit: cover;
+      display: block;
     }
-    .header-title { 
-      font-size: 11pt; 
-      color: #4b5563; 
-      margin: 0 0 4px 0; 
+    .avatar-placeholder {
+      width: {{ theme.avatar_size }};
+      height: {{ theme.avatar_size if template_id != 'modern' else '120px' }};
+      border-radius: {{ theme.avatar_radius }};
+      background: #cbd5e1;
+      border: 1px solid #b6c1d2;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-      .header-contact { 
-        font-size: 9pt; 
-        color: #6b7280; 
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      .section { 
-        margin-bottom: {{ layout.section_gap }}; 
-      }
-      .section-title { 
-        display: block;
-        width: 100%;
-        font-size: 11pt; 
-        font-weight: bold; 
-        color: #1e40af; 
-      border-bottom: 1px solid #dbeafe; 
-      padding-bottom: 3px; 
-      margin-bottom: 6px; 
+    .avatar-placeholder svg {
+      width: 56%;
+      height: 56%;
+      fill: #8ea0b8;
     }
-      .item { 
-        margin-bottom: {{ layout.item_gap }}; 
-      }
+    .name {
+      margin: 0 0 4px 0;
+      font-size: {{ theme.name_size }};
+      font-weight: bold;
+      color: #0f172a;
+      letter-spacing: 0.2px;
+    }
+    .job-title {
+      margin: 0 0 6px 0;
+      font-size: {{ theme.title_size }};
+      color: {{ theme.title_color }};
+      {% if template_id == 'classic' %}
+      font-style: italic;
+      {% endif %}
+    }
+    .meta {
+      font-size: 10pt;
+      color: #6b7280;
+      white-space: normal;
+    }
+    .meta span {
+      display: inline;
+    }
+    .meta .sep {
+      margin: 0 6px;
+      color: #9ca3af;
+    }
+    .section {
+      margin-bottom: {{ layout.section_gap }};
+    }
+    .section-title {
+      font-size: 12pt;
+      font-weight: bold;
+      color: {{ theme.accent }};
+      border-bottom: 1px solid {{ theme.section_border }};
+      padding-bottom: 3px;
+      margin-bottom: 6px;
+      {% if theme.section_bg != 'transparent' %}
+      background: {{ theme.section_bg }};
+      padding-left: 6px;
+      {% endif %}
+    }
+    .item {
+      margin-bottom: {{ layout.item_gap }};
+    }
     .item-header {
-      width: 100%;
       display: flex;
       align-items: baseline;
       justify-content: space-between;
-      gap: 10px;
+      gap: 12px;
     }
-    .item-title { 
-      font-size: 10pt; 
-      font-weight: bold; 
-      color: #111827; 
+    .item-title {
+      font-size: 11pt;
+      font-weight: bold;
+      color: #111827;
+      min-width: 0;
     }
-    .item-subtitle { 
-      font-size: 9pt; 
-      color: #374151; 
-      margin: 2px 0; 
-    }
-    .item-date { 
-      font-size: 8pt; 
-      color: #6b7280; 
+    .item-date {
+      font-size: 10pt;
+      color: #64748b;
       white-space: nowrap;
       flex: 0 0 auto;
       text-align: right;
     }
-      .item-desc { 
-        font-size: 9pt; 
-        color: #4b5563; 
-        margin-top: 2px;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-    .skills { 
-      margin-top: 3px; 
+    .item-subtitle {
+      margin-top: 2px;
+      font-size: 10pt;
+      color: #334155;
+      {% if template_id == 'classic' %}
+      font-style: italic;
+      {% endif %}
     }
-      .skill { 
-        display: inline; 
-        background-color: transparent; 
-        color: #374151; 
-        border: none; 
-        padding: 0; 
-        font-size: 8pt; 
-        margin-right: 8px; 
-      }
+    .item-desc {
+      margin-top: 2px;
+      font-size: 10pt;
+      color: #334155;
+      white-space: normal;
+    }
+    .skills-line {
+      font-size: 10pt;
+      color: #1f2937;
+      line-height: 1.6;
+    }
   </style>
 </head>
 <body>
-  <div class="page">
-  <div class="container">
-  <table width="100%" cellpadding="0" cellspacing="0" border="0">
-    <tr>
-      <td width="110" valign="top">
+  <div class="resume">
+    <div class="header">
+      {% if template_id == 'classic' %}
+      <div style="display:inline-block; margin-bottom:6px;">
         {% if avatar %}
           <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
           <div class="avatar-placeholder">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-            </svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
           </div>
         {% endif %}
-      </td>
-      <td valign="top">
-        <h1 class="header-name">{{ name }}</h1>
-        <div class="header-title">{{ title }}</div>
-        <div class="header-contact">
-          {% if gender or age %}
-            {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
-          {% endif %}
-          {{ email }} | {{ phone }}
-        </div>
-      </td>
-    </tr>
-  </table>
+      </div>
+      <div class="name">{{ name }}</div>
+      <div class="job-title">{{ title }}</div>
+      {% else %}
+      <table class="header-row" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td width="{{ 120 if template_id == 'modern' else 102 }}">
+            {% if avatar %}
+              <img class="avatar" src="{{ avatar }}" alt="avatar" />
+            {% else %}
+              <div class="avatar-placeholder">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path></svg>
+              </div>
+            {% endif %}
+          </td>
+          <td>
+            <div class="name">{{ name }}</div>
+            <div class="job-title">{{ title }}</div>
+      {% endif %}
+            <div class="meta">
+              {% if gender or age %}
+                <span>{% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %}</span>
+                <span class="sep">•</span>
+              {% endif %}
+              <span>{{ email }}</span>
+              <span class="sep">•</span>
+              <span>{{ phone }}</span>
+            </div>
+      {% if template_id != 'classic' %}
+          </td>
+        </tr>
+      </table>
+      {% endif %}
+    </div>
 
-  {% if summary %}
+    {% if summary %}
     <div class="section">
       <div class="section-title">个人简介</div>
       <div class="item-desc">{{ summary }}</div>
     </div>
-  {% endif %}
-
-  {% if work_exps %}
-    <div class="section">
-      <div class="section-title">工作经历</div>
-      {% for exp in work_exps %}
-        <div class="item">
-          <div class="item-header">
-            <div class="item-title">{{ exp.title }}</div>
-            <div class="item-date">{{ exp.date }}</div>
-          </div>
-          {% if exp.subtitle %}<div class="item-subtitle">{{ exp.subtitle }}</div>{% endif %}
-          <div class="item-desc">{{ exp.description }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  {% if educations %}
-    <div class="section">
-        <div class="section-title">教育背景</div>
-      {% for edu in educations %}
-        <div class="item">
-          <div class="item-header">
-            <div class="item-title">{{ edu.title }}</div>
-            <div class="item-date">{{ edu.date }}</div>
-          </div>
-          <div class="item-subtitle">{{ edu.subtitle }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  {% if projects %}
-    <div class="section">
-      <div class="section-title">项目经历</div>
-      {% for proj in projects %}
-        <div class="item">
-          <div class="item-header">
-            <div class="item-title">{{ proj.title }}</div>
-            <div class="item-date">{{ proj.date }}</div>
-          </div>
-          {% if proj.subtitle %}<div class="item-subtitle">{{ proj.subtitle }}</div>{% endif %}
-          <div class="item-desc">{{ proj.description }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-    {% if skills %}
-      <div class="section">
-        <div class="section-title">技能</div>
-        <div class="skills">
-          {% for skill in skills %}
-            <span class="skill">{{ skill }}</span>
-          {% endfor %}
-        </div>
-      </div>
     {% endif %}
-  </div>
-  </div>
-  </body>
-  </html>
-        """,
-        'classic': """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>{{ name }} - 简历</title>
-  <style>
-      @page { 
-        size: A4; 
-        margin: {{ layout.page_margin }}; 
-      }
-        body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'SimSun', 'Noto Serif CJK SC', 'WenQuanYi Zen Hei', 'Times New Roman', serif; 
-          font-size: {{ layout.body_font_size }}; 
-          line-height: {{ layout.body_line_height }}; 
-          color: #111827;
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      .header { 
-        text-align: center; 
-        border-bottom: 2px solid #111827; 
-        padding-bottom: 10px; 
-        margin-bottom: 14px; 
-      }
-      .page {
-        width: 100%;
-        margin: 0;
-      }
-      .avatar { 
-        width: 96px; 
-        height: 96px; 
-        border-radius: 9999px;
-      }
-      .avatar-placeholder { 
-        width: 96px; 
-        height: 96px; 
-        background-color: #d1d5db;
-        border: 1px solid #111827;
-        border-radius: 9999px;
-        position: relative;
-      }
-      .avatar-placeholder svg {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 56px;
-        height: 56px;
-        transform: translate(-50%, -50%);
-        fill: #90a0b7;
-      }
-    .name { 
-      font-size: 18pt; 
-      font-weight: bold; 
-    }
-    .title { 
-      font-size: 11pt; 
-      font-style: italic; 
-      margin-top: 4px; 
-    }
-      .contact { 
-        font-size: 9pt; 
-        color: #4b5563; 
-        margin-top: 5px; 
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      .section { 
-        margin-bottom: {{ layout.section_gap }}; 
-      }
-      .section-title { 
-        display: block;
-        width: 100%;
-        font-size: 11pt; 
-        font-weight: bold; 
-        border-bottom: 1px solid #111827; 
-      padding-bottom: 3px; 
-      margin-bottom: 6px; 
-      background-color: #f3f4f6; 
-      padding-left: 5px; 
-    }
-      .item { 
-        margin-bottom: {{ layout.item_gap }}; 
-        padding-left: 5px; 
-      }
-    .item-title { 
-      font-size: 10pt;
-      font-weight: bold; 
-    }
-    .item-subtitle { 
-      font-size: 9pt;
-      font-style: italic; 
-      color: #374151; 
-    }
-    .item-date { 
-      font-size: 8pt; 
-      color: #6b7280; 
-    }
-      .item-desc { 
-        font-size: 9pt; 
-        margin-top: 2px;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-  </style>
-</head>
-  <body>
-  <div class="page">
-    <div class="header">
-    {% if avatar %}
-      <img class="avatar" src="{{ avatar }}" alt="avatar" />
-      {% else %}
-        <div class="avatar-placeholder">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-          </svg>
-        </div>
-      {% endif %}
-    <div class="name">{{ name }}</div>
-    <div class="title">{{ title }}</div>
-    <div class="contact">
-      {% if gender or age %}
-        {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
-      {% endif %}
-      {{ email }} | {{ phone }}
-    </div>
-  </div>
 
-  {% if summary %}
-    <div class="section">
-        <div class="section-title">个人简介</div>
-      <div class="item-desc">{{ summary }}</div>
-    </div>
-  {% endif %}
-
-  {% if work_exps %}
+    {% if work_exps %}
     <div class="section">
       <div class="section-title">工作经历</div>
       {% for exp in work_exps %}
-        <div class="item">
+      <div class="item">
+        <div class="item-header">
           <div class="item-title">{{ exp.title }}</div>
-          <div class="item-subtitle">{{ exp.subtitle }}</div>
           <div class="item-date">{{ exp.date }}</div>
-          <div class="item-desc">{{ exp.description }}</div>
         </div>
+        {% if exp.subtitle %}<div class="item-subtitle">{{ exp.subtitle }}</div>{% endif %}
+        {% if exp.description %}<div class="item-desc">{{ exp.description }}</div>{% endif %}
+      </div>
       {% endfor %}
     </div>
-  {% endif %}
+    {% endif %}
 
-  {% if educations %}
+    {% if educations %}
     <div class="section">
       <div class="section-title">教育背景</div>
       {% for edu in educations %}
-        <div class="item">
+      <div class="item">
+        <div class="item-header">
           <div class="item-title">{{ edu.title }}</div>
-          <div class="item-subtitle">{{ edu.subtitle }}</div>
           <div class="item-date">{{ edu.date }}</div>
         </div>
+        {% if edu.subtitle %}<div class="item-subtitle">{{ edu.subtitle }}</div>{% endif %}
+      </div>
       {% endfor %}
     </div>
-  {% endif %}
+    {% endif %}
 
-  {% if projects %}
+    {% if projects %}
     <div class="section">
       <div class="section-title">项目经历</div>
       {% for proj in projects %}
-        <div class="item">
-          <div class="item-title">{{ proj.title }}</div>
-          <div class="item-subtitle">{{ proj.subtitle }}</div>
-          <div class="item-date">{{ proj.date }}</div>
-          <div class="item-desc">{{ proj.description }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-    {% if skills %}
-      <div class="section">
-        <div class="section-title">技能</div>
-        <div class="item-desc">{{ skills | join(' | ') }}</div>
-      </div>
-    {% endif %}
-  </div>
-  </body>
-  </html>
-        """,
-        'minimal': """
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <title>{{ name }} - 简历</title>
-  <style>
-      @page { 
-        size: A4; 
-        margin: {{ layout.page_margin }}; 
-      }
-        body { 
-          font-family: {% if pdf_font_url %}'CustomPDF',{% endif %} '{{ pdf_font_family }}', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', 'SimHei', 'WenQuanYi Micro Hei', Arial, sans-serif; 
-          font-size: {{ layout.body_font_size }}; 
-          line-height: {{ layout.body_line_height }}; 
-          color: #111827;
-        margin: 0;
-        padding: 0;
-        width: 100%;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        table-layout: auto;
-      }
-      .page {
-        width: 100%;
-        margin: 0;
-      }
-      td {
-        vertical-align: top;
-        padding: 0;
-      }
-    .header { 
-      margin-bottom: 14px; 
-    }
-      .header-top { 
-        width: 100%; 
-      }
-      .avatar { 
-        width: 84px; 
-        height: 84px; 
-        display: inline-block;
-        border-radius: 9999px;
-      }
-      .avatar-placeholder { 
-        width: 84px; 
-        height: 84px; 
-        background-color: #d1d5db;
-        border: 1px solid #cbd5f5;
-        border-radius: 9999px;
-        display: inline-block;
-        position: relative;
-      }
-      .avatar-placeholder svg {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 48px;
-        height: 48px;
-        transform: translate(-50%, -50%);
-        fill: #90a0b7;
-      }
-    .name { 
-      font-size: 20pt; 
-      font-weight: bold; 
-      margin: 0; 
-    }
-    .title { 
-      font-size: 11pt; 
-      color: #6b7280; 
-      margin: 3px 0 6px 0; 
-    }
-      .contact { 
-        font-size: 9pt; 
-        color: #9ca3af; 
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      .section { 
-        margin-bottom: {{ layout.section_gap }}; 
-      }
-      .section-title { 
-        display: block;
-        width: 100%;
-        font-size: 9pt; 
-        font-weight: bold; 
-        color: #9ca3af; 
-      margin-bottom: 5px; 
-    }
-      .item { 
-        margin-bottom: {{ layout.item_gap }}; 
-      }
-    .item-title { 
-      font-size: 10pt;
-      font-weight: bold; 
-    }
-    .item-date { 
-      font-size: 8pt; 
-      color: #9ca3af; 
-    }
-      .item-desc { 
-        font-size: 9pt; 
-        color: #374151; 
-        margin-top: 2px;
-        word-break: normal;
-        overflow-wrap: anywhere;
-        word-wrap: break-word;
-      }
-      .skills span { 
-        display: inline; 
-        margin-right: 8px; 
-        border-bottom: none; 
-        padding-bottom: 0; 
-        font-size: 9pt; 
-      }
-  </style>
-</head>
-  <body>
-  <div class="page">
-    <div class="header">
-      <table width="100%" cellpadding="0" cellspacing="0" border="0">
-        <tr>
-          <td width="110" valign="top">
-            {% if avatar %}
-              <img class="avatar" src="{{ avatar }}" alt="avatar" />
-        {% else %}
-          <div class="avatar-placeholder">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
-            </svg>
-          </div>
-        {% endif %}
-          </td>
-          <td valign="top">
-            <div class="name">{{ name }}</div>
-            <div class="title">{{ title }}</div>
-            <div class="contact">
-              {% if gender or age %}
-                {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
-              {% endif %}
-              {{ email }} | {{ phone }}
-            </div>
-          </td>
-        </tr>
-      </table>
-    </div>
-
-  {% if summary %}
-    <div class="section">
-       <div class="section-title">个人简介</div>
-      <div class="item-desc">{{ summary }}</div>
-    </div>
-  {% endif %}
-
-  {% if work_exps %}
-    <div class="section">
-      <div class="section-title">工作经历</div>
-      {% for exp in work_exps %}
-        <div class="item">
-          <div class="item-title">{{ exp.title }}</div>
-          <div class="item-date">{{ exp.date }}</div>
-          <div class="item-desc">{{ exp.subtitle }}</div>
-          <div class="item-desc">{{ exp.description }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  {% if educations %}
-    <div class="section">
-      <div class="section-title">教育背景</div>
-      {% for edu in educations %}
-        <div class="item">
-          <div class="item-title">{{ edu.title }}</div>
-          <div class="item-date">{{ edu.date }}</div>
-          <div class="item-desc">{{ edu.subtitle }}</div>
-        </div>
-      {% endfor %}
-    </div>
-  {% endif %}
-
-  {% if projects %}
-    <div class="section">
-      <div class="section-title">项目经历</div>
-      {% for proj in projects %}
-        <div class="item">
+      <div class="item">
+        <div class="item-header">
           <div class="item-title">{{ proj.title }}</div>
           <div class="item-date">{{ proj.date }}</div>
-          <div class="item-desc">{{ proj.subtitle }}</div>
-          <div class="item-desc">{{ proj.description }}</div>
         </div>
+        {% if proj.subtitle %}<div class="item-subtitle">{{ proj.subtitle }}</div>{% endif %}
+        {% if proj.description %}<div class="item-desc">{{ proj.description }}</div>{% endif %}
+      </div>
       {% endfor %}
     </div>
-  {% endif %}
+    {% endif %}
 
     {% if skills %}
-      <div class="section">
-        <div class="section-title">技能</div>
-        <div class="skills">
-          {% for skill in skills %}
-            <span>{{ skill }}</span>
-          {% endfor %}
-        </div>
-      </div>
+    <div class="section">
+      <div class="section-title">技能</div>
+      <div class="skills-line">{{ skills | join(theme.skill_sep) }}</div>
+    </div>
     {% endif %}
   </div>
-  </body>
-  </html>
-        """,
-    }
+</body>
+</html>
+    """
 
-    template_html = templates.get(template_id, templates['modern'])
     env = Environment(loader=BaseLoader(), autoescape=True)
     return env.from_string(template_html).render(**context)
 
