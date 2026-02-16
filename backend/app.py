@@ -1907,7 +1907,8 @@ def build_resume_context(resume_data):
              if len(segments) > 1 and len(segments[0]) >= 2:
                  subtitle_text = segments[0]
         
-        date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or '时间不详'
+        # Prefer start/end because editor updates these fields; `date` may be stale.
+        date_text = normalize_date_range(exp.get('startDate', ''), exp.get('endDate', '')) or exp.get('date') or '时间不详'
         work_exps.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
@@ -1932,7 +1933,7 @@ def build_resume_context(resume_data):
         else:
             subtitle_text = deg or maj or sub or '未说明'
             
-        date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or '时间不详'
+        date_text = normalize_date_range(edu.get('startDate', ''), edu.get('endDate', '')) or edu.get('date') or '时间不详'
         educations.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),

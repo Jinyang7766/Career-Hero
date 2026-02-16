@@ -405,7 +405,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           subtitle,
           startDate,
           endDate,
-          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
           company: toText(item?.company || title),
           position: toText(item?.position || subtitle),
           description: toText(item?.description),
@@ -423,7 +423,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           subtitle,
           startDate,
           endDate,
-          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
           school: toText(item?.school || title),
           major: toText(item?.major || subtitle),
           degree: toText(item?.degree),
@@ -441,7 +441,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           role: toText(item?.role || item?.subtitle),
           startDate,
           endDate,
-          date: toText(item?.date) || normalizeDateRange(startDate, endDate),
+          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
           description: toText(item?.description),
         };
       });

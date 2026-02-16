@@ -10,12 +10,8 @@ import { useAppContext } from '../../src/app-context';
 
 // Format date range: handles 'date' field or 'startDate/endDate' fields
 const formatDateRange = (item: any): string => {
-  // If 'date' field exists and is not empty, use it directly
-  if (item.date && item.date.trim()) {
-    return item.date;
-  }
-
-  // Otherwise, try to build from startDate and endDate
+  // Prefer start/end fields because editor mainly updates these fields.
+  // `date` can be stale after edits/import merges.
   const startDate = item.startDate || '';
   const endDate = item.endDate || '';
 
@@ -25,6 +21,11 @@ const formatDateRange = (item: any): string => {
     return `${startDate} - 至今`;
   } else if (endDate) {
     return endDate;
+  }
+
+  // Fallback to legacy `date` only when start/end are empty.
+  if (item.date && item.date.trim()) {
+    return item.date;
   }
 
   return '';
