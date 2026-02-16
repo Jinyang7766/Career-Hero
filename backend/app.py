@@ -26,6 +26,7 @@ import base64
 import traceback
 import ipaddress
 import socket
+import unicodedata
 from urllib.parse import urlparse
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, BaseLoader
@@ -1520,8 +1521,11 @@ def export_pdf():
         
         logger.info("Starting PDF generation with Playwright")
         
-        # Generate HTML for PDF
-        html_content = data.get('htmlContent')
+        # Generate HTML for PDF.
+        # Default to backend template for deterministic font/layout behavior in headless export.
+        # Frontend-built html may contain icon-font classes (e.g. material-symbols) unavailable on server.
+        use_client_html = (os.getenv('PDF_USE_CLIENT_HTML', '0').strip().lower() in ('1', 'true', 'yes', 'on'))
+        html_content = data.get('htmlContent') if use_client_html else None
         if not html_content:
             html_content = generate_resume_html(resume_data)
         # Always inject font CSS so all templates (modern/classic/minimal)
@@ -1749,8 +1753,27 @@ def clean_text_for_pdf(text):
     for old, new in replacements.items():
         text = text.replace(old, new)
 
-    # Remove control chars
-    text = ''.join(char for char in text if ord(char) >= 32 or char in '\n\r\t')
+    def _is_bad_char(ch: str) -> bool:
+        cp = ord(ch)
+        # Keep basic whitespace controls used in formatting.
+        if ch in '\n\r\t':
+            return False
+        # Remove C0/C1 controls.
+        if cp < 32 or (0x7F <= cp <= 0x9F):
+            return True
+        # Remove replacement char and common zero-width / BOM.
+        if cp in (0xFFFD, 0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF):
+            return True
+        # Remove variation selectors.
+        if 0xFE00 <= cp <= 0xFE0F or 0xE0100 <= cp <= 0xE01EF:
+            return True
+        # Remove private-use, surrogate, unassigned/format categories.
+        cat = unicodedata.category(ch)
+        if cat in ('Co', 'Cs', 'Cn', 'Cf'):
+            return True
+        return False
+
+    text = ''.join(char for char in text if not _is_bad_char(char))
 
     return text
 
