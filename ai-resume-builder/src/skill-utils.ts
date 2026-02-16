@@ -4,11 +4,14 @@
 const LLM_RE =
   /(chatgpt|gpt[-\s]?\w*|openai|claude|anthropic|kimi|moonshot|gemini|qwen|通义千问|llama|deepseek|文心一言|ernie|智谱|glm)/i;
 const CERT_RE =
-  /(证书|认证|资格证|执业证|从业资格|等级证|证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格|基金从业|证券从业|银行从业|建造师|会计师)/i;
+  /(证书|认证|资格证|执业证|从业资格|等级证|证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格|基金从业|证券从业|银行从业|建造师|会计师|CET[-\s]?[46]|TEM[-\s]?[48]|IELTS|TOEFL|N2|N1|大学英语[四六]级|英语[四六]级|普通话[一二三]级(?:甲等|乙等)?|计算机(?:等级)?[一二三四]级|NCRE)/i;
 
 const WEAK_NOUNS = new Set([
   '电商',
   '数据',
+  '数据分析',
+  '直播',
+  '直播运营',
   '运营',
   '管理',
   '分析',
@@ -82,6 +85,14 @@ const normalizeCertificate = (token: string) => {
   if (token.includes('一级建造师')) return '一级建造师';
   if (token.includes('二级建造师')) return '二级建造师';
   if (token.includes('会计师')) return '会计师证书';
+  if (/CET[-\s]?4/i.test(token) || token.includes('大学英语四级') || token.includes('英语四级')) return 'CET-4';
+  if (/CET[-\s]?6/i.test(token) || token.includes('大学英语六级') || token.includes('英语六级')) return 'CET-6';
+  if (/TEM[-\s]?4/i.test(token)) return 'TEM-4';
+  if (/TEM[-\s]?8/i.test(token)) return 'TEM-8';
+  if (/IELTS/i.test(token)) return 'IELTS';
+  if (/TOEFL/i.test(token)) return 'TOEFL';
+  if (token.includes('普通话')) return token.includes('甲等') || token.includes('乙等') ? stripEdge(token) : '普通话等级证书';
+  if (token.includes('计算机') || /NCRE/i.test(token)) return '计算机等级证书';
   return stripEdge(token).slice(0, 20);
 };
 
@@ -110,7 +121,7 @@ const isHardSkill = (token: string) => {
   if (!t || t.length < 2 || t.length > 24) return false;
   if (WEAK_NOUNS.has(t)) return false;
   if (/^(与|和|及|等)$/.test(t)) return false;
-  if (/(全链路|策略|流程|方案|运营|协同|沟通|策划|看板|分镜|内容|直播间|私域|社群)/.test(t)) return false;
+  if (/(全链路|策略|流程|方案|运营|协同|沟通|策划|看板|分镜|内容|直播|直播间|私域|社群)/.test(t)) return false;
   if (CERT_RE.test(t)) return true;
   if (HARD_SKILL_KEEP_RE.some((re) => re.test(t))) return true;
   // Keep concise noun-like technical terms (Chinese 2-8 chars / English tokens).

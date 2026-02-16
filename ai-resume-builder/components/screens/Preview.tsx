@@ -650,25 +650,25 @@ const Preview: React.FC<ScreenProps> = () => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-background-dark animate-in slide-in-from-right duration-300">
-      <header className="absolute top-0 left-0 w-full z-30 flex items-center justify-between p-4 bg-gradient-to-b from-background-dark/90 to-transparent backdrop-blur-[2px]">
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
+      <header className="absolute top-0 left-0 w-full z-30 flex items-center justify-between p-4 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <button
           onClick={goBack}
-          className="flex size-10 items-center justify-center rounded-full bg-white/5 hover:bg-white/10 active:scale-95 transition-all text-white"
+          className="flex size-10 items-center justify-center rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white"
         >
           <span className="material-symbols-outlined text-[24px]">arrow_back</span>
         </button>
-        <h2 className="text-white text-lg font-bold tracking-tight opacity-90">简历预览</h2>
+        <h2 className="text-slate-800 dark:text-white text-lg font-bold tracking-tight">简历预览</h2>
         <button
           onClick={() => navigateToView(View.EDITOR)}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 transition-all text-white text-xs font-semibold"
+          className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white text-xs font-semibold"
         >
           <span className="material-symbols-outlined text-[18px]">edit</span>
           编辑
         </button>
       </header>
 
-      <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">
+      <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-slate-50 dark:bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">
         <div className="relative w-[85%] flex flex-col items-center group/doc-wrapper">
           <div className={`
                 relative w-full aspect-[1/1.414] bg-white rounded-sm shadow-2xl transition-all duration-500 ease-out origin-top 
@@ -707,23 +707,23 @@ const Preview: React.FC<ScreenProps> = () => {
         </div>
 
         <div className="w-[85%] flex flex-col gap-4">
-          <div className="w-full bg-white/5 backdrop-blur-md rounded-xl p-2 border border-white/5 shadow-inner mb-2">
-            <p className="text-xs text-slate-400 mb-2 px-1">简历模板</p>
-            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+          <div className="w-full bg-white dark:bg-white/5 rounded-xl p-3 border border-slate-200 dark:border-white/5 shadow-sm mb-2">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 px-1 font-medium">简历模板</p>
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-1">
               {TEMPLATE_OPTIONS.map((t) => (
                 <button
                   key={t.id}
                   onClick={() => handleTemplateChange(t.id)}
                   className={`
-                  relative px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex-1 flex items-center justify-center gap-2 whitespace-nowrap
+                  relative px-4 py-2 rounded-lg text-sm font-medium transition-all duration-300 flex-1 flex items-center justify-center gap-2 whitespace-nowrap border
                   ${currentTemplateId === t.id
-                      ? 'bg-primary text-white shadow-lg'
-                      : 'bg-white/5 text-slate-300 hover:text-white hover:bg-white/10'
+                      ? 'bg-primary border-primary text-white shadow-md'
+                      : 'bg-slate-50 dark:bg-white/5 border-slate-200 dark:border-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/10 hover:border-slate-300'
                     }
               `}
                 >
                   <span
-                    className="w-2 h-2 rounded-full shadow-sm"
+                    className={`w-2 h-2 rounded-full shadow-sm ${currentTemplateId === t.id ? 'ring-2 ring-white/30' : ''}`}
                     style={{ backgroundColor: t.color }}
                   ></span>
                   {t.name}
@@ -790,7 +790,7 @@ const Preview: React.FC<ScreenProps> = () => {
               </>
             )}
           </button>
-          <p className="text-center text-xs text-white/30 mt-2">
+          <p className="text-center text-xs text-slate-400 dark:text-slate-600 mt-2">
             注意：PDF导出样式取决于后端生成配置，可能与预览略有差异。
           </p>
         </div>

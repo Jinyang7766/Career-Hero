@@ -51,6 +51,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const [validationStep, setValidationStep] = useState<WizardStep | null>(null);
   const [validationReason, setValidationReason] = useState<'missing' | 'format'>('missing');
   const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
+  const [showClearPageConfirm, setShowClearPageConfirm] = useState(false);
   const lastNormalizedResumeIdRef = useRef<number | null>(null);
   const draftSaveTimerRef = useRef<number | null>(null);
   const editorDraftKey = useMemo(
@@ -138,14 +139,19 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     }
   }, [editorDraftKey, resumeData?.id]);
 
+  const lastProcessedResumeIdRef = useRef<number | null>(null);
+
   useEffect(() => {
-    if (resumeData?.id) {
+    // Only initialize wizard state when a NEW resume is loaded (or ID changes from undefined -> number).
+    // If the ID is the same as before (e.g. after a save), do NOT reset the step.
+    if (resumeData?.id && resumeData.id !== lastProcessedResumeIdRef.current) {
       setCurrentStep('personal');
       setHasImportedResume(true);
       setShowImportSuccess(false);
       if ((resumeData.projects || []).length > 0) {
         setHasTouchedProjects(true);
       }
+      lastProcessedResumeIdRef.current = resumeData.id;
     }
   }, [resumeData?.id]);
 
@@ -348,6 +354,38 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
     console.log('导入简历数据:', importedData);
     const toText = (value: any) => (typeof value === 'string' ? value.trim() : '');
+    const toKeyText = (value: any) => toText(value).toLowerCase().replace(/\s+/g, '');
+    const parseRangeText = (date?: string) => {
+      const raw = toText(date);
+      if (!raw) return { startDate: '', endDate: '' };
+      // Single date (e.g. 2022 or 2022-06) should not be split into start/end.
+      if (/^\d{4}([./-]\d{1,2})?$/.test(raw) || /^(至今|现在|present|current)$/i.test(raw)) {
+        return { startDate: raw, endDate: '' };
+      }
+      const sep = raw.match(/\s*(?:-|–|—|~|至|到|to)\s*/i);
+      if (!sep) return { startDate: raw, endDate: '' };
+      const parts = raw.split(/\s*(?:-|–|—|~|至|到|to)\s*/i).map((v) => toText(v)).filter(Boolean);
+      if (parts.length >= 2) return { startDate: parts[0], endDate: parts.slice(1).join(' - ') };
+      return { startDate: raw, endDate: '' };
+    };
+    const normalizeYearOnlyFromRaw = (rawValue: string, normalizedValue: string) => {
+      if (/^\d{4}$/.test(toText(rawValue))) {
+        const m = toText(normalizedValue).match(/^(\d{4})[./-]\d{1,2}$/);
+        if (m) return m[1];
+      }
+      return toText(normalizedValue);
+    };
+    const resolveDates = (item: any) => {
+      const rawStart = toText(item?.startDate);
+      const rawEnd = toText(item?.endDate);
+      const parsed = parseRangeText(item?.date);
+      const startDate = rawStart || parsed.startDate;
+      const endDate = rawEnd || parsed.endDate;
+      return {
+        startDate: normalizeYearOnlyFromRaw(rawStart, startDate),
+        endDate: normalizeYearOnlyFromRaw(rawEnd, endDate),
+      };
+    };
     const normalizeDateRange = (start?: string, end?: string) => {
       const s = toText(start);
       const e = toText(end);
@@ -357,8 +395,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     const importedSummary = toText(importedData.summary || importedData.personalInfo?.summary);
     const normalizeWorkItems = (items: any[] = []) =>
       items.map((item, index) => {
-        const startDate = toText(item?.startDate);
-        const endDate = toText(item?.endDate);
+        const { startDate, endDate } = resolveDates(item);
         const title = toText(item?.title || item?.company);
         const subtitle = toText(item?.subtitle || item?.position);
         return {
@@ -376,8 +413,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       });
     const normalizeEducationItems = (items: any[] = []) =>
       items.map((item, index) => {
-        const startDate = toText(item?.startDate);
-        const endDate = toText(item?.endDate);
+        const { startDate, endDate } = resolveDates(item);
         const title = toText(item?.title || item?.school);
         const subtitle = toText(item?.subtitle || item?.major);
         return {
@@ -396,8 +432,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       });
     const normalizeProjectItems = (items: any[] = []) =>
       items.map((item, index) => {
-        const startDate = toText(item?.startDate);
-        const endDate = toText(item?.endDate);
+        const { startDate, endDate } = resolveDates(item);
         return {
           ...item,
           id: typeof item?.id === 'number' ? item.id : Date.now() + 2000 + index,
@@ -410,6 +445,79 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           description: toText(item?.description),
         };
       });
+    const mergeUniqueItems = <T extends { id?: number }>(
+      existing: T[],
+      incoming: T[],
+      getKey: (item: T) => string,
+      mergeItem: (oldItem: T, newItem: T) => T
+    ) => {
+      const out = [...existing];
+      const keyToIndex = new Map<string, number>();
+      out.forEach((item, idx) => {
+        const key = getKey(item);
+        if (key) keyToIndex.set(key, idx);
+      });
+      incoming.forEach((item) => {
+        const key = getKey(item);
+        if (!key) {
+          out.push(item);
+          return;
+        }
+        const existingIndex = keyToIndex.get(key);
+        if (existingIndex === undefined) {
+          keyToIndex.set(key, out.length);
+          out.push(item);
+          return;
+        }
+        out[existingIndex] = mergeItem(out[existingIndex], item);
+      });
+      return out;
+    };
+    const toYearKey = (value: any) => {
+      const text = toText(value);
+      if (!text) return '';
+      const m = text.match(/\b(19|20)\d{2}\b/);
+      if (m) return m[0];
+      if (/至今|现在|present|current/i.test(text)) return 'present';
+      return toKeyText(text);
+    };
+    const getWorkKey = (item: any) => [
+      toKeyText(item?.company || item?.title),
+      toKeyText(item?.position || item?.subtitle),
+      toKeyText(item?.startDate),
+      toKeyText(item?.endDate),
+      toKeyText(item?.date),
+    ].join('|');
+    const getEduKey = (item: any) => [
+      toKeyText(item?.school || item?.title),
+      toKeyText(item?.major || item?.subtitle),
+      toYearKey(item?.startDate || item?.date),
+      toYearKey(item?.endDate || item?.date),
+    ].join('|');
+    const getProjectKey = (item: any) => [
+      toKeyText(item?.title),
+      toKeyText(item?.role || item?.subtitle),
+      toKeyText(item?.startDate),
+      toKeyText(item?.endDate),
+      toKeyText(item?.date),
+    ].join('|');
+    const mergeEntity = (oldItem: any, newItem: any) => ({
+      ...oldItem,
+      ...newItem,
+      id: oldItem?.id ?? newItem?.id,
+      title: oldItem?.title || newItem?.title || '',
+      subtitle: oldItem?.subtitle || newItem?.subtitle || '',
+      company: oldItem?.company || newItem?.company || '',
+      position: oldItem?.position || newItem?.position || '',
+      school: oldItem?.school || newItem?.school || '',
+      major: oldItem?.major || newItem?.major || '',
+      degree: oldItem?.degree || newItem?.degree || '',
+      role: oldItem?.role || newItem?.role || '',
+      startDate: oldItem?.startDate || newItem?.startDate || '',
+      endDate: oldItem?.endDate || newItem?.endDate || '',
+      date: oldItem?.date || newItem?.date || normalizeDateRange(oldItem?.startDate || newItem?.startDate, oldItem?.endDate || newItem?.endDate),
+      description: oldItem?.description || newItem?.description || '',
+    });
 
     // 合并导入的数据到当前简历
     const computeMergedData = (prev: ResumeData): ResumeData => {
@@ -431,24 +539,60 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
       // 合并工作经历（添加到现有列表）
       if (importedData.workExps && importedData.workExps.length > 0) {
-        mergedData.workExps = [...prev.workExps, ...normalizeWorkItems(importedData.workExps as any[])];
+        mergedData.workExps = mergeUniqueItems(
+          prev.workExps as any[],
+          normalizeWorkItems(importedData.workExps as any[]),
+          getWorkKey,
+          mergeEntity
+        );
       }
 
       // 合并教育经历（添加到现有列表）
       if (importedData.educations && importedData.educations.length > 0) {
-        mergedData.educations = [...prev.educations, ...normalizeEducationItems(importedData.educations as any[])];
+        const normalizedIncomingEdu = normalizeEducationItems(importedData.educations as any[]);
+        const existingEdu = [...(prev.educations as any[])];
+        const eduKeyToIndex = new Map<string, number>();
+        existingEdu.forEach((item, idx) => {
+          const key = getEduKey(item);
+          if (key) eduKeyToIndex.set(key, idx);
+        });
+        normalizedIncomingEdu.forEach((item) => {
+          const key = getEduKey(item);
+          const existingIndex = key ? eduKeyToIndex.get(key) : undefined;
+          if (existingIndex === undefined) {
+            if (key) eduKeyToIndex.set(key, existingEdu.length);
+            existingEdu.push(item);
+            return;
+          }
+          const merged = mergeEntity(existingEdu[existingIndex], item);
+          // Keep existing year-only granularity if user already has no-month dates.
+          if (/^\d{4}$/.test(toText(existingEdu[existingIndex]?.startDate))) {
+            merged.startDate = toText(existingEdu[existingIndex]?.startDate);
+          }
+          if (/^\d{4}$/.test(toText(existingEdu[existingIndex]?.endDate))) {
+            merged.endDate = toText(existingEdu[existingIndex]?.endDate);
+          }
+          merged.date = toText(merged.date) || normalizeDateRange(merged.startDate, merged.endDate);
+          existingEdu[existingIndex] = merged;
+        });
+        mergedData.educations = existingEdu;
       }
 
       // 合并项目经历（添加到现有列表）
       if (importedData.projects && importedData.projects.length > 0) {
-        mergedData.projects = [...prev.projects, ...normalizeProjectItems(importedData.projects as any[])];
+        mergedData.projects = mergeUniqueItems(
+          prev.projects as any[],
+          normalizeProjectItems(importedData.projects as any[]),
+          getProjectKey,
+          mergeEntity
+        );
       }
 
       // 合并技能（去重）
       const importedSkills = toSkillList(importedData.skills);
-      if (importedSkills.length > 0) {
-        mergedData.skills = mergeSkills(prev.skills, importedSkills);
-      }
+      // Always trust latest import result for skills to avoid stale/wrong tokens
+      // lingering from previous imports.
+      mergedData.skills = importedSkills;
 
       // Merge summary (top-level)
       if (importedSummary) {
@@ -817,6 +961,59 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     }));
   };
 
+  const handleClearCurrentStep = () => {
+    setShowClearPageConfirm(false);
+    setResumeData(prev => {
+      const next = { ...prev };
+      switch (currentStep) {
+        case 'personal':
+          next.personalInfo = {
+            name: '', title: '', email: '', phone: '', avatar: '', location: '', age: '', summary: prev.personalInfo.summary
+          };
+          next.gender = '';
+          break;
+        case 'work':
+          next.workExps = [];
+          break;
+        case 'education':
+          next.educations = [];
+          break;
+        case 'projects':
+          next.projects = [];
+          setHasTouchedProjects(false);
+          break;
+        case 'skills':
+          next.skills = [];
+          setNewSkill('');
+          break;
+        case 'summary':
+          next.summary = '';
+          setSummary('');
+          break;
+      }
+      return next;
+    });
+  };
+
+  const handleClearAllData = () => {
+    setResumeData({
+      id: resumeData.id,
+      resumeTitle: resumeData.resumeTitle,
+      personalInfo: { name: '', title: '', email: '', phone: '' },
+      workExps: [],
+      educations: [],
+      projects: [],
+      skills: [],
+      summary: '',
+      gender: '',
+    });
+    setSummary('');
+    setHasTouchedProjects(false);
+    setHasImportedResume(false);
+    setTextResume('');
+    setCurrentStep('import');
+  };
+
   // --- Wizard Navigation ---
   const currentStepIndex = WIZARD_STEPS.findIndex(s => s.key === currentStep);
   const progress = ((currentStepIndex + 1) / WIZARD_STEPS.length) * 100;
@@ -885,15 +1082,25 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
               </p>
             </div>
           </div>
-          <div className="text-right flex flex-col items-end min-w-[96px]">
-            <span className="text-sm text-slate-500 dark:text-slate-400">
+          <div className="text-right flex flex-col items-end min-w-[32px] sm:min-w-[96px]">
+            <span className="hidden sm:block text-sm text-slate-500 dark:text-slate-400">
               {isAutosaving ? '保存中...' : (lastSavedAt ? '已自动保存' : '未保存')}
             </span>
             {lastSavedAt && (
-              <span className="text-xs text-slate-400 dark:text-slate-500">
+              <span className="hidden sm:block text-xs text-slate-400 dark:text-slate-500">
                 时间 {lastSavedAt}
               </span>
             )}
+
+            {/* Clear Page Button - Top Right */}
+            <button
+              onClick={() => setShowClearPageConfirm(true)}
+              className={`mt-0 sm:mt-1 p-2 sm:px-3 sm:py-1 rounded-full border border-slate-200 dark:border-slate-700 text-slate-400 hover:text-red-500 hover:border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all flex items-center gap-1.5 ${currentStep === 'import' ? 'opacity-0 pointer-events-none' : ''}`}
+              title="清空当前页"
+            >
+              <span className="material-symbols-outlined text-[20px] sm:text-[16px]">delete</span>
+              <span className="hidden sm:inline text-xs">清空本页</span>
+            </button>
           </div>
         </div>
 
@@ -972,6 +1179,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
             onPdfImport={handlePDFImport}
             pdfInputRef={pdfInputRef}
             onSkip={() => setCurrentStep('personal')}
+            onClearAll={handleClearAllData}
           />
         )}
 
@@ -1142,9 +1350,37 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
         </div>
       )}
 
+      {/* Clear Page Confirmation Modal */}
+      {showClearPageConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-6">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-surface-dark border border-slate-200 dark:border-[#324d67] shadow-xl p-6 text-center animate-in zoom-in-95 duration-200">
+            <div className="mx-auto mb-3 size-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[24px]">delete_forever</span>
+            </div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-white">确认清空当前页？</h3>
+            <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+              此操作将清空“{WIZARD_STEPS.find(s => s.key === currentStep)?.label}”的所有内容，且无法撤销。
+            </p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowClearPageConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-semibold hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleClearCurrentStep}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-semibold hover:bg-red-600 active:scale-[0.98] transition-all shadow-lg shadow-red-500/20"
+              >
+                确认清空
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div >
   );
 };
 
 export default Editor;
-

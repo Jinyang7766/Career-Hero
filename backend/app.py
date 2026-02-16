@@ -18,6 +18,8 @@ import re
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4
 from pypdf import PdfReader
 from docx import Document
 import fitz  # PyMuPDF for PDF-to-image
@@ -1444,11 +1446,12 @@ def export_pdf():
         data = request.get_json() or {}
         resume_data = data.get('resumeData')
         jd_text = data.get('jdText', '')
+        pdf_engine = (os.getenv('PDF_EXPORT_ENGINE', 'auto') or 'auto').strip().lower()
         
         if not resume_data:
             return jsonify({'error': '需要提供简历数据'}), 400
         
-        logger.info("Starting PDF generation with Playwright")
+        logger.info("Starting PDF generation, engine=%s", pdf_engine)
         
         # Generate HTML for PDF
         html_content = data.get('htmlContent')
@@ -1458,26 +1461,52 @@ def export_pdf():
             html_content = inject_font_css_into_html(html_content)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
-        try:
+        def _generate_pdf_with_playwright():
+            launch_args = [
+                "--disable-dev-shm-usage",
+                "--no-first-run",
+                "--no-default-browser-check"
+            ]
+            # These flags improve compatibility in restricted environments.
+            if os.getenv('PDF_PLAYWRIGHT_NO_SANDBOX', '1').strip().lower() in ('1', 'true', 'yes', 'on'):
+                launch_args.extend(["--no-sandbox", "--disable-setuid-sandbox"])
+
             with sync_playwright() as p:
-                browser = p.chromium.launch()
-                page = browser.new_page(viewport={"width": 794, "height": 1123})
-                page.emulate_media(media="print")
-                page.set_content(html_content, wait_until="networkidle")
-                pdf_bytes = page.pdf(
-                    print_background=True,
-                    prefer_css_page_size=False,
-                    format="A4",
-                    margin={"top": "0cm", "bottom": "0cm", "left": "0cm", "right": "0cm"},
-                    scale=1
-                )
-                browser.close()
-            result = io.BytesIO(pdf_bytes)
-            result.seek(0)
-            logger.info("PDF generated successfully with Playwright")
-        except Exception as pw_err:
-            logger.error(f"Playwright PDF generation failed: {pw_err}")
-            return jsonify({'error': 'PDF 生成失败'}), 500
+                browser = p.chromium.launch(headless=True, args=launch_args)
+                try:
+                    page = browser.new_page(viewport={"width": 794, "height": 1123})
+                    page.emulate_media(media="print")
+                    page.set_content(html_content, wait_until="networkidle", timeout=30000)
+                    return page.pdf(
+                        print_background=True,
+                        prefer_css_page_size=False,
+                        format="A4",
+                        margin={"top": "0cm", "bottom": "0cm", "left": "0cm", "right": "0cm"},
+                        scale=1
+                    )
+                finally:
+                    browser.close()
+
+        result = None
+        if pdf_engine in ('reportlab', 'simple', 'fallback'):
+            logger.info("PDF engine forced to ReportLab fallback")
+            result = _build_simple_pdf_fallback(resume_data)
+        else:
+            try:
+                pdf_bytes = _generate_pdf_with_playwright()
+                result = io.BytesIO(pdf_bytes)
+                result.seek(0)
+                logger.info("PDF generated successfully with Playwright")
+            except Exception as pw_err:
+                logger.error(f"Playwright PDF generation failed: {pw_err}")
+                if pdf_engine == 'playwright':
+                    return jsonify({'error': f'PDF 生成失败(Playwright): {str(pw_err)}'}), 500
+                logger.info("Falling back to ReportLab PDF generation")
+                try:
+                    result = _build_simple_pdf_fallback(resume_data)
+                except Exception as fb_err:
+                    logger.error(f"ReportLab fallback PDF generation failed: {fb_err}")
+                    return jsonify({'error': f'PDF 生成失败: {str(pw_err)}'}), 500
 
         # 处理自定义文件名（来自前端的简历标题）
         custom_title = data.get('resumeTitle') or data.get('filename') or ''
@@ -1706,6 +1735,139 @@ def normalize_date_range(start_date: str, end_date: str) -> str:
     if start and end:
         return f"{start} - {end}"
     return start or end
+
+
+def _build_simple_pdf_fallback(resume_data):
+    """
+    Fallback PDF generator when Playwright is unavailable on local/dev environments.
+    Produces a readable single/multi-page PDF via ReportLab.
+    """
+    buffer = io.BytesIO()
+    page_w, page_h = A4
+    c = canvas.Canvas(buffer, pagesize=A4)
+
+    font_name = get_pdf_font_family()
+    font_size_title = 16
+    font_size_h2 = 12
+    font_size_body = 10
+    line_gap = 14
+
+    def set_font(size):
+        try:
+            c.setFont(font_name, size)
+        except Exception:
+            c.setFont('Helvetica', size)
+
+    def draw_line(text, x, y, size=font_size_body):
+        set_font(size)
+        c.drawString(x, y, str(text or ''))
+
+    x_left = 36
+    y = page_h - 48
+
+    personal = resume_data.get('personalInfo', {}) or {}
+    name = personal.get('name') or '未填写姓名'
+    title = personal.get('title') or '求职意向'
+    email = personal.get('email') or ''
+    phone = personal.get('phone') or ''
+    location = personal.get('location') or ''
+    summary = resume_data.get('summary') or personal.get('summary') or ''
+
+    draw_line(name, x_left, y, font_size_title)
+    y -= line_gap + 4
+    draw_line(title, x_left, y, font_size_h2)
+    y -= line_gap
+    draw_line(f"{email}  {phone}  {location}".strip(), x_left, y, font_size_body)
+    y -= line_gap + 4
+
+    def ensure_space(lines_needed=1):
+        nonlocal y
+        if y < 48 + lines_needed * line_gap:
+            c.showPage()
+            y = page_h - 48
+
+    def draw_section_header(text):
+        nonlocal y
+        ensure_space(2)
+        draw_line(text, x_left, y, font_size_h2)
+        y -= line_gap
+
+    def draw_multiline(text, prefix=''):
+        nonlocal y
+        raw = str(text or '').replace('\r', '\n')
+        chunks = []
+        for part in raw.split('\n'):
+            part = part.strip()
+            if not part:
+                continue
+            # very simple wrap by char length for stability
+            width = 70
+            for i in range(0, len(part), width):
+                chunks.append(part[i:i + width])
+        if not chunks:
+            chunks = ['']
+        for i, line in enumerate(chunks):
+            ensure_space(1)
+            draw_line((prefix if i == 0 else '  ') + line, x_left, y, font_size_body)
+            y -= line_gap
+
+    if summary:
+        draw_section_header('个人简介')
+        draw_multiline(summary)
+
+    work_exps = resume_data.get('workExps', []) or []
+    if work_exps:
+        draw_section_header('工作经历')
+        for exp in work_exps:
+            title_text = exp.get('company') or exp.get('title') or '未填写单位'
+            subtitle_text = exp.get('position') or exp.get('subtitle') or ''
+            date_text = exp.get('date') or normalize_date_range(exp.get('startDate', ''), exp.get('endDate', ''))
+            ensure_space(3)
+            draw_line(f"{title_text}  {subtitle_text}".strip(), x_left, y, font_size_body)
+            y -= line_gap
+            if date_text:
+                draw_line(date_text, x_left, y, font_size_body)
+                y -= line_gap
+            draw_multiline(exp.get('description') or '')
+
+    educations = resume_data.get('educations', []) or []
+    if educations:
+        draw_section_header('教育背景')
+        for edu in educations:
+            school = edu.get('school') or edu.get('title') or '未填写学校'
+            degree = edu.get('degree') or ''
+            major = edu.get('major') or edu.get('subtitle') or ''
+            date_text = edu.get('date') or normalize_date_range(edu.get('startDate', ''), edu.get('endDate', ''))
+            ensure_space(2)
+            draw_line(f"{school}  {degree} {major}".strip(), x_left, y, font_size_body)
+            y -= line_gap
+            if date_text:
+                draw_line(date_text, x_left, y, font_size_body)
+                y -= line_gap
+
+    projects = resume_data.get('projects', []) or []
+    if projects:
+        draw_section_header('项目经历')
+        for proj in projects:
+            title_text = proj.get('title') or '未填写项目'
+            role = proj.get('role') or proj.get('subtitle') or ''
+            date_text = proj.get('date') or normalize_date_range(proj.get('startDate', ''), proj.get('endDate', ''))
+            ensure_space(3)
+            draw_line(f"{title_text}  {role}".strip(), x_left, y, font_size_body)
+            y -= line_gap
+            if date_text:
+                draw_line(date_text, x_left, y, font_size_body)
+                y -= line_gap
+            draw_multiline(proj.get('description') or '')
+
+    skills = resume_data.get('skills', []) or []
+    if skills:
+        draw_section_header('技能')
+        draw_multiline('、'.join(str(s) for s in skills if str(s).strip()))
+
+    c.save()
+    buffer.seek(0)
+    return buffer
 
 def build_resume_context(resume_data):
     personal_info = resume_data.get('personalInfo', {}) or {}
@@ -2965,8 +3127,8 @@ def _normalize_parsed_resume_result(ai_result):
             continue
         start, end = _extract_dates(item)
         normalized_work.append({
-            'company': _pick(item, ['company', 'employer', 'organization', 'org', '单位', '公司', 'title']),
-            'position': _pick(item, ['position', 'jobTitle', 'role', '岗位', '职位', 'subtitle']),
+            'company': _pick(item, ['company', 'employer', 'organization', 'org', '单位', '公司']),
+            'position': _pick(item, ['position', 'jobTitle', 'role', '岗位', '职位']),
             'startDate': start,
             'endDate': end,
             'description': _pick(item, ['description', 'content', 'summary', '职责', '工作内容']),
@@ -2978,9 +3140,9 @@ def _normalize_parsed_resume_result(ai_result):
             continue
         start, end = _extract_dates(item)
         normalized_edu.append({
-            'school': _pick(item, ['school', 'university', 'college', '学校', 'title']),
+            'school': _pick(item, ['school', 'university', 'college', '学校']),
             'degree': _pick(item, ['degree', '学历', '学位']),
-            'major': _pick(item, ['major', 'speciality', '专业', 'subtitle']),
+            'major': _pick(item, ['major', 'speciality', '专业']),
             'startDate': start,
             'endDate': end,
         })
@@ -3029,36 +3191,83 @@ def _extract_skills_from_resume_text(resume_text):
     collected = []
     cert_collected = []
 
-    # 1) Prefer explicit skill sections.
-    skill_heading_re = re.compile(r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能)\s*[:：]?$')
-    next_section_re = re.compile(r'^(工作经历|项目经历|教育经历|教育背景|个人总结|自我评价|证书|资格证书|荣誉|语言能力)\s*[:：]?$')
-    in_skill_block = False
-    for ln in lines:
-        if skill_heading_re.match(ln):
-            in_skill_block = True
-            continue
-        if in_skill_block and next_section_re.match(ln):
-            in_skill_block = False
-        if not in_skill_block:
-            continue
-        parts = [p.strip() for p in re.split(r'[，,、;；|/]+', ln) if p.strip()]
-        collected.extend(parts)
+    # 1) Prefer explicit skill/certificate sections (supports heading-only / heading+content same line).
+    skill_heading_inline_re = re.compile(
+        r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能)\s*[:：]?\s*(.*)$',
+        re.IGNORECASE
+    )
+    cert_heading_inline_re = re.compile(
+        r'^(证书|资格证书|专业证书|职业资格|资质证书)\s*[:：]?\s*(.*)$',
+        re.IGNORECASE
+    )
+    next_section_re = re.compile(
+        r'^(工作经历|项目经历|教育经历|教育背景|个人总结|自我评价|荣誉|语言能力|兴趣爱好|联系方式)\s*[:：]?$'
+    )
 
-    # 2) Extract certificate-like terms from certificate sections.
-    cert_heading_re = re.compile(r'^(证书|资格证书|专业证书|职业资格|资质证书)\s*[:：]?$')
+    in_skill_block = False
     in_cert_block = False
+    split_items_re = re.compile(r'[，,、;；|/]+|\t+|\s{2,}')
     for ln in lines:
-        if cert_heading_re.match(ln):
-            in_cert_block = True
-            continue
-        if in_cert_block and next_section_re.match(ln):
+        # OCR often inserts spaces between Chinese characters, e.g. "资 格 证 书".
+        compact_ln = re.sub(r'\s+', '', ln)
+
+        skill_m = skill_heading_inline_re.match(ln) or skill_heading_inline_re.match(compact_ln)
+        if skill_m:
+            in_skill_block = True
             in_cert_block = False
-        if not in_cert_block:
+            inline_payload = (skill_m.group(2) or '').strip()
+            # If matched on compact text, try to recover payload from original line after first colon.
+            if not inline_payload and ('：' in ln or ':' in ln):
+                inline_payload = re.split(r'[:：]', ln, maxsplit=1)[1].strip()
+            if inline_payload:
+                parts = [p.strip() for p in split_items_re.split(inline_payload) if p.strip()]
+                collected.extend(parts)
             continue
-        parts = [p.strip() for p in re.split(r'[，,、;；|/\s]+', ln) if p.strip()]
-        cert_collected.extend(parts)
+
+        cert_m = cert_heading_inline_re.match(ln) or cert_heading_inline_re.match(compact_ln)
+        if cert_m:
+            in_cert_block = True
+            in_skill_block = False
+            inline_payload = (cert_m.group(2) or '').strip()
+            if not inline_payload and ('：' in ln or ':' in ln):
+                inline_payload = re.split(r'[:：]', ln, maxsplit=1)[1].strip()
+            if inline_payload:
+                parts = [p.strip() for p in split_items_re.split(inline_payload) if p.strip()]
+                cert_collected.extend(parts)
+            continue
+
+        if next_section_re.match(ln):
+            in_skill_block = False
+            in_cert_block = False
+            continue
+
+        if in_skill_block:
+            parts = [p.strip() for p in split_items_re.split(ln) if p.strip()]
+            collected.extend(parts)
+            continue
+
+        if in_cert_block:
+            # Keep certificate noun phrases intact; do not split by whitespace.
+            parts = [p.strip() for p in split_items_re.split(ln) if p.strip()]
+            cert_collected.extend(parts)
 
     collected.extend(cert_collected)
+
+    # 3) Global certificate scan (safe): even if heading structure is broken by OCR,
+    # still allow certificate entities to be extracted into skills.
+    cert_global_patterns = [
+        r'\b(?:PMP|CFA|FRM|CPA|ACCA|CISP|CISSP)\b',
+        r'(?:软考(?:中级|高级)?(?:证书)?|教师资格证|法律职业资格证|基金从业资格证|证券从业资格证|银行从业资格证|一级建造师|二级建造师|会计师证书|执业药师|注册会计师)',
+        r'\b(?:CET[-\s]?[46]|TEM[-\s]?[48]|IELTS|TOEFL|N2|N1)\b',
+        r'(?:大学英语[四六]级|英语[四六]级|普通话[一二三]级(?:甲等|乙等)?|计算机(?:等级)?[一二三四]级|全国计算机等级考试|NCRE)'
+    ]
+    for pat in cert_global_patterns:
+        for m in re.findall(pat, text, flags=re.IGNORECASE):
+            if isinstance(m, tuple):
+                m = next((x for x in m if x), '')
+            v = str(m).strip()
+            if v:
+                collected.append(v)
 
     # Normalize + deduplicate + filter obvious noise
     noise = {
@@ -3066,7 +3275,12 @@ def _extract_skills_from_resume_text(resume_text):
         '电商', '数据', '运营', '分析', '平台', '工具', '技术', '能力',
         '天猫', '京东', '钉钉'
     }
-    cert_re = re.compile(r'(证书|认证|资格证|执业证|从业资格|等级证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格)', re.IGNORECASE)
+    cert_re = re.compile(
+        r'(证书|认证|资格证|执业证|从业资格|等级证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格|'
+        r'CET[-\s]?[46]|TEM[-\s]?[48]|IELTS|TOEFL|N2|N1|大学英语[四六]级|英语[四六]级|普通话[一二三]级(?:甲等|乙等)?|'
+        r'计算机(?:等级)?[一二三四]级|全国计算机等级考试|NCRE)',
+        re.IGNORECASE
+    )
     strong_skill_re = re.compile(
         r'^(Python|Java|JavaScript|TypeScript|SQL|Excel|Tableau|PowerBI|SPSS|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring|SAP|ERP|WMS|GA4|SEO|SEM|A/B测试|A/B Test|SCRM|CRM|LLM|生意参谋|京东商智|万相台|直通车|引力魔方|千川|巨量引擎|数据建模|数据可视化|机器学习|深度学习)$',
         re.IGNORECASE
@@ -3075,6 +3289,7 @@ def _extract_skills_from_resume_text(resume_text):
     seen = set()
     for item in collected:
         v = re.sub(r'\s+', ' ', str(item)).strip('：:;；,，|/ ').strip()
+        v = re.sub(r'^[\-•·\*\u2022]+\s*', '', v).strip()
         if not v or v in noise:
             continue
         if len(v) > 40 or len(v) < 2:
@@ -3182,6 +3397,65 @@ def _repair_missing_core_fields_with_ai(resume_text, parsed_data):
 
     return parsed_data
 
+
+def _compact_text_for_match(value):
+    text = str(value or '').strip().lower()
+    if not text:
+        return ''
+    return re.sub(r'[\s\-–—·•,，.。:：;；/\\|()（）\[\]【】\'"`]+', '', text)
+
+
+def _filter_unverifiable_entities(parsed_data, resume_text):
+    """
+    Guard against hallucinated entities from model extraction:
+    company/school must be traceable in source resume text.
+    """
+    source_compact = _compact_text_for_match(resume_text)
+    if not source_compact:
+        return parsed_data
+
+    blocked_company_tokens = {'工作经历', '项目经历', '教育经历', '公司', '单位', '职位', '岗位', '本人'}
+    blocked_school_tokens = {'教育经历', '教育背景', '学校', '院校', '本人'}
+
+    work_exps = parsed_data.get('workExps', []) or []
+    for item in work_exps:
+        if not isinstance(item, dict):
+            continue
+        company = (item.get('company') or '').strip()
+        if not company:
+            continue
+        compact_company = _compact_text_for_match(company)
+        if not compact_company:
+            item['company'] = ''
+            continue
+        if company in blocked_company_tokens:
+            item['company'] = ''
+            continue
+        # Require traceability in source text to prevent invented company names.
+        if compact_company not in source_compact:
+            item['company'] = ''
+
+    educations = parsed_data.get('educations', []) or []
+    for item in educations:
+        if not isinstance(item, dict):
+            continue
+        school = (item.get('school') or '').strip()
+        if not school:
+            continue
+        compact_school = _compact_text_for_match(school)
+        if not compact_school:
+            item['school'] = ''
+            continue
+        if school in blocked_school_tokens:
+            item['school'] = ''
+            continue
+        if compact_school not in source_compact:
+            item['school'] = ''
+
+    parsed_data['workExps'] = work_exps
+    parsed_data['educations'] = educations
+    return parsed_data
+
 def parse_resume_text_with_ai(resume_text):
     """Parse resume text into structured data via AI."""
     if not resume_text.strip():
@@ -3273,6 +3547,7 @@ def parse_resume_text_with_ai(resume_text):
 
     parsed_data = _normalize_parsed_resume_result(ai_result)
     parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
+    parsed_data = _filter_unverifiable_entities(parsed_data, resume_text)
     parsed_data = _fill_skills_if_missing(parsed_data, resume_text)
 
     logger.info("Resume parsed successfully with AI")
