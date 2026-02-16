@@ -321,7 +321,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
         <div className="mb-40 flex gap-3">
           <button
             onClick={handleAnalyzeOtherResume}
-            className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white transition-all active:scale-[0.98]"
+            className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20"
             type="button"
           >
             <span className="material-symbols-outlined text-[18px]">restart_alt</span>
@@ -330,9 +330,9 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           <button
             onClick={handleExportPDF}
             disabled={!hasAcceptedSuggestion}
-            className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed ${!hasAcceptedSuggestion
+            className={`flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed shadow-blue-500/20 ${!hasAcceptedSuggestion
               ? 'bg-slate-300 dark:bg-slate-800 text-slate-500'
-              : 'bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white'
+              : 'bg-primary hover:bg-blue-600 text-white'
               }`}
             type="button"
           >
