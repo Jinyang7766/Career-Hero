@@ -436,7 +436,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setResumeData: setResumeData as any,
     sourceResumeIdRef: sourceResumeIdRef as any,
     setSelectedResumeId,
-    setOriginalResumeData,
     setAnalysisResumeId,
     setOptimizedResumeId,
     setTargetCompany,
@@ -445,9 +444,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setChatMessages: setChatMessages as any,
     setChatInitialized,
     openChat,
-    applyAnalysisSnapshot,
-    saveLastAnalysis,
-    navigateToStep: navigateToStep as any,
     setStepHistory: setStepHistory as any,
     setCurrentStep: setCurrentStep as any,
     setForceReportEntry,
@@ -627,5 +623,4 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 };
 
 export default AiAnalysis;
-
 

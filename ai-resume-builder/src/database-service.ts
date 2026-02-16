@@ -1,6 +1,49 @@
 import { supabase } from './supabase-client';
 
 export class DatabaseService {
+  private static normalizeResumeId(id: any) {
+    return String(id ?? '').trim();
+  }
+
+  private static async findExistingOptimizedResume(userId: string, optimizedFromId: any) {
+    const normalizedOriginalId = DatabaseService.normalizeResumeId(optimizedFromId);
+    if (!normalizedOriginalId) return { success: true, data: null as any, error: null as any };
+
+    // Try server-side JSON path filtering first.
+    const filtered = await supabase
+      .from('resumes')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('resume_data->>optimizationStatus', 'optimized')
+      .eq('resume_data->>optimizedFromId', normalizedOriginalId)
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!filtered.error) {
+      return { success: true, data: filtered.data, error: null as any };
+    }
+
+    // Fallback for environments where JSON path filter is unavailable.
+    const all = await supabase
+      .from('resumes')
+      .select('*')
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false });
+    if (all.error) {
+      return { success: false, data: null as any, error: all.error };
+    }
+
+    const hit = (all.data || []).find((r: any) => {
+      const resumeData = r?.resume_data || {};
+      const status = String(resumeData?.optimizationStatus || '').trim().toLowerCase();
+      const fromId = DatabaseService.normalizeResumeId(resumeData?.optimizedFromId);
+      return status === 'optimized' && fromId === normalizedOriginalId;
+    }) || null;
+
+    return { success: true, data: hit, error: null as any };
+  }
+
   // 创建用户记录
   static async createUser(userId: string, email: string, name: string) {
     try {
@@ -96,6 +139,33 @@ export class DatabaseService {
       if (Object.keys(resumeData).length === 0) {
         console.error('❌ Invalid resume data: empty object');
         return { success: false, error: new Error('简历数据为空'), data: null };
+      }
+
+      const optimizationStatus = String(resumeData?.optimizationStatus || '').trim().toLowerCase();
+      const optimizedFromId = DatabaseService.normalizeResumeId(resumeData?.optimizedFromId);
+      if (optimizationStatus === 'optimized' && optimizedFromId) {
+        const existing = await DatabaseService.findExistingOptimizedResume(userId, optimizedFromId);
+        if (!existing.success) {
+          console.error('❌ Error finding existing optimized resume:', existing.error);
+          return { success: false, error: existing.error, data: null };
+        }
+        if (existing.data?.id) {
+          const { data: updated, error: updateError } = await supabase
+            .from('resumes')
+            .update({
+              title,
+              resume_data: resumeData,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existing.data.id)
+            .select()
+            .single();
+          if (updateError) {
+            console.error('❌ Error updating existing optimized resume:', updateError);
+            return { success: false, error: updateError, data: null };
+          }
+          return { success: true, data: updated };
+        }
       }
 
       const { data, error } = await supabase

@@ -120,16 +120,8 @@ CORS(app,
      supports_credentials=False
 )
 
-# Handle OPTIONS preflight
 @app.before_request
 def handle_options_request():
-    if request.method == 'OPTIONS':
-        response = jsonify({'status': '成功'})
-        response.headers.add('Access-Control-Allow-Origin', '*')
-        response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
-        response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
-        return response
-
     # Opportunistic low-frequency sweep for expired deletion requests.
     # This keeps cleanup running even without external cron.
     if AUTO_DELETION_SWEEP_ENABLED and request.path.startswith('/api/'):
@@ -322,6 +314,44 @@ def get_mock_resumes_for_user(user_id: str):
     if user_id not in mock_resumes:
         mock_resumes[user_id] = {}
     return mock_resumes[user_id]
+
+
+def _normalize_resume_id(value):
+    return str(value or '').strip()
+
+
+def _find_existing_optimized_resume(current_user_id: str, optimized_from_id: str):
+    target_id = _normalize_resume_id(optimized_from_id)
+    if not target_id:
+        return None
+
+    if is_mock_mode():
+        for resume in get_mock_resumes_for_user(current_user_id).values():
+            resume_data = resume.get('resume_data') or {}
+            status = str(resume_data.get('optimizationStatus') or '').strip().lower()
+            from_id = _normalize_resume_id(resume_data.get('optimizedFromId'))
+            if status == 'optimized' and from_id == target_id:
+                return resume
+        return None
+
+    try:
+        result = (
+            supabase.table('resumes')
+            .select('*')
+            .eq('user_id', current_user_id)
+            .order('updated_at', desc=True)
+            .execute()
+        )
+        for resume in (result.data or []):
+            resume_data = resume.get('resume_data') or {}
+            status = str(resume_data.get('optimizationStatus') or '').strip().lower()
+            from_id = _normalize_resume_id(resume_data.get('optimizedFromId'))
+            if status == 'optimized' and from_id == target_id:
+                return resume
+    except Exception as exc:
+        logger.warning("find existing optimized resume failed: %s", exc)
+
+    return None
 
 
 def _parse_iso_datetime(value: str):
@@ -781,8 +811,18 @@ def clean_resume_payload(payload):
         'gender': clean_string(payload.get('gender'), 20),
         'templateId': clean_string(payload.get('templateId'), 50),
         'optimizationStatus': clean_string(payload.get('optimizationStatus'), 50),
+        'optimizedFromId': clean_string(payload.get('optimizedFromId'), 120),
         'lastJdText': clean_string(payload.get('lastJdText'), 8000),
+        'targetCompany': clean_string(payload.get('targetCompany'), 300),
     }
+
+    analysis_snapshot = payload.get('analysisSnapshot')
+    if isinstance(analysis_snapshot, dict):
+        cleaned['analysisSnapshot'] = analysis_snapshot
+
+    ai_suggestion_feedback = payload.get('aiSuggestionFeedback')
+    if isinstance(ai_suggestion_feedback, dict):
+        cleaned['aiSuggestionFeedback'] = ai_suggestion_feedback
 
     interview_sessions = payload.get('interviewSessions')
     if isinstance(interview_sessions, dict):
@@ -966,14 +1006,43 @@ def create_resume(current_user_id):
         cleaned_resume_data, err = clean_resume_payload(resume_data)
         if err:
             return jsonify({'error': err}), 400
+        now_iso = datetime.utcnow().isoformat()
+
+        optimization_status = str(cleaned_resume_data.get('optimizationStatus') or '').strip().lower()
+        optimized_from_id = _normalize_resume_id(cleaned_resume_data.get('optimizedFromId'))
+        if optimization_status == 'optimized' and optimized_from_id:
+            existing_resume = _find_existing_optimized_resume(current_user_id, optimized_from_id)
+            if existing_resume:
+                update_data = {
+                    'title': title,
+                    'resume_data': cleaned_resume_data,
+                    'updated_at': now_iso
+                }
+                if is_mock_mode():
+                    existing_resume.update(update_data)
+                    result = mock_supabase_response(data=[existing_resume])
+                else:
+                    result = (
+                        supabase.table('resumes')
+                        .update(update_data)
+                        .eq('id', existing_resume.get('id'))
+                        .eq('user_id', current_user_id)
+                        .execute()
+                    )
+
+                if result.data:
+                    return jsonify({
+                        'message': '优化简历已存在，已更新',
+                        'resume': result.data[0]
+                    }), 200
 
         resume_record = {
             'id': str(uuid.uuid4()),
             'user_id': current_user_id,
             'title': title,
             'resume_data': cleaned_resume_data,
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat()
+            'created_at': now_iso,
+            'updated_at': now_iso
         }
 
         if is_mock_mode():
@@ -1455,8 +1524,9 @@ def export_pdf():
         html_content = data.get('htmlContent')
         if not html_content:
             html_content = generate_resume_html(resume_data)
-        else:
-            html_content = inject_font_css_into_html(html_content)
+        # Always inject font CSS so all templates (modern/classic/minimal)
+        # share the same reliable font-loading path.
+        html_content = inject_font_css_into_html(html_content)
         logger.info(f"Generated HTML content length: {len(html_content)}")
         
         def _generate_pdf_with_playwright():
@@ -1475,6 +1545,15 @@ def export_pdf():
                     page = browser.new_page(viewport={"width": 794, "height": 1123})
                     page.emulate_media(media="print")
                     page.set_content(html_content, wait_until="networkidle", timeout=30000)
+                    # Ensure @font-face resources are fully loaded before printing PDF.
+                    page.evaluate("""
+                        () => {
+                            if (document.fonts && document.fonts.ready) {
+                                return document.fonts.ready;
+                            }
+                            return Promise.resolve();
+                        }
+                    """)
                     return page.pdf(
                         print_background=True,
                         prefer_css_page_size=False,
@@ -1590,6 +1669,39 @@ def clean_text_for_pdf(text):
 
 
 _PDF_FONT_FAMILY_CACHE = None
+_PDF_FONT_URL_CACHE = None
+
+
+def resolve_pdf_font_path() -> str:
+    """Resolve a usable local font path for PDF rendering."""
+    env_path = (os.getenv("PDF_FONT_PATH", "") or "").strip()
+    candidates = []
+
+    if env_path:
+        if os.path.isabs(env_path):
+            candidates.append(env_path)
+        else:
+            candidates.append(os.path.abspath(env_path))
+            candidates.append(os.path.abspath(os.path.join(os.path.dirname(__file__), env_path)))
+
+    base_dir = os.path.dirname(__file__)
+    candidates.extend([
+        os.path.join(base_dir, "font.ttf"),
+        os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "public", "font.ttf")),
+        os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "dist", "font.ttf")),
+    ])
+
+    seen = set()
+    for path in candidates:
+        if not path:
+            continue
+        norm = os.path.normpath(path)
+        if norm in seen:
+            continue
+        seen.add(norm)
+        if os.path.exists(norm):
+            return norm
+    return ""
 
 
 def get_pdf_font_family() -> str:
@@ -1599,8 +1711,8 @@ def get_pdf_font_family() -> str:
         return _PDF_FONT_FAMILY_CACHE
 
     # 1) Prefer user-provided font file for maximum compatibility
-    font_path = os.getenv("PDF_FONT_PATH", "").strip()
-    if font_path and os.path.exists(font_path):
+    font_path = resolve_pdf_font_path()
+    if font_path:
         font_name = os.getenv("PDF_FONT_NAME", "").strip() or "CustomPDF"
         try:
             pdfmetrics.registerFont(TTFont(font_name, font_path))
@@ -1623,14 +1735,27 @@ def get_pdf_font_family() -> str:
 
 
 def get_pdf_font_url() -> str:
-    """Return a file URL to the configured font if available."""
-    font_path = os.getenv("PDF_FONT_PATH", "").strip()
+    """Return a loadable font URL/data URI for HTML-to-PDF rendering."""
+    global _PDF_FONT_URL_CACHE
+    if _PDF_FONT_URL_CACHE:
+        return _PDF_FONT_URL_CACHE
+
+    font_path = resolve_pdf_font_path()
     if not font_path:
         return ""
+    try:
+        with open(font_path, "rb") as f:
+            encoded = base64.b64encode(f.read()).decode("ascii")
+        _PDF_FONT_URL_CACHE = f"data:font/ttf;base64,{encoded}"
+        return _PDF_FONT_URL_CACHE
+    except Exception as exc:
+        logger.warning(f"Failed to inline PDF font from {font_path}: {exc}")
+
+    # Fallback: Use file:// URL so Playwright can load local font when possible.
     if not os.path.isabs(font_path):
         font_path = os.path.abspath(font_path)
-    # Use file:// URL so Playwright can load local font
-    return f"file:///{font_path.replace(os.sep, '/')}"
+    _PDF_FONT_URL_CACHE = f"file:///{font_path.replace(os.sep, '/')}"
+    return _PDF_FONT_URL_CACHE
 
 def inject_font_css_into_html(html_content: str) -> str:
     if not html_content:
@@ -1884,22 +2009,6 @@ def generate_resume_html(resume_data):
   <meta charset="UTF-8">
   <title>{{ name }} - 简历</title>
     <style>
-      {% if pdf_font_url %}
-      @font-face {
-        font-family: 'CustomPDF';
-        src: url('{{ pdf_font_url }}') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      {% endif %}
-      {% if pdf_font_url %}
-      @font-face {
-        font-family: 'CustomPDF';
-        src: url('{{ pdf_font_url }}') format('truetype');
-        font-weight: normal;
-        font-style: normal;
-      }
-      {% endif %}
       {% if pdf_font_url %}
       @font-face {
         font-family: 'CustomPDF';
@@ -3498,7 +3607,7 @@ def parse_pdf():
         logger.error(f"Full traceback: {traceback.format_exc()}")
         return jsonify({'error': 'PDF 解析失败'}), 500
 
-@app.route('/api/ai/analyze', methods=['POST', 'OPTIONS'])
+@app.route('/api/ai/analyze', methods=['POST'])
 @token_required
 def analyze_resume(current_user_id):
     try:
@@ -3825,7 +3934,7 @@ def analyze_resume(current_user_id):
         logger.error(f"简历分析出错: {traceback.format_exc()}")
         return jsonify({'error': '服务器内部错误'}), 500
 
-@app.route('/api/ai/parse-screenshot', methods=['POST', 'OPTIONS'])
+@app.route('/api/ai/parse-screenshot', methods=['POST'])
 @token_required
 def parse_screenshot(current_user_id):
     try:
@@ -3892,7 +4001,7 @@ def parse_screenshot(current_user_id):
     except Exception as e:
         return jsonify({'error': '服务器内部错误'}), 500
 
-@app.route('/api/ai/chat', methods=['POST', 'OPTIONS'])
+@app.route('/api/ai/chat', methods=['POST'])
 @token_required
 def ai_chat(current_user_id):
     try:
@@ -4124,7 +4233,7 @@ def ai_chat(current_user_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 
-@app.route('/api/ai/transcribe', methods=['POST', 'OPTIONS'])
+@app.route('/api/ai/transcribe', methods=['POST'])
 @token_required
 def ai_transcribe(current_user_id):
     """
@@ -4363,7 +4472,7 @@ def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_ke
     merged = ''.join(parts).strip()
     return _finalize_summary_text(merged, max_len=200)
 
-@app.route('/api/ai/generate-resume', methods=['POST', 'OPTIONS'])
+@app.route('/api/ai/generate-resume', methods=['POST'])
 @token_required
 def generate_resume(current_user_id):
     try:
@@ -4529,18 +4638,15 @@ def generate_resume(current_user_id):
         return jsonify({'error': '服务器内部错误'}), 500
 
 
-def generate_enhanced_mock_chat_response(message, score, suggestions):
-    """当 AI 不可用时的增强版面试回复"""
+def generate_mock_chat_response(message, score, suggestions, enhanced=False):
+    """当 AI 不可用时的面试回复。enhanced=True 时使用更严格模板。"""
     if 'SYSTEM_START_INTERVIEW' in message or 'INTERVIEW_MODE' in message:
-        return "我是你的智能面试官，现在开始：请用 1 分钟介绍自己，并说明目标岗位方向。"
-
-    return "点评：表达清晰，但缺少量化结果。改进：补充指标数据。参考：我在 X 项目中将 Y 提升 Z%。下一题：请举例说明你解决关键问题的项目及结果。"
-
-
-def generate_mock_chat_response(message, score, suggestions):
-    """当 AI 不可用时的基础面试回复"""
-    if 'SYSTEM_START_INTERVIEW' in message or 'INTERVIEW_MODE' in message:
+        if enhanced:
+            return "我是你的智能面试官，现在开始：请用 1 分钟介绍自己，并说明目标岗位方向。"
         return "我是你的智能面试官，现在开始：请简要介绍自己，并说明为何适合该岗位。"
+
+    if enhanced:
+        return "点评：表达清晰，但缺少量化结果。改进：补充指标数据。参考：我在 X 项目中将 Y 提升 Z%。下一题：请举例说明你解决关键问题的项目及结果。"
 
     return "点评：结构尚可，但缺少背景与结果。改进：补充场景和成果。参考：当时……我……最终达成……。下一题：描述一次你处理冲突或分歧的经历，以及你如何推动结果。"
 

@@ -67,11 +67,17 @@ export const useSuggestionAcceptance = ({
   updateScore,
 }: Params) => {
   const acceptSuggestionQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const acceptingSuggestionIdsRef = useRef<Set<string>>(new Set());
 
   const handleAcceptSuggestionInChat = async (suggestion: Suggestion) => {
     acceptSuggestionQueueRef.current = acceptSuggestionQueueRef.current.then(async () => {
       try {
         if (!setResumeData || !resumeData) return;
+        const suggestionId = String((suggestion as any)?.id || '').trim();
+        if (!suggestionId) return;
+        if ((suggestion as any).status && (suggestion as any).status !== 'pending') return;
+        if (acceptingSuggestionIdsRef.current.has(suggestionId)) return;
+        acceptingSuggestionIdsRef.current.add(suggestionId);
 
         const { data: { user }, error: userError } = await supabase.auth.getUser();
         if (userError || !user) {
@@ -204,6 +210,9 @@ export const useSuggestionAcceptance = ({
       } catch (error) {
         console.error('Error in handleAcceptSuggestionInChat:', error);
         showToast(`采纳失败：${(error as any)?.message || '请稍后重试'}`, 'error');
+      } finally {
+        const suggestionId = String((suggestion as any)?.id || '').trim();
+        if (suggestionId) acceptingSuggestionIdsRef.current.delete(suggestionId);
       }
     }).catch((error) => {
       console.error('Error in accept suggestion queue:', error);
