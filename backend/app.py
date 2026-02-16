@@ -10,7 +10,7 @@ for _key in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_prox
     os.environ.pop(_key, None)
 from supabase import create_client, Client
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -32,6 +32,7 @@ from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 import logging
 import requests
+import threading
 import google.genai as genai
 from google.genai import types
 
@@ -92,6 +93,16 @@ def _delete_supabase_auth_user(user_id: str):
 
     raise RuntimeError(f"删除 Auth 用户失败(status={resp.status_code}): {payload}")
 
+
+AUTO_DELETION_SWEEP_ENABLED = (os.getenv('AUTO_DELETION_SWEEP_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on'))
+try:
+    AUTO_DELETION_SWEEP_INTERVAL_SECONDS = int(os.getenv('AUTO_DELETION_SWEEP_INTERVAL_SECONDS', '600'))
+except Exception:
+    AUTO_DELETION_SWEEP_INTERVAL_SECONDS = 600
+INTERNAL_CRON_TOKEN = (os.getenv('INTERNAL_CRON_TOKEN') or '').strip()
+_deletion_sweep_lock = threading.Lock()
+_last_deletion_sweep_at = 0.0
+
 # Debug: Log environment variable keys (NOT values) to verify injection
 env_keys = list(os.environ.keys())
 logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
@@ -117,6 +128,16 @@ def handle_options_request():
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Requested-With')
         response.headers.add('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS')
         return response
+
+    # Opportunistic low-frequency sweep for expired deletion requests.
+    # This keeps cleanup running even without external cron.
+    if AUTO_DELETION_SWEEP_ENABLED and request.path.startswith('/api/'):
+        # Avoid recursion for manual sweep endpoint.
+        if not request.path.startswith('/api/internal/sweep-expired-deletions'):
+            try:
+                run_expired_deletion_sweep(force=False, limit=200)
+            except Exception as sweep_err:
+                logger.warning(f"background deletion sweep failed: {sweep_err}")
 
 
 @app.after_request
@@ -300,6 +321,115 @@ def get_mock_resumes_for_user(user_id: str):
     if user_id not in mock_resumes:
         mock_resumes[user_id] = {}
     return mock_resumes[user_id]
+
+
+def _parse_iso_datetime(value: str):
+    s = str(value or '').strip()
+    if not s:
+        return None
+    # Accept both "...Z" and offset-less timestamps.
+    if s.endswith('Z'):
+        s = s[:-1] + '+00:00'
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _delete_user_everywhere(user_id: str, delete_auth: bool = True):
+    if is_mock_mode():
+        if user_id in mock_users:
+            del mock_users[user_id]
+        if user_id in mock_resumes:
+            del mock_resumes[user_id]
+        return {'profile_deleted': True, 'auth_deleted': True}
+
+    dependent_tables = [
+        ('ai_suggestion_feedback', 'user_id'),
+        ('feedback', 'user_id'),
+        ('resumes', 'user_id'),
+    ]
+    for table_name, user_col in dependent_tables:
+        try:
+            supabase.table(table_name).delete().eq(user_col, user_id).execute()
+        except Exception as dep_err:
+            logger.warning(f"user cleanup warning table={table_name} user={user_id}: {dep_err}")
+
+    profile_deleted = False
+    try:
+        result = supabase.table('users').delete().eq('id', user_id).execute()
+        profile_deleted = bool(result.data)
+    except Exception as profile_err:
+        logger.warning(f"user cleanup warning table=users user={user_id}: {profile_err}")
+
+    auth_deleted = True
+    if delete_auth:
+        _delete_supabase_auth_user(user_id)
+
+    return {'profile_deleted': profile_deleted, 'auth_deleted': auth_deleted}
+
+
+def run_expired_deletion_sweep(force: bool = False, limit: int = 200):
+    global _last_deletion_sweep_at
+    now_ts = datetime.now(timezone.utc).timestamp()
+
+    with _deletion_sweep_lock:
+        if (
+            not force
+            and AUTO_DELETION_SWEEP_INTERVAL_SECONDS > 0
+            and (now_ts - _last_deletion_sweep_at) < AUTO_DELETION_SWEEP_INTERVAL_SECONDS
+        ):
+            return {'ran': False, 'reason': 'throttled', 'deleted': 0, 'candidates': 0}
+        _last_deletion_sweep_at = now_ts
+
+    deleted = 0
+    candidates = 0
+
+    if is_mock_mode():
+        due_ids = []
+        now_dt = datetime.now(timezone.utc)
+        for uid, user in list(mock_users.items()):
+            due_raw = user.get('deletion_pending_until')
+            try:
+                due_dt = _parse_iso_datetime(due_raw) if due_raw else None
+            except Exception:
+                due_dt = None
+            if due_dt and due_dt <= now_dt:
+                due_ids.append(uid)
+        candidates = len(due_ids)
+        for uid in due_ids[: max(1, limit)]:
+            _delete_user_everywhere(uid, delete_auth=False)
+            deleted += 1
+        return {'ran': True, 'deleted': deleted, 'candidates': candidates}
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    try:
+        result = (
+            supabase.table('users')
+            .select('id,deletion_pending_until')
+            .lte('deletion_pending_until', now_iso)
+            .limit(limit)
+            .execute()
+        )
+    except Exception as query_err:
+        if _is_missing_deletion_column_error(query_err):
+            logger.warning("deletion sweep skipped: users.deletion_pending_until column missing")
+            return {'ran': True, 'deleted': 0, 'candidates': 0, 'warning': 'missing_deletion_pending_until_column'}
+        raise
+
+    rows = result.data or []
+    candidates = len(rows)
+    for row in rows:
+        uid = row.get('id')
+        if not uid:
+            continue
+        try:
+            _delete_user_everywhere(uid, delete_auth=True)
+            deleted += 1
+        except Exception as del_err:
+            logger.exception(f"deletion sweep failed for user={uid}: {del_err}")
+
+    return {'ran': True, 'deleted': deleted, 'candidates': candidates}
 
 def generate_embedding(text):
     """使用 Gemini 生成文本向量"""
@@ -1182,40 +1312,39 @@ def cancel_deletion(current_user_id):
 @token_required
 def delete_account_immediate(current_user_id):
     try:
-        # Immediate deletion of all data
-        if is_mock_mode():
-            if current_user_id in mock_users: del mock_users[current_user_id]
-            if current_user_id in mock_resumes: del mock_resumes[current_user_id]
-            result = mock_supabase_response(data=[{'id': current_user_id}])
-        else:
-            # Best-effort cleanup of dependent rows before deleting user.
-            dependent_tables = [
-                ('ai_suggestion_feedback', 'user_id'),
-                ('feedback', 'user_id'),
-                ('resumes', 'user_id'),
-            ]
-            for table_name, user_col in dependent_tables:
-                try:
-                    supabase.table(table_name).delete().eq(user_col, current_user_id).execute()
-                except Exception as dep_err:
-                    logger.warning(
-                        f"delete_account_immediate cleanup warning table={table_name} user={current_user_id}: {dep_err}"
-                    )
-
-            # Delete user profile row
-            result = supabase.table('users').delete().eq('id', current_user_id).execute()
-            if not result.data:
-                logger.warning(f"delete_account_immediate: no profile row deleted for user={current_user_id}")
-
-            # Crucial: delete Supabase Auth user as well; otherwise email remains occupied.
-            _delete_supabase_auth_user(current_user_id)
-            
-        if result.data or not is_mock_mode():
-            return jsonify({'message': '账号已立即永久注销'}), 200
-        return jsonify({'error': '操作失败'}), 500
+        _delete_user_everywhere(current_user_id, delete_auth=True)
+        return jsonify({'message': '账号已立即永久注销'}), 200
     except Exception as e:
         logger.exception(f"delete_account_immediate failed for user={current_user_id}")
         return jsonify({'error': f'立即注销失败：{str(e)}'}), 500
+
+
+@app.route('/api/internal/sweep-expired-deletions', methods=['POST'])
+def sweep_expired_deletions():
+    """
+    Internal maintenance endpoint (for cron):
+    Deletes users whose deletion_pending_until has expired.
+    Protect with INTERNAL_CRON_TOKEN.
+    """
+    try:
+        if not INTERNAL_CRON_TOKEN:
+            return jsonify({'error': 'INTERNAL_CRON_TOKEN 未配置'}), 503
+
+        token = (
+            (request.headers.get('X-Internal-Token') or '').strip()
+            or request.headers.get('Authorization', '').replace('Bearer', '').strip()
+        )
+        if token != INTERNAL_CRON_TOKEN:
+            return jsonify({'error': 'Unauthorized'}), 401
+
+        result = run_expired_deletion_sweep(force=True, limit=500)
+        return jsonify({
+            'message': 'Sweep completed',
+            **result
+        }), 200
+    except Exception as e:
+        logger.exception(f"sweep_expired_deletions failed: {e}")
+        return jsonify({'error': f'sweep failed: {str(e)}'}), 500
 
 @app.route('/api/user/profile', methods=['PUT'])
 @token_required

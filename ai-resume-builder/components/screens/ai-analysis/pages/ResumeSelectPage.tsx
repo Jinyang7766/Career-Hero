@@ -102,7 +102,13 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
       <main className="flex-1 overflow-y-auto pb-32 no-scrollbar">
         <div className="flex flex-col gap-2">
-          {filtered.length === 0 && (
+          {allResumes && allResumes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
+              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
+              <p className="text-slate-900 dark:text-white font-medium mb-1">简历库中还没有简历</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">请先回首页新建一份简历吧</p>
+            </div>
+          ) : filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">search_off</span>
               <p className="text-slate-900 dark:text-white font-medium mb-1">未找到相关简历</p>
