@@ -58,9 +58,6 @@ export const useAiAnalysisLifecycle = ({
   ]);
 
   useEffect(() => {
-    const currentPath = (locationPathname || '').toLowerCase();
-    if (!currentPath.startsWith('/ai-analysis')) return;
-
     localStorage.setItem('ai_analysis_step', currentStep);
     if (currentStep !== 'resume_select') {
       localStorage.setItem('ai_analysis_has_activity', '1');
