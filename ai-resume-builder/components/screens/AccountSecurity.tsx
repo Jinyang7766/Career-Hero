@@ -12,6 +12,11 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
   const { userProfile } = useUserProfile();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
 
   const email = currentUser?.email || userProfile?.email || '';
   const phone = userProfile?.phone || '';
@@ -61,6 +66,48 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
     }
   };
 
+  const resetPasswordModalState = () => {
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setIsUpdatingPassword(false);
+  };
+
+  const handleUpdatePassword = async () => {
+    const pwd = newPassword.trim();
+    const confirm = confirmPassword.trim();
+
+    if (!pwd || !confirm) {
+      setPasswordError('请填写完整的新密码信息');
+      return;
+    }
+    if (pwd.length < 8) {
+      setPasswordError('新密码至少需要 8 位');
+      return;
+    }
+    if (pwd !== confirm) {
+      setPasswordError('两次输入的新密码不一致');
+      return;
+    }
+
+    setPasswordError('');
+    setIsUpdatingPassword(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwd });
+      if (error) {
+        throw new Error(error.message || '更新失败');
+      }
+      alert('密码修改成功，请使用新密码登录');
+      setShowPasswordModal(false);
+      resetPasswordModalState();
+    } catch (err) {
+      console.error('Update password error:', err);
+      setPasswordError(`修改密码失败：${err instanceof Error ? err.message : '请稍后重试'}`);
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+  };
+
   return (
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
@@ -80,7 +127,13 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
         <div className="mt-4 px-4">
           <h3 className="ml-4 mb-2 text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">登录与安全</h3>
           <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-sm border border-gray-100 dark:border-white/5 divide-y divide-gray-100 dark:divide-white/5">
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group">
+            <button
+              onClick={() => {
+                resetPasswordModalState();
+                setShowPasswordModal(true);
+              }}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-gray-50 dark:active:bg-white/5 transition-colors group"
+            >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/5 dark:bg-primary/10 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">lock_reset</span>
@@ -163,6 +216,71 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
             </p>
           </div>
         </div>
+
+        {/* Update Password Modal */}
+        {showPasswordModal && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in duration-300">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => {
+                if (isUpdatingPassword) return;
+                setShowPasswordModal(false);
+                resetPasswordModalState();
+              }}
+            />
+            <div className="relative w-full max-w-md bg-white dark:bg-[#1c1c1e] rounded-t-[32px] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-500">
+              <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">修改密码</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">请输入新的登录密码（至少 8 位）。</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-slate-500 dark:text-slate-400">新密码</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="请输入新密码"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-4 py-3 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500 dark:text-slate-400">确认新密码</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="请再次输入新密码"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-4 py-3 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                {passwordError && (
+                  <p className="text-sm text-red-500">{passwordError}</p>
+                )}
+              </div>
+
+              <div className="mt-8 space-y-3">
+                <button
+                  disabled={isUpdatingPassword}
+                  onClick={handleUpdatePassword}
+                  className="w-full rounded-2xl bg-primary text-white py-3.5 font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+                >
+                  {isUpdatingPassword ? '提交中...' : '确认修改'}
+                </button>
+                <button
+                  disabled={isUpdatingPassword}
+                  onClick={() => {
+                    setShowPasswordModal(false);
+                    resetPasswordModalState();
+                  }}
+                  className="w-full rounded-2xl bg-black/10 dark:bg-white/10 text-slate-700 dark:text-slate-200 py-3.5 font-bold hover:opacity-90 active:scale-[0.98] transition-all"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Delete Confirmation Modal */}
         {showDeleteConfirm && (

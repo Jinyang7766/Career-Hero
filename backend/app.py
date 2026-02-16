@@ -10,7 +10,7 @@ for _key in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_prox
     os.environ.pop(_key, None)
 from supabase import create_client, Client
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 import jwt
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1050,7 +1050,6 @@ def get_profile(current_user_id):
 @token_required
 def request_deletion(current_user_id):
     try:
-        from datetime import timedelta
         # Default to 3 days grace period
         deletion_until = (datetime.utcnow() + timedelta(days=3)).isoformat()
         
@@ -1067,13 +1066,24 @@ def request_deletion(current_user_id):
             user['deletion_pending_until'] = deletion_until
             result = mock_supabase_response(data=[user])
         else:
-            result = supabase.table('users').update({'deletion_pending_until': deletion_until}).eq('id', current_user_id).execute()
+            update_payload = {
+                'deletion_pending_until': deletion_until,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            result = supabase.table('users').update(update_payload).eq('id', current_user_id).execute()
+            # Fallback: user row may not exist yet; create/update via upsert.
+            if not result.data:
+                result = supabase.table('users').upsert(
+                    {'id': current_user_id, **update_payload},
+                    on_conflict='id'
+                ).execute()
             
         if result.data:
             return jsonify({'message': '已申请注销，账号将在3天后清除', 'deletion_pending_until': deletion_until}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
-        return jsonify({'error': '服务器内部错误'}), 500
+        logger.exception(f"request_deletion failed for user={current_user_id}")
+        return jsonify({'error': f'注销操作失败：{str(e)}'}), 500
 
 @app.route('/api/user/cancel-deletion', methods=['POST'])
 @token_required
@@ -1092,13 +1102,23 @@ def cancel_deletion(current_user_id):
             user['deletion_pending_until'] = None
             result = mock_supabase_response(data=[user])
         else:
-            result = supabase.table('users').update({'deletion_pending_until': None}).eq('id', current_user_id).execute()
+            update_payload = {
+                'deletion_pending_until': None,
+                'updated_at': datetime.utcnow().isoformat()
+            }
+            result = supabase.table('users').update(update_payload).eq('id', current_user_id).execute()
+            if not result.data:
+                result = supabase.table('users').upsert(
+                    {'id': current_user_id, **update_payload},
+                    on_conflict='id'
+                ).execute()
             
         if result.data:
             return jsonify({'message': '已撤销注销申请'}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
-        return jsonify({'error': '服务器内部错误'}), 500
+        logger.exception(f"cancel_deletion failed for user={current_user_id}")
+        return jsonify({'error': f'撤销注销失败：{str(e)}'}), 500
 
 @app.route('/api/user/delete-account-immediate', methods=['POST'])
 @token_required
@@ -1110,16 +1130,29 @@ def delete_account_immediate(current_user_id):
             if current_user_id in mock_resumes: del mock_resumes[current_user_id]
             result = mock_supabase_response(data=[{'id': current_user_id}])
         else:
-            # Delete resumes first (if not cascading)
-            supabase.table('resumes').delete().eq('user_id', current_user_id).execute()
-            # Delete user
+            # Best-effort cleanup of dependent rows before deleting user.
+            dependent_tables = [
+                ('ai_suggestion_feedback', 'user_id'),
+                ('feedback', 'user_id'),
+                ('resumes', 'user_id'),
+            ]
+            for table_name, user_col in dependent_tables:
+                try:
+                    supabase.table(table_name).delete().eq(user_col, current_user_id).execute()
+                except Exception as dep_err:
+                    logger.warning(
+                        f"delete_account_immediate cleanup warning table={table_name} user={current_user_id}: {dep_err}"
+                    )
+
+            # Delete user profile row
             result = supabase.table('users').delete().eq('id', current_user_id).execute()
             
         if result.data:
             return jsonify({'message': '账号已立即永久注销'}), 200
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
-        return jsonify({'error': '服务器内部错误'}), 500
+        logger.exception(f"delete_account_immediate failed for user={current_user_id}")
+        return jsonify({'error': f'立即注销失败：{str(e)}'}), 500
 
 @app.route('/api/user/profile', methods=['PUT'])
 @token_required
