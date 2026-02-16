@@ -8,7 +8,7 @@ import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
-  const { logout, goBack, currentUser } = useAppContext();
+  const { logout, goBack, currentUser, navigateToView } = useAppContext();
   const { userProfile } = useUserProfile();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -56,7 +56,14 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
       }
 
       alert(payload?.message || (immediate ? '账号已立即注销' : '已提交注销申请'));
-      logout();
+      if (immediate) {
+        logout({ skipConfirm: true });
+      } else {
+        if (currentUser) {
+          currentUser.deletion_pending_until = payload?.deletion_pending_until || null;
+        }
+        navigateToView(View.DELETION_PENDING, { replace: true });
+      }
     } catch (err) {
       console.error('Delete account error:', err);
       alert(`注销操作失败：${err instanceof Error ? err.message : '请稍后重试'}`);

@@ -353,10 +353,12 @@ function App() {
     navigate(viewToPath(View.DASHBOARD), { replace: true });
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async (opts?: { skipConfirm?: boolean }) => {
     if (isLoggingOut) return;
-    const ok = await confirmAsync('确定要退出登录吗？');
-    if (!ok) return;
+    if (!opts?.skipConfirm) {
+      const ok = await confirmAsync('确定要退出登录吗？');
+      if (!ok) return;
+    }
 
     setIsLoggingOut(true);
     void (async () => {

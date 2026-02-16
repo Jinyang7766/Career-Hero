@@ -102,7 +102,7 @@ const Login: React.FC<ScreenProps> = () => {
                   autoComplete="email"
                   required
                   className="block w-full rounded-xl border-0 bg-white dark:bg-white/5 py-3.5 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all"
-                  placeholder="请输入邮箱 (例如: name@example.com)"
+                  placeholder="name@example.com"
                 />
               </div>
             </div>

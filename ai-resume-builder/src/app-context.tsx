@@ -23,7 +23,7 @@ export type AppContextValue = {
   goBack: () => void;
 
   login: (userData?: any) => void;
-  logout: () => void;
+  logout: (opts?: { skipConfirm?: boolean }) => void;
 };
 
 const AppContext = createContext<AppContextValue | null>(null);
