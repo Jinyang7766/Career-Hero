@@ -18,6 +18,7 @@ export type ReportPageProps = {
   getDisplayOriginalValue: (s: any) => React.ReactNode;
   persistSuggestionFeedback: (suggestion: any, rating: 'up' | 'down') => void;
   handleAcceptSuggestionInChat: (suggestion: any) => void;
+  acceptingSuggestionIds?: Set<string>;
   handleAnalyzeOtherResume: () => void;
   handleExportPDF: () => void;
   openChat: (source: 'internal' | 'preview') => void;
@@ -42,6 +43,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
     getDisplayOriginalValue,
     persistSuggestionFeedback,
     handleAcceptSuggestionInChat,
+    acceptingSuggestionIds,
     handleAnalyzeOtherResume,
     handleExportPDF,
     openChat,
@@ -304,11 +306,24 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
                       </button>
                       <button
                         onClick={() => handleAcceptSuggestionInChat(suggestion)}
-                        className="px-4 py-2 text-xs bg-primary hover:bg-blue-600 text-white font-bold rounded-lg shadow-sm shadow-blue-500/20 active:scale-95 transition-all flex items-center gap-1.5 whitespace-nowrap"
+                        disabled={acceptingSuggestionIds?.has(String(suggestion.id))}
+                        className={`px-4 py-2 text-xs font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap active:scale-95 ${acceptingSuggestionIds?.has(String(suggestion.id))
+                          ? 'bg-slate-200 dark:bg-white/10 text-slate-400 cursor-not-allowed'
+                          : 'bg-primary hover:bg-blue-600 text-white shadow-blue-500/20'
+                          }`}
                         type="button"
                       >
-                        <span className="material-symbols-outlined text-[16px]">check</span>
-                        采纳优化
+                        {acceptingSuggestionIds?.has(String(suggestion.id)) ? (
+                          <>
+                            <span className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></span>
+                            采纳中...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[16px]">check</span>
+                            采纳优化
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

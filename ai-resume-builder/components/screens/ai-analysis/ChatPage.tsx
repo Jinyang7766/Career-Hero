@@ -128,9 +128,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
         <button
           type="button"
-          disabled={isRecording}
+          disabled={isRecording || isSending}
           onClick={() => {
-            if (isRecording) return;
+            if (isRecording || isSending) return;
+            const confirmed = window.confirm('确认结束面试并生成总结吗？');
+            if (!confirmed) return;
             try {
               onEndInterview();
             } catch {

@@ -54,6 +54,8 @@ export const useInterviewChat = ({
 }: Params) => {
   const [isSending, setIsSending] = useState(false);
   const sendingCountRef = useRef(0);
+  const endingInterviewRef = useRef(false);
+  const interviewEndedRef = useRef(false);
 
   const beginSending = () => {
     sendingCountRef.current += 1;
@@ -120,6 +122,8 @@ export const useInterviewChat = ({
   ) => {
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
+    const isEndCommand = currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend);
+    if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
     if (!hasText && !hasAudio) return;
@@ -152,7 +156,8 @@ export const useInterviewChat = ({
     beginSending();
 
     try {
-      if (!opts?.skipAddUserMessage && currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend)) {
+      if (!opts?.skipAddUserMessage && isEndCommand) {
+        endingInterviewRef.current = true;
         const summaryRaw = await generateInterviewSummary(baseMessages);
         const summary = stripMarkdownTableSeparators(summaryRaw);
         const aiMessage: ChatMessage = {
@@ -164,6 +169,7 @@ export const useInterviewChat = ({
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
+        interviewEndedRef.current = true;
         return;
       }
 
@@ -273,6 +279,9 @@ export const useInterviewChat = ({
       }
       alert('AI 连接暂时中断');
     } finally {
+      if (isEndCommand) {
+        endingInterviewRef.current = false;
+      }
       endSending();
     }
   };

@@ -314,7 +314,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const updateScore = (points: number) => {
     setScore(prev => Math.min(prev + points, 100));
   };
-  const { handleAcceptSuggestionInChat } = useSuggestionAcceptance({
+  const { handleAcceptSuggestionInChat, acceptingSuggestionIds } = useSuggestionAcceptance({
     resumeData,
     setResumeData: setResumeData as any,
     suggestions: suggestions as any,
@@ -541,6 +541,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         getDisplayOriginalValue={getDisplayOriginalValueOf}
         persistSuggestionFeedback={persistSuggestionFeedback as any}
         handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
+        acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
         openChat={openChat}
@@ -564,6 +565,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         getDisplayOriginalValue={getDisplayOriginalValueOf}
         persistSuggestionFeedback={persistSuggestionFeedback as any}
         handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
+        acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
         openChat={openChat}
