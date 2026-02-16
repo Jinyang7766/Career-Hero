@@ -405,8 +405,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setCurrentStep,
     selectedResumeId,
     resumeData,
-    navigate,
-    locationPathname: location.pathname,
   });
 
 
@@ -629,6 +627,5 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 };
 
 export default AiAnalysis;
-
 
 

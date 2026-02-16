@@ -11,8 +11,6 @@ type Params = {
   setCurrentStep: (v: any) => void;
   selectedResumeId: string | number | null;
   resumeData: any;
-  navigate: (to: string, options?: { replace?: boolean }) => void;
-  locationPathname: string;
 };
 
 export const useAiAnalysisLifecycle = ({
@@ -26,8 +24,6 @@ export const useAiAnalysisLifecycle = ({
   setCurrentStep,
   selectedResumeId,
   resumeData,
-  navigate,
-  locationPathname,
 }: Params) => {
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -62,31 +58,5 @@ export const useAiAnalysisLifecycle = ({
     if (currentStep !== 'resume_select') {
       localStorage.setItem('ai_analysis_has_activity', '1');
     }
-
-    try {
-      const base = '/ai-analysis';
-      const resumeIdHint =
-        (localStorage.getItem('ai_analysis_resume_id') || '').trim() ||
-        (selectedResumeId !== null && selectedResumeId !== undefined ? String(selectedResumeId) : '').trim() ||
-        (resumeData && resumeData.id ? String(resumeData.id) : '').trim();
-
-      const targetPath = (() => {
-        switch (currentStep) {
-          case 'resume_select': return base;
-          case 'jd_input': return `${base}/jd`;
-          case 'analyzing': return `${base}/analyzing`;
-          case 'chat': return `${base}/chat`;
-          case 'comparison': return resumeIdHint ? `${base}/comparison/${encodeURIComponent(resumeIdHint)}` : `${base}/comparison`;
-          case 'report': return resumeIdHint ? `${base}/report/${encodeURIComponent(resumeIdHint)}` : `${base}/report`;
-          default: return base;
-        }
-      })();
-
-      if (locationPathname !== targetPath) {
-        navigate(targetPath, { replace: true });
-      }
-    } catch {
-      // ignore URL sync errors
-    }
-  }, [currentStep, selectedResumeId, resumeData, navigate, locationPathname]);
+  }, [currentStep, selectedResumeId, resumeData]);
 };
