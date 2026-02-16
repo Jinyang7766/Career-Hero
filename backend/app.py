@@ -1522,12 +1522,8 @@ def export_pdf():
         logger.info("Starting PDF generation with Playwright")
         
         # Generate HTML for PDF.
-        # Default to backend template for deterministic font/layout behavior in headless export.
-        # Frontend-built html may contain icon-font classes (e.g. material-symbols) unavailable on server.
-        use_client_html = (os.getenv('PDF_USE_CLIENT_HTML', '0').strip().lower() in ('1', 'true', 'yes', 'on'))
-        html_content = data.get('htmlContent') if use_client_html else None
-        if not html_content:
-            html_content = generate_resume_html(resume_data)
+        # Always use backend template to avoid drift with frontend icon-font/runtime CSS.
+        html_content = generate_resume_html(resume_data)
         # Always inject font CSS so all templates (modern/classic/minimal)
         # share the same reliable font-loading path.
         html_content = inject_font_css_into_html(html_content)
@@ -1748,7 +1744,14 @@ def clean_text_for_pdf(text):
         '–': '-',
         '—': '--',
         '…': '...',
+        '•': '·',
+        '▪': '·',
+        '◦': '·',
+        '●': '·',
     }
+
+    # Unicode normalization first to reduce compatibility noise.
+    text = unicodedata.normalize('NFKC', text)
 
     for old, new in replacements.items():
         text = text.replace(old, new)
@@ -1762,7 +1765,10 @@ def clean_text_for_pdf(text):
         if cp < 32 or (0x7F <= cp <= 0x9F):
             return True
         # Remove replacement char and common zero-width / BOM.
-        if cp in (0xFFFD, 0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF):
+        if cp in (
+            0xFFFD, 0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF,  # zero-width / replacement
+            0x00A0, 0x1680, 0x180E, 0x202F, 0x205F, 0x3000    # NBSP and special spaces
+        ):
             return True
         # Remove variation selectors.
         if 0xFE00 <= cp <= 0xFE0F or 0xE0100 <= cp <= 0xE01EF:
@@ -1771,9 +1777,21 @@ def clean_text_for_pdf(text):
         cat = unicodedata.category(ch)
         if cat in ('Co', 'Cs', 'Cn', 'Cf'):
             return True
+        # Drop non-ASCII symbols that often render as tofu in PDF fonts.
+        if cp > 127 and cat in ('So', 'Sk', 'Sm'):
+            return True
         return False
 
+    # Normalize all unicode spaces to regular spaces before filtering.
+    text = ''.join(
+        (' ' if (unicodedata.category(ch) == 'Zs' and ch not in '\n\r\t') else ch)
+        for ch in text
+    )
     text = ''.join(char for char in text if not _is_bad_char(char))
+    # Collapse duplicated spaces but keep line breaks.
+    text = re.sub(r'[ \t]+', ' ', text)
+    text = re.sub(r' *\n *', '\n', text)
+    text = text.strip()
 
     return text
 
@@ -1920,7 +1938,7 @@ def inject_font_css_into_html(html_content: str) -> str:
 
 def is_safe_external_url(url: str) -> bool:
     try:
-        parsed = urllib.parse.urlparse(url)
+        parsed = urlparse(url)
         if parsed.scheme not in ('http', 'https'):
             return False
         host = parsed.hostname
@@ -1956,11 +1974,23 @@ def normalize_avatar_data(avatar_url: str) -> str:
         if not is_safe_external_url(avatar_url):
             return ''
         try:
-            with urllib.request.urlopen(avatar_url, timeout=3) as response:
-                content_type = response.headers.get('Content-Type', 'image/png')
-                data = response.read(2 * 1024 * 1024)
-                encoded = base64.b64encode(data).decode('utf-8')
-                return f"data:{content_type};base64,{encoded}"
+            resp = requests.get(
+                avatar_url,
+                timeout=3,
+                stream=True,
+                allow_redirects=False,
+                headers={'User-Agent': 'CareerHeroPDF/1.0'}
+            )
+            if resp.status_code != 200:
+                return ''
+            content_type = (resp.headers.get('Content-Type') or 'image/png').split(';')[0].strip().lower()
+            if not content_type.startswith('image/'):
+                return ''
+            data = resp.content[: 2 * 1024 * 1024]
+            if not data:
+                return ''
+            encoded = base64.b64encode(data).decode('utf-8')
+            return f"data:{content_type};base64,{encoded}"
         except Exception:
             return ''
     return ''
@@ -2158,7 +2188,8 @@ def generate_resume_html(resume_data):
         margin: 0;
         padding: 0;
         width: 100%;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       * {
@@ -2218,11 +2249,7 @@ def generate_resume_html(resume_data):
         width: 58px;
         height: 58px;
         transform: translate(-50%, -50%);
-        fill: none;
-        stroke: #90a0b7;
-        stroke-width: 2.8;
-        stroke-linecap: round;
-        stroke-linejoin: round;
+        fill: #90a0b7;
       }
     .header-name { 
       font-size: 16pt; 
@@ -2237,7 +2264,8 @@ def generate_resume_html(resume_data):
       .header-contact { 
         font-size: 9pt; 
         color: #6b7280; 
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       .section { 
@@ -2284,7 +2312,8 @@ def generate_resume_html(resume_data):
         font-size: 9pt; 
         color: #4b5563; 
         margin-top: 2px;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
     .skills { 
@@ -2311,9 +2340,8 @@ def generate_resume_html(resume_data):
           <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
           <div class="avatar-placeholder">
-            <svg viewBox="0 0 64 64" aria-hidden="true">
-              <circle cx="32" cy="22" r="12"></circle>
-              <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
             </svg>
           </div>
         {% endif %}
@@ -2419,7 +2447,8 @@ def generate_resume_html(resume_data):
         margin: 0;
         padding: 0;
         width: 100%;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       * {
@@ -2455,7 +2484,7 @@ def generate_resume_html(resume_data):
         width: 56px;
         height: 56px;
         transform: translate(-50%, -50%);
-        fill: #4b5563;
+        fill: #90a0b7;
       }
     .name { 
       font-size: 18pt; 
@@ -2470,7 +2499,8 @@ def generate_resume_html(resume_data):
         font-size: 9pt; 
         color: #4b5563; 
         margin-top: 5px; 
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       .section { 
@@ -2507,7 +2537,8 @@ def generate_resume_html(resume_data):
       .item-desc { 
         font-size: 9pt; 
         margin-top: 2px;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
   </style>
@@ -2519,9 +2550,8 @@ def generate_resume_html(resume_data):
       <img class="avatar" src="{{ avatar }}" alt="avatar" />
       {% else %}
         <div class="avatar-placeholder">
-          <svg viewBox="0 0 64 64" aria-hidden="true">
-            <circle cx="32" cy="22" r="12"></circle>
-            <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
           </svg>
         </div>
       {% endif %}
@@ -2612,7 +2642,8 @@ def generate_resume_html(resume_data):
         margin: 0;
         padding: 0;
         width: 100%;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       * {
@@ -2659,7 +2690,7 @@ def generate_resume_html(resume_data):
         width: 48px;
         height: 48px;
         transform: translate(-50%, -50%);
-        fill: #6b7280;
+        fill: #90a0b7;
       }
     .name { 
       font-size: 20pt; 
@@ -2674,7 +2705,8 @@ def generate_resume_html(resume_data):
       .contact { 
         font-size: 9pt; 
         color: #9ca3af; 
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       .section { 
@@ -2703,7 +2735,8 @@ def generate_resume_html(resume_data):
         font-size: 9pt; 
         color: #374151; 
         margin-top: 2px;
-        word-break: break-all;
+        word-break: normal;
+        overflow-wrap: anywhere;
         word-wrap: break-word;
       }
       .skills span { 
@@ -2725,9 +2758,8 @@ def generate_resume_html(resume_data):
               <img class="avatar" src="{{ avatar }}" alt="avatar" />
         {% else %}
           <div class="avatar-placeholder">
-            <svg viewBox="0 0 64 64" aria-hidden="true">
-              <circle cx="32" cy="22" r="12"></circle>
-              <path d="M10 58c4-12 16-20 22-20s18 8 22 20"></path>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
             </svg>
           </div>
         {% endif %}

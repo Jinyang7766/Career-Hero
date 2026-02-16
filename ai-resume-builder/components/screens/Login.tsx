@@ -189,15 +189,12 @@ const Login: React.FC<ScreenProps> = () => {
               </form>
 
               <div className="mt-10">
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-slate-200 dark:border-white/10" />
-                  </div>
-                  <div className="relative flex justify-center text-xs uppercase tracking-widest font-bold text-slate-400">
-                    <span className="bg-transparent px-4">
-                      其他方式
-                    </span>
-                  </div>
+                <div className="flex items-center gap-4">
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                  <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-slate-400 shrink-0 whitespace-nowrap">
+                    其他方式
+                  </span>
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
                 </div>
 
                 <div className="mt-8 grid grid-cols-2 gap-4">
