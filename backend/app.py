@@ -2051,7 +2051,7 @@ def build_resume_context(resume_data):
     for proj in resume_data.get('projects', []) or []:
         title_text = proj.get('title') or '未填写项目名称'
         subtitle_text = proj.get('role') or proj.get('subtitle') or '项目角色'
-        date_text = proj.get('date') or '时间不详'
+        date_text = normalize_date_range(proj.get('startDate', ''), proj.get('endDate', '')) or proj.get('date') or '时间不详'
         projects.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
@@ -2215,10 +2215,14 @@ def generate_resume_html(resume_data):
         position: absolute;
         top: 50%;
         left: 50%;
-        width: 56px;
-        height: 56px;
+        width: 58px;
+        height: 58px;
         transform: translate(-50%, -50%);
-        fill: #6b7280;
+        fill: none;
+        stroke: #90a0b7;
+        stroke-width: 2.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
       }
     .header-name { 
       font-size: 16pt; 
@@ -2254,6 +2258,10 @@ def generate_resume_html(resume_data):
       }
     .item-header {
       width: 100%;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
     }
     .item-title { 
       font-size: 10pt; 
@@ -2268,6 +2276,9 @@ def generate_resume_html(resume_data):
     .item-date { 
       font-size: 8pt; 
       color: #6b7280; 
+      white-space: nowrap;
+      flex: 0 0 auto;
+      text-align: right;
     }
       .item-desc { 
         font-size: 9pt; 
@@ -2314,7 +2325,7 @@ def generate_resume_html(resume_data):
           {% if gender or age %}
             {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
           {% endif %}
-          {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+          {{ email }} | {{ phone }}
         </div>
       </td>
     </tr>
@@ -2332,8 +2343,11 @@ def generate_resume_html(resume_data):
       <div class="section-title">工作经历</div>
       {% for exp in work_exps %}
         <div class="item">
-          <div class="item-title">{{ exp.title }}{% if exp.subtitle %} - {{ exp.subtitle }}{% endif %}</div>
-          <div class="item-date">{{ exp.date }}</div>
+          <div class="item-header">
+            <div class="item-title">{{ exp.title }}</div>
+            <div class="item-date">{{ exp.date }}</div>
+          </div>
+          {% if exp.subtitle %}<div class="item-subtitle">{{ exp.subtitle }}</div>{% endif %}
           <div class="item-desc">{{ exp.description }}</div>
         </div>
       {% endfor %}
@@ -2345,9 +2359,11 @@ def generate_resume_html(resume_data):
         <div class="section-title">教育背景</div>
       {% for edu in educations %}
         <div class="item">
-          <div class="item-title">{{ edu.title }}</div>
+          <div class="item-header">
+            <div class="item-title">{{ edu.title }}</div>
+            <div class="item-date">{{ edu.date }}</div>
+          </div>
           <div class="item-subtitle">{{ edu.subtitle }}</div>
-          <div class="item-date">{{ edu.date }}</div>
         </div>
       {% endfor %}
     </div>
@@ -2358,8 +2374,11 @@ def generate_resume_html(resume_data):
       <div class="section-title">项目经历</div>
       {% for proj in projects %}
         <div class="item">
-          <div class="item-title">{{ proj.title }}{% if proj.subtitle %} - {{ proj.subtitle }}{% endif %}</div>
-          <div class="item-date">{{ proj.date }}</div>
+          <div class="item-header">
+            <div class="item-title">{{ proj.title }}</div>
+            <div class="item-date">{{ proj.date }}</div>
+          </div>
+          {% if proj.subtitle %}<div class="item-subtitle">{{ proj.subtitle }}</div>{% endif %}
           <div class="item-desc">{{ proj.description }}</div>
         </div>
       {% endfor %}
@@ -2512,7 +2531,7 @@ def generate_resume_html(resume_data):
       {% if gender or age %}
         {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
       {% endif %}
-      {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+      {{ email }} | {{ phone }}
     </div>
   </div>
 
@@ -2720,7 +2739,7 @@ def generate_resume_html(resume_data):
               {% if gender or age %}
                 {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
               {% endif %}
-              {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+              {{ email }} | {{ phone }}
             </div>
           </td>
         </tr>
