@@ -18,6 +18,8 @@ export type ChatPageProps = {
   chatMessages: ChatMessage[];
   isSending: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
+  messagesContainerRef: React.RefObject<HTMLDivElement | null>;
+  onMessagesScroll: () => void;
 
   expandedReferences: Record<string, boolean>;
   setExpandedReferences: React.Dispatch<React.SetStateAction<Record<string, boolean>>>;
@@ -66,6 +68,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
   chatMessages,
   isSending,
   messagesEndRef,
+  messagesContainerRef,
+  onMessagesScroll,
   expandedReferences,
   setExpandedReferences,
   parseReferenceReply,
@@ -141,6 +145,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
       </div>
 
       <div
+        ref={messagesContainerRef}
+        onScroll={onMessagesScroll}
         className="flex-1 overflow-y-auto p-4 space-y-5 bg-slate-50 dark:bg-[#0b1219]"
         style={{
           paddingBottom: `${Math.max(100, inputBarHeight + 20) + keyboardOffset}px`,

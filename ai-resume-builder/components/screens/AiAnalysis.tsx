@@ -11,6 +11,20 @@ import { useAppContext } from '../../src/app-context';
 import ResumeSelectPage from './ai-analysis/pages/ResumeSelectPage';
 import JdInputPage from './ai-analysis/pages/JdInputPage';
 import ReportPage from './ai-analysis/pages/ReportPage';
+import { buildResumeTitle } from '../../src/resume-utils';
+import { useChatViewport } from './ai-analysis/hooks/useChatViewport';
+import { useInterviewVoice } from './ai-analysis/hooks/useInterviewVoice';
+import { useInterviewSessionStore } from './ai-analysis/hooks/useInterviewSessionStore';
+import { useAiAnalysisLifecycle } from './ai-analysis/hooks/useAiAnalysisLifecycle';
+import { useResumeSelection } from './ai-analysis/hooks/useResumeSelection';
+import { normalizeScoreBreakdown, resolveDisplayScore } from './ai-analysis/analysis-mappers';
+import {
+  isAffirmative,
+  isEndInterviewCommand,
+  parseReferenceReply,
+  splitNextQuestion,
+  stripMarkdownTableSeparators
+} from './ai-analysis/chat-text';
 
 interface Suggestion {
   id: string;
@@ -53,10 +67,6 @@ interface AnalysisReport {
 }
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
-type ResumeReadState = {
-  status: 'idle' | 'loading' | 'success' | 'error';
-  message: string;
-};
 
 const AiAnalysis: React.FC<ScreenProps> = () => {
   const { navigateToView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden } = useAppContext();
@@ -66,54 +76,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const AI_AVATAR_URL = '/ai-avatar.png';
   const AI_AVATAR_FALLBACK =
     'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
-
-  const SCORE_WEIGHTS = { experience: 0.4, skills: 0.4, format: 0.2 } as const;
-
-  const normalizeScoreBreakdown = (raw: ScoreBreakdown, totalScore?: number): ScoreBreakdown => {
-    if (!raw) return { experience: 0, skills: 0, format: 0 };
-
-    const sum = (raw.experience || 0) + (raw.skills || 0) + (raw.format || 0);
-    const maxExpected = {
-      experience: Math.round(SCORE_WEIGHTS.experience * 100),
-      skills: Math.round(SCORE_WEIGHTS.skills * 100),
-      format: Math.round(SCORE_WEIGHTS.format * 100),
-    };
-
-    const looksLikeContrib =
-      sum > 0 &&
-      sum <= 100 &&
-      (totalScore ? Math.abs(sum - totalScore) <= 3 : true) &&
-      raw.experience <= maxExpected.experience &&
-      raw.skills <= maxExpected.skills &&
-      raw.format <= maxExpected.format;
-
-    if (!looksLikeContrib) {
-      return {
-        experience: Math.min(100, Math.max(0, Math.round(raw.experience || 0))),
-        skills: Math.min(100, Math.max(0, Math.round(raw.skills || 0))),
-        format: Math.min(100, Math.max(0, Math.round(raw.format || 0))),
-      };
-    }
-
-    const toDimScore = (value: number, weight: number) =>
-      Math.min(100, Math.max(0, Math.round((value || 0) / weight)));
-
-    return {
-      experience: toDimScore(raw.experience || 0, SCORE_WEIGHTS.experience),
-      skills: toDimScore(raw.skills || 0, SCORE_WEIGHTS.skills),
-      format: toDimScore(raw.format || 0, SCORE_WEIGHTS.format),
-    };
-  };
-  const clampScore = (value: number) => Math.min(100, Math.max(0, Math.round(value || 0)));
-  const calcTotalFromBreakdown = (b: ScoreBreakdown) =>
-    clampScore((b.experience || 0) * SCORE_WEIGHTS.experience + (b.skills || 0) * SCORE_WEIGHTS.skills + (b.format || 0) * SCORE_WEIGHTS.format);
-  const resolveDisplayScore = (rawScore: number, breakdown: ScoreBreakdown) => {
-    const hasBreakdown =
-      (breakdown?.experience || 0) > 0 ||
-      (breakdown?.skills || 0) > 0 ||
-      (breakdown?.format || 0) > 0;
-    return hasBreakdown ? calcTotalFromBreakdown(breakdown) : clampScore(rawScore);
-  };
   const sanitizeSuggestedValue = (value: any, targetSection?: Suggestion['targetSection']) => {
     if (targetSection === 'skills') return value;
     if (typeof value !== 'string') return value;
@@ -161,11 +123,36 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       .trim();
     return text;
   };
+  const isGenderRelatedSuggestion = (suggestion: any) => {
+    if (!suggestion) return false;
+    const keywordPattern = /(性别|gender|sex|男性|女性|男生|女生|女士|先生|male|female|man|woman)/i;
+    if (typeof suggestion === 'string') return keywordPattern.test(suggestion);
+
+    const targetField = String(suggestion.targetField || '').trim().toLowerCase();
+    if (targetField === 'gender' || targetField === 'sex') return true;
+
+    const targetSection = String(suggestion.targetSection || '').trim().toLowerCase();
+    if (targetSection === 'gender' || targetSection === 'sex') return true;
+
+    const combinedText = [
+      suggestion.title,
+      suggestion.reason,
+      suggestion.targetField,
+      suggestion.targetSection,
+      Array.isArray(suggestion.suggestedValue)
+        ? suggestion.suggestedValue.join(' ')
+        : suggestion.suggestedValue,
+      suggestion.originalValue
+    ]
+      .map((item) => String(item || ''))
+      .join(' ');
+    return keywordPattern.test(combinedText);
+  };
   // Skill normalization moved to `src/skill-utils.ts` so resume import and suggestion generation stay consistent.
 
   const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
     const field = (raw?.targetField || '').toString().toLowerCase();
-    if (['email', 'phone', 'name', 'title', 'jobtitle', 'job_title', 'position', 'gender', 'location'].includes(field)) {
+    if (['email', 'phone', 'name', 'title', 'jobtitle', 'job_title', 'position', 'gender', 'location', 'age'].includes(field)) {
       return 'personalInfo';
     }
     if (['company', 'employer', 'organization', 'org', 'subtitle', 'role', 'description', 'startdate', 'enddate'].includes(field)) {
@@ -599,96 +586,35 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputBarRef = useRef<HTMLDivElement>(null);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
-  const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
-  const [inputBarHeight, setInputBarHeight] = useState(76);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const recordChunksRef = useRef<BlobPart[]>([]);
-  const [audioSupported, setAudioSupported] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const isRecordingRef = useRef(false);
-  const setRecording = (v: boolean) => {
-    isRecordingRef.current = v;
-    setIsRecording(v);
-  };
-
-  // Android Chrome long-press may trigger text selection + "网页搜索" UI while holding to record.
-  // While recording, disable selection/callout globally to keep the hold-to-talk UX stable.
-  useEffect(() => {
-    if (!isRecording) return;
-
-    const docEl = document.documentElement;
-    const body = document.body;
-
-    const prev = {
-      docUserSelect: docEl.style.userSelect,
-      docWebkitUserSelect: (docEl.style as any).webkitUserSelect,
-      bodyUserSelect: body.style.userSelect,
-      bodyWebkitUserSelect: (body.style as any).webkitUserSelect,
-      bodyWebkitTouchCallout: (body.style as any).webkitTouchCallout,
-    };
-
-    docEl.style.userSelect = 'none';
-    (docEl.style as any).webkitUserSelect = 'none';
-    body.style.userSelect = 'none';
-    (body.style as any).webkitUserSelect = 'none';
-    (body.style as any).webkitTouchCallout = 'none';
-
-    const prevent = (e: Event) => {
-      try {
-        e.preventDefault();
-      } catch {
-        // ignore
-      }
-    };
-
-    document.addEventListener('contextmenu', prevent, true);
-    document.addEventListener('selectstart', prevent, true);
-    document.addEventListener('dragstart', prevent, true);
-
-    return () => {
-      document.removeEventListener('contextmenu', prevent, true);
-      document.removeEventListener('selectstart', prevent, true);
-      document.removeEventListener('dragstart', prevent, true);
-
-      docEl.style.userSelect = prev.docUserSelect;
-      (docEl.style as any).webkitUserSelect = prev.docWebkitUserSelect;
-      body.style.userSelect = prev.bodyUserSelect;
-      (body.style as any).webkitUserSelect = prev.bodyWebkitUserSelect;
-      (body.style as any).webkitTouchCallout = prev.bodyWebkitTouchCallout;
-    };
-  }, [isRecording]);
-  const [audioError, setAudioError] = useState<string>('');
-  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const holdStartRef = useRef<{ x: number; y: number } | null>(null);
-  // Track whether the user is still holding the "press to talk" button.
-  const holdActiveRef = useRef(false);
-  const holdPointerIdRef = useRef<number | null>(null);
-  const holdMaxTimerRef = useRef<number | null>(null);
-  const holdTalkBtnRef = useRef<HTMLButtonElement | null>(null);
-  const holdSessionRef = useRef(0);
-  const [holdCancel, setHoldCancel] = useState(false);
-  const holdCancelRef = useRef(false);
-  const holdStartTimeRef = useRef<number>(0);
-  const holdAwaitAudioSendRef = useRef(false);
-  const voicePendingUserMsgIdRef = useRef<string | null>(null);
-  const voiceBlobByMsgIdRef = useRef<Map<string, { blob: Blob; mime: string }>>(new Map());
-  const voiceSilenceByMsgIdRef = useRef<Map<string, boolean>>(new Map());
-  const [transcribingByMsgId, setTranscribingByMsgId] = useState<Record<string, boolean>>({});
+  const {
+    messagesEndRef,
+    messagesContainerRef,
+    inputBarRef,
+    keyboardOffset,
+    isKeyboardOpen,
+    inputBarHeight,
+    onMessagesScroll: handleMessagesScroll
+  } = useChatViewport({ currentStep, chatMessages, isSending });
   const [chatInitialized, setChatInitialized] = useState(false);
-  const audioCtxRef = useRef<AudioContext | null>(null);
-  const voiceMeterStreamRef = useRef<MediaStream | null>(null);
-  const voiceMeterOwnsStreamRef = useRef(false);
-  const audioRafRef = useRef<number | null>(null);
-  const fakeMeterTimerRef = useRef<number | null>(null);
-  const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
-  // Peak level during the current hold session, used for fast silence detection (no decode).
-  const holdVoicePeakRef = useRef(0);
+  const chatIntroScheduledRef = useRef(false);
+  const {
+    saveLastAnalysis,
+    loadLastAnalysis,
+    clearLastAnalysis,
+    makeJdKey,
+    restoreInterviewSession,
+    persistInterviewSession,
+  } = useInterviewSessionStore({
+    resumeData,
+    setResumeData: setResumeData as any,
+    jdText,
+    setJdText,
+    targetCompany,
+    setTargetCompany,
+    setChatMessages: setChatMessages as any,
+    setChatInitialized,
+  });
   const toastTimerRef = useRef<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
@@ -737,157 +663,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }, ms);
   };
 
-  const voiceDebugEnabled = () => {
-    try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
-  };
-
-  const transcribeAudioOnBackend = async (audioObj: { blob: Blob; url: string; mime: string }) => {
-    const token = await getBackendAuthToken();
-    if (!token) throw new Error('请先登录以使用 AI 功能');
-
-    const apiEndpoint = buildApiUrl('/api/ai/transcribe');
-    const audioPayload = {
-      mime_type: audioObj.mime,
-      data: await blobToBase64(audioObj.blob),
-    };
-
-    const resp = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.trim()}`
-      },
-      body: JSON.stringify({ audio: audioPayload, lang: 'zh-CN' })
-    });
-
-    const json = await resp.json().catch(() => ({} as any));
-    if (!resp.ok) {
-      throw new Error(json?.error || '转写失败');
-    }
-    if (!json?.success) {
-      throw new Error(json?.error || '转写失败');
-    }
-    return String(json?.text || '').trim();
-  };
-
-  const isAudioLikelySilent = async (blob: Blob): Promise<boolean | null> => {
-    // Returns:
-    // - true: very likely silence
-    // - false: likely has meaningful audio energy
-    // - null: can't determine (format decode not supported etc.)
-    try {
-      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return null;
-
-      const buf = await blob.arrayBuffer();
-      const ctx: AudioContext = new AC();
-      try { await (ctx as any).resume?.(); } catch { }
-
-      // Some browsers require the buffer to be detached from the original.
-      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        try {
-          const ab = buf.slice(0);
-          ctx.decodeAudioData(
-            ab,
-            (decoded) => resolve(decoded),
-            (err) => reject(err)
-          );
-        } catch (e) {
-          reject(e);
-        }
-      });
-
-      const ch = audioBuffer.numberOfChannels || 1;
-      const len = audioBuffer.length || 0;
-      if (!len) {
-        try { ctx.close(); } catch { }
-        return true;
-      }
-
-      // Compute RMS and peak across channels with light subsampling for speed.
-      const step = Math.max(1, Math.floor(len / 48000)); // ~1s worth of samples max
-      let sumSq = 0;
-      let count = 0;
-      let peak = 0;
-      for (let c = 0; c < ch; c++) {
-        const data = audioBuffer.getChannelData(c);
-        for (let i = 0; i < len; i += step) {
-          const v = data[i] || 0;
-          const av = Math.abs(v);
-          if (av > peak) peak = av;
-          sumSq += v * v;
-          count++;
-        }
-      }
-      const rms = Math.sqrt(sumSq / Math.max(1, count));
-
-      try { ctx.close(); } catch { }
-
-      // Heuristics:
-      // - Very low RMS and low peak => likely silence (or near silence).
-      // Keep thresholds conservative to avoid false "silent" on quiet speech, especially on mobile.
-      const silent = (rms < 0.003) && (peak < 0.02);
-      return silent;
-    } catch {
-      return null;
-    }
-  };
-
-  const transcribeExistingVoiceMessage = async (msgId: string) => {
-    if (transcribingByMsgId[msgId]) return;
-    const audio = voiceBlobByMsgIdRef.current.get(msgId);
-    if (!audio?.blob) {
-      showToast('该语音无法转写（可能已过期），请重新发送', 'info');
-      return;
-    }
-
-    // Frontend silence detection: if likely silent, do not call backend AI transcribe.
-    const cachedSilent = voiceSilenceByMsgIdRef.current.get(msgId);
-    if (cachedSilent === true) {
-      showToast('未识别到语音内容', 'info');
-      return;
-    }
-    if (cachedSilent === undefined) {
-      const verdict = await isAudioLikelySilent(audio.blob);
-      if (verdict === true) {
-        try { voiceSilenceByMsgIdRef.current.set(msgId, true); } catch { }
-        showToast('未识别到语音内容', 'info');
-        return;
-      }
-      if (verdict === false) {
-        try { voiceSilenceByMsgIdRef.current.set(msgId, false); } catch { }
-      }
-      // verdict === null => can't determine, fall through to backend.
-    }
-
-    setTranscribingByMsgId(prev => ({ ...prev, [msgId]: true }));
-    try {
-      const text = await transcribeAudioOnBackend({ blob: audio.blob, url: '', mime: audio.mime });
-      if (!text) {
-        showToast('未识别到语音内容', 'info');
-        return;
-      }
-      const updated = chatMessagesRef.current.map(m => (
-        m.id === msgId ? { ...m, text } : m
-      ));
-      chatMessagesRef.current = updated;
-      setChatMessages(updated);
-    } catch (e) {
-      const msg =
-        (e && typeof e === 'object' && 'message' in (e as any) && String((e as any).message || '').trim())
-          ? String((e as any).message).trim()
-          : '转写失败，请稍后重试';
-      showToast(msg, 'error');
-      if (voiceDebugEnabled()) console.debug('[voice] transcribeExistingVoiceMessage failed', e);
-    } finally {
-      setTranscribingByMsgId(prev => {
-        const next = { ...prev };
-        delete next[msgId];
-        return next;
-      });
-    }
-  };
-
   const ToastOverlay = () => {
     if (!toast) return null;
     const tone = "bg-red-500/80 backdrop-blur-md text-white border-red-400/30";
@@ -912,10 +687,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const acceptSuggestionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
   const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
-  const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
-    status: 'idle',
-    message: '尚未读取简历，请先选择简历'
-  });
   const isLikelyJwt = (token?: string | null) => {
     const raw = (token || '').trim();
     if (!raw) return false;
@@ -976,32 +747,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   // and ignore late results from an aborted run.
   const analysisRunIdRef = useRef<string | null>(null);
   const analysisAbortRef = useRef<AbortController | null>(null);
-  const saveLastAnalysis = (payload: {
-    resumeId: string | number;
-    jdText: string;
-    targetCompany?: string;
-    snapshot: any;
-    updatedAt: string;
-  }) => {
-    try {
-      localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(payload));
-    } catch (error) {
-      console.warn('Failed to save last analysis snapshot:', error);
-    }
-  };
-  const loadLastAnalysis = () => {
-    try {
-      const raw = localStorage.getItem(LAST_ANALYSIS_KEY);
-      if (!raw) return null;
-      return JSON.parse(raw);
-    } catch (error) {
-      console.warn('Failed to parse last analysis snapshot:', error);
-      return null;
-    }
-  };
-  const clearLastAnalysis = () => {
-    localStorage.removeItem(LAST_ANALYSIS_KEY);
-  };
 
   const setAnalysisInProgress = (value: boolean) => {
     if (value) {
@@ -1213,6 +958,23 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     const bb = normalizeResumeId(b);
     return !!aa && !!bb && aa === bb;
   };
+  const { resumeReadState, handleResumeSelect } = useResumeSelection({
+    allResumes: allResumes as any,
+    resumeData,
+    setResumeData: setResumeData as any,
+    currentStep,
+    setSelectedResumeId,
+    sourceResumeIdRef: sourceResumeIdRef as any,
+    setAnalysisResumeId,
+    setJdText,
+    setTargetCompany,
+    navigateToStep: navigateToStep as any,
+    setOptimizedResumeId,
+    applyAnalysisSnapshot,
+    saveLastAnalysis,
+    showToast,
+    isSameResumeId,
+  });
 
   const resolveOriginalResumeIdForOptimization = () => {
     if (sourceResumeIdRef.current) {
@@ -1283,7 +1045,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     creatingOptimizedForOriginalIdRef.current = normalizedOriginalId;
     creatingOptimizedResumeRef.current = (async () => {
       const baseTitle = allResumes?.find(r => isSameResumeId(r.id, baseResumeData.id))?.title || '简历';
-      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true);
+      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, targetCompany);
       const createResult = await DatabaseService.createResume(userId, newTitle, {
         ...baseResumeData,
         optimizationStatus: 'optimized' as const,
@@ -1411,317 +1173,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       console.error('Failed to persist suggestion feedback:', err);
     }
   };
-
-  // --- Helper: Extract Company Name from JD ---
-  // --- Helper: Extract Company Name from JD ---
-  const getCompanyNameFromJd = (text: string) => {
-    if (!text) return '';
-
-    // 预处理：移除常见的干扰字符
-    const cleanText = text.trim();
-    const lines = cleanText.split('\n').filter(l => l.trim().length > 0);
-
-    // 黑名单关键词：包含这些词的一定不是公司名
-    const invalidKeywords = ['职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利', '一、', '二、', '三、', '1.', '2.', '3.', '任职', '优先', '加分', '简历', '投递', '招聘'];
-
-    const isValid = (name: string) => {
-      const n = name.trim();
-      if (n.length < 2 || n.length > 50) return false;
-      return !invalidKeywords.some(kw => n.includes(kw));
-    };
-
-    // 1. 优先匹配明确的标签
-    const patterns = [
-      /(?:公司|企业|Employer|Company)[:：]\s*([^\n]+)/i,
-      /招聘单位[:：]\s*([^\n]+)/,
-    ];
-
-    for (const pattern of patterns) {
-      const match = cleanText.match(pattern);
-      if (match && match[1]) {
-        const candidate = match[1].trim();
-        if (isValid(candidate)) return candidate;
-      }
-    }
-
-    // 2. 尝试从第一行判断（必须包含公司相关后缀）
-    if (lines.length > 0) {
-      const firstLine = lines[0].trim();
-      // 必须包含公司实体后缀，且不包含黑名单
-      if (/(?:公司|集团|工作室|科技|网络|技术|Consulting|Inc\.|Ltd\.|Co\.)/i.test(firstLine)) {
-        if (isValid(firstLine)) return firstLine;
-      }
-    }
-
-    // 不再鲁莽地返回第一行作为默认值，因为那往往是"职位描述"或"任职要求"
-    return '';
-  };
-
-  const makeJdKey = (text: string) => {
-    const normalized = (text || '').trim().toLowerCase();
-    if (!normalized) return 'jd_default';
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i += 1) {
-      hash = (hash * 31 + normalized.charCodeAt(i)) | 0;
-    }
-    return `jd_${Math.abs(hash)}`;
-  };
-
-  const getLatestInterviewSession = (sessions: ResumeData['interviewSessions']) => {
-    if (!sessions) return null;
-    const entries = Object.values(sessions);
-    if (entries.length === 0) return null;
-    return entries.sort((a, b) => (a.updatedAt > b.updatedAt ? -1 : 1))[0];
-  };
-
-  const hasInterviewHistoryForCurrentResumeAndJd = () => {
-    const sessionJdText = (jdText ?? resumeData?.lastJdText ?? '').trim();
-    if (!sessionJdText) return false;
-    const sessionKey = makeJdKey(sessionJdText);
-    const session = resumeData?.interviewSessions?.[sessionKey];
-    return !!(session && Array.isArray(session.messages) && session.messages.length > 0);
-  };
-
-  const buildResumeTitle = (baseTitle: string | undefined, data: ResumeData, jd: string, includeCompany: boolean) => {
-    const direction = data?.personalInfo?.title?.trim();
-    const personName = data?.personalInfo?.name?.trim();
-    const manualCompany = (data?.targetCompany || targetCompany || '').trim();
-    const parts: string[] = [];
-
-    if (direction) {
-      parts.push(direction);
-    } else if (baseTitle) {
-      parts.push(baseTitle);
-    } else {
-      parts.push('简历');
-    }
-
-    if (includeCompany) {
-      const companyName = manualCompany || getCompanyNameFromJd(jd);
-      if (companyName) {
-        parts.push(companyName);
-      }
-    }
-
-    if (personName) {
-      parts.push(personName);
-    }
-
-    return parts.join(' - ');
-  };
-
-  const restoreInterviewSession = (overrideJdText?: string) => {
-    if (!resumeData) return;
-    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    if (!jdText && sessionJdText) {
-      setJdText(sessionJdText);
-    }
-    if (!targetCompany && resumeData.targetCompany) {
-      setTargetCompany(resumeData.targetCompany);
-    }
-
-    if (!sessionJdText) {
-      setChatMessages([]);
-      setChatInitialized(false);
-      return;
-    }
-
-    const sessions = resumeData.interviewSessions || {};
-    const sessionKey = makeJdKey(sessionJdText);
-    const session = sessions[sessionKey];
-
-    if (session && session.messages?.length) {
-      setChatMessages(session.messages as ChatMessage[]);
-      setChatInitialized(true);
-    } else {
-      setChatMessages([]);
-      setChatInitialized(false);
-    }
-  };
-
-  const persistInterviewSession = async (messages: ChatMessage[], overrideJdText?: string) => {
-    if (!resumeData?.id) return;
-    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    const jdKey = makeJdKey(sessionJdText);
-    const currentSessions = resumeData.interviewSessions || {};
-    const updatedSessions = {
-      ...currentSessions,
-      [jdKey]: {
-        jdText: sessionJdText,
-        messages: messages.map(m => ({ id: m.id, role: m.role, text: m.text })),
-        updatedAt: new Date().toISOString()
-      }
-    };
-
-    const updatedResumeData = {
-      ...resumeData,
-      interviewSessions: updatedSessions,
-      lastJdText: sessionJdText,
-      targetCompany: targetCompany || resumeData.targetCompany || ''
-    };
-
-    if (setResumeData) {
-      setResumeData(updatedResumeData);
-    }
-
-    await DatabaseService.updateResume(String(resumeData.id), {
-      resume_data: updatedResumeData,
-      updated_at: new Date().toISOString()
-    });
-  };
-
   // --- Handlers ---
-
-  const handleResumeSelect = async (id: string | number, preferReport: boolean = false) => {
-    setSelectedResumeId(id);
-    sourceResumeIdRef.current = id;
-    setAnalysisResumeId(id);
-    // Reset JD content when switching resumes to avoid stale data from previous analysis
-    setJdText('');
-    setTargetCompany('');
-    const selectedTitle = (allResumes || []).find((item) => isSameResumeId(item.id, id))?.title || '当前简历';
-    setResumeReadState({
-      status: 'loading',
-      message: `正在读取《${selectedTitle}》...`
-    });
-
-    // 立即切换到下一步，提高用户体验
-    // 避免优先进入 report 导致 0 分闪屏，再进入 JD
-    if (!preferReport) {
-      navigateToStep('jd_input');
-    }
-
-    // 记录当前 resumeData 和 allResumes 的状态
-    console.log('handleResumeSelect - Current resumeData:', resumeData);
-    console.log('handleResumeSelect - Selected resume ID:', id);
-    console.log('handleResumeSelect - All resumes:', allResumes);
-
-    // 在后台从数据库中获取完整的简历数据
-    try {
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        console.error('User not authenticated:', userError);
-        setResumeReadState({
-          status: 'error',
-          message: '读取失败：用户未登录或登录已过期'
-        });
-        // 已经切换到下一步，这里只需要显示错误提示
-        showToast('请先登录', 'error');
-        return;
-      }
-
-      let resume: any = null;
-      const single = await DatabaseService.getResume(id);
-      if (single.success && single.data) {
-        resume = single.data;
-      } else {
-        const result = await DatabaseService.getUserResumes(user.id);
-        if (!result.success) {
-          console.error('Failed to load resumes:', result.error);
-          setResumeReadState({
-            status: 'error',
-            message: `读取失败：${result.error?.message || '加载简历失败'}`
-          });
-          showToast(`加载简历失败: ${result.error?.message || '请重试'}`, 'error');
-          return;
-        }
-        resume = result.data.find((r: any) => String(r.id) === String(id));
-      }
-
-      if (!resume && resumeData?.id && String(resumeData.id) === String(id)) {
-        resume = {
-          id: resumeData.id,
-          title: allResumes?.find(r => String(r.id) === String(id))?.title || '简历',
-          resume_data: resumeData
-        };
-      }
-
-      if (!resume) {
-        console.error('Resume not found');
-        setResumeReadState({
-          status: 'error',
-          message: `读取失败：未找到该简历（ID: ${id}）`
-        });
-        showToast(`简历不存在 (ID: ${id})`, 'error');
-        return;
-      }
-
-      console.log('Target resume found:', resume);
-
-      if (!resume.resume_data) {
-        console.error('Resume data is empty: resume_data is null/undefined');
-        setResumeReadState({
-          status: 'error',
-          message: '读取失败：简历内容为空'
-        });
-        showToast('简历数据为空，请重新创建简历', 'error');
-        return;
-      }
-
-      if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
-        console.error('Resume data is empty object: resume_data is empty object');
-        setResumeReadState({
-          status: 'error',
-          message: '读取失败：简历内容为空对象'
-        });
-        showToast('简历数据为空，请重新创建简历', 'error');
-        return;
-      }
-
-      console.log('Resume loaded successfully:', resume);
-
-      if (setResumeData) {
-        const finalResumeData = {
-          id: resume.id,
-          ...resume.resume_data,
-          resumeTitle: resume.title
-        };
-        sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
-
-        console.log('Setting resume data:', finalResumeData);
-        setResumeData(finalResumeData);
-        setResumeReadState({
-          status: 'success',
-          message: `已成功读取《${resume.title || selectedTitle}》`
-        });
-        setOptimizedResumeId(
-          finalResumeData.optimizedResumeId ||
-          (finalResumeData.optimizationStatus === 'optimized' ? resume.id : null)
-        );
-        if (finalResumeData.targetCompany) {
-          setTargetCompany(finalResumeData.targetCompany);
-        }
-
-        if (preferReport) {
-          const restoredJdText = (finalResumeData.lastJdText || '').trim();
-          if (restoredJdText) {
-            setJdText(restoredJdText);
-          }
-          applyAnalysisSnapshot(finalResumeData.analysisSnapshot);
-          if (finalResumeData.analysisSnapshot) {
-            saveLastAnalysis({
-              resumeId: resume.id,
-              jdText: restoredJdText,
-              targetCompany: finalResumeData.targetCompany || '',
-              snapshot: finalResumeData.analysisSnapshot,
-              updatedAt: finalResumeData.analysisSnapshot.updatedAt || new Date().toISOString()
-            });
-            setAnalysisResumeId(resume.id);
-          }
-          navigateToStep('report', true);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading resume:', error);
-      setResumeReadState({
-        status: 'error',
-        message: '读取失败：网络异常或服务不可用'
-      });
-      showToast('加载简历失败，请检查网络连接', 'error');
-    }
-  };
 
   const generateRealAnalysis = async (runId: string) => {
     if (!resumeData) return null;
@@ -1891,6 +1343,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
           : '';
 
         backendSuggestions.forEach((suggestion: any, index: number) => {
+          if (isGenderRelatedSuggestion(suggestion)) return;
           // 如果是字符串，转换为对象
           if (typeof suggestion === 'string') {
             newSuggestions.push({
@@ -2294,7 +1747,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         );
 
         const baseTitle = allResumes?.find(r => isSameResumeId(r.id, originalResumeId))?.title || '简历';
-        const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true);
+        const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true, targetCompany);
         let updatedOptimized: ResumeData = {
           ...nextResumeData,
           interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || originalResume.interviewSessions,
@@ -2495,389 +1948,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }
   };
 
-  // --- Chat Logic ---
-  const scrollToBottom = () => {
-    // 当消息更新或键盘高度变化时，强制置底
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({
-        behavior: "smooth", // 键盘弹出时立即跳转，不平滑滚动
-        block: "end"
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (currentStep === 'chat') {
-      scrollToBottom();
-    }
-  }, [chatMessages, isSending]);
-
-  // 额外的滚动逻辑，确保新消息时立即滚动
-  useEffect(() => {
-    if (currentStep === 'chat' && chatMessages.length > 0) {
-      scrollToBottom();
-    }
-  }, [chatMessages.length]);
-
-  // Mobile keyboard handling: translate the fixed input bar above the keyboard and keep
-  // enough bottom padding for message list so the latest message isn't covered.
-  // Also track keyboard open/close reliably across all devices.
-  useEffect(() => {
-    if (currentStep !== 'chat') return;
-
-    const vv = (window as any).visualViewport as VisualViewport | undefined;
-
-    // Baseline height captured once when the chat screen mounts (keyboard closed).
-    const baselineHeight = vv ? vv.height : window.innerHeight;
-
-    const compute = () => {
-      if (!vv) { setKeyboardOffset(0); return; }
-      // Some Android builds report offsetTop=0 and don't reflect keyboard overlap.
-      const overlap = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
-      const heightDelta = Math.max(0, window.innerHeight - vv.height);
-      const inferred = Math.max(overlap, heightDelta);
-      setKeyboardOffset(inferred);
-
-      // Keyboard detection: viewport shrunk >100px from baseline => keyboard likely open.
-      // 100px threshold safely ignores address-bar (~60px) but catches any keyboard (>200px).
-      const shrinkage = baselineHeight - vv.height;
-      setIsKeyboardOpen(shrinkage > 100);
-    };
-
-    // Fallback: use focusin/focusout for devices where visualViewport is unreliable.
-    const onFocusIn = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea') setIsKeyboardOpen(true);
-    };
-    const onFocusOut = (e: FocusEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea') {
-        // Delay so tapping another input doesn't briefly flash the disclaimer.
-        setTimeout(() => {
-          if (document.activeElement?.tagName?.toLowerCase() !== 'input' &&
-            document.activeElement?.tagName?.toLowerCase() !== 'textarea') {
-            setIsKeyboardOpen(false);
-          }
-        }, 120);
-      }
-    };
-
-    compute();
-    if (vv) {
-      vv.addEventListener('resize', compute);
-      vv.addEventListener('scroll', compute);
-    }
-    window.addEventListener('resize', compute);
-    document.addEventListener('focusin', onFocusIn, true);
-    document.addEventListener('focusout', onFocusOut, true);
-
-    return () => {
-      if (vv) {
-        vv.removeEventListener('resize', compute);
-        vv.removeEventListener('scroll', compute);
-      }
-      window.removeEventListener('resize', compute);
-      document.removeEventListener('focusin', onFocusIn, true);
-      document.removeEventListener('focusout', onFocusOut, true);
-    };
-  }, [currentStep]);
-
-  // Track input bar height (textarea grows), so paddingBottom stays correct.
-  useEffect(() => {
-    if (currentStep !== 'chat') return;
-    const el = inputBarRef.current;
-    if (!el) return;
-
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setInputBarHeight(Math.max(60, Math.round(rect.height)));
-    };
-
-    update();
-    const ResizeObs = (window as any).ResizeObserver as any;
-    if (!ResizeObs) {
-      window.addEventListener('resize', update);
-      return () => window.removeEventListener('resize', update);
-    }
-
-    const ro = new ResizeObs(update);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [currentStep]);
-
-  // When keyboard opens/closes, keep the latest message visible.
-  useEffect(() => {
-    if (currentStep !== 'chat') return;
-    scrollToBottom();
-  }, [keyboardOffset, inputBarHeight, currentStep]);
-
-  // Voice input: we record audio (MediaRecorder) and send it to the backend chat endpoint.
-  // The LLM will listen to the audio and reply directly. Transcription is user-triggered via "转文字".
-  useEffect(() => {
-    const ok =
-      typeof window !== 'undefined' &&
-      typeof navigator !== 'undefined' &&
-      !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia) &&
-      !!((window as any).MediaRecorder);
-    setAudioSupported(ok);
-  }, []);
-
-  const cleanupVoiceMeter = () => {
-    if (fakeMeterTimerRef.current) {
-      try { window.clearInterval(fakeMeterTimerRef.current); } catch { }
-      fakeMeterTimerRef.current = null;
-    }
-    if (audioRafRef.current) {
-      try { cancelAnimationFrame(audioRafRef.current); } catch { }
-      audioRafRef.current = null;
-    }
-    if (voiceMeterStreamRef.current && voiceMeterOwnsStreamRef.current) {
-      try { voiceMeterStreamRef.current.getTracks().forEach(t => t.stop()); } catch { }
-    }
-    voiceMeterStreamRef.current = null;
-    voiceMeterOwnsStreamRef.current = false;
-    if (audioCtxRef.current) {
-      try { audioCtxRef.current.close(); } catch { }
-      audioCtxRef.current = null;
-    }
-    setVisualizerData(new Array(24).fill(4));
-  };
-
-  const startVoiceMeter = async (streamOverride?: MediaStream) => {
-    cleanupVoiceMeter();
-
-    if (!streamOverride) return;
-
-    try {
-      voiceMeterStreamRef.current = streamOverride;
-      voiceMeterOwnsStreamRef.current = false;
-      holdVoicePeakRef.current = 0;
-
-      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return;
-      const ctx = new AC();
-      audioCtxRef.current = ctx;
-      try { await ctx.resume?.(); } catch { }
-
-      const source = ctx.createMediaStreamSource(streamOverride);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.5;
-      source.connect(analyser);
-
-      const dataArray = new Uint8Array(analyser.frequencyBinCount);
-      let lastUpdate = 0;
-
-      const loop = (now: number) => {
-        try {
-          analyser.getByteFrequencyData(dataArray);
-          if (now - lastUpdate > 50) {
-            lastUpdate = now;
-            // Track a rough peak to detect "almost silent" holds.
-            let maxByte = 0;
-            for (let i = 0; i < dataArray.length; i++) {
-              const v = dataArray[i] || 0;
-              if (v > maxByte) maxByte = v;
-            }
-            const peak = maxByte / 255;
-            if (peak > holdVoicePeakRef.current) holdVoicePeakRef.current = peak;
-            const newData: number[] = [];
-            const step = Math.floor(dataArray.length / 12);
-            for (let i = 0; i < 12; i++) {
-              const val = dataArray[i * step] || 0;
-              newData.push(4 + (val / 255) * 44);
-            }
-            const mirrored = [...[...newData].reverse(), ...newData];
-            setVisualizerData(mirrored);
-          }
-        } catch { }
-        audioRafRef.current = requestAnimationFrame(loop);
-      };
-      audioRafRef.current = requestAnimationFrame(loop);
-    } catch (e) {
-      console.warn('Voice meter failed:', e);
-    }
-  };
-
-  const pickRecorderMime = () => {
-    const MR: any = typeof window !== 'undefined' ? (window as any).MediaRecorder : null;
-    const isSupported = (t: string) => {
-      try { return !!MR?.isTypeSupported?.(t); } catch { return false; }
-    };
-    const candidates = [
-      'audio/webm;codecs=opus',
-      'audio/webm',
-      'audio/mp4',
-    ];
-    for (const c of candidates) {
-      if (isSupported(c)) return c;
-    }
-    return '';
-  };
-
-  const startAudioRecorder = async (token: number) => {
-    // Capture audio and send to backend (LLM listens to the audio).
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-      // Reuse recorder stream for real waveform (no extra mic request).
-      startVoiceMeter(stream);
-
-      const mime = pickRecorderMime();
-      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      mediaRecorderRef.current = rec;
-      recordChunksRef.current = [];
-
-      rec.ondataavailable = (e: any) => {
-        try {
-          if (e?.data && e.data.size > 0) recordChunksRef.current.push(e.data);
-        } catch { }
-      };
-
-      rec.onstop = () => {
-        if (holdAudioDiscardRef.current) {
-          holdAudioDiscardRef.current = false;
-          try { mediaStreamRef.current?.getTracks().forEach(t => t.stop()); } catch { }
-          mediaStreamRef.current = null;
-          mediaRecorderRef.current = null;
-          recordChunksRef.current = [];
-          return;
-        }
-
-        let blob: Blob | null = null;
-        try {
-          const chunks = recordChunksRef.current;
-          blob = new Blob(chunks, { type: mime || 'audio/webm' });
-        } catch { }
-
-        try { mediaStreamRef.current?.getTracks().forEach(t => t.stop()); } catch { }
-        mediaStreamRef.current = null;
-        mediaRecorderRef.current = null;
-        recordChunksRef.current = [];
-
-        if (!blob || !blob.size) {
-          if (voiceDebugEnabled()) console.debug('[voice] audio recorder stopped: empty blob');
-          // If we already inserted a placeholder bubble, clean it up to avoid a stuck "pending" UI.
-          try {
-            const pendingId = voicePendingUserMsgIdRef.current;
-            voicePendingUserMsgIdRef.current = null;
-            holdAwaitAudioSendRef.current = false;
-            if (pendingId) {
-              const filtered = chatMessagesRef.current.filter(m => m.id !== pendingId);
-              chatMessagesRef.current = filtered;
-              setChatMessages(filtered);
-            }
-          } catch { }
-          showToast('录音失败，请重试', 'error');
-          return;
-        }
-
-        if (voiceDebugEnabled()) {
-          console.debug('[voice] audio recorder stopped', {
-            token,
-            size: blob.size,
-            mime: blob.type || mime || 'audio/webm',
-            peak: holdVoicePeakRef.current,
-          });
-        }
-
-        const userMsgId = voicePendingUserMsgIdRef.current;
-        if (!userMsgId) return;
-
-        voicePendingUserMsgIdRef.current = null;
-        const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
-
-        // If the hold is likely silent, don't send audio to backend; instead show an AI chat hint.
-        // Use a fast peak heuristic first; optionally confirm with decode-based check for low peaks.
-        (async () => {
-          const peak = holdVoicePeakRef.current;
-          let silentVerdict: boolean | null = null;
-          // Do NOT hard-block based on the live meter peak alone: on some mobile browsers AudioContext
-          // may be suspended, producing a near-zero peak even when the recorder captured valid audio.
-          // Only block if we can confirm silence by decoding the recorded blob.
-          if (peak < 0.08) silentVerdict = await isAudioLikelySilent(blob);
-
-          if (silentVerdict === true) {
-            try { voiceSilenceByMsgIdRef.current.set(userMsgId, true); } catch { }
-            // Remove user placeholder voice bubble.
-            const filtered = chatMessagesRef.current.filter(m => m.id !== userMsgId);
-            const aiMsg: ChatMessage = {
-              id: `ai-${Date.now()}`,
-              role: 'model',
-              text: '未识别到语音内容。请检查：是否已允许麦克风权限、是否连接了蓝牙耳机、是否有其他应用占用麦克风。'
-            };
-            const next = [...filtered, aiMsg];
-            chatMessagesRef.current = next;
-            setChatMessages(next);
-            holdAwaitAudioSendRef.current = false;
-            return;
-          }
-
-          // Not silent (or undetermined): proceed to attach audio + allow manual "转文字".
-          const url = URL.createObjectURL(blob);
-          const audioObj = { blob, url, mime: blob.type || mime || 'audio/webm' };
-
-          // Persist blob for "transcribe" button later (scheme A: update same message text on demand).
-          try { voiceBlobByMsgIdRef.current.set(userMsgId, { blob: audioObj.blob, mime: audioObj.mime }); } catch { }
-          try { voiceSilenceByMsgIdRef.current.set(userMsgId, false); } catch { }
-
-          // Attach audio to the placeholder message and send immediately as an audio message.
-          const updated = chatMessagesRef.current.map(m => (
-            m.id === userMsgId
-              // Keep a minimal text marker so chatHistory contains this turn (LLM already listened to the audio).
-              ? { ...m, text: '（语音）', audioPending: false, audioUrl: audioObj.url, audioMime: audioObj.mime, audioDuration: duration }
-              : m
-          ));
-          chatMessagesRef.current = updated;
-          setChatMessages(updated);
-
-          if (holdAwaitAudioSendRef.current) {
-            holdAwaitAudioSendRef.current = false;
-            try {
-              await handleSendMessage('', { ...audioObj, duration } as any, { skipAddUserMessage: true, existingUserMessageId: userMsgId });
-            } catch { }
-          }
-        })();
-      };
-
-      rec.onerror = (e: any) => {
-        if (voiceDebugEnabled()) console.debug('[voice] audio recorder error', e);
-      };
-
-      // Collect small chunks to avoid losing data on some devices.
-      try { rec.start(120); } catch { rec.start(); }
-    } catch (e: any) {
-      const name = String(e?.name || '').toLowerCase();
-      if (name.includes('notallowed') || name.includes('permission')) {
-        setAudioError('无法使用麦克风：请在浏览器权限中允许麦克风访问');
-      } else {
-        setAudioError('麦克风启动失败，请重试');
-      }
-      setRecording(false);
-      cleanupVoiceMeter();
-      if (voiceDebugEnabled()) console.debug('[voice] startAudioRecorder failed', e);
-    }
-  };
-
-  const holdAudioDiscardRef = useRef(false);
-  const stopAudioRecorder = (discard: boolean) => {
-    const rec = mediaRecorderRef.current;
-    if (!rec) return;
-    holdAudioDiscardRef.current = !!discard;
-    if (discard) {
-      // Just stop and drop anything recorded.
-      holdAwaitAudioSendRef.current = false;
-    }
-    // Best-effort flush to reduce perceived delay on release.
-    try { (rec as any).requestData?.(); } catch { }
-    try { rec.stop(); } catch { }
-  };
-
-  // Avoid sending accidental taps as voice messages.
-  const MIN_VOICE_HOLD_MS = 600;
-  const MAX_VOICE_HOLD_MS = 3 * 60 * 1000;
-
   const INTERVIEW_ANSWER_LIMIT_SUFFIX = '请将回答控制在3分钟内';
   const SELF_INTRO_REMINDER = '自我介绍时间为1分钟';
 
@@ -2906,106 +1976,76 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     return t;
   };
 
-  const clearHoldMaxTimer = () => {
-    if (holdMaxTimerRef.current) {
-      try { window.clearTimeout(holdMaxTimerRef.current); } catch { }
-      holdMaxTimerRef.current = null;
-    }
-  };
-
-  // SpeechRecognition STT flow removed: we always send audio to LLM, and transcription is manual ("转文字").
-
-  const setMode = (mode: 'text' | 'voice') => {
-    setInputMode(mode);
-    setAudioError('');
-    // Hide keyboard when switching to voice; focus when switching back to text.
-    if (mode === 'voice') {
-      try { textareaRef.current?.blur(); } catch { }
-    } else {
-      setTimeout(() => {
-        try { textareaRef.current?.focus(); } catch { }
-      }, 0);
-    }
-  };
-
-  // 当步骤发生变化时，重置聊天初始化状态并清理录音
+  // 当步骤发生变化时，重置聊天初始化状态
   useEffect(() => {
     if (currentStep !== 'chat') {
+      chatIntroScheduledRef.current = false;
       setChatInitialized(false);
-      // Force-stop any active recording to prevent the global recording overlay
-      // (disabled text selection, hold-to-talk mask) from leaking to other pages.
-      if (isRecordingRef.current) {
-        setRecording(false);
-        holdActiveRef.current = false;
-        try {
-          if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-            mediaRecorderRef.current.stop();
-          }
-        } catch { /* ignore */ }
-      }
     }
   }, [currentStep]);
 
-
-
+  // 进入聊天页时，先给出问候和面试介绍，再询问是否开始（仅首次且无历史消息）
   useEffect(() => {
     if (currentStep !== 'chat') return;
+    if (chatIntroScheduledRef.current) return;
+    if (chatMessagesRef.current.length !== 0) return;
 
-    if (chatEntrySource === 'internal') return;
+    chatIntroScheduledRef.current = true;
+    setChatInitialized(true);
 
-    const entrySource = localStorage.getItem('ai_analysis_entry_source');
-    if (entrySource !== 'bottom_nav') return;
-
-    localStorage.removeItem('ai_analysis_entry_source');
-
-    if (localStorage.getItem('ai_interview_open') === '1') {
-      return;
-    }
-
-    const nextStep: Step = score > 0 || suggestions.length > 0 ? 'report' : 'resume_select';
-    setChatEntrySource('internal');
-    setLastChatStep(nextStep);
-    localStorage.setItem('ai_chat_entry_source', 'internal');
-    localStorage.setItem('ai_chat_prev_step', nextStep);
-    setStepHistory([]);
-    setCurrentStep(nextStep);
-  }, [currentStep, score, suggestions.length]);
-
-
-  // 记住用户所在步骤，切换回来可恢复
-  useEffect(() => {
-    localStorage.setItem('ai_analysis_step', currentStep);
-    if (currentStep !== 'resume_select') {
-      localStorage.setItem('ai_analysis_has_activity', '1');
-    }
-
-    // Keep URL in sync for refresh/back behavior.
-    try {
-      const base = '/ai-analysis';
-      const resumeIdHint =
-        (localStorage.getItem('ai_analysis_resume_id') || '').trim() ||
-        (selectedResumeId !== null && selectedResumeId !== undefined ? String(selectedResumeId) : '').trim() ||
-        (resumeData && (resumeData as any).id ? String((resumeData as any).id) : '').trim();
-
-      const targetPath = (() => {
-        switch (currentStep) {
-          case 'resume_select': return base;
-          case 'jd_input': return `${base}/jd`;
-          case 'analyzing': return `${base}/analyzing`;
-          case 'chat': return `${base}/chat`;
-          case 'comparison': return resumeIdHint ? `${base}/comparison/${encodeURIComponent(resumeIdHint)}` : `${base}/comparison`;
-          case 'report': return resumeIdHint ? `${base}/report/${encodeURIComponent(resumeIdHint)}` : `${base}/report`;
-          default: return base;
-        }
-      })();
-
-      if (location.pathname !== targetPath) {
-        navigate(targetPath, { replace: true });
+    let userName = '';
+    if (resumeData?.personalInfo?.name) {
+      const fullName = resumeData.personalInfo.name;
+      if (fullName.includes(' ')) {
+        userName = fullName.split(' ').pop() || fullName;
+      } else if (fullName.length >= 2) {
+        userName = fullName.slice(-2);
+      } else {
+        userName = fullName;
       }
-    } catch {
-      // ignore URL sync errors (e.g., SSR/non-browser)
     }
-  }, [currentStep, selectedResumeId, resumeData, navigate, location.pathname]);
+
+    const t1 = window.setTimeout(() => {
+      const greeting = userName ? `${userName}，您好！` : '您好！';
+      const summaryMessage: ChatMessage = {
+        id: 'ai-summary',
+        role: 'model',
+        text: `${greeting}我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`
+      };
+      setChatMessages(prev => (prev.some(m => m.id === summaryMessage.id) ? prev : [...prev, summaryMessage]));
+    }, 1000);
+
+    const t2 = window.setTimeout(() => {
+      const askMessage: ChatMessage = {
+        id: 'ai-ask',
+        role: 'model',
+        text: '请问您准备好开始模拟面试了吗？您可以随时告诉我开始，我会根据您的简历和岗位要求提出面试问题。'
+      };
+      setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
+    }, 2500);
+
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [currentStep, jdText, resumeData?.personalInfo?.name]);
+
+  useAiAnalysisLifecycle({
+    currentStep,
+    chatEntrySource,
+    score,
+    suggestionsLength: suggestions.length,
+    setChatEntrySource,
+    setLastChatStep,
+    setStepHistory,
+    setCurrentStep,
+    selectedResumeId,
+    resumeData,
+    navigate,
+    locationPathname: location.pathname,
+  });
+
+
 
   // 统一恢复逻辑：优先使用最近一次分析快照（切换页面再回来时）
   useEffect(() => {
@@ -3245,77 +2285,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     })();
   }, []);
 
-  useEffect(() => {
-    if (currentStep !== 'jd_input') return;
-    if (resumeReadState.status !== 'idle') return;
-    if (!resumeData?.id) return;
-    const fallbackLabel =
-      (resumeData.resumeTitle || '').trim() ||
-      ((resumeData.personalInfo?.name || '').trim() ? `${resumeData.personalInfo.name.trim()}的简历` : '当前简历');
-    setResumeReadState({
-      status: 'success',
-      message: `已成功读取《${fallbackLabel}》`
-    });
-  }, [currentStep, resumeData?.id, resumeData?.resumeTitle, resumeData?.personalInfo?.name, resumeReadState.status]);
-
-  // 当切换到聊天步骤时，先弹出整体总结，然后询问用户是否开始面试
-  useEffect(() => {
-    if (currentStep === 'chat' && !chatInitialized && chatMessages.length === 0) {
-      console.log('Generating chat summary...');
-      console.log('Current state:', {
-        currentStep,
-        suggestionsLength: suggestions.length,
-        chatInitialized,
-        score,
-        resumeData: resumeData?.personalInfo?.name
-      });
-
-      // 标记聊天已初始化，避免重复运行
-      setChatInitialized(true);
-
-      // 获取用户名字，只使用名字部分，不带姓氏
-      let userName = '';
-      if (resumeData?.personalInfo?.name) {
-        // 提取名字部分，移除姓氏
-        const fullName = resumeData.personalInfo.name;
-        // 简单处理：如果名字包含空格或中文姓氏，只取最后一个部分
-        if (fullName.includes(' ')) {
-          // 英文名字，取最后一个单词
-          userName = fullName.split(' ').pop() || fullName;
-        } else if (fullName.length >= 2) {
-          // 中文名字，取后两个字（假设姓氏为单字）
-          userName = fullName.slice(-2);
-        } else {
-          // 单字名字或其他情况，直接使用
-          userName = fullName;
-        }
-      }
-
-      // 先显示问候和面试介绍消息
-      setTimeout(() => {
-        const greeting = userName ? `${userName}，您好！` : '您好！';
-        const summaryMessage = {
-          id: 'ai-summary',
-          role: 'model' as const,
-          text: `${greeting}我是您的 AI 模拟面试官。${jdText ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`
-        };
-        console.log('Adding summary message:', summaryMessage);
-        setChatMessages(prev => (prev.some(m => m.id === summaryMessage.id) ? prev : [...prev, summaryMessage]));
-
-        // 然后询问用户是否准备好开始面试
-        setTimeout(() => {
-          const askMessage = {
-            id: 'ai-ask',
-            role: 'model' as const,
-            text: '请问您准备好开始模拟面试了吗？您可以随时告诉我开始，我会根据您的简历和岗位要求提出面试问题。'
-          };
-          console.log('Adding ask message:', askMessage);
-          setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
-        }, 1500);
-      }, 1000);
-    }
-  }, [currentStep, suggestions, score, resumeData, chatInitialized, jdText, chatMessages.length]);
-
   const blobToBase64 = (blob: Blob) =>
     new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -3327,22 +2296,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       reader.onerror = () => reject(new Error('read failed'));
       reader.readAsDataURL(blob);
     });
-
-  const isEndInterviewCommand = (text: string) => {
-    const t = String(text || '').trim().toLowerCase();
-    if (!t) return false;
-    const hits = [
-      '结束面试',
-      '面试结束',
-      '结束',
-      '结束了',
-      '结束吧',
-      'stop',
-      'end',
-      'finish',
-    ];
-    return hits.some(k => t === k || t.includes(k));
-  };
 
   const generateInterviewSummary = async (baseMessages: ChatMessage[]) => {
     const token = await getBackendAuthToken();
@@ -3398,19 +2351,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     const result = await response.json().catch(() => ({} as any));
     const unmaskedText = masker.unmaskText(result?.response || '');
     return String(unmaskedText || '').trim();
-  };
-
-  // The UI renders chat text as plain text; markdown table separator rows like `|:---|:---|:---|`
-  // show up as "meaningless fields". Strip those rows for readability.
-  const stripMarkdownTableSeparators = (text: string) => {
-    const lines = String(text || '').split(/\r?\n/);
-    const isSepLine = (line: string) => {
-      const s = String(line || '').trim();
-      if (!s) return false;
-      // Matches: | --- | --- |, |:---|:---|, :---|---:, etc.
-      return /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(s);
-    };
-    return lines.filter((l) => !isSepLine(l)).join('\n').trim();
   };
 
   const handleSendMessage = async (
@@ -3587,41 +2527,40 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     }
   };
 
+  const {
+    audioSupported,
+    isRecording,
+    audioError,
+    setAudioError,
+    inputMode,
+    textareaRef,
+    holdTalkBtnRef,
+    holdCancel,
+    visualizerData,
+    transcribingByMsgId,
+    toggleChatInputMode,
+    onHoldPointerDown,
+    onHoldPointerMove,
+    onHoldPointerUp,
+    onHoldPointerCancel,
+    hasVoiceBlobForMsg,
+    transcribeExistingVoiceMessage,
+  } = useInterviewVoice({
+    currentStep,
+    chatMessagesRef: chatMessagesRef as any,
+    setChatMessages: setChatMessages as any,
+    handleSendMessage: handleSendMessage as any,
+    showToast,
+    getBackendAuthToken,
+    blobToBase64,
+  });
+
   const getScoreColor = (s: number) => {
     if (s >= 90) return 'text-green-500';
     if (s >= 70) return 'text-primary';
     return 'text-orange-500';
   };
 
-  const parseReferenceReply = (text: string) => {
-    const refLabel = '参考回复：';
-    const nextLabel = '下一题：';
-    const refIndex = text.indexOf(refLabel);
-    if (refIndex === -1) return null;
-    const afterRef = refIndex + refLabel.length;
-    const nextIndex = text.indexOf(nextLabel, afterRef);
-    const before = text.slice(0, refIndex).trim();
-    const reference = (nextIndex === -1 ? text.slice(afterRef) : text.slice(afterRef, nextIndex)).trim();
-    const after = nextIndex === -1 ? '' : text.slice(nextIndex).trim();
-    return { before, reference, after };
-  };
-
-  const splitNextQuestion = (text: string) => {
-    const s = String(text || '');
-    const m = s.match(/(下一题|下一道问题|下一道具体问题|下一个问题)\s*[:：]/);
-    if (!m || m.index === undefined) return { cleaned: s, next: null };
-    const nextIndex = m.index;
-    let cleaned = s.slice(0, nextIndex).trim();
-    // Remove trailing incomplete brackets like 【 or [
-    cleaned = cleaned.replace(/[【\[（]\s*$/, '').trim();
-    const next = s.slice(nextIndex + m[0].length).trim();
-    return { cleaned, next: next || null };
-  };
-
-  const isAffirmative = (text: string) => {
-    const t = text.trim().toLowerCase();
-    return ['好', '好的', '可以', '继续', '继续吧', '开始', '开始吧', '行', '嗯', 'ok', 'yes'].some(k => t === k || t.includes(k));
-  };
   // ================= RENDER STEPS =================
   if (currentStep === 'resume_select') {
     return (
@@ -3708,146 +2647,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
       />
     );
   }
-  const toggleChatInputMode = () => setMode(inputMode === 'text' ? 'voice' : 'text');
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
-  const hasVoiceBlobForMsg = (msgId: string) => !!voiceBlobByMsgIdRef.current.get(msgId)?.blob;
-
-  const onHoldPointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setMode('voice');
-    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch { }
-    holdActiveRef.current = true;
-    holdPointerIdRef.current = e.pointerId;
-    clearHoldMaxTimer();
-    holdSessionRef.current += 1;
-    const token = holdSessionRef.current;
-    holdAwaitAudioSendRef.current = false;
-    voicePendingUserMsgIdRef.current = null;
-    holdStartRef.current = { x: e.clientX, y: e.clientY };
-    holdStartTimeRef.current = Date.now();
-    holdCancelRef.current = false;
-    holdVoicePeakRef.current = 0;
-    setHoldCancel(false);
-    setAudioError('');
-    setRecording(true);
-    startAudioRecorder(token);
-
-    // Max duration: auto-send after 3 minutes even if the user keeps holding.
-    holdMaxTimerRef.current = window.setTimeout(() => {
-      if (!holdActiveRef.current) return;
-
-      holdActiveRef.current = false;
-      holdStartRef.current = null;
-      holdCancelRef.current = false;
-      setHoldCancel(false);
-
-      const heldMs = Date.now() - (holdStartTimeRef.current || Date.now());
-      if (heldMs < MIN_VOICE_HOLD_MS) {
-        voicePendingUserMsgIdRef.current = null;
-        holdAwaitAudioSendRef.current = false;
-        stopAudioRecorder(true);
-        setRecording(false);
-        cleanupVoiceMeter();
-        showToast('按键时间太短，请按住说话', 'info');
-        return;
-      }
-
-      const userMsgId = `user-voice-${Date.now()}`;
-      voicePendingUserMsgIdRef.current = userMsgId;
-      const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
-      const placeholder: ChatMessage = { id: userMsgId, role: 'user', text: '', audioPending: true, audioDuration: duration };
-      const next = [...chatMessagesRef.current, placeholder];
-      chatMessagesRef.current = next;
-      setChatMessages(next);
-
-      holdAwaitAudioSendRef.current = true;
-      stopAudioRecorder(false);
-      setRecording(false);
-      cleanupVoiceMeter();
-      showToast('已达到3分钟上限，已自动发送', 'info');
-
-      try {
-        const pid = holdPointerIdRef.current;
-        if (pid !== null) holdTalkBtnRef.current?.releasePointerCapture?.(pid);
-      } catch { }
-      holdPointerIdRef.current = null;
-      clearHoldMaxTimer();
-    }, MAX_VOICE_HOLD_MS);
-  };
-
-  const onHoldPointerMove = (e: React.PointerEvent<HTMLButtonElement>) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!holdStartRef.current) return;
-
-    const el = e.currentTarget as HTMLElement;
-    const rect = el.getBoundingClientRect();
-    const insideX = e.clientX >= rect.left && e.clientX <= rect.right;
-    const insideY = e.clientY >= rect.top && e.clientY <= rect.bottom;
-    const startY = holdStartRef.current.y;
-    const dy = startY - e.clientY;
-    const screenDy = typeof window !== 'undefined' ? window.innerHeight / 3 : 240;
-    const cancelThreshold = Math.max(120, Math.floor(screenDy));
-    const cancel = (insideX && insideY) ? false : (dy > cancelThreshold);
-    if (cancel !== holdCancelRef.current) {
-      holdCancelRef.current = cancel;
-      setHoldCancel(cancel);
-    }
-  };
-
-  const onHoldPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
-    try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-    clearHoldMaxTimer();
-    holdPointerIdRef.current = null;
-    if (!holdActiveRef.current) return;
-    const cancel = holdCancelRef.current;
-    holdActiveRef.current = false;
-    holdStartRef.current = null;
-    holdCancelRef.current = false;
-    setHoldCancel(false);
-    if (cancel) {
-      voicePendingUserMsgIdRef.current = null;
-      stopAudioRecorder(true);
-    } else {
-      const heldMs = Date.now() - (holdStartTimeRef.current || Date.now());
-      if (heldMs < MIN_VOICE_HOLD_MS) {
-        voicePendingUserMsgIdRef.current = null;
-        holdAwaitAudioSendRef.current = false;
-        stopAudioRecorder(true);
-        setRecording(false);
-        cleanupVoiceMeter();
-        showToast('按键时间太短，请按住说话', 'info');
-        return;
-      }
-      const userMsgId = `user-voice-${Date.now()}`;
-      voicePendingUserMsgIdRef.current = userMsgId;
-      const duration = Math.max(1, Math.round((Date.now() - holdStartTimeRef.current) / 1000));
-      const placeholder: ChatMessage = { id: userMsgId, role: 'user', text: '', audioPending: true, audioDuration: duration };
-      const next = [...chatMessagesRef.current, placeholder];
-      chatMessagesRef.current = next;
-      setChatMessages(next);
-
-      holdAwaitAudioSendRef.current = true;
-      stopAudioRecorder(false);
-    }
-    setRecording(false);
-    cleanupVoiceMeter();
-  };
-
-  const onHoldPointerCancel = (e: React.PointerEvent<HTMLButtonElement>) => {
-    try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch { }
-    clearHoldMaxTimer();
-    holdPointerIdRef.current = null;
-    holdActiveRef.current = false;
-    holdStartRef.current = null;
-    holdCancelRef.current = false;
-    setHoldCancel(false);
-    voicePendingUserMsgIdRef.current = null;
-    stopAudioRecorder(true);
-    setRecording(false);
-    cleanupVoiceMeter();
-  };
 
   // 5. Chat Page (Full Screen with Interactive Cards)
   if (currentStep === 'chat') {
@@ -3861,6 +2661,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         chatMessages={chatMessages}
         isSending={isSending}
         messagesEndRef={messagesEndRef}
+        messagesContainerRef={messagesContainerRef}
+        onMessagesScroll={handleMessagesScroll}
         expandedReferences={expandedReferences}
         setExpandedReferences={setExpandedReferences}
         parseReferenceReply={parseReferenceReply}

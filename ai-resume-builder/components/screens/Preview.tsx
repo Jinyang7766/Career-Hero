@@ -151,6 +151,17 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         <h1 className="text-xl font-bold text-gray-900" style={{ fontSize: '18px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
         <p className="text-sm text-gray-600" style={{ fontSize: '14px', color: '#666' }}>{resolveJobTitle(data)}</p>
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
+          {(data?.gender || data?.personalInfo?.age) && (
+            <>
+              <span>
+                {[
+                  data.gender === 'male' ? '男' : data.gender === 'female' ? '女' : '',
+                  data.personalInfo.age ? `${data.personalInfo.age}岁` : ''
+                ].filter(Boolean).join(' · ')}
+              </span>
+              <span>•</span>
+            </>
+          )}
           <span>{data?.personalInfo?.email || 'email@example.com'}</span>
           <span>•</span>
           <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
@@ -247,6 +258,14 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       <h1 className="text-2xl font-bold text-black uppercase tracking-wider mb-2" style={{ fontSize: '24px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-base text-gray-800 font-serif italic mb-2" style={{ fontSize: '16px' }}>{resolveJobTitle(data)}</p>
       <div className="flex justify-center gap-4 text-xs text-gray-600" style={{ fontSize: '12px', color: '#333' }}>
+        {(data?.gender || data?.personalInfo?.age) && (
+          <span>
+            {[
+              data.gender === 'male' ? '男' : data.gender === 'female' ? '女' : '',
+              data.personalInfo.age ? `${data.personalInfo.age}岁` : ''
+            ].filter(Boolean).join(' · ')}
+          </span>
+        )}
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
       </div>
@@ -339,6 +358,14 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       <h1 className="text-4xl font-black text-black tracking-tight mb-2" style={{ fontSize: '36px', fontWeight: '900' }}>{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-lg text-gray-500 font-light mb-4" style={{ fontSize: '18px' }}>{resolveJobTitle(data)}</p>
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+        {(data?.gender || data?.personalInfo?.age) && (
+          <span>
+            {[
+              data.gender === 'male' ? '男' : data.gender === 'female' ? '女' : '',
+              data.personalInfo.age ? `${data.personalInfo.age}岁` : ''
+            ].filter(Boolean).join(' · ')}
+          </span>
+        )}
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
       </div>

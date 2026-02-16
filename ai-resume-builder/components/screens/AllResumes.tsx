@@ -129,7 +129,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
           if (setResumeData) {
             // Define default structure to ensure all fields exist
             const defaultData = {
-              personalInfo: { name: '', title: '', email: '', phone: '' },
+              personalInfo: { name: '', title: '', email: '', phone: '', age: '' },
               workExps: [],
               educations: [],
               projects: [],

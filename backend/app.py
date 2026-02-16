@@ -589,7 +589,8 @@ def clean_resume_payload(payload):
             'linkedin': clean_string(personal_info.get('linkedin'), 200),
             'website': clean_string(personal_info.get('website'), 200),
             'summary': clean_string(personal_info.get('summary'), 4000),
-            'avatar': clean_string(personal_info.get('avatar'), 8000)
+            'avatar': clean_string(personal_info.get('avatar'), 8000),
+            'age': clean_string(personal_info.get('age'), 50)
         },
         'workExps': clean_list_dicts(
             payload.get('workExps'),
@@ -1621,7 +1622,9 @@ def build_resume_context(resume_data):
         'projects': projects,
         'skills': skills,
         'template_id': (resume_data.get('templateId') or 'modern').lower(),
-        'layout': layout
+        'layout': layout,
+        'gender': resume_data.get('gender') or '',
+        'age': personal_info.get('age') or '',
     }
 
 def generate_resume_html(resume_data):
@@ -1827,7 +1830,12 @@ def generate_resume_html(resume_data):
       <td valign="top">
         <h1 class="header-name">{{ name }}</h1>
         <div class="header-title">{{ title }}</div>
-        <div class="header-contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+        <div class="header-contact">
+          {% if gender or age %}
+            {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
+          {% endif %}
+          {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+        </div>
       </td>
     </tr>
   </table>
@@ -2020,7 +2028,12 @@ def generate_resume_html(resume_data):
       {% endif %}
     <div class="name">{{ name }}</div>
     <div class="title">{{ title }}</div>
-    <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+    <div class="contact">
+      {% if gender or age %}
+        {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
+      {% endif %}
+      {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+    </div>
   </div>
 
   {% if summary %}
@@ -2223,7 +2236,12 @@ def generate_resume_html(resume_data):
           <td valign="top">
             <div class="name">{{ name }}</div>
             <div class="title">{{ title }}</div>
-            <div class="contact">{{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}</div>
+            <div class="contact">
+              {% if gender or age %}
+                {% if gender == 'male' %}男{% elif gender == 'female' %}女{% endif %}{% if gender and age %} · {% endif %}{% if age %}{{ age }}岁{% endif %} | 
+              {% endif %}
+              {{ email }} | {{ phone }}{% if location %} | {{ location }}{% endif %}
+            </div>
           </td>
         </tr>
       </table>
@@ -2900,6 +2918,7 @@ def parse_resume_text_with_ai(resume_text):
             "email": "",
             "phone": "",
             "location": "",
+            "age": "",
             "summary": ""
         }},
         "workExps": [
@@ -3133,11 +3152,15 @@ def analyze_resume(current_user_id):
 8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
    - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
    - 严禁尝试猜测或还原真实隐私信息。
-9. **教育信息不可“专业优化”（强制）**：
+9. **性别字段使用约束（强制）**：
+   - 简历中的性别字段仅用于面试语境理解，不是优化目标。
+   - 严禁在 `suggestions` 的 `title/reason/targetField/suggestedValue` 中提出任何与性别相关的修改、补充、删除或匹配建议。
+   - 严禁因为性别信息影响评分结果或给出偏向性结论。
+10. **教育信息不可“专业优化”（强制）**：
    - 教育背景中的“学校/学院名称、专业名称、学历/学位、入学/毕业时间”属于事实字段，必须严格来自简历原文。
    - 严禁为了贴合 JD 而擅自“优化专业名称/主修方向”（例如把“电子商务”改成“电子商务（主修方向：数据挖掘与商务智能）”）。
    - 若 JD 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
-9. **技能词条白名单/黑名单规则（强制）**：
+11. **技能词条白名单/黑名单规则（强制）**：
    - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
    - **同类合并（强制）**：如果技能候选中出现任意大模型/对话模型/厂商或具体型号（例如：GPT-4/ChatGPT/OpenAI、Claude/Anthropic、Kimi/Moonshot、Gemini/Google、Qwen/通义千问、DeepSeek、Llama、GLM/智谱、文心一言/ERNIE 等），一律合并成单条技能：`LLM`。禁止同时列出多个不同模型名导致技能列表冗余。
    - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
@@ -3271,6 +3294,20 @@ def analyze_resume(current_user_id):
                     raise last_model_error or RuntimeError("No available Gemini analysis model")
 
                 ai_result = parse_ai_response(response.text)
+                raw_suggestions = ai_result.get('suggestions', [])
+                filtered_suggestions = []
+                dropped_gender_suggestions = 0
+                if isinstance(raw_suggestions, list):
+                    for suggestion in raw_suggestions:
+                        if is_gender_related_suggestion(suggestion):
+                            dropped_gender_suggestions += 1
+                            continue
+                        filtered_suggestions.append(suggestion)
+                else:
+                    filtered_suggestions = []
+                if dropped_gender_suggestions > 0:
+                    logger.info("Dropped %d gender-related suggestions from AI analyze result", dropped_gender_suggestions)
+                ai_result['suggestions'] = filtered_suggestions
                 ensured_summary = ensure_analysis_summary(
                     ai_result.get('summary', ''),
                     ai_result.get('strengths', []),
@@ -3305,6 +3342,7 @@ def analyze_resume(current_user_id):
 
                 score = calculate_resume_score(resume_data)
                 suggestions = generate_enhanced_suggestions(resume_data, score, job_description)
+                suggestions = [s for s in (suggestions or []) if not is_gender_related_suggestion(s)]
 
                 return jsonify({
                     'score': score,
@@ -3324,6 +3362,7 @@ def analyze_resume(current_user_id):
 
         score = calculate_resume_score(resume_data)
         suggestions = generate_suggestions(resume_data, score)
+        suggestions = [s for s in (suggestions or []) if not is_gender_related_suggestion(s)]
 
         return jsonify({
             'score': score,
@@ -3700,12 +3739,22 @@ def format_resume_for_ai(resume_data):
     """用于 AI 的简历格式化文本"""
     def _text(v):
         return str(v).strip() if v is not None else ''
+    def _normalize_gender(v):
+        value = _text(v).lower()
+        if value in ('male', 'man', 'm', '男', '男性'):
+            return '男'
+        if value in ('female', 'woman', 'f', '女', '女性'):
+            return '女'
+        return ''
 
     formatted = []
     personal = resume_data.get('personalInfo', {}) or {}
     if personal:
         formatted.append(f"姓名: {_text(personal.get('name'))}")
         formatted.append(f"职位: {_text(personal.get('title') or personal.get('jobTitle'))}")
+    gender = _normalize_gender(resume_data.get('gender') or personal.get('gender'))
+    if gender:
+        formatted.append(f"性别: {gender}")
     
     summary = _text(resume_data.get('summary') or personal.get('summary'))
     if summary:
@@ -3761,6 +3810,45 @@ def parse_ai_response(response_text):
             return json.loads(response_text[start:end])
     except: pass
     return {'score': 75, 'strengths': [], 'weaknesses': [], 'suggestions': [], 'missingKeywords': []}
+
+def is_gender_related_suggestion(suggestion):
+    if suggestion is None:
+        return False
+
+    gender_tokens = (
+        '性别', 'gender', 'sex',
+        '男', '女', '男性', '女性', '男生', '女生', '女士', '先生',
+        'male', 'female', 'man', 'woman'
+    )
+
+    def _contains_gender_text(value):
+        text = str(value or '').strip().lower()
+        if not text:
+            return False
+        return any(token in text for token in gender_tokens)
+
+    if isinstance(suggestion, str):
+        return _contains_gender_text(suggestion)
+    if not isinstance(suggestion, dict):
+        return False
+
+    target_field = str(suggestion.get('targetField') or '').strip().lower()
+    if target_field in ('gender', 'sex'):
+        return True
+
+    target_section = str(suggestion.get('targetSection') or '').strip().lower()
+    if target_section in ('gender', 'sex'):
+        return True
+
+    combined = ' '.join([
+        str(suggestion.get('title') or ''),
+        str(suggestion.get('reason') or ''),
+        str(suggestion.get('targetSection') or ''),
+        str(suggestion.get('targetField') or ''),
+        json.dumps(suggestion.get('suggestedValue', ''), ensure_ascii=False),
+        json.dumps(suggestion.get('originalValue', ''), ensure_ascii=False)
+    ])
+    return _contains_gender_text(combined)
 
 def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_keywords=None, has_jd=False):
     """

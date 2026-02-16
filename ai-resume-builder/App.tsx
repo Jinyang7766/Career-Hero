@@ -304,7 +304,8 @@ function App() {
       name: '',
       title: '',
       email: '',
-      phone: ''
+      phone: '',
+      age: ''
     },
     workExps: [],
     educations: [],
@@ -392,7 +393,8 @@ function App() {
         linkedin: '',
         website: '',
         summary: '',
-        avatar: ''
+        avatar: '',
+        age: ''
       },
       workExps: [],
       educations: [],
@@ -514,7 +516,8 @@ function App() {
               linkedin: '',
               website: '',
               summary: '',
-              avatar: ''
+              avatar: '',
+              age: ''
             },
             workExps: [],
             educations: [],

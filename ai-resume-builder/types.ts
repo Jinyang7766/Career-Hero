@@ -42,6 +42,7 @@ export interface PersonalInfo {
   website?: string;
   summary?: string;
   avatar?: string;
+  age?: string;
 }
 
 export interface WorkExperience extends ExperienceItem {

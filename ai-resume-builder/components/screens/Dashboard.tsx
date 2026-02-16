@@ -102,7 +102,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
           if (setResumeData) {
             // Ensure all required fields exist by merging with defaults
             const defaultData = {
-              personalInfo: { name: '', title: '', email: '', phone: '' },
+              personalInfo: { name: '', title: '', email: '', phone: '', age: '' },
               workExps: [],
               educations: [],
               projects: [],

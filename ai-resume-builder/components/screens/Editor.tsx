@@ -4,6 +4,7 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
 import { toSkillList, mergeSkills } from '../../src/skill-utils';
+import { buildResumeTitle } from '../../src/resume-utils';
 import ImportStep from '../editor/steps/ImportStep';
 import PersonalStep from '../editor/steps/PersonalStep';
 import WorkStep from '../editor/steps/WorkStep';
@@ -339,6 +340,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           phone: importedData.personalInfo.phone || prev.personalInfo.phone,
           avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           location: importedData.personalInfo.location || prev.personalInfo.location,
+          age: importedData.personalInfo.age || prev.personalInfo.age,
           summary: importedSummary || prev.personalInfo.summary
         };
       }
@@ -655,7 +657,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       console.log('Current user:', user);
 
       let result;
-      const title = `${resumeData.personalInfo.name || '未命名'}的简历`;
+      const title = buildResumeTitle(
+        resumeData.resumeTitle,
+        resumeData,
+        resumeData.lastJdText || '',
+        true,
+        resumeData.targetCompany
+      );
 
       // Check if we're updating an existing resume or creating a new one
       if (resumeData.id) {
