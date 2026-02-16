@@ -1568,6 +1568,7 @@ def export_pdf():
                                     "Cache-Control": "public, max-age=3600",
                                 },
                             )
+                        page.route("https://pdf.local/__pdf_font__.ttf", _handle_font_route)
                         page.route("**/__pdf_font__.ttf", _handle_font_route)
                     page.set_content(html_content, wait_until="networkidle", timeout=30000)
                     # Ensure @font-face resources are fully loaded before printing PDF.
@@ -1749,7 +1750,7 @@ def clean_text_for_pdf(text):
 _PDF_FONT_FAMILY_CACHE = None
 _PDF_FONT_URL_CACHE = None
 _PDF_FONT_BYTES_CACHE = None
-_PDF_FONT_VIRTUAL_URL = "/__pdf_font__.ttf"
+_PDF_FONT_VIRTUAL_URL = "https://pdf.local/__pdf_font__.ttf"
 
 
 def resolve_pdf_font_path() -> str:
