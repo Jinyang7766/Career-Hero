@@ -51,38 +51,55 @@ const DeletionPending: React.FC<ScreenProps> = () => {
     };
 
     return (
-        <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col items-center justify-center px-6 text-center animate-in fade-in duration-500">
-            <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-full flex items-center justify-center mb-6">
-                <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-4xl">warning</span>
+        <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col items-center justify-center px-6 text-center animate-in fade-in duration-500 relative overflow-hidden">
+            {/* Decorative Background */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                {/* Main Blobs - Soft & Large */}
+                <div className="absolute top-[-5%] left-[-5%] w-[400px] h-[400px] rounded-full bg-primary/10 blur-[100px] animate-pulse" style={{ animationDuration: '8s' }}></div>
+                <div className="absolute bottom-[-5%] right-[-5%] w-[350px] h-[350px] rounded-full bg-blue-500/10 blur-[100px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '1s' }}></div>
+                <div className="absolute top-[20%] right-[10%] w-[150px] h-[150px] rounded-full bg-purple-500/5 blur-[80px]"></div>
+
+                {/* Subtle Grid Interaction */}
+                <div className="absolute inset-0 opacity-[0.2] dark:opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle, #3b82f6 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
+
+                {/* Floating Accents */}
+                <div className="absolute top-[15%] left-[20%] w-24 h-24 border border-primary/10 rounded-full"></div>
+                <div className="absolute bottom-[25%] right-[15%] w-16 h-16 border border-blue-400/10 rounded-lg rotate-12"></div>
             </div>
 
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">账号注销处理中</h1>
+            <div className="relative z-10 flex flex-col items-center w-full max-w-sm">
+                <div className="w-20 h-20 bg-amber-100 dark:bg-amber-900/30 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-amber-500/10 border border-amber-200/50 dark:border-amber-700/30">
+                    <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-4xl">warning</span>
+                </div>
 
-            <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
-                您的账号已申请注销，所有数据将在 <br />
-                <span className="font-bold text-slate-900 dark:text-white">{formatDate(deletionUntil)}</span> <br />
-                之后被永久清除。在此期间，您可以随时恢复账号。
-            </p>
+                <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">账号注销处理中</h1>
 
-            <div className="w-full space-y-4">
-                <button
-                    onClick={handleRestore}
-                    className="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-[0.98] transition-all"
-                >
-                    恢复账号
-                </button>
+                <p className="text-slate-600 dark:text-slate-400 mb-8 leading-relaxed">
+                    您的账号已申请注销，所有数据将在 <br />
+                    <span className="font-bold text-slate-900 dark:text-white">{formatDate(deletionUntil)}</span> <br />
+                    之后被永久清除。在此期间，您可以随时恢复账号。
+                </p>
 
-                <button
-                    onClick={logout}
-                    className="w-full py-4 bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl font-medium border border-slate-200 dark:border-white/10 active:scale-[0.98] transition-all"
-                >
-                    退出登录
-                </button>
+                <div className="w-full space-y-4">
+                    <button
+                        onClick={handleRestore}
+                        className="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-[0.98] transition-all"
+                    >
+                        恢复账号
+                    </button>
+
+                    <button
+                        onClick={() => logout()}
+                        className="w-full py-4 bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 rounded-xl font-medium border border-slate-200 dark:border-white/10 active:scale-[0.98] transition-all"
+                    >
+                        退出登录
+                    </button>
+                </div>
+
+                <p className="mt-8 text-xs text-slate-400 dark:text-slate-500">
+                    如果您不进行任何操作，账号将在到期后自动注销。
+                </p>
             </div>
-
-            <p className="mt-8 text-xs text-slate-400 dark:text-slate-500">
-                如果您不进行任何操作，账号将在到期后自动注销。
-            </p>
         </div>
     );
 };
