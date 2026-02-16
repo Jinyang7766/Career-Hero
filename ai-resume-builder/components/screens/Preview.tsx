@@ -375,7 +375,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       {/* Summary Section */}
       {data?.summary && (
         <section className="mb-6 no-break">
-          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px] mb-2" style={{ fontSize: '14px' }}>Summary</h3>
+          <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px] mb-2" style={{ fontSize: '14px' }}>个人总结</h3>
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>
             {data.summary}
           </p>
@@ -385,7 +385,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       {/* Experience */}
       {data?.workExps && data.workExps.length > 0 && (
         <div className="no-break">
-          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>Experience</h3>
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>工作经历</h3>
           <div className="space-y-6">
             {data.workExps.map((exp: any) => (
               <div key={exp.id}>
@@ -406,7 +406,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       {/* Education */}
       {data?.educations && data.educations.length > 0 && (
         <div className="no-break">
-          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>Education</h3>
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>教育背景</h3>
           <div className="space-y-4">
             {data.educations.map((edu: any) => (
               <div key={edu.id}>
@@ -424,7 +424,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       {/* Projects */}
       {data?.projects && data.projects.length > 0 && (
         <div className="no-break">
-          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>Projects</h3>
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>项目经历</h3>
           <div className="space-y-6">
             {data.projects.map((proj: any) => (
               <div key={proj.id}>
@@ -443,7 +443,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       {/* Skills */}
       {data?.skills && data.skills.length > 0 && (
         <div className="no-break">
-          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>Skills</h3>
+          <h3 className="text-sm font-bold text-black uppercase tracking-widest border-b border-black pb-2 mb-4" style={{ fontSize: '14px' }}>专业技能</h3>
           <div className="flex flex-wrap gap-x-6 gap-y-3">
             {data.skills.map((skill: string) => (
               <span key={skill} className="text-sm text-black font-medium" style={{ fontSize: '10px' }}>{skill}</span>

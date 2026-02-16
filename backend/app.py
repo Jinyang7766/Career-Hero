@@ -54,6 +54,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _is_missing_deletion_column_error(err: Exception) -> bool:
+    text = str(err or '')
+    return (
+        'deletion_pending_until' in text
+        and ('PGRST204' in text or 'schema cache' in text or 'Could not find' in text)
+    )
+
 # Debug: Log environment variable keys (NOT values) to verify injection
 env_keys = list(os.environ.keys())
 logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
@@ -1039,11 +1047,23 @@ def get_profile(current_user_id):
                 'deletion_pending_until': user.get('deletion_pending_until')
             }), 200
         else:
-            result = supabase.table('users').select('id,email,name,deletion_pending_until').eq('id', current_user_id).execute()
+            try:
+                result = supabase.table('users').select('id,email,name,deletion_pending_until').eq('id', current_user_id).execute()
+            except Exception as col_err:
+                if _is_missing_deletion_column_error(col_err):
+                    # Backward compatibility: old schema without deletion_pending_until.
+                    result = supabase.table('users').select('id,email,name').eq('id', current_user_id).execute()
+                    if result.data:
+                        row = dict(result.data[0] or {})
+                        row['deletion_pending_until'] = None
+                        return jsonify(row), 200
+                    return jsonify({'error': '用户不存在'}), 404
+                raise
             if not result.data:
                 return jsonify({'error': '用户不存在'}), 404
             return jsonify(result.data[0]), 200
     except Exception as e:
+        logger.exception(f"get_profile failed for user={current_user_id}")
         return jsonify({'error': '服务器内部错误'}), 500
 
 @app.route('/api/user/request-deletion', methods=['POST'])
@@ -1083,6 +1103,10 @@ def request_deletion(current_user_id):
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
         logger.exception(f"request_deletion failed for user={current_user_id}")
+        if _is_missing_deletion_column_error(e):
+            return jsonify({
+                'error': '当前数据库缺少 deletion_pending_until 字段，暂不支持冷静期注销。请先执行数据库迁移，或使用“立即永久注销”。'
+            }), 400
         return jsonify({'error': f'注销操作失败：{str(e)}'}), 500
 
 @app.route('/api/user/cancel-deletion', methods=['POST'])
@@ -1118,6 +1142,10 @@ def cancel_deletion(current_user_id):
         return jsonify({'error': '操作失败'}), 500
     except Exception as e:
         logger.exception(f"cancel_deletion failed for user={current_user_id}")
+        if _is_missing_deletion_column_error(e):
+            return jsonify({
+                'error': '当前数据库缺少 deletion_pending_until 字段，无法撤销冷静期注销。请先执行数据库迁移。'
+            }), 400
         return jsonify({'error': f'撤销注销失败：{str(e)}'}), 500
 
 @app.route('/api/user/delete-account-immediate', methods=['POST'])

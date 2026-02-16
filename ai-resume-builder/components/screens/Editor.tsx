@@ -311,7 +311,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   // Guard clause to prevent crash if data isn't ready
   if (!resumeData || !setResumeData) {
-    return <div className="p-4 text-white">Loading data...</div>;
+    return <div className="p-4 text-white">数据加载中...</div>;
   }
 
   // --- Handlers ---
@@ -482,7 +482,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   const handleTextImport = async () => {
     if (!textResume.trim()) {
-      setTextError('Please paste your resume text.');
+      setTextError('请粘贴您的简历文本。');
       return;
     }
 
@@ -502,18 +502,18 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Resume parse failed');
+        throw new Error(errorData.error || '简历解析失败');
       }
 
       const result = await response.json();
       if (result.success && result.data) {
         handleResumeImport(result.data);
       } else {
-        throw new Error('Empty parse result');
+        throw new Error('未获取到解析结果');
       }
     } catch (err: any) {
       console.error('Resume parse failed:', err);
-      setTextError(err.message || 'Resume parse failed, please try again.');
+      setTextError(err.message || '简历解析失败，请稍后重试。');
     } finally {
       setIsProcessing(false);
     }
@@ -537,18 +537,18 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'PDF parse failed');
+        throw new Error(errorData.error || 'PDF 解析失败');
       }
 
       const result = await response.json();
       if (result.success && result.data) {
         handleResumeImport(result.data);
       } else {
-        throw new Error('Empty parse result');
+        throw new Error('未获取到解析结果');
       }
     } catch (err: any) {
       console.error('PDF parse failed:', err);
-      setPdfError(err.message || 'PDF parse failed, please try again.');
+      setPdfError(err.message || 'PDF 解析失败，请稍后重试。');
     } finally {
       setIsPdfProcessing(false);
       if (pdfInputRef.current) pdfInputRef.current.value = '';
