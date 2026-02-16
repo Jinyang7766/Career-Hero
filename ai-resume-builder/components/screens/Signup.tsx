@@ -22,6 +22,15 @@ const Signup: React.FC<ScreenProps> = () => {
     try {
       console.log('Attempting signup with:', { email, name });
 
+      // 密码复杂度校验
+      const hasLetter = /[a-zA-Z]/.test(password);
+      const hasNumber = /\d/.test(password);
+      if (password.length < 8 || !hasLetter || !hasNumber) {
+        setError('密码需至少8位，且同时包含字母和数字');
+        setIsLoading(false);
+        return;
+      }
+
       // 使用AuthService进行注册
       const result = await AuthService.signUp(email, password, name);
 
@@ -104,8 +113,8 @@ const Signup: React.FC<ScreenProps> = () => {
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
           <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
-              <div className="mx-auto flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-primary/10 text-primary ring-4 ring-primary/5">
-                <span className="material-symbols-outlined text-[24px] sm:text-[28px]">person_add</span>
+              <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-600 shadow-lg shadow-primary/30 ring-4 ring-primary/10">
+                <span className="material-symbols-outlined text-white text-[28px] sm:text-[32px]">person_add</span>
               </div>
               <h2 className="mt-4 sm:mt-6 text-center text-xl sm:text-2xl font-black leading-9 tracking-tight text-slate-900 dark:text-white">
                 创建新账号
@@ -202,13 +211,16 @@ const Signup: React.FC<ScreenProps> = () => {
                     </span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => navigateToView(View.LOGIN, { replace: true })}
-                    className="mt-6 flex w-full justify-center text-xs font-bold text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
-                  >
-                    已有账号？去登录
-                  </button>
+                  <div className="mt-8 text-center text-sm text-slate-500 dark:text-slate-400 font-medium">
+                    已有账号？{' '}
+                    <button
+                      type="button"
+                      onClick={() => navigateToView(View.LOGIN, { replace: true })}
+                      className="font-black leading-6 text-primary hover:text-blue-500 transition-colors"
+                    >
+                      去登录
+                    </button>
+                  </div>
                 </div>
               </form>
             </div>

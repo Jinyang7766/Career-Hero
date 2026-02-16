@@ -88,19 +88,17 @@ const Login: React.FC<ScreenProps> = () => {
           <div className="absolute top-[40%] right-[10%] w-12 h-12 border-t border-r border-primary/10 rounded-tr-xl"></div>
         </div>
 
-        <div className="absolute top-4 right-4 z-20">
-          <button
-            onClick={toggleTheme}
-            className="flex size-10 items-center justify-center rounded-xl bg-white/10 backdrop-blur-md border border-white/20 text-slate-900 dark:text-white hover:bg-white/20 transition-all active:scale-95 shadow-lg"
-          >
-            <span className="material-symbols-outlined text-[20px]">
-              {isDarkMode ? 'light_mode' : 'dark_mode'}
-            </span>
-          </button>
-        </div>
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
-          <div className="bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
+          <div className="relative bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
+            <button
+              onClick={toggleTheme}
+              className="absolute top-4 right-4 flex size-10 items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {isDarkMode ? 'light_mode' : 'dark_mode'}
+              </span>
+            </button>
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
               <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-600 shadow-lg shadow-primary/30 ring-4 ring-primary/10">
                 <span className="material-symbols-outlined text-white text-[28px] sm:text-[32px]">description</span>
