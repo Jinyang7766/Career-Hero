@@ -133,6 +133,8 @@ GEMINI_RESUME_PARSE_MODEL = os.getenv(
 )
 # PDF OCR 文本提取模型：优先速度/成本
 GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview')
+# JD 截图识别模型：默认与 PDF OCR 一致，可单独下调到更快模型（如 gemini-2.5-flash-lite）
+GEMINI_JD_OCR_MODEL = os.getenv('GEMINI_JD_OCR_MODEL', GEMINI_PDF_OCR_MODEL)
 # 简历分析（优化建议）模型
 GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-pro-preview')
 # 面试对话模型
@@ -225,6 +227,17 @@ except ImportError:
 
 def get_ocr_model_candidates():
     return get_ocr_model_candidates_service(GEMINI_VISION_MODELS)
+
+def get_jd_ocr_model_candidates():
+    raw_fallback = os.getenv('GEMINI_JD_OCR_FALLBACK_MODELS', '')
+    env_fallback = [item.strip() for item in raw_fallback.split(',') if item.strip()]
+    jd_models = [
+        GEMINI_JD_OCR_MODEL,
+        *env_fallback,
+        GEMINI_PDF_OCR_MODEL,
+        'gemini-2.5-flash-lite',
+    ]
+    return get_ocr_model_candidates_service(jd_models)
 
 
 def get_analysis_model_candidates():
@@ -835,6 +848,7 @@ def parse_screenshot(current_user_id):
                 'gemini_client': gemini_client,
                 'check_gemini_quota': check_gemini_quota,
                 'get_ocr_model_candidates': get_ocr_model_candidates,
+                'get_jd_ocr_model_candidates': get_jd_ocr_model_candidates,
                 'logger': logger,
             },
         )

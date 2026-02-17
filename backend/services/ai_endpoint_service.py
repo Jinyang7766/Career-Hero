@@ -570,9 +570,9 @@ def parse_screenshot_core(data, deps):
     if deps['gemini_client'] and deps['check_gemini_quota']():
         try:
             prompt = (
-                "请从图片中提取完整职位描述（JD）文本。"
-                "尽可能保留原始分段和要点，删除与JD无关的噪声内容。"
-                "仅返回可直接粘贴的中文文本，不要解释，不要JSON。"
+                "你是JD文本OCR助手。"
+                "任务：从图片中提取完整职位描述（JD）文本。"
+                "要求：保留原有分段和项目符号；去掉无关UI文字；只输出纯文本，不要解释，不要Markdown，不要JSON。"
             )
             from base64 import b64decode
             mime_type = "image/png"
@@ -584,14 +584,30 @@ def parse_screenshot_core(data, deps):
                 base64_data = match.group(2)
 
             image_data = b64decode(base64_data)
+            if len(image_data) > 8 * 1024 * 1024:
+                return {'success': False, 'text': '', 'error': '图片过大，请裁剪后重试（建议不超过 8MB）。'}, 200
             contents = [prompt, types.Part.from_bytes(data=image_data, mime_type=mime_type)]
-            candidate_models = deps['get_ocr_model_candidates']()
+            get_jd_candidates = deps.get('get_jd_ocr_model_candidates')
+            if callable(get_jd_candidates):
+                candidate_models = get_jd_candidates()
+            else:
+                candidate_models = deps['get_ocr_model_candidates']()
 
             last_error = None
             for model_name in candidate_models:
                 try:
-                    response = deps['gemini_client'].models.generate_content(model=model_name, contents=contents)
+                    response = deps['gemini_client'].models.generate_content(
+                        model=model_name,
+                        contents=contents,
+                        config=types.GenerateContentConfig(
+                            temperature=0,
+                            max_output_tokens=2200,
+                        ),
+                    )
                     text = (response.text or '').strip()
+                    if text.startswith("```"):
+                        text = re.sub(r"^```[a-zA-Z]*\s*", "", text)
+                        text = re.sub(r"\s*```$", "", text).strip()
                     if text:
                         return {'success': True, 'text': text, 'model': model_name}, 200
                 except Exception as model_err:
