@@ -18,6 +18,10 @@ type Params = {
   chatMessagesRef: MutableRefObject<ChatMessage[]>;
   setChatMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   persistInterviewSession: (messages: ChatMessage[], overrideJdText?: string) => Promise<void>;
+  persistAnalysisSessionState: (
+    state: 'interview_in_progress' | 'paused' | 'interview_done',
+    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; lastMessageAt: string; force: boolean }>
+  ) => Promise<void>;
   jdText: string;
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
@@ -39,6 +43,7 @@ export const useInterviewChat = ({
   chatMessagesRef,
   setChatMessages,
   persistInterviewSession,
+  persistAnalysisSessionState,
   jdText,
   getBackendAuthToken,
   buildApiUrl,
@@ -78,6 +83,180 @@ export const useInterviewChat = ({
       reader.onerror = () => reject(new Error('read failed'));
       reader.readAsDataURL(blob);
     });
+
+  const streamInterviewResponse = async ({
+    token,
+    requestBody,
+    baseMessages,
+    streamingMessageId,
+  }: {
+    token: string;
+    requestBody: any;
+    baseMessages: ChatMessage[];
+    streamingMessageId: string;
+  }) => {
+    const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
+    let streamedText = '';
+    let doneText = '';
+    let incomingBuffer = '';
+    let displayedText = '';
+    let streamFinished = false;
+    let typingTimer: number | null = null;
+    let hasRealChunk = false;
+    let typingTickAt = Date.now();
+
+    const setStreamingText = (text: string) => {
+      setChatMessages(prev => {
+        const has = prev.some(msg => msg.id === streamingMessageId);
+        if (!has) {
+          const next = [...prev, { id: streamingMessageId, role: 'model' as const, text }];
+          chatMessagesRef.current = next as ChatMessage[];
+          return next;
+        }
+        const next = prev.map(msg => (
+          msg.id === streamingMessageId ? { ...msg, text } : msg
+        ));
+        chatMessagesRef.current = next as ChatMessage[];
+        return next;
+      });
+    };
+
+    const pumpTyping = () => {
+      if (!incomingBuffer) {
+        return;
+      }
+      const now = Date.now();
+      const elapsed = Math.max(1, now - typingTickAt);
+      typingTickAt = now;
+
+      // Smooth typing speed: adapt batch size to backlog and frame interval.
+      const byBacklog =
+        incomingBuffer.length > 180 ? 12 :
+          incomingBuffer.length > 120 ? 8 :
+            incomingBuffer.length > 60 ? 5 :
+              incomingBuffer.length > 24 ? 3 : 2;
+      const byElapsed = Math.max(1, Math.floor(elapsed / 16));
+      const take = Math.min(incomingBuffer.length, Math.max(byBacklog, byElapsed));
+      const delta = incomingBuffer.slice(0, take);
+      incomingBuffer = incomingBuffer.slice(take);
+      displayedText += delta;
+      setStreamingText(displayedText);
+    };
+
+    const startTypingLoop = () => {
+      if (typingTimer) return;
+      typingTickAt = Date.now();
+      typingTimer = window.setInterval(() => {
+        pumpTyping();
+      }, 24);
+    };
+
+    const stopTypingLoop = () => {
+      if (typingTimer) {
+        window.clearInterval(typingTimer);
+        typingTimer = null;
+      }
+    };
+
+    const waitForTypingDrain = async (maxMs: number = 2500) => {
+      const started = Date.now();
+      while (incomingBuffer.length > 0 && (Date.now() - started) < maxMs) {
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+    };
+
+    const response = await fetch(streamEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error((errorData as any).error || 'Backend API failed');
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    // Early-return path from backend keeps JSON semantics.
+    if (!contentType.includes('text/event-stream')) {
+      const result = await response.json().catch(() => ({} as any));
+      const fallbackText = String(result?.response || '').trim();
+      return fallbackText || '感谢你的回答，我们继续下一题。';
+    }
+
+    if (!response.body) {
+      throw new Error('流式响应不可用');
+    }
+
+    startTypingLoop();
+
+    try {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let boundary = buffer.indexOf('\n\n');
+        while (boundary !== -1) {
+          const rawEvent = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          boundary = buffer.indexOf('\n\n');
+
+          const lines = rawEvent.split('\n').map(line => line.trim());
+          const dataLines = lines.filter(line => line.startsWith('data:'));
+          if (!dataLines.length) continue;
+          const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
+          if (!dataRaw) continue;
+
+          try {
+            const payload = JSON.parse(dataRaw);
+            const type = String(payload?.type || '');
+            if (type === 'chunk') {
+              const delta = String(payload?.delta || '');
+              if (!delta) continue;
+              hasRealChunk = true;
+              streamedText += delta;
+              incomingBuffer += delta;
+            } else if (type === 'done') {
+              doneText = String(payload?.text || '').trim();
+            } else if (type === 'error') {
+              throw new Error(String(payload?.message || '流式面试失败'));
+            }
+          } catch (parseError) {
+            console.warn('Failed to parse SSE payload:', parseError);
+          }
+        }
+      }
+
+      streamFinished = true;
+      if (doneText) {
+        if (!hasRealChunk) {
+          incomingBuffer += doneText;
+        } else if (doneText.startsWith(displayedText)) {
+          incomingBuffer += doneText.slice(displayedText.length);
+        } else if (doneText !== displayedText) {
+          // Non-prefix correction case: switch to authoritative done text.
+          displayedText = '';
+          incomingBuffer = doneText;
+        }
+      }
+      await waitForTypingDrain();
+      pumpTyping();
+
+      const finalText = (doneText || displayedText || streamedText || '').trim();
+      if (finalText) return finalText;
+      return '感谢你的回答，我们继续下一题。';
+    } finally {
+      stopTypingLoop();
+    }
+  };
 
   const generateInterviewSummary = async (baseMessages: ChatMessage[]) => {
     const token = await getBackendAuthToken();
@@ -154,6 +333,15 @@ export const useInterviewChat = ({
     }
 
     beginSending();
+    try {
+      await persistAnalysisSessionState('interview_in_progress', {
+        jdText,
+        step: 'chat',
+        lastMessageAt: new Date().toISOString(),
+      });
+    } catch (stateErr) {
+      console.warn('Failed to persist interview_in_progress state:', stateErr);
+    }
 
     try {
       if (!opts?.skipAddUserMessage && isEndCommand) {
@@ -169,6 +357,16 @@ export const useInterviewChat = ({
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
         await persistInterviewSession(finalMessages, jdText);
+        try {
+          await persistAnalysisSessionState('interview_done', {
+            jdText,
+            step: 'report',
+            lastMessageAt: new Date().toISOString(),
+            force: true,
+          });
+        } catch (stateErr) {
+          console.warn('Failed to persist interview_done state:', stateErr);
+        }
         interviewEndedRef.current = true;
         return;
       }
@@ -176,7 +374,6 @@ export const useInterviewChat = ({
       const token = await getBackendAuthToken();
       if (!token) throw new Error('请先登录以使用 AI 功能');
 
-      const apiEndpoint = buildApiUrl('/api/ai/chat');
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
@@ -222,53 +419,66 @@ export const useInterviewChat = ({
         audioPayload.data = await blobToBase64(audioObj!.blob);
       }
 
-      const response = await fetch(apiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token.trim()}`
-        },
-        body: JSON.stringify(buildChatRequestBody({
-          message: maskedMessage,
-          audio: audioPayload,
-          resumeData: maskedResumeData,
-          jobDescription: maskedJdText,
-          chatHistory: maskedChatHistory,
-          score,
-          suggestions,
-          isInterviewChat
-        }))
+      const requestBody = buildChatRequestBody({
+        message: maskedMessage,
+        audio: audioPayload,
+        resumeData: maskedResumeData,
+        jobDescription: maskedJdText,
+        chatHistory: maskedChatHistory,
+        score,
+        suggestions,
+        isInterviewChat
       });
 
-      if (response.ok) {
-        const result = await response.json();
-        const unmaskedText = masker.unmaskText(result.response || '感谢你的回答，我们继续下一题。');
-        const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
-        const { cleaned, next } = splitNextQuestion(safeText);
-        const aiMessage: ChatMessage = {
-          id: `ai-${Date.now()}`,
+      const streamId = `ai-stream-${Date.now()}`;
+      const unmaskedText = masker.unmaskText(await streamInterviewResponse({
+        token,
+        requestBody,
+        baseMessages,
+        streamingMessageId: streamId,
+      }));
+
+      const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
+      const { cleaned, next } = splitNextQuestion(safeText);
+      const aiMessage: ChatMessage = {
+        id: `ai-${Date.now()}`,
+        role: 'model',
+        text: (cleaned || safeText).trim()
+      };
+      let finalMessages: ChatMessage[] = [...baseMessages, aiMessage];
+      if (next) {
+        const formattedQ = formatInterviewQuestion(next);
+        const nextMsg: ChatMessage = {
+          id: `ai-next-${Date.now()}`,
           role: 'model',
-          text: (cleaned || safeText).trim()
+          text: isSelfIntroQuestion(formattedQ) ? formattedQ : `下一题：${formattedQ}`
         };
-        let finalMessages: ChatMessage[] = [...baseMessages, aiMessage];
-        if (next) {
-          const formattedQ = formatInterviewQuestion(next);
-          const nextMsg: ChatMessage = {
-            id: `ai-next-${Date.now()}`,
-            role: 'model',
-            text: isSelfIntroQuestion(formattedQ) ? formattedQ : `下一题：${formattedQ}`
-          };
-          finalMessages = [...finalMessages, nextMsg];
-        }
-        chatMessagesRef.current = finalMessages;
-        setChatMessages(finalMessages);
-        await persistInterviewSession(finalMessages, jdText);
-      } else {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error((errorData as any).error || 'Backend API failed');
+        finalMessages = [...finalMessages, nextMsg];
+      }
+      chatMessagesRef.current = finalMessages;
+      setChatMessages(finalMessages);
+      await persistInterviewSession(finalMessages, jdText);
+      try {
+        await persistAnalysisSessionState('interview_in_progress', {
+          jdText,
+          step: 'chat',
+          lastMessageAt: new Date().toISOString(),
+        });
+      } catch (stateErr) {
+        console.warn('Failed to refresh interview_in_progress state:', stateErr);
       }
     } catch (error) {
       console.error('API failed:', error);
+      try {
+        await persistAnalysisSessionState('paused', {
+          jdText,
+          step: 'chat',
+          error: (error as any)?.message || 'interview_interrupted',
+          force: true,
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist paused interview state:', stateErr);
+      }
       if (hasAudio && !hasText && !opts?.skipAddUserMessage) {
         const filtered = chatMessagesRef.current.filter(m => m.id !== userMessage.id);
         chatMessagesRef.current = filtered;

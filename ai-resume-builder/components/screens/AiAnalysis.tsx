@@ -116,12 +116,15 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const [forceReportEntry, setForceReportEntry] = useState(false);
   const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
   const [chatInitialized, setChatInitialized] = useState(false);
+  const recoveredSessionKeyRef = useRef<string>('');
   const chatIntroScheduledRef = useRef(false);
   const {
     saveLastAnalysis,
     loadLastAnalysis,
     clearLastAnalysis,
     makeJdKey,
+    getAnalysisSession,
+    persistAnalysisSessionState,
     restoreInterviewSession,
     persistInterviewSession,
   } = useInterviewSessionStore({
@@ -164,6 +167,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     chatMessagesRef: chatMessagesRef as any,
     setChatMessages: setChatMessages as any,
     persistInterviewSession: persistInterviewSession as any,
+    persistAnalysisSessionState,
     jdText,
     getBackendAuthToken,
     buildApiUrl,
@@ -304,6 +308,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setScore,
     setSuggestions: setSuggestions as any,
     setReport: setReport as any,
+    persistAnalysisSessionState,
     persistAnalysisSnapshot: persistAnalysisSnapshot as any,
     saveLastAnalysis,
     setAnalysisResumeId,
@@ -413,6 +418,63 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     selectedResumeId,
     resumeData,
   });
+
+  useEffect(() => {
+    if (!resumeData) return;
+    const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
+    if (!effectiveJdText) return;
+
+    const jdKey = makeJdKey(effectiveJdText);
+    const marker = `${String(resumeData.id || '')}:${jdKey}:${currentStep}`;
+    if (recoveredSessionKeyRef.current === marker) return;
+
+    const session = getAnalysisSession(effectiveJdText) as any;
+    if (!session) return;
+
+    const status = String(session.state || '');
+    const hasInterviewMessages = !!(resumeData.interviewSessions?.[jdKey]?.messages?.length);
+
+    // Refresh/re-entry recovery: interrupted interview should resume in chat with existing history.
+    if (
+      hasInterviewMessages &&
+      (status === 'interview_in_progress' || status === 'paused') &&
+      currentStep !== 'chat'
+    ) {
+      if (!jdText) setJdText(effectiveJdText);
+      restoreInterviewSession(effectiveJdText);
+      openChat('internal');
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+
+    // If analysis finished previously and user lands on JD input accidentally, take them back to report.
+    if (
+      status === 'report_ready' &&
+      (currentStep === 'jd_input' || currentStep === 'resume_select') &&
+      (resumeData.analysisSnapshot || loadLastAnalysis())
+    ) {
+      navigateToStep('report', true);
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+  }, [
+    currentStep,
+    getAnalysisSession,
+    jdText,
+    loadLastAnalysis,
+    makeJdKey,
+    navigateToStep,
+    openChat,
+    resumeData,
+    restoreInterviewSession,
+    setJdText,
+  ]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    if (chatInitialized) return;
+    restoreInterviewSession();
+  }, [chatInitialized, currentStep, restoreInterviewSession]);
 
 
 

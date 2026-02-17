@@ -1,7 +1,78 @@
 import re
 import traceback
+import json
+import copy
 
 from google.genai import types
+
+
+class PIIMasker:
+    """
+    Reversible PII masker for server-side defense-in-depth.
+    Masks name/phone/email before AI calls and restores placeholders after parsing response.
+    """
+
+    _EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+    _PHONE_RE = re.compile(r"(?<!\d)(\+?\d[\d\s-]{7,}\d)(?!\d)")
+
+    def __init__(self, *, user_name: str = "", email: str = "", phone: str = ""):
+        self.user_name = str(user_name or '').strip()
+        self.email = str(email or '').strip()
+        self.phone = str(phone or '').strip()
+
+        self.name_token = '[USER_NAME]'
+        self.email_token = '[EMAIL_ADDRESS]'
+        self.phone_token = '[PHONE_NUMBER]'
+
+    def mask_text(self, text: str) -> str:
+        value = str(text or '')
+
+        if self.user_name:
+            value = value.replace(self.user_name, self.name_token)
+            compact_name = re.sub(r'\s+', '', self.user_name)
+            if compact_name and compact_name != self.user_name:
+                value = value.replace(compact_name, self.name_token)
+
+        if self.email:
+            value = value.replace(self.email, self.email_token)
+        value = self._EMAIL_RE.sub(self.email_token, value)
+
+        if self.phone:
+            value = value.replace(self.phone, self.phone_token)
+            compact_phone = re.sub(r'[\s-]+', '', self.phone)
+            if compact_phone and compact_phone != self.phone:
+                value = value.replace(compact_phone, self.phone_token)
+        value = self._PHONE_RE.sub(self.phone_token, value)
+
+        return value
+
+    def unmask_text(self, text: str) -> str:
+        value = str(text or '')
+        if self.user_name:
+            value = value.replace(self.name_token, self.user_name)
+        if self.email:
+            value = value.replace(self.email_token, self.email)
+        if self.phone:
+            value = value.replace(self.phone_token, self.phone)
+        return value
+
+    def mask_object(self, value):
+        if isinstance(value, dict):
+            return {k: self.mask_object(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self.mask_object(v) for v in value]
+        if isinstance(value, str):
+            return self.mask_text(value)
+        return value
+
+    def unmask_object(self, value):
+        if isinstance(value, dict):
+            return {k: self.unmask_object(v) for k, v in value.items()}
+        if isinstance(value, list):
+            return [self.unmask_object(v) for v in value]
+        if isinstance(value, str):
+            return self.unmask_text(value)
+        return value
 
 
 def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai):
@@ -157,21 +228,34 @@ def analyze_resume_core(current_user_id, data, deps):
     if not resume_data:
         return {'error': '需要提供简历数据'}, 400
 
-    if deps['PII_GUARD_MODE'] in ('warn', 'reject'):
+    pii_mode = str(deps['PII_GUARD_MODE'] or 'warn').strip().lower()
+    pii_masker = None
+
+    if pii_mode in ('warn', 'reject', 'mask'):
         pii_types = deps['_payload_pii_types'](resume_data, job_description)
         if pii_types:
-            logger.warning("PII guard detected types=%s (mode=%s)", sorted(list(pii_types)), deps['PII_GUARD_MODE'])
-            if deps['PII_GUARD_MODE'] == 'reject':
+            logger.warning("PII guard detected types=%s (mode=%s)", sorted(list(pii_types)), pii_mode)
+            if pii_mode == 'reject':
                 return {
                     'error': '检测到可能的个人敏感信息（PII），已拒绝处理。请使用前端内置脱敏后再重试。',
                     'pii_types': sorted(list(pii_types))
                 }, 400
+            if pii_mode == 'mask':
+                personal = (resume_data or {}).get('personalInfo', {}) or {}
+                pii_masker = PIIMasker(
+                    user_name=personal.get('name') or '',
+                    email=personal.get('email') or '',
+                    phone=personal.get('phone') or '',
+                )
 
     if deps['gemini_client'] and deps['check_gemini_quota']():
         try:
+            masked_resume_data = pii_masker.mask_object(copy.deepcopy(resume_data)) if pii_masker else resume_data
+            masked_job_description = pii_masker.mask_text(job_description) if pii_masker else job_description
+
             rag_context = ""
             if rag_enabled:
-                relevant_cases = deps['find_relevant_cases_vector'](resume_data, limit=rag_strategy.get('case_limit', 3))
+                relevant_cases = deps['find_relevant_cases_vector'](masked_resume_data, limit=rag_strategy.get('case_limit', 3))
                 if isinstance(relevant_cases, list):
                     reference_cases = [{
                         'id': case.get('id'),
@@ -212,8 +296,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 rag_context = f"{rag_context}\n{rag_strategy.get('extra_context')}\n"
 
             prompt = _build_analysis_prompt(
-                resume_data=resume_data,
-                job_description=job_description,
+                resume_data=masked_resume_data,
+                job_description=masked_job_description,
                 rag_context=rag_context,
                 format_resume_for_ai=deps['format_resume_for_ai'],
             )
@@ -234,6 +318,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 raise last_model_error or RuntimeError("No available Gemini analysis model")
 
             ai_result = deps['parse_ai_response'](response.text)
+            if pii_masker:
+                ai_result = pii_masker.unmask_object(ai_result)
             raw_suggestions = ai_result.get('suggestions', [])
             filtered_suggestions = []
             dropped_gender_suggestions = 0
@@ -546,6 +632,219 @@ def ai_chat_core(data, deps):
             deps['logger'].error("AI 面试失败: %s", ai_error)
             return {'response': '面试官暂时开小差了，请稍后再试。'}, 200
     return {'response': '面试官暂时开小差了。'}, 200
+
+
+def ai_chat_stream_core(data, deps):
+    """
+    Stream interview chat response as incremental chunks.
+    Yields dict events: {"type":"chunk","delta":"..."} / {"type":"done","text":"..."} / {"type":"error","message":"..."}
+    """
+    mode = (data.get('mode') or '').strip().lower()
+    message = data.get('message', '')
+    audio = data.get('audio')
+    resume_data = data.get('resumeData')
+    job_description = data.get('jobDescription', '')
+    chat_history = data.get('chatHistory', [])
+
+    has_audio = isinstance(audio, dict) and bool(audio.get('data'))
+    audio_duration_sec = None
+    try:
+        if isinstance(audio, dict):
+            value = audio.get('duration_sec')
+            if value is not None and str(value).strip() != '':
+                audio_duration_sec = float(value)
+    except Exception:
+        audio_duration_sec = None
+
+    if (not message) and (not has_audio):
+        return None, {'error': '消息内容不能为空'}, 400
+
+    clean_message = message.replace('[INTERVIEW_MODE]', '').replace('[INTERVIEW_SUMMARY]', '').strip()
+
+    def _is_voice_placeholder_text(text: str) -> bool:
+        stripped = str(text or '').strip()
+        return bool(stripped) and stripped in {'（语音）', '(语音)', '[语音]', '语音', 'voice'}
+
+    def _extract_question_from_interviewer_text(text: str) -> str:
+        stripped = str(text or '').strip()
+        if not stripped:
+            return ''
+        match = re.search(r'下一题[:：]\s*(.*)$', stripped, flags=re.DOTALL)
+        return (match.group(1) or '').strip() if match else stripped
+
+    def _get_last_interviewer_question(chat_history_list) -> str:
+        if not isinstance(chat_history_list, list):
+            return ''
+        for item in reversed(chat_history_list):
+            if not isinstance(item, dict):
+                continue
+            if item.get('role') != 'model':
+                continue
+            txt = str(item.get('text') or '').replace('[INTERVIEW_MODE]', '').strip()
+            if not txt or txt.startswith('SYSTEM_'):
+                continue
+            return _extract_question_from_interviewer_text(txt)
+        return ''
+
+    def _is_low_information_answer(text: str) -> bool:
+        stripped = str(text or '').strip()
+        if not stripped:
+            return True
+        if _is_voice_placeholder_text(stripped):
+            return True
+        compact = re.sub(r'[\s\.,;:!?\-—_·~`"\'“”‘’（）()\[\]{}<>《》【】|/\\\\]+', '', stripped)
+        if len(compact) < 6:
+            return True
+        low = compact.lower()
+        if low in {'不知道', '不清楚', '没想过', '随便', '都可以', '没有', '没了', '嗯', '啊', '额', 'emmm', 'ok', 'okay', '是的', '不是', '还行', '一般', '差不多', '就那样'}:
+            return True
+        return False
+
+    if _is_voice_placeholder_text(clean_message):
+        clean_message = ''
+
+    if mode != 'interview_summary':
+        last_q = _get_last_interviewer_question(chat_history)
+        if has_audio and not clean_message:
+            transcript = ''
+            try:
+                if deps['GOOGLE_SPEECH_API_KEY']:
+                    from base64 import b64decode
+                    mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
+                    base64_data = audio.get('data') or ''
+                    match = re.match(r'^data:(audio/[a-zA-Z0-9.+-]+);base64,(.*)$', base64_data, flags=re.DOTALL)
+                    if match:
+                        mime_type = (match.group(1) or mime_type).strip().lower()
+                        base64_data = match.group(2)
+                    audio_bytes = b64decode(base64_data)
+                    transcript = deps['_google_speech_transcribe'](audio_bytes, mime_type, 'zh-CN')
+            except Exception as stt_err:
+                deps['logger'].warning("Interview STT check failed, continuing without transcript: %s", stt_err)
+                transcript = ''
+            if not str(transcript or '').strip():
+                question = last_q or '请再说一遍你的回答。'
+                return None, {'response': f"我没有识别到有效的语音内容。请重新回答：{question}"}, 200
+            clean_message = str(transcript).strip()
+
+        if _is_low_information_answer(clean_message):
+            question = last_q or '请把你的回答说得更具体一些。'
+            return None, {'response': f"你的回答信息量不足或未能回答到问题。请补充并重新回答：{question}"}, 200
+
+    if not (deps['gemini_client'] and deps['check_gemini_quota']()):
+        return None, {'response': '面试官暂时开小差了。'}, 200
+
+    formatted_chat = ""
+    for message_obj in chat_history:
+        role = "候选人" if message_obj.get('role') == 'user' else "面试官"
+        msg_text = message_obj.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
+        if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):
+            formatted_chat += f"{role}: {msg_text}\n"
+
+    is_self_intro_q = bool(re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', _get_last_interviewer_question(chat_history) or ''))
+
+    if mode == 'interview_summary':
+        prompt = f"""
+【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
+要求：
+- 用中文输出；不要提出下一题。
+- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 输出结构：
+1) 综合评价（3-5句）
+2) 表现亮点（3-6条）
+3) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
+4) JD 匹配度与缺口（分点说明）
+5) 简历可改进点（3-6条，针对表达与证据补强）
+6) 1-2 周训练计划（按天/按主题）
+
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+对话记录：{formatted_chat if formatted_chat else '无'}
+候选人结束指令：{clean_message if clean_message else '（无）'}
+"""
+    else:
+        prompt = f"""
+【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
+禁止提及任何评分，禁止给出建议，保持面试官角色。
+规则：
+- 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
+- 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
+- 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
+- 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
+- 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
+候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
+候选人语音时长（秒）：{audio_duration_sec if audio_duration_sec is not None else '未知'}
+请直接输出面试官回答：简短点评 + 下一道具体问题。
+"""
+
+    contents = prompt
+    if has_audio and mode != 'interview_summary':
+        try:
+            from base64 import b64decode
+            mime_type = (audio.get('mime_type') or 'audio/webm').strip().lower()
+            base64_data = audio.get('data') or ''
+            match = re.match(r'^data:(audio/[a-zA-Z0-9.+-]+);base64,(.*)$', base64_data, flags=re.DOTALL)
+            if match:
+                mime_type = (match.group(1) or mime_type).strip().lower()
+                base64_data = match.group(2)
+            audio_bytes = b64decode(base64_data)
+            contents = [prompt, types.Part.from_bytes(data=audio_bytes, mime_type=mime_type)]
+        except Exception as dec_err:
+            deps['logger'].warning("Audio decode failed, continuing without audio: %s", dec_err)
+            contents = prompt
+
+    stream_api = getattr(deps['gemini_client'].models, 'generate_content_stream', None)
+
+    def _iter_events():
+        if not callable(stream_api):
+            try:
+                response, _used = deps['_gemini_generate_content_resilient'](deps['GEMINI_INTERVIEW_MODEL'], contents, want_json=False)
+                text = (response.text or "").replace('*', '').strip()
+                yield {'type': 'done', 'text': text or '感谢你的回答，我们继续下一题。'}
+                return
+            except Exception as fallback_err:
+                deps['logger'].error("AI 面试流式降级失败: %s", fallback_err)
+                yield {'type': 'error', 'message': '面试官暂时开小差了，请稍后再试。'}
+                return
+
+        full_text = ''
+        try:
+            for chunk in stream_api(model=deps['GEMINI_INTERVIEW_MODEL'], contents=contents):
+                delta = (getattr(chunk, 'text', '') or '').replace('*', '')
+                if not delta:
+                    continue
+                full_text += delta
+                yield {'type': 'chunk', 'delta': delta}
+
+            parsed = deps['_parse_json_object_from_text'](full_text)
+            if isinstance(parsed, dict):
+                full_text = parsed.get('response') or parsed.get('text') or parsed.get('message') or parsed.get('reply') or full_text
+
+            final_text = (full_text or '').replace('*', '').strip()
+            try:
+                too_long = False
+                if is_self_intro_q:
+                    if audio_duration_sec is not None and audio_duration_sec > 60:
+                        too_long = True
+                    elif audio_duration_sec is None and len(str(clean_message or '')) > 360:
+                        too_long = True
+                if too_long and ('1分钟' not in final_text):
+                    final_text = f"提醒：你的自我介绍偏长，后续请控制在1分钟内。\n{final_text}".strip()
+            except Exception:
+                pass
+
+            yield {'type': 'done', 'text': final_text or '感谢你的回答，我们继续下一题。'}
+        except Exception as stream_err:
+            deps['logger'].error("AI 面试流式输出失败: %s", stream_err)
+            deps['logger'].error("Full traceback: %s", traceback.format_exc())
+            if full_text.strip():
+                yield {'type': 'done', 'text': full_text.strip()}
+            else:
+                yield {'type': 'error', 'message': '面试官暂时开小差了，请稍后再试。'}
+
+    return _iter_events(), None, 200
 
 
 def transcribe_core(data, deps):

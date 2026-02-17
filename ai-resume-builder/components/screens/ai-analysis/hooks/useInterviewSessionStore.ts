@@ -3,6 +3,16 @@ import type { ResumeData } from '../../../../types';
 import type { ChatMessage } from '../types';
 import { makeJdKey } from '../id-utils';
 
+type AnalysisSessionState =
+  | 'idle'
+  | 'jd_ready'
+  | 'analyzing'
+  | 'report_ready'
+  | 'interview_in_progress'
+  | 'paused'
+  | 'interview_done'
+  | 'error';
+
 type Params = {
   resumeData: ResumeData;
   setResumeData?: (v: ResumeData) => void;
@@ -55,6 +65,78 @@ export const useInterviewSessionStore = ({
 
   const clearLastAnalysis = () => {
     localStorage.removeItem(LAST_ANALYSIS_KEY);
+  };
+
+  const getAnalysisSession = (overrideJdText?: string) => {
+    const sessionJdText = (overrideJdText ?? jdText ?? resumeData?.lastJdText ?? '').trim();
+    if (!sessionJdText || !resumeData) return null;
+    const jdKey = makeJdKey(sessionJdText);
+    const byJd = (resumeData as any).analysisSessionByJd || {};
+    return byJd[jdKey] || null;
+  };
+
+  const persistAnalysisSessionState = async (
+    state: AnalysisSessionState,
+    patch?: Partial<{
+      jdText: string;
+      targetCompany: string;
+      score: number;
+      step: string;
+      error: string;
+      lastMessageAt: string;
+      force: boolean;
+    }>
+  ) => {
+    if (!resumeData?.id) return;
+    const sessionJdText = (patch?.jdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
+    if (!sessionJdText) return;
+
+    const jdKey = makeJdKey(sessionJdText);
+    const byJd = (resumeData as any).analysisSessionByJd || {};
+    const prev = byJd[jdKey] || {};
+    const now = new Date().toISOString();
+    const force = !!patch?.force;
+
+    if (!force && prev.state === state) {
+      // Avoid noisy writes on every render/send while preserving real transitions.
+      const prevAt = Date.parse(String(prev.updatedAt || ''));
+      const ageMs = Number.isFinite(prevAt) ? (Date.now() - prevAt) : Number.MAX_SAFE_INTEGER;
+      if (ageMs < 12000 && !patch?.error && !patch?.lastMessageAt) {
+        return;
+      }
+    }
+
+    const nextSession = {
+      ...prev,
+      state,
+      jdKey,
+      jdText: sessionJdText,
+      targetCompany: patch?.targetCompany ?? targetCompany ?? resumeData.targetCompany ?? '',
+      score: (typeof patch?.score === 'number' ? patch.score : prev.score),
+      step: patch?.step ?? prev.step,
+      error: patch?.error ?? '',
+      lastMessageAt: patch?.lastMessageAt ?? prev.lastMessageAt,
+      updatedAt: now,
+    };
+
+    const updatedResumeData = {
+      ...resumeData,
+      analysisSessionByJd: {
+        ...byJd,
+        [jdKey]: nextSession,
+      },
+      lastJdText: sessionJdText || resumeData.lastJdText || '',
+      targetCompany: targetCompany || resumeData.targetCompany || '',
+    };
+
+    if (setResumeData) {
+      setResumeData(updatedResumeData);
+    }
+
+    await DatabaseService.updateResume(String(resumeData.id), {
+      resume_data: updatedResumeData,
+      updated_at: now,
+    });
   };
 
   const restoreInterviewSession = (overrideJdText?: string) => {
@@ -122,6 +204,8 @@ export const useInterviewSessionStore = ({
     loadLastAnalysis,
     clearLastAnalysis,
     makeJdKey,
+    getAnalysisSession,
+    persistAnalysisSessionState,
     restoreInterviewSession,
     persistInterviewSession,
   };

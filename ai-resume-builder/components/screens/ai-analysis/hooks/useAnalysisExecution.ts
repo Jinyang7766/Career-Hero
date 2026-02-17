@@ -35,6 +35,10 @@ type Params = {
   setScore: (value: number) => void;
   setSuggestions: (value: Suggestion[]) => void;
   setReport: (value: AnalysisReport | null) => void;
+  persistAnalysisSessionState: (
+    state: 'jd_ready' | 'analyzing' | 'report_ready' | 'paused' | 'error',
+    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; force: boolean }>
+  ) => Promise<void>;
   persistAnalysisSnapshot: (resumeData: any, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => Promise<any>;
   saveLastAnalysis: (payload: any) => void;
   setAnalysisResumeId: (value: string | number | null) => void;
@@ -68,6 +72,7 @@ export const useAnalysisExecution = ({
   setScore,
   setSuggestions,
   setReport,
+  persistAnalysisSessionState,
   persistAnalysisSnapshot,
   saveLastAnalysis,
   setAnalysisResumeId,
@@ -137,6 +142,16 @@ export const useAnalysisExecution = ({
     setChatInitialized(false);
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
     setAnalysisInProgress(true);
+    try {
+      await persistAnalysisSessionState('analyzing', {
+        jdText: jdText || resumeData.lastJdText || '',
+        targetCompany: targetCompany || resumeData.targetCompany || '',
+        step: 'analyzing',
+        force: true,
+      });
+    } catch (stateErr) {
+      console.warn('Failed to persist analyzing session state:', stateErr);
+    }
     navigateToStep('analyzing');
 
     try {
@@ -274,11 +289,33 @@ export const useAnalysisExecution = ({
         });
         setAnalysisResumeId((persistTargetId || resumeData.id) as any);
       }
+      try {
+        await persistAnalysisSessionState('report_ready', {
+          jdText: jdText || resumeData.lastJdText || '',
+          targetCompany: targetCompany || resumeData.targetCompany || '',
+          score: totalScore,
+          step: 'report',
+          force: true,
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist report_ready session state:', stateErr);
+      }
       markAnalysisCompleted();
       navigateToStep('report', true);
     } catch (error) {
       if (analysisRunIdRef.current !== runId) return;
       console.error('AI analysis failed:', error);
+      try {
+        await persistAnalysisSessionState('paused', {
+          jdText: jdText || resumeData?.lastJdText || '',
+          targetCompany: targetCompany || resumeData?.targetCompany || '',
+          step: 'jd_input',
+          error: (error as any)?.message || 'analysis_interrupted',
+          force: true,
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist paused session state:', stateErr);
+      }
       showToast(`AI 分析失败：${(error as any)?.message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       navigateToStep('jd_input');
     } finally {
@@ -297,6 +334,7 @@ export const useAnalysisExecution = ({
     optimizedResumeId,
     ensureAnalysisBinding,
     optimizedResumeIdRef,
+    persistAnalysisSessionState,
     persistAnalysisSnapshot,
     resumeData,
     resolveOriginalResumeIdForOptimization,

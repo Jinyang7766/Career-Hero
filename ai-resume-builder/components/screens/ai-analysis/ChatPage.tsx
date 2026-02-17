@@ -59,6 +59,23 @@ export type ChatPageProps = {
   onHoldPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => void;
 };
 
+const ThinkingIndicator: React.FC = () => {
+  const [dots, setDots] = React.useState('');
+  React.useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? '' : prev + '.'));
+    }, 500);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div className="flex items-center px-4 mb-4 animate-in fade-in duration-300">
+      <span className="text-[13px] text-slate-400 dark:text-slate-500 font-medium">
+        AI 正在思考{dots}
+      </span>
+    </div>
+  );
+};
+
 const ChatPage: React.FC<ChatPageProps> = ({
   ToastOverlay,
   WaveformVisualizer,
@@ -187,16 +204,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
                       }}
                       disabled={!msg.audioUrl}
                       style={{ width: `${Math.min(180, 70 + (msg.audioDuration || 1) * 4)}px` }}
-                      className={`group relative flex items-center px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${
-                        msg.role === 'user'
+                      className={`group relative flex items-center px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
                           ? 'bg-primary text-white rounded-tr-none flex-row-reverse'
                           : 'bg-white dark:bg-[#2c2c2c] text-[#191919] dark:text-white rounded-tl-none border border-slate-200 dark:border-white/5'
-                      }`}
+                        }`}
                     >
                       <span
-                        className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${
-                          msg.role === 'user' ? 'rotate-180 -translate-x-1' : '-translate-x-1'
-                        }`}
+                        className={`material-symbols-outlined text-[20px] ${playingAudioId === msg.id ? 'animate-pulse' : ''} ${msg.role === 'user' ? 'rotate-180 -translate-x-1' : '-translate-x-1'
+                          }`}
                       >
                         {!msg.audioUrl ? 'hourglass_top' : playingAudioId === msg.id ? 'volume_up' : 'signal_cellular_alt'}
                       </span>
@@ -242,11 +257,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
                             type="button"
                             disabled={isTranscribing}
                             onClick={() => transcribeExistingVoiceMessage(msg.id)}
-                            className={`h-7 px-2.5 rounded-md text-[12px] font-bold border transition-colors ${
-                              isTranscribing
+                            className={`h-7 px-2.5 rounded-md text-[12px] font-bold border transition-colors ${isTranscribing
                                 ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
                                 : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
-                            }`}
+                              }`}
                           >
                             {isTranscribing ? (
                               <span className="material-symbols-outlined text-[16px] animate-spin h-4 flex items-center justify-center">
@@ -279,11 +293,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
                   msg.text.trim() !== '' &&
                   !(msg.role === 'user' && (msg.audioUrl || msg.audioPending)) && (
                     <div
-                      className={`px-4 py-2.5 text-[15px] leading-relaxed shadow-sm rounded-lg whitespace-pre-wrap break-words ${
-                        msg.role === 'user'
+                      className={`px-4 py-2.5 text-[15px] leading-relaxed shadow-sm rounded-lg whitespace-pre-wrap break-words ${msg.role === 'user'
                           ? 'bg-primary text-white rounded-tr-none'
                           : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
-                      }`}
+                        }`}
                     >
                       {msg.role === 'model' ? (
                         (() => {
@@ -321,25 +334,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
         ))}
 
-        {isSending && (
-          <div className="flex justify-start">
-            <div className="size-8 rounded-full overflow-hidden shrink-0 mr-2 mt-1 shadow-sm">
-              <img
-                src={AI_AVATAR_URL}
-                onError={(e) => {
-                  (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
-                }}
-                alt="AI Agent"
-              />
-            </div>
-            <div className="bg-white dark:bg-[#1c2936] rounded-2xl rounded-bl-none px-4 py-3 border border-slate-200 dark:border-white/5 shadow-sm">
-              <div className="flex gap-1.5">
-                <span className="size-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
-                <span className="size-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-              </div>
-            </div>
-          </div>
+        {isSending && !chatMessages.some((m) => m.id.startsWith('ai-stream')) && (
+          <ThinkingIndicator />
         )}
 
         <div ref={messagesEndRef} />
@@ -386,20 +382,18 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 )}
 
                 <div
-                  className={`relative flex flex-col items-center transition-all duration-300 ${
-                    isRecording
+                  className={`relative flex flex-col items-center transition-all duration-300 ${isRecording
                       ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
                       : 'relative'
-                  }`}
+                    }`}
                 >
                   {isRecording && (
                     <div className="absolute -left-20 -right-20 -bottom-24 h-96 bg-gradient-to-t from-black via-black via-50% to-transparent pointer-events-none" />
                   )}
                   {isRecording && (
                     <div
-                      className={`relative z-[1] mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${
-                        holdCancel ? 'text-red-500' : 'text-white/90 shadow-sm'
-                      }`}
+                      className={`relative z-[1] mb-4 text-[15px] font-medium tracking-wide transition-all animate-in fade-in slide-in-from-bottom-2 duration-200 ${holdCancel ? 'text-red-500' : 'text-white/90 shadow-sm'
+                        }`}
                     >
                       {holdCancel ? '松手取消' : '松手发送 上移取消'}
                     </div>
@@ -413,13 +407,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
                     onPointerCancel={onHoldPointerCancel}
                     onContextMenu={(e) => e.preventDefault()}
                     disabled={!audioSupported}
-                    className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${
-                      isRecording
+                    className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
                         ? holdCancel
                           ? 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
                           : 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]'
                         : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
-                    } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
+                      } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
                     type="button"
                   >
                     {isRecording ? (

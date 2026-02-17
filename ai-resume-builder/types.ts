@@ -84,6 +84,17 @@ export interface ResumeData {
     jdText?: string;
     updatedAt?: string;
   }>;
+  analysisSessionByJd?: Record<string, {
+    state: 'idle' | 'jd_ready' | 'analyzing' | 'report_ready' | 'interview_in_progress' | 'paused' | 'interview_done' | 'error';
+    jdKey?: string;
+    jdText?: string;
+    targetCompany?: string;
+    score?: number;
+    step?: string;
+    updatedAt?: string;
+    error?: string;
+    lastMessageAt?: string;
+  }>;
   analysisSnapshot?: {
     score: number;
     summary: string;

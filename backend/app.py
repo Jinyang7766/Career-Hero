@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from dotenv import load_dotenv
 load_dotenv()  # 加载 .env 文件
-from flask import Flask, request, jsonify, send_file
+from flask import Flask, request, jsonify, send_file, Response, stream_with_context
 from flask_cors import CORS
 import os
 # Clear proxy env vars before importing supabase to avoid proxy kw mismatch in some versions
@@ -104,21 +104,27 @@ JWT_SECRET = os.getenv('JWT_SECRET', 'your-jwt-secret')
 
 # Google Gemini AI configuration
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', 'your-gemini-api-key')
-# 上传/读取简历文本解析模型
-GEMINI_RESUME_PARSE_MODEL = os.getenv('GEMINI_RESUME_PARSE_MODEL', 'gemini-2.5-flash-lite')
+# 简历反向工程（结构化解析）模型：优先速度
+# 兼容旧变量名 GEMINI_RESUME_PARSE_MODEL
+GEMINI_RESUME_PARSE_MODEL = os.getenv(
+    'GEMINI_RESUME_PARSE_MODEL',
+    os.getenv('GEMINI_RESUME_RE_MODEL', 'gemini-3-flash-preview')
+)
+# PDF OCR 文本提取模型：优先速度/成本
+GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview')
 # 简历分析（优化建议）模型
-GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
+GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-pro-preview')
 # 面试对话模型
-GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
+GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-pro-preview')
 # 语音转写模型（优先选择更快更便宜的 Flash/Lite 型号）
 GEMINI_TRANSCRIBE_MODEL = os.getenv('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash-lite')
 
 # Google Cloud Speech-to-Text (REST API key). This is NOT the Gemini key.
 GOOGLE_SPEECH_API_KEY = (os.getenv('GOOGLE_SPEECH_API_KEY') or '').strip()
 GEMINI_VISION_MODELS = [
-    GEMINI_RESUME_PARSE_MODEL,
+    GEMINI_PDF_OCR_MODEL,
     os.getenv('GEMINI_VISION_MODEL', '').strip(),
-    'gemini-3-flash-preview'
+    'gemini-2.5-flash-lite'
 ]
 GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
 PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
@@ -134,6 +140,7 @@ except ValueError:
 # - off: do nothing
 # - warn (default): log a warning if PII-like patterns are detected
 # - reject: return 400 if PII-like patterns are detected
+# - mask: automatically mask PII before AI call, then unmask placeholders in AI output
 PII_GUARD_MODE = (os.getenv('PII_GUARD_MODE', 'warn') or 'warn').strip().lower()
 
 
@@ -148,7 +155,6 @@ try:
     from services.deletion_service import (
         is_missing_deletion_column_error as is_missing_deletion_column_error_service,
         delete_supabase_auth_user as delete_supabase_auth_user_service,
-        parse_iso_datetime as parse_iso_datetime_service,
         delete_user_everywhere as delete_user_everywhere_service,
         run_expired_deletion_sweep as run_expired_deletion_sweep_service,
     )
@@ -163,7 +169,6 @@ except ImportError:
     from backend.services.deletion_service import (
         is_missing_deletion_column_error as is_missing_deletion_column_error_service,
         delete_supabase_auth_user as delete_supabase_auth_user_service,
-        parse_iso_datetime as parse_iso_datetime_service,
         delete_user_everywhere as delete_user_everywhere_service,
         run_expired_deletion_sweep as run_expired_deletion_sweep_service,
     )
@@ -174,6 +179,7 @@ try:
         get_analysis_model_candidates as get_analysis_model_candidates_service,
     )
     from services.mock_store_service import (
+        create_storage_context as create_storage_context_service,
         is_mock_mode as is_mock_mode_service,
         mock_supabase_response as mock_supabase_response_service,
         get_mock_resumes_for_user as get_mock_resumes_for_user_service,
@@ -187,6 +193,7 @@ except ImportError:
         get_analysis_model_candidates as get_analysis_model_candidates_service,
     )
     from backend.services.mock_store_service import (
+        create_storage_context as create_storage_context_service,
         is_mock_mode as is_mock_mode_service,
         mock_supabase_response as mock_supabase_response_service,
         get_mock_resumes_for_user as get_mock_resumes_for_user_service,
@@ -215,24 +222,28 @@ try:
         logger=logger,
     )
 except Exception as exc:
-    logger.warning("Supabase connection failed: %s", exc)
-    logger.warning("Using mock data storage for development")
+    logger.error("Supabase connection failed: %s", exc)
     supabase = None
 
+storage_context = create_storage_context_service(
+    supabase_client=supabase,
+    logger=logger,
+)
+supabase = storage_context.supabase
+
 def is_mock_mode():
-    return is_mock_mode_service(supabase)
+    return is_mock_mode_service(storage_context=storage_context)
 
 def mock_supabase_response(data=None, error=None):
-    return mock_supabase_response_service(data=data, error=error)
+    return mock_supabase_response_service(data=data, error=error, storage_context=storage_context)
 
-# Mock data storage for development
-mock_users = {}
-mock_resumes = {}  # user_id -> {resume_id: resume_record}
-mock_feedback = []
+mock_users = storage_context.mock_users
+mock_resumes = storage_context.mock_resumes
+mock_feedback = storage_context.mock_feedback
 
 
 def get_mock_resumes_for_user(user_id: str):
-    return get_mock_resumes_for_user_service(mock_resumes, user_id)
+    return get_mock_resumes_for_user_service(user_id=user_id, storage_context=storage_context)
 
 
 def _normalize_resume_id(value):
@@ -243,25 +254,16 @@ def _find_existing_optimized_resume(current_user_id: str, optimized_from_id: str
     return find_existing_optimized_resume_service(
         current_user_id,
         optimized_from_id,
-        supabase_client=supabase,
-        mock_mode=is_mock_mode(),
-        get_mock_resumes_for_user_fn=get_mock_resumes_for_user,
+        storage_context=storage_context,
         logger=logger,
     )
-
-
-def _parse_iso_datetime(value: str):
-    return parse_iso_datetime_service(value)
 
 
 def _delete_user_everywhere(user_id: str, delete_auth: bool = True):
     return delete_user_everywhere_service(
         user_id=user_id,
         delete_auth=delete_auth,
-        is_mock_mode=is_mock_mode(),
-        mock_users=mock_users,
-        mock_resumes=mock_resumes,
-        supabase=supabase,
+        storage_context=storage_context,
         logger=logger,
         delete_supabase_auth_user_fn=_delete_supabase_auth_user,
     )
@@ -273,11 +275,8 @@ def run_expired_deletion_sweep(force: bool = False, limit: int = 200):
         limit=limit,
         sweep_state=_deletion_sweep_state,
         interval_seconds=AUTO_DELETION_SWEEP_INTERVAL_SECONDS,
-        is_mock_mode=is_mock_mode(),
-        mock_users=mock_users,
+        storage_context=storage_context,
         delete_user_everywhere_fn=_delete_user_everywhere,
-        parse_iso_datetime_fn=_parse_iso_datetime,
-        supabase=supabase,
         logger=logger,
         is_missing_deletion_column_error_fn=_is_missing_deletion_column_error,
     )
@@ -364,11 +363,8 @@ def register():
             {
                 'validate_email': validate_email,
                 'validate_password': validate_password,
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'supabase': supabase,
+                'storage_context': storage_context,
                 'generate_password_hash': generate_password_hash,
-                'mock_supabase_response': mock_supabase_response,
                 'JWT_SECRET': JWT_SECRET,
                 'jwt': jwt,
             },
@@ -383,9 +379,7 @@ def login():
         body, status = login_user(
             request.get_json() or {},
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'supabase': supabase,
+                'storage_context': storage_context,
                 'check_password_hash': check_password_hash,
                 'JWT_SECRET': JWT_SECRET,
                 'jwt': jwt,
@@ -409,9 +403,7 @@ def get_resumes(current_user_id):
     try:
         body, status = list_resumes(
             current_user_id=current_user_id,
-            is_mock_mode=is_mock_mode,
-            get_mock_resumes_for_user=get_mock_resumes_for_user,
-            supabase=supabase,
+            storage_context=storage_context,
         )
         return jsonify(body), status
     except Exception:
@@ -428,10 +420,7 @@ def create_resume(current_user_id):
             clean_resume_payload=clean_resume_payload,
             normalize_resume_id=_normalize_resume_id,
             find_existing_optimized_resume=_find_existing_optimized_resume,
-            is_mock_mode=is_mock_mode,
-            get_mock_resumes_for_user=get_mock_resumes_for_user,
-            mock_supabase_response=mock_supabase_response,
-            supabase=supabase,
+            storage_context=storage_context,
         )
         return jsonify(body), status
     except Exception:
@@ -444,9 +433,7 @@ def get_resume(current_user_id, resume_id):
         body, status = get_resume_detail(
             current_user_id=current_user_id,
             resume_id=resume_id,
-            is_mock_mode=is_mock_mode,
-            get_mock_resumes_for_user=get_mock_resumes_for_user,
-            supabase=supabase,
+            storage_context=storage_context,
         )
         return jsonify(body), status
     except Exception:
@@ -461,10 +448,7 @@ def update_resume(current_user_id, resume_id):
             resume_id=resume_id,
             data=request.get_json() or {},
             clean_resume_payload=clean_resume_payload,
-            is_mock_mode=is_mock_mode,
-            get_mock_resumes_for_user=get_mock_resumes_for_user,
-            mock_supabase_response=mock_supabase_response,
-            supabase=supabase,
+            storage_context=storage_context,
         )
         return jsonify(body), status
     except Exception:
@@ -477,10 +461,7 @@ def delete_resume(current_user_id, resume_id):
         body, status = delete_resume_record(
             current_user_id=current_user_id,
             resume_id=resume_id,
-            is_mock_mode=is_mock_mode,
-            get_mock_resumes_for_user=get_mock_resumes_for_user,
-            mock_supabase_response=mock_supabase_response,
-            supabase=supabase,
+            storage_context=storage_context,
         )
         return jsonify(body), status
     except Exception:
@@ -506,9 +487,7 @@ def get_profile(current_user_id):
         body, status = get_profile_service(
             current_user_id,
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'supabase': supabase,
+                'storage_context': storage_context,
                 '_is_missing_deletion_column_error': _is_missing_deletion_column_error,
             },
         )
@@ -524,10 +503,7 @@ def request_deletion(current_user_id):
         body, status = request_deletion_service(
             current_user_id,
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'mock_supabase_response': mock_supabase_response,
-                'supabase': supabase,
+                'storage_context': storage_context,
             },
         )
         return jsonify(body), status
@@ -546,10 +522,7 @@ def cancel_deletion(current_user_id):
         body, status = cancel_deletion_service(
             current_user_id,
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'mock_supabase_response': mock_supabase_response,
-                'supabase': supabase,
+                'storage_context': storage_context,
             },
         )
         return jsonify(body), status
@@ -610,10 +583,7 @@ def update_profile(current_user_id):
             current_user_id,
             request.get_json() or {},
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_users': mock_users,
-                'mock_supabase_response': mock_supabase_response,
-                'supabase': supabase,
+                'storage_context': storage_context,
             },
         )
         return jsonify(body), status
@@ -636,10 +606,7 @@ def submit_feedback(current_user_id):
             current_user_id,
             request.get_json() or {},
             {
-                'is_mock_mode': is_mock_mode,
-                'mock_feedback': mock_feedback,
-                'mock_supabase_response': mock_supabase_response,
-                'supabase': supabase,
+                'storage_context': storage_context,
             },
         )
         return jsonify(body), status
@@ -703,6 +670,7 @@ try:
         analyze_resume_core,
         parse_screenshot_core,
         ai_chat_core,
+        ai_chat_stream_core,
         transcribe_core,
     )
 except ImportError:
@@ -733,6 +701,7 @@ except ImportError:
         analyze_resume_core,
         parse_screenshot_core,
         ai_chat_core,
+        ai_chat_stream_core,
         transcribe_core,
     )
 
@@ -866,6 +835,61 @@ def ai_chat(current_user_id):
             },
         )
         return jsonify(body), status
+    except Exception:
+        return jsonify({'error': '服务器内部错误'}), 500
+
+
+@app.route('/api/ai/chat/stream', methods=['POST'])
+@token_required
+def ai_chat_stream(current_user_id):
+    """
+    SSE streaming endpoint for interview chat.
+    Emits events as `data: {"type":"chunk","delta":"..."}` / `done` / `error`.
+    """
+    try:
+        data = request.get_json() or {}
+        events_iter, immediate_body, status = ai_chat_stream_core(
+            data,
+            {
+                'logger': logger,
+                'gemini_client': gemini_client,
+                'check_gemini_quota': check_gemini_quota,
+                'GOOGLE_SPEECH_API_KEY': GOOGLE_SPEECH_API_KEY,
+                '_google_speech_transcribe': _google_speech_transcribe,
+                '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
+                '_parse_json_object_from_text': _parse_json_object_from_text,
+                'GEMINI_INTERVIEW_MODEL': GEMINI_INTERVIEW_MODEL,
+                'format_resume_for_ai': format_resume_for_ai,
+            },
+        )
+
+        if immediate_body is not None:
+            # Validation/early-return path keeps JSON semantics for easier fallback handling.
+            return jsonify(immediate_body), status
+
+        def _format_sse(payload: dict) -> str:
+            import json as _json
+            return f"data: {_json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        @stream_with_context
+        def _stream():
+            try:
+                yield _format_sse({'type': 'start'})
+                for event in events_iter:
+                    yield _format_sse(event)
+            except GeneratorExit:
+                return
+            except Exception as stream_err:
+                logger.error("SSE stream failed: %s", stream_err)
+                yield _format_sse({'type': 'error', 'message': '流式输出异常，请稍后重试'})
+
+        headers = {
+            'Content-Type': 'text/event-stream; charset=utf-8',
+            'Cache-Control': 'no-cache, no-transform',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no',
+        }
+        return Response(_stream(), status=200, headers=headers)
     except Exception:
         return jsonify({'error': '服务器内部错误'}), 500
 

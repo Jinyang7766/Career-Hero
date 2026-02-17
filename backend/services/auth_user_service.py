@@ -2,8 +2,8 @@ import uuid
 from datetime import datetime, timedelta
 
 
-def _ensure_mock_user(mock_users, current_user_id):
-    user = mock_users.get(current_user_id)
+def _ensure_mock_user(storage_context, current_user_id):
+    user = storage_context.get_user_by_id(current_user_id)
     if user:
         return user
     user = {
@@ -12,7 +12,7 @@ def _ensure_mock_user(mock_users, current_user_id):
         'name': 'Mock User',
         'deletion_pending_until': None,
     }
-    mock_users[current_user_id] = user
+    storage_context.insert_user(user)
     return user
 
 
@@ -28,14 +28,9 @@ def register_user(data, deps):
     if not deps['validate_password'](password):
         return {'error': '密码长度至少 8 位'}, 400
 
-    if deps['is_mock_mode']():
-        for user_data in deps['mock_users'].values():
-            if user_data.get('email') == email:
-                return {'error': '用户已存在'}, 400
-    else:
-        existing_user = deps['supabase'].table('users').select('*').eq('email', email).execute()
-        if existing_user.data:
-            return {'error': '用户已存在'}, 400
+    existing_users = deps['storage_context'].list_users_by_email(email)
+    if existing_users:
+        return {'error': '用户已存在'}, 400
 
     hashed_password = deps['generate_password_hash'](password)
     user_id = str(uuid.uuid4())
@@ -46,25 +41,21 @@ def register_user(data, deps):
         'name': name,
         'created_at': datetime.utcnow().isoformat(),
     }
-    if deps['is_mock_mode']():
-        deps['mock_users'][user_id] = user_data
-        result = deps['mock_supabase_response'](data=[user_data])
-    else:
-        result = deps['supabase'].table('users').insert(user_data).execute()
 
-    if not result.data:
+    created = deps['storage_context'].insert_user(user_data)
+    if not created:
         return {'error': '创建用户失败'}, 500
     if not deps['JWT_SECRET']:
         return {'error': 'JWT_SECRET 未配置'}, 500
 
-    token = deps['jwt'].encode({'user_id': result.data[0]['id']}, deps['JWT_SECRET'], algorithm="HS256")
+    token = deps['jwt'].encode({'user_id': created['id']}, deps['JWT_SECRET'], algorithm='HS256')
     return {
         'message': '注册成功',
         'token': token,
         'user': {
-            'id': result.data[0]['id'],
-            'email': result.data[0]['email'],
-            'name': result.data[0]['name'],
+            'id': created['id'],
+            'email': created['email'],
+            'name': created['name'],
         }
     }, 201
 
@@ -75,26 +66,17 @@ def login_user(data, deps):
     if not email or not password:
         return {'error': '邮箱和密码为必填项'}, 400
 
-    if deps['is_mock_mode']():
-        user = None
-        for user_data in deps['mock_users'].values():
-            if user_data.get('email') == email:
-                user = user_data
-                break
-        if not user:
-            return {'error': '账号或密码错误'}, 401
-    else:
-        result = deps['supabase'].table('users').select('*').eq('email', email).execute()
-        if not result.data:
-            return {'error': '账号或密码错误'}, 401
-        user = result.data[0]
+    users = deps['storage_context'].list_users_by_email(email)
+    if not users:
+        return {'error': '账号或密码错误'}, 401
+    user = users[0]
 
     if not deps['check_password_hash'](user['password'], password):
         return {'error': '账号或密码错误'}, 401
     if not deps['JWT_SECRET']:
         return {'error': 'JWT_SECRET 未配置'}, 500
 
-    token = deps['jwt'].encode({'user_id': user['id']}, deps['JWT_SECRET'], algorithm="HS256")
+    token = deps['jwt'].encode({'user_id': user['id']}, deps['JWT_SECRET'], algorithm='HS256')
     return {
         'message': '登录成功',
         'token': token,
@@ -115,8 +97,9 @@ def forgot_password(data):
 
 
 def get_profile(current_user_id, deps):
-    if deps['is_mock_mode']():
-        user = _ensure_mock_user(deps['mock_users'], current_user_id)
+    storage_context = deps['storage_context']
+    if storage_context.is_mock_mode():
+        user = _ensure_mock_user(storage_context, current_user_id)
         return {
             'id': user.get('id'),
             'email': user.get('email'),
@@ -125,51 +108,45 @@ def get_profile(current_user_id, deps):
         }, 200
 
     try:
-        result = deps['supabase'].table('users').select('id,email,name,deletion_pending_until').eq('id', current_user_id).execute()
+        row = storage_context.get_user_by_id(current_user_id, fields='id,email,name,deletion_pending_until')
     except Exception as col_err:
         if deps['_is_missing_deletion_column_error'](col_err):
-            result = deps['supabase'].table('users').select('id,email,name').eq('id', current_user_id).execute()
-            if result.data:
-                row = dict(result.data[0] or {})
+            row = storage_context.get_user_by_id(current_user_id, fields='id,email,name')
+            if row:
+                row = dict(row)
                 row['deletion_pending_until'] = None
                 return row, 200
             return {'error': '用户不存在'}, 404
         raise
 
-    if not result.data:
+    if not row:
         return {'error': '用户不存在'}, 404
-    return result.data[0], 200
+    return row, 200
 
 
 def request_deletion(current_user_id, deps):
+    storage_context = deps['storage_context']
     deletion_until = (datetime.utcnow() + timedelta(days=3)).isoformat()
-    if deps['is_mock_mode']():
-        user = _ensure_mock_user(deps['mock_users'], current_user_id)
-        user['deletion_pending_until'] = deletion_until
-        result = deps['mock_supabase_response'](data=[user])
-    else:
-        update_payload = {'deletion_pending_until': deletion_until, 'updated_at': datetime.utcnow().isoformat()}
-        result = deps['supabase'].table('users').update(update_payload).eq('id', current_user_id).execute()
-        if not result.data:
-            result = deps['supabase'].table('users').upsert({'id': current_user_id, **update_payload}, on_conflict='id').execute()
+    update_payload = {'deletion_pending_until': deletion_until, 'updated_at': datetime.utcnow().isoformat()}
 
-    if result.data:
+    updated = storage_context.update_user(current_user_id, update_payload)
+    if not updated:
+        updated = storage_context.upsert_user({'id': current_user_id, **update_payload}, on_conflict='id')
+
+    if updated:
         return {'message': '已申请注销，账号将在3天后清除', 'deletion_pending_until': deletion_until}, 200
     return {'error': '操作失败'}, 500
 
 
 def cancel_deletion(current_user_id, deps):
-    if deps['is_mock_mode']():
-        user = _ensure_mock_user(deps['mock_users'], current_user_id)
-        user['deletion_pending_until'] = None
-        result = deps['mock_supabase_response'](data=[user])
-    else:
-        update_payload = {'deletion_pending_until': None, 'updated_at': datetime.utcnow().isoformat()}
-        result = deps['supabase'].table('users').update(update_payload).eq('id', current_user_id).execute()
-        if not result.data:
-            result = deps['supabase'].table('users').upsert({'id': current_user_id, **update_payload}, on_conflict='id').execute()
+    storage_context = deps['storage_context']
+    update_payload = {'deletion_pending_until': None, 'updated_at': datetime.utcnow().isoformat()}
 
-    if result.data:
+    updated = storage_context.update_user(current_user_id, update_payload)
+    if not updated:
+        updated = storage_context.upsert_user({'id': current_user_id, **update_payload}, on_conflict='id')
+
+    if updated:
         return {'message': '已撤销注销申请'}, 200
     return {'error': '操作失败'}, 500
 
@@ -184,17 +161,9 @@ def update_profile(current_user_id, data, deps):
     if not name:
         return {'error': '姓名为必填项'}, 400
 
-    if deps['is_mock_mode']():
-        user = deps['mock_users'].get(current_user_id)
-        if not user:
-            return {'error': '更新个人信息失败'}, 500
-        user['name'] = name
-        result = deps['mock_supabase_response'](data=[user])
-    else:
-        result = deps['supabase'].table('users').update({'name': name}).eq('id', current_user_id).execute()
-
-    if result.data:
-        return {'message': '个人信息更新成功', 'user': result.data[0]}, 200
+    updated = deps['storage_context'].update_user(current_user_id, {'name': name})
+    if updated:
+        return {'message': '个人信息更新成功', 'user': updated}, 200
     return {'error': '更新个人信息失败'}, 500
 
 
@@ -220,12 +189,8 @@ def submit_feedback(current_user_id, data, deps):
         'images': images,
         'created_at': datetime.utcnow().isoformat(),
     }
-    if deps['is_mock_mode']():
-        deps['mock_feedback'].append(record)
-        result = deps['mock_supabase_response'](data=[record])
-    else:
-        result = deps['supabase'].table('feedback').insert(record).execute()
 
-    if result.data:
-        return {'message': '反馈已提交', 'feedback': result.data[0]}, 201
+    created = deps['storage_context'].insert_feedback(record)
+    if created:
+        return {'message': '反馈已提交', 'feedback': created}, 201
     return {'error': '提交失败'}, 500

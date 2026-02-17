@@ -17,7 +17,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 gemini_client = None
-GEMINI_RESUME_PARSE_MODEL = 'gemini-2.5-flash-lite'
+GEMINI_RESUME_PARSE_MODEL = 'gemini-3-flash-preview'
 GOOGLE_SPEECH_API_KEY = ''
 PDF_PARSE_DEBUG = False
 _GET_OCR_MODEL_CANDIDATES = None
