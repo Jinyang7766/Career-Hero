@@ -231,6 +231,36 @@ export const useInterviewSessionStore = ({
     return !!(session && Array.isArray(session.messages) && session.messages.length > 0);
   };
 
+  const clearInterviewSession = async (overrideJdText?: string, overrideInterviewType?: string) => {
+    if (!resumeData?.id) return;
+    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
+    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
+    const legacyJdKey = makeJdKey(sessionJdText);
+
+    const currentSessions = resumeData.interviewSessions || {};
+    const updatedSessions = { ...currentSessions };
+    delete updatedSessions[sessionKey];
+    delete updatedSessions[legacyJdKey];
+
+    const updatedResumeData = {
+      ...resumeData,
+      interviewSessions: updatedSessions,
+    };
+
+    if (setResumeData) {
+      setResumeData(updatedResumeData);
+    }
+
+    setChatMessages([]);
+    setChatInitialized(false);
+
+    await DatabaseService.updateResume(String(resumeData.id), {
+      resume_data: updatedResumeData,
+      updated_at: new Date().toISOString(),
+    });
+  };
+
   return {
     saveLastAnalysis,
     loadLastAnalysis,
@@ -241,5 +271,6 @@ export const useInterviewSessionStore = ({
     restoreInterviewSession,
     persistInterviewSession,
     hasInterviewSessionMessages,
+    clearInterviewSession,
   };
 };

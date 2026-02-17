@@ -611,30 +611,34 @@ function App() {
       confirmState.resolve(true);
       setConfirmState(null);
     };
+
     return (
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center px-6">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px]" onClick={onCancel} />
-        <div className="relative w-full max-w-[360px] rounded-[32px] border border-red-400/30 bg-red-500/90 backdrop-blur-2xl text-white shadow-2xl p-8 animate-in zoom-in-95 duration-200">
-          <div className="flex flex-col items-center text-center gap-4">
-            <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
-              <span className="material-symbols-outlined text-white text-[32px]">warning</span>
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 animate-in fade-in duration-200">
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
+        <div className="relative w-full max-w-[340px] bg-white dark:bg-[#1c2936] rounded-[24px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-200">
+          <div className="p-8">
+            <div className="flex flex-col items-center text-center">
+              <div className="size-14 rounded-full bg-blue-50 dark:bg-primary/10 flex items-center justify-center mb-4">
+                <span className="material-symbols-outlined text-primary dark:text-blue-400 text-[32px]">help_outline</span>
+              </div>
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 underline decoration-primary/20 underline-offset-4">提示</h3>
+              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed px-1">
+                {confirmState.message}
+              </p>
             </div>
-            <p className="text-base text-white font-bold leading-relaxed mb-2 px-2">
-              {confirmState.message}
-            </p>
           </div>
-          <div className="mt-8 flex flex-col gap-3">
-            <button
-              onClick={onOk}
-              className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
-            >
-              确定
-            </button>
+          <div className="flex border-t border-slate-100 dark:border-white/5">
             <button
               onClick={onCancel}
-              className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
+              className="flex-1 px-4 py-4 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors border-r border-slate-100 dark:border-white/5"
             >
               取消
+            </button>
+            <button
+              onClick={onOk}
+              className="flex-1 px-4 py-4 text-sm font-bold text-primary hover:bg-blue-50 dark:hover:bg-primary/10 transition-colors"
+            >
+              确定
             </button>
           </div>
         </div>

@@ -435,6 +435,15 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   </button>
                 </div>
               )}
+              {activeMenuId === resume.id && (
+                <div
+                  className="fixed inset-0 z-[45]"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveMenuId(null);
+                  }}
+                />
+              )}
             </div>
           </div>
         ))}

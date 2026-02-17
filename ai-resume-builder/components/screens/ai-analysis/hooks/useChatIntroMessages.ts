@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
 
 type Params = {
   currentStep: string;
+  chatInitialized: boolean;
   chatMessagesRef: MutableRefObject<ChatMessage[]>;
   chatIntroScheduledRef: MutableRefObject<boolean>;
   setChatInitialized: (v: boolean) => void;
@@ -14,6 +15,7 @@ type Params = {
 
 export const useChatIntroMessages = ({
   currentStep,
+  chatInitialized,
   chatMessagesRef,
   chatIntroScheduledRef,
   setChatInitialized,
@@ -21,6 +23,8 @@ export const useChatIntroMessages = ({
   resumeData,
   jdText,
 }: Params) => {
+  const askTimerRef = useRef<number | null>(null);
+
   const getInterviewType = () => {
     try {
       const t = String(localStorage.getItem('ai_interview_type') || '').trim().toLowerCase();
@@ -35,29 +39,39 @@ export const useChatIntroMessages = ({
     const greeting = userName ? `${userName}，您好！` : '您好！';
     const interviewType = getInterviewType();
     const hasJd = !!String(jdText || '').trim();
+    const generalWarmup =
+      '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
+    const technicalWarmup =
+      '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
+    const hrWarmup =
+      '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
 
     if (interviewType === 'technical') {
       return {
-        summary: `${greeting}我是您的 AI 技术面试官。${hasJd ? '我已结合您的简历和目标岗位 JD，' : '我已阅读您的简历，'}接下来将重点围绕项目技术方案、架构设计与性能优化进行深挖。`,
-        ask: '我们直接进入技术面。请先挑一个你最有代表性的项目，简要说明你的职责、技术栈以及最核心的技术挑战。'
+        summary: `${greeting}我是您的 AI 复试深挖面试官。${hasJd ? '我已结合您的简历和目标岗位 JD，' : '我已阅读您的简历，'}接下来将重点围绕与你岗位相关的专业能力、项目方法与问题解决过程进行深挖。`,
+        ask: technicalWarmup
       };
     }
 
     if (interviewType === 'hr') {
       return {
         summary: `${greeting}我是您的 AI HR 面试官。${hasJd ? '我已结合您的简历和目标岗位 JD，' : '我已阅读您的简历，'}接下来将重点考察你的动机匹配度、沟通协作和职业稳定性。`,
-        ask: '我们直接开始 HR 面。请先用 STAR 结构讲一个你与同事出现分歧并最终达成一致的真实案例。'
+        ask: hrWarmup
       };
     }
 
     return {
       summary: `${greeting}我是您的 AI 模拟面试官。${hasJd ? '我已经阅读了您的简历和目标职位描述，' : '我已经阅读了您的简历，'}接下来将基于这些信息对您进行模拟面试。每题会给出点评、改进要点与参考回复。`,
-      ask: '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。'
+      ask: generalWarmup
     };
   };
 
   useEffect(() => {
     if (currentStep !== 'chat') {
+      if (askTimerRef.current) {
+        window.clearTimeout(askTimerRef.current);
+        askTimerRef.current = null;
+      }
       chatIntroScheduledRef.current = false;
       setChatInitialized(false);
     }
@@ -65,6 +79,7 @@ export const useChatIntroMessages = ({
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
+    if (chatInitialized) return;
     if (chatIntroScheduledRef.current) return;
     if (chatMessagesRef.current.length !== 0) return;
 
@@ -91,17 +106,18 @@ export const useChatIntroMessages = ({
     };
     setChatMessages(prev => (prev.some(m => m.id === summaryMessage.id) ? prev : [...prev, summaryMessage]));
 
-    const t2 = window.setTimeout(() => {
+    if (askTimerRef.current) {
+      window.clearTimeout(askTimerRef.current);
+      askTimerRef.current = null;
+    }
+    askTimerRef.current = window.setTimeout(() => {
       const askMessage: ChatMessage = {
         id: 'ai-ask',
         role: 'model',
         text: intro.ask
       };
       setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
+      askTimerRef.current = null;
     }, 900);
-
-    return () => {
-      window.clearTimeout(t2);
-    };
-  }, [currentStep, jdText, resumeData?.personalInfo?.name, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatInitialized, jdText, resumeData?.personalInfo?.name, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

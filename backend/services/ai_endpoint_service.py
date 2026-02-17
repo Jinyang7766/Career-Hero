@@ -701,6 +701,128 @@ def ai_chat_core(data, deps):
 
     clean_message = message.replace('[INTERVIEW_MODE]', '').replace('[INTERVIEW_SUMMARY]', '').strip()
 
+    if mode == 'interview_plan':
+        self_intro_re = re.compile(r'(自我介绍|介绍一下你自己|简单介绍一下自己)')
+        warmup_by_type = {
+            'general': '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。',
+            'technical': '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？',
+            'hr': '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。',
+        }
+        warmup_question = warmup_by_type.get(interview_type, warmup_by_type['general'])
+        warmup_pattern_by_type = {
+            'general': re.compile(r'(自我介绍|介绍一下你自己|简单介绍一下自己)'),
+            'technical': re.compile(r'(最引以为傲.*职业成就|最近解决.*棘手问题)'),
+            'hr': re.compile(r'(三个关键词.*工作风格|体现该关键词)'),
+        }
+        warmup_pattern = warmup_pattern_by_type.get(interview_type, warmup_pattern_by_type['general'])
+
+        def _normalize_question_text(value):
+            text = str(value or '').strip().lower()
+            return re.sub(r'[\s\.,;:!?，。！？；：、（）()\[\]{}<>《》“”"\'`~\-—_]+', '', text)
+
+        def _looks_like_warmup_question(value):
+            q = str(value or '').strip()
+            if not q:
+                return False
+            if warmup_pattern.search(q):
+                return True
+            nq = _normalize_question_text(q)
+            nw = _normalize_question_text(warmup_question)
+            if not nq or not nw:
+                return False
+            if nq == nw:
+                return True
+            return (nq in nw) or (nw in nq)
+
+        default_questions = [
+            '请介绍一个你最有代表性的项目，并说明你的具体职责。',
+            '这个项目的关键挑战是什么？你是如何解决的？',
+            '请分享一次跨团队协作推进结果的案例。',
+            '请讲一个你做过关键决策的场景，并说明你的判断依据。',
+            '如果再做一次，你会如何优化？',
+            '你为什么想加入这个岗位/公司？你的3个月目标是什么？',
+            '请补充一个能体现你岗位匹配度的经历或成果。',
+        ]
+        def _sanitize_plan_questions(items, *, min_count=4, max_count=12):
+            sanitized = []
+            for item in (items or []):
+                q = str(item or '').strip()
+                if not q:
+                    continue
+                if self_intro_re.search(q):
+                    continue
+                if _looks_like_warmup_question(q):
+                    continue
+                if q in sanitized:
+                    continue
+                sanitized.append(q)
+                if len(sanitized) >= max_count:
+                    break
+            if len(sanitized) < min_count:
+                for fallback_q in default_questions:
+                    if self_intro_re.search(fallback_q):
+                        continue
+                    if fallback_q in sanitized:
+                        continue
+                    sanitized.append(fallback_q)
+                    if len(sanitized) >= min_count:
+                        break
+            return sanitized[:max_count]
+
+        if not (deps['gemini_client'] and deps['check_gemini_quota']()):
+            return {
+                'success': True,
+                'questions': _sanitize_plan_questions(default_questions),
+                'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
+            }, 200
+        try:
+            role_hint = {
+                'technical': '技术面（项目深挖）',
+                'hr': 'HR面（文化匹配）',
+                'general': '初试（综合基础面）',
+            }.get(interview_type, '初试（综合基础面）')
+            prompt = f"""
+你是一位资深面试官，请为候选人生成一套“完整且不重复”的模拟面试题单。
+要求：
+- 面试类型：{role_hint}
+- 结合岗位JD与候选人简历定制，问题要具体。
+- 一次性给出全部题目，题量由你根据岗位复杂度与候选人背景自行决定。
+- 题量建议区间：5~9题；若岗位很复杂可适度增加，但不超过12题。
+- 题目顺序要从浅入深，覆盖面完整，避免语义重复。
+- 严禁出现“自我介绍”相关题目（例如“请做自我介绍/介绍一下你自己”）。
+- 严禁生成与本场热身题重合或近似的题目。本场热身题为：{warmup_question}
+- 仅输出 JSON，不要任何解释文字。
+- JSON 格式：
+{{
+  "questions": ["问题1", "问题2", "..."],
+  "coverage": ["覆盖点1", "覆盖点2", "..."]
+}}
+
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+"""
+            response, _used = deps['_gemini_generate_content_resilient'](deps['GEMINI_INTERVIEW_MODEL'], prompt, want_json=False)
+            raw_text = (response.text or "").strip()
+            parsed = deps['_parse_json_object_from_text'](raw_text)
+            questions = []
+            coverage = []
+            if isinstance(parsed, dict):
+                q = parsed.get('questions')
+                c = parsed.get('coverage')
+                if isinstance(q, list):
+                    questions = [str(x).strip() for x in q if str(x).strip()]
+                if isinstance(c, list):
+                    coverage = [str(x).strip() for x in c if str(x).strip()]
+            questions = _sanitize_plan_questions(questions or default_questions)
+            return {'success': True, 'questions': questions, 'coverage': coverage}, 200
+        except Exception as e:
+            deps['logger'].warning("Interview plan generation failed: %s", e)
+            return {
+                'success': True,
+                'questions': _sanitize_plan_questions(default_questions),
+                'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
+            }, 200
+
     def _is_voice_placeholder_text(text: str) -> bool:
         stripped = str(text or '').strip()
         return bool(stripped) and stripped in {'（语音）', '(语音)', '[语音]', '语音', 'voice'}
@@ -760,7 +882,7 @@ def ai_chat_core(data, deps):
 
         if _is_low_information_answer(clean_message):
             question = last_q or '请把你的回答说得更具体一些。'
-            return {'response': f"你的回答信息量不足或未能回答到问题。请补充并重新回答：{question}"}, 200
+            return {'response': f"你的回答信息量不足。请只补充当前问题中缺失的关键点（例如你的具体职责、行动细节、结果数据），无需整题重答。当前问题：{question}"}, 200
 
     if deps['gemini_client'] and deps['check_gemini_quota']():
         try:
@@ -787,13 +909,15 @@ def ai_chat_core(data, deps):
 要求：
 - 用中文输出；不要提出下一题。
 - 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 必须给出总分（0-100 的整数）。
 - 输出结构：
-1) 综合评价（3-5句）
-2) 表现亮点（3-6条）
-3) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-4) JD 匹配度与缺口（分点说明）
-5) 简历可改进点（3-6条，针对表达与证据补强）
-6) 1-2 周训练计划（按天/按主题）
+1) 总分：XX/100（必须是整数）
+2) 综合评价（3-5句）
+3) 表现亮点（3-6条）
+4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
+5) JD 匹配度与缺口（分点说明）
+6) 简历可改进点（3-6条，针对表达与证据补强）
+7) 1-2 周训练计划（按天/按主题）
 
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
@@ -827,7 +951,9 @@ def ai_chat_core(data, deps):
  {interview_style_instruction}
  {self_intro_policy_instruction}
  规则：
- - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
+ - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题。
+ - 优先采用“定点补充追问”：明确指出缺失维度（如职责边界、关键行动、量化结果、决策依据），要求候选人只补充该部分。
+ - 仅当回答几乎为空或完全跑题时，才要求整题重答并重复当前问题。
  - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
  - 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
  - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
@@ -968,7 +1094,7 @@ def ai_chat_stream_core(data, deps):
 
         if _is_low_information_answer(clean_message):
             question = last_q or '请把你的回答说得更具体一些。'
-            return None, {'response': f"你的回答信息量不足或未能回答到问题。请补充并重新回答：{question}"}, 200
+            return None, {'response': f"你的回答信息量不足。请只补充当前问题中缺失的关键点（例如你的具体职责、行动细节、结果数据），无需整题重答。当前问题：{question}"}, 200
 
     if not (deps['gemini_client'] and deps['check_gemini_quota']()):
         return None, {'response': '面试官暂时开小差了。'}, 200
@@ -998,13 +1124,15 @@ def ai_chat_stream_core(data, deps):
 要求：
 - 用中文输出；不要提出下一题。
 - 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 必须给出总分（0-100 的整数）。
 - 输出结构：
-1) 综合评价（3-5句）
-2) 表现亮点（3-6条）
-3) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-4) JD 匹配度与缺口（分点说明）
-5) 简历可改进点（3-6条，针对表达与证据补强）
-6) 1-2 周训练计划（按天/按主题）
+1) 总分：XX/100（必须是整数）
+2) 综合评价（3-5句）
+3) 表现亮点（3-6条）
+4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
+5) JD 匹配度与缺口（分点说明）
+6) 简历可改进点（3-6条，针对表达与证据补强）
+7) 1-2 周训练计划（按天/按主题）
 
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
@@ -1037,7 +1165,9 @@ def ai_chat_stream_core(data, deps):
 {interview_style_instruction}
 {self_intro_policy_instruction}
 规则：
-- 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
+- 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题。
+- 优先采用“定点补充追问”：明确指出缺失维度（如职责边界、关键行动、量化结果、决策依据），要求候选人只补充该部分。
+- 仅当回答几乎为空或完全跑题时，才要求整题重答并重复当前问题。
 - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
 - 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
 - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）

@@ -49,8 +49,7 @@ import {
   parseReferenceReply,
   splitNextQuestion,
   stripMarkdownTableSeparators,
-  isAffirmative,
-  isEndInterviewCommand
+  isAffirmative
 } from './ai-analysis/chat-text';
 import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
 
@@ -119,6 +118,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     chatMessagesRef.current = chatMessages;
   }, [chatMessages]);
   const [inputMessage, setInputMessage] = useState('');
+  const [interviewPlan, setInterviewPlan] = useState<string[]>([]);
+  const [planFetchTrigger, setPlanFetchTrigger] = useState(0);
 
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
@@ -136,6 +137,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     restoreInterviewSession,
     persistInterviewSession,
     hasInterviewSessionMessages,
+    clearInterviewSession,
   } = useInterviewSessionStore({
     resumeData,
     setResumeData: setResumeData as any,
@@ -183,13 +185,120 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     resumeData,
     score,
     suggestions,
+    plannedQuestionCount: interviewPlan.length,
     isAffirmative,
-    isEndInterviewCommand,
     splitNextQuestion,
     stripMarkdownTableSeparators,
     formatInterviewQuestion,
     isSelfIntroQuestion,
   });
+
+  const getActiveInterviewType = () => {
+    const t = String(localStorage.getItem('ai_interview_type') || '').trim().toLowerCase();
+    if (t === 'technical' || t === 'hr' || t === 'general') return t;
+    return 'general';
+  };
+
+  const getPlanStorageKey = (effectiveJdText: string) => {
+    const interviewType = getActiveInterviewType();
+    return `ai_interview_plan_${String(resumeData?.id || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}`;
+  };
+
+  const getWarmupQuestion = (interviewType: string) => {
+    if (interviewType === 'technical') return '你能跟我说说你最引以为傲的职业成就是什么？或者是一个你最近解决过的棘手问题？';
+    if (interviewType === 'hr') return '除了简历上写的那些硬技能，你觉得最能定义你个人风格的三个关键词是什么？并请简单解释一下原因。';
+    return '请做一个简单的自我介绍。你可以重点聊聊你的职业背景，以及为什么会对这个职位感兴趣？';
+  };
+
+  useEffect(() => {
+    // Ensure warmup is present if plan is empty (e.g. initial load or restart)
+    if (currentStep === 'chat' && interviewPlan.length === 0) {
+      const interviewType = getActiveInterviewType();
+      const warmup = getWarmupQuestion(interviewType);
+      setInterviewPlan([warmup]);
+    }
+  }, [currentStep, interviewPlan.length]);
+
+  const getFallbackPlanByType = (interviewType: string): string[] => {
+    if (interviewType === 'technical') {
+      return [
+        '请介绍一个你最有代表性的项目，并说明你负责的技术模块。',
+        '该项目的核心技术方案是如何设计的？为什么这样选型？',
+        '上线后遇到过哪些性能或稳定性问题？你如何定位与优化？',
+        '请描述一次你处理复杂故障或线上事故的过程。',
+        '如果业务量翻倍，你会如何改造当前架构？',
+        '你如何保障代码质量与可维护性？',
+        '回到这个项目，你认为最大的技术遗憾和改进方向是什么？',
+      ];
+    }
+    if (interviewType === 'hr') {
+      return [
+        '请分享一次你与同事意见冲突并最终达成一致的案例。',
+        '你如何在高压和紧急任务下保持交付质量？',
+        '请讲一个你主动推动改进并产生结果的经历。',
+        '你过去离职/转岗的主要考虑是什么？',
+        '你为什么想加入这个岗位/公司？',
+        '如果入职，你前3个月的工作目标是什么？',
+      ];
+    }
+    return [
+      '请介绍一个最有代表性的项目，并说明你的职责与结果。',
+      '这个项目中最困难的问题是什么？你如何解决？',
+      '请举例说明一次跨团队协作并推动结果落地的经历。',
+      '你最匹配这个岗位的能力是什么？请给出证据。',
+      '如果你入职该岗位，前3个月会如何规划与交付？',
+      '请补充一个能体现你岗位匹配度的关键成果。'
+    ];
+  };
+  const getWarmupQuestionByType = (interviewType: string): string => {
+    if (interviewType === 'technical') {
+      return '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
+    }
+    if (interviewType === 'hr') {
+      return '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
+    }
+    return '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
+  };
+  const normalizeQuestionText = (value: any): string =>
+    String(value || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[\s\.,;:!?，。！？；：、（）()\[\]{}<>《》“”"'`~\-—_]+/g, '');
+  const isSameOrSimilarQuestion = (a: any, b: any): boolean => {
+    const na = normalizeQuestionText(a);
+    const nb = normalizeQuestionText(b);
+    if (!na || !nb) return false;
+    return na === nb || na.includes(nb) || nb.includes(na);
+  };
+  const composeInterviewPlan = (interviewType: string, baseQuestions: string[]): string[] => {
+    const warmup = String(getWarmupQuestionByType(interviewType) || '').trim();
+    const dedupedBase = (baseQuestions || []).map((q) => String(q || '').trim()).filter(Boolean);
+    if (!warmup) return dedupedBase;
+    const rest = dedupedBase.filter((q) => !isSameOrSimilarQuestion(q, warmup));
+    return [warmup, ...rest];
+  };
+  const sanitizePlanQuestions = (items: any[], interviewType: string): string[] => {
+    const selfIntroRe = /(自我介绍|介绍一下你自己|简单介绍一下自己)/;
+    const minCount = 4;
+    const maxCount = 12;
+    const unique: string[] = [];
+    for (const it of (items || [])) {
+      const q = String(it || '').trim();
+      if (!q) continue;
+      if (selfIntroRe.test(q)) continue;
+      if (unique.includes(q)) continue;
+      unique.push(q);
+      if (unique.length >= maxCount) break;
+    }
+    if (unique.length < minCount) {
+      for (const fallback of getFallbackPlanByType(interviewType)) {
+        if (!fallback || selfIntroRe.test(fallback) || unique.includes(fallback)) continue;
+        unique.push(fallback);
+        if (unique.length >= minCount) break;
+      }
+    }
+    return unique.slice(0, maxCount);
+  };
   const {
     messagesEndRef,
     messagesContainerRef,
@@ -433,6 +542,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   useChatIntroMessages({
     currentStep,
+    chatInitialized,
     chatMessagesRef: chatMessagesRef as any,
     chatIntroScheduledRef: chatIntroScheduledRef as any,
     setChatInitialized,
@@ -508,6 +618,85 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     restoreInterviewSession,
     setJdText,
   ]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    if (!resumeData) return;
+    const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
+    if (!effectiveJdText) return;
+    const interviewType = getActiveInterviewType();
+    const storageKey = getPlanStorageKey(effectiveJdText);
+
+    try {
+      const cached = localStorage.getItem(storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        const q = composeInterviewPlan(
+          interviewType,
+          sanitizePlanQuestions(Array.isArray(parsed?.questions) ? parsed.questions : [], interviewType)
+        );
+        if (q.length > 0) {
+          setInterviewPlan(q);
+          return;
+        }
+      }
+    } catch {
+      // ignore cache parse errors
+    }
+
+    let cancelled = false;
+    const run = async () => {
+      try {
+        setInterviewPlan(prev => {
+          if (prev.length > 0) return prev;
+          return [getWarmupQuestion(interviewType)];
+        });
+
+        const token = await getBackendAuthToken();
+        if (!token) {
+          const fallback = sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType);
+          if (!cancelled) setInterviewPlan(fallback);
+          return;
+        }
+        const resp = await fetch(buildApiUrl('/api/ai/chat'), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token.trim()}`,
+          },
+          body: JSON.stringify({
+            mode: 'interview_plan',
+            message: '请生成本场面试题单',
+            resumeData,
+            jobDescription: effectiveJdText,
+            chatHistory: [],
+            interviewType,
+          }),
+        });
+        const data = await resp.json().catch(() => ({} as any));
+        const questions = sanitizePlanQuestions(Array.isArray(data?.questions) ? data.questions : [], interviewType);
+        const finalPlan = composeInterviewPlan(
+          interviewType,
+          questions.length > 0 ? questions : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+        );
+        if (!cancelled) {
+          setInterviewPlan(finalPlan);
+          try { localStorage.setItem(storageKey, JSON.stringify({ questions: finalPlan, interviewType, jdText: effectiveJdText })); } catch { }
+        }
+      } catch {
+        if (!cancelled) {
+          const fallback = composeInterviewPlan(
+            interviewType,
+            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+          );
+          setInterviewPlan(fallback);
+          try { localStorage.setItem(storageKey, JSON.stringify({ questions: fallback, interviewType, jdText: effectiveJdText })); } catch { }
+        }
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [buildApiUrl, currentStep, jdText, makeJdKey, resumeData, planFetchTrigger]);
 
   useReportSnapshotRestore({
     currentStep,
@@ -674,6 +863,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     );
   }
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
+  const interviewAnsweredCount = chatMessages.filter((m) => {
+    if (m.role !== 'user') return false;
+    const txt = String(m.text || '').trim();
+    const hasTextAnswer = !!txt && txt !== '结束面试';
+    const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
+    return hasTextAnswer || hasVoiceAnswer;
+  }).length;
+  const handleRestartInterview = async () => {
+    chatIntroScheduledRef.current = false;
+    await clearInterviewSession();
+    const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
+    if (effectiveJdText) {
+      try { localStorage.removeItem(getPlanStorageKey(effectiveJdText)); } catch { }
+    }
+    setInterviewPlan([]);
+    setPlanFetchTrigger(v => v + 1);
+  };
 
   // 5. Chat Page (Full Screen with Interactive Cards)
   if (currentStep === 'chat') {
@@ -683,6 +889,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         WaveformVisualizer={(props: any) => <WaveformVisualizer {...props} visualizerData={visualizerData} />}
         handleStepBack={handleStepBack}
         onEndInterview={endInterviewFromChat}
+        onRestartInterview={handleRestartInterview}
         userAvatar={userAvatar}
         chatMessages={chatMessages}
         isSending={isSending}
@@ -718,6 +925,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         onHoldPointerMove={onHoldPointerMove}
         onHoldPointerUp={onHoldPointerUp}
         onHoldPointerCancel={onHoldPointerCancel}
+        interviewPlan={interviewPlan}
+        interviewAnsweredCount={interviewAnsweredCount}
+        interviewTotalCount={interviewPlan.length}
       />
     );
   }

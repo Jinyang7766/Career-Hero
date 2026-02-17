@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ChatMessage } from './types';
+import { confirmDialog } from '../../../src/ui/dialogs';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
@@ -13,6 +14,7 @@ export type ChatPageProps = {
 
   handleStepBack: () => void;
   onEndInterview: () => void;
+  onRestartInterview: () => void;
 
   userAvatar: string;
   chatMessages: ChatMessage[];
@@ -57,6 +59,9 @@ export type ChatPageProps = {
   onHoldPointerMove: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onHoldPointerUp: (e: React.PointerEvent<HTMLButtonElement>) => void;
   onHoldPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => void;
+  interviewPlan: string[];
+  interviewAnsweredCount: number;
+  interviewTotalCount: number;
 };
 
 const ThinkingIndicator: React.FC = () => {
@@ -81,6 +86,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   WaveformVisualizer,
   handleStepBack,
   onEndInterview,
+  onRestartInterview,
   userAvatar,
   chatMessages,
   isSending,
@@ -116,7 +122,17 @@ const ChatPage: React.FC<ChatPageProps> = ({
   onHoldPointerMove,
   onHoldPointerUp,
   onHoldPointerCancel,
+  interviewPlan,
+  interviewAnsweredCount,
+  interviewTotalCount,
 }) => {
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [planExpanded, setPlanExpanded] = React.useState(false);
+
+  const progressPercent = interviewTotalCount > 0
+    ? Math.min(100, Math.round((interviewAnsweredCount / interviewTotalCount) * 100))
+    : 0;
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
       <ToastOverlay />
@@ -143,24 +159,164 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
         </div>
 
-        <button
-          type="button"
-          disabled={isRecording || isSending}
-          onClick={() => {
-            if (isRecording || isSending) return;
-            const confirmed = window.confirm('确认结束面试并生成总结吗？');
-            if (!confirmed) return;
-            try {
-              onEndInterview();
-            } catch {
-              // ignore
-            }
-          }}
-          className="h-9 px-3 rounded-lg text-[13px] font-bold border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          title="结束面试并生成综合分析"
-        >
-          结束面试
-        </button>
+        <div className="relative">
+          <button
+            type="button"
+            disabled={isRecording || isSending}
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="size-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50 transition-colors"
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
+          </button>
+
+          {menuOpen && (
+            <div className="absolute right-0 top-11 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+              <button
+                onClick={async () => {
+                  setMenuOpen(false);
+                  if (await confirmDialog('确定要重新开始吗？当前面试记录将被清空。')) {
+                    onRestartInterview();
+                  }
+                }}
+                className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">restart_alt</span>
+                重新开始
+              </button>
+              <div className="h-px bg-slate-100 dark:bg-white/5"></div>
+              <button
+                onClick={async () => {
+                  setMenuOpen(false);
+                  if (await confirmDialog('确认结束面试并生成总结吗？')) {
+                    onEndInterview();
+                  }
+                }}
+                className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">logout</span>
+                结束面试
+              </button>
+            </div>
+          )}
+          {menuOpen && (
+            <div
+              className="fixed inset-0 z-[59]"
+              onClick={() => setMenuOpen(false)}
+            />
+          )}
+        </div>
+      </div>
+
+      <div className="mx-4 my-2 p-3 bg-white/70 dark:bg-[#1c2936]/40 backdrop-blur-md rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-sm">
+        {interviewTotalCount > 0 ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setPlanExpanded((v) => !v)}
+              className="w-full text-left group"
+            >
+              <div className="flex items-center justify-between mb-2 px-1">
+                <div className="flex items-center gap-2">
+                  <div className="size-5 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-[14px] text-primary">assessment</span>
+                  </div>
+                  {interviewTotalCount <= 1 ? (
+                    <div className="flex items-center gap-2">
+                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                        正在加载面试题库
+                      </p>
+                      <div className="size-2.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                        面试进度
+                      </p>
+                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                        {Math.min(interviewAnsweredCount + 1, interviewTotalCount)} / {interviewTotalCount}
+                      </span>
+                    </>
+                  )}
+                </div>
+                <span className={`material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-500 transition-transform duration-300 ${planExpanded ? 'rotate-180' : ''}`}>
+                  keyboard_arrow_down
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden p-0.5 border border-slate-200/50 dark:border-white/5">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-primary to-blue-400 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(37,99,235,0.4)]"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </button>
+            {planExpanded && (
+              <div className="mt-3 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 customize-scrollbar">
+                  {interviewPlan.map((q, idx) => {
+                    const done = idx < interviewAnsweredCount;
+                    const isCurrent = idx === interviewAnsweredCount;
+                    return (
+                      <div
+                        key={`${idx}-${q.slice(0, 20)}`}
+                        className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${isCurrent ? 'bg-primary/5 dark:bg-primary/10 border border-primary/10' : ''
+                          }`}
+                      >
+                        <div className="shrink-0 mt-0.5">
+                          {done ? (
+                            <div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                              <span className="material-symbols-outlined text-[12px] text-white font-bold">check</span>
+                            </div>
+                          ) : (
+                            <div className={`size-5 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${isCurrent
+                              ? 'border-primary text-primary animate-pulse'
+                              : 'border-slate-300 dark:border-slate-700 text-slate-400'
+                              }`}>
+                              {idx + 1}
+                            </div>
+                          )}
+                        </div>
+                        <p className={`text-[12px] leading-relaxed font-medium ${done
+                          ? 'text-slate-400 dark:text-slate-500 line-through decoration-slate-300/50 dark:decoration-white/10'
+                          : isCurrent
+                            ? 'text-slate-900 dark:text-white font-bold'
+                            : 'text-slate-600 dark:text-slate-400'
+                          }`}>
+                          {q}
+                        </p>
+                      </div>
+                    );
+                  })}
+                  {interviewPlan.length === 1 && (
+                    <div className="flex items-center gap-3 p-2 opacity-50">
+                      <div className="size-5 flex items-center justify-center">
+                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]"></div>
+                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s] mx-0.5"></div>
+                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce"></div>
+                      </div>
+                      <p className="text-[11px] font-medium text-slate-400">正在生成后续题单...</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="flex flex-col gap-2.5 px-1 py-1">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="size-5 rounded-md bg-slate-100 dark:bg-white/5 flex items-center justify-center animate-pulse">
+                  <span className="material-symbols-outlined text-[14px] text-slate-400">query_builder</span>
+                </div>
+                <p className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider animate-pulse">
+                  正在加载本场面试的题库...
+                </p>
+              </div>
+            </div>
+            <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200/50 dark:border-white/5">
+              <div className="h-full w-1/2 bg-slate-200 dark:bg-white/10 rounded-full animate-[shimmer_1.5s_infinite] shadow-[0_0_10px_rgba(255,255,255,0.1)]"></div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div
@@ -205,8 +361,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
                       disabled={!msg.audioUrl}
                       style={{ width: `${Math.min(180, 70 + (msg.audioDuration || 1) * 4)}px` }}
                       className={`group relative flex items-center px-3 h-11 rounded-lg shadow-sm active:scale-[0.98] transition-all overflow-hidden ${msg.role === 'user'
-                          ? 'bg-primary text-white rounded-tr-none flex-row-reverse'
-                          : 'bg-white dark:bg-[#2c2c2c] text-[#191919] dark:text-white rounded-tl-none border border-slate-200 dark:border-white/5'
+                        ? 'bg-primary text-white rounded-tr-none flex-row-reverse'
+                        : 'bg-white dark:bg-[#2c2c2c] text-[#191919] dark:text-white rounded-tl-none border border-slate-200 dark:border-white/5'
                         }`}
                     >
                       <span
@@ -258,8 +414,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
                             disabled={isTranscribing}
                             onClick={() => transcribeExistingVoiceMessage(msg.id)}
                             className={`h-7 px-2.5 rounded-md text-[12px] font-bold border transition-colors ${isTranscribing
-                                ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
+                              ? 'bg-slate-100 text-slate-400 border-slate-200 dark:bg-white/5 dark:text-slate-500 dark:border-white/10 cursor-not-allowed'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50 active:scale-[0.98] dark:bg-white/5 dark:text-slate-200 dark:border-white/10 dark:hover:bg-white/10'
                               }`}
                           >
                             {isTranscribing ? (
@@ -294,8 +450,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
                   !(msg.role === 'user' && (msg.audioUrl || msg.audioPending)) && (
                     <div
                       className={`px-4 py-2.5 text-[15px] leading-relaxed shadow-sm rounded-lg whitespace-pre-wrap break-words ${msg.role === 'user'
-                          ? 'bg-primary text-white rounded-tr-none'
-                          : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
+                        ? 'bg-primary text-white rounded-tr-none'
+                        : 'bg-white dark:bg-[#1c2936] text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-white/5 rounded-tl-none'
                         }`}
                     >
                       {msg.role === 'model' ? (
@@ -383,8 +539,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
                 <div
                   className={`relative flex flex-col items-center transition-all duration-300 ${isRecording
-                      ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
-                      : 'relative'
+                    ? 'fixed left-4 right-4 bottom-[calc(max(12px,env(safe-area-inset-bottom))+12px)] z-[110]'
+                    : 'relative'
                     }`}
                 >
                   {isRecording && (
@@ -408,10 +564,10 @@ const ChatPage: React.FC<ChatPageProps> = ({
                     onContextMenu={(e) => e.preventDefault()}
                     disabled={!audioSupported}
                     className={`transition-all duration-300 select-none font-bold overflow-hidden touch-none ${isRecording
-                        ? holdCancel
-                          ? 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
-                          : 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]'
-                        : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
+                      ? holdCancel
+                        ? 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-red-500 to-rose-600 text-white border-transparent shadow-2xl scale-[1.02]'
+                        : 'w-full h-[68px] rounded-[34px] bg-gradient-to-r from-blue-600 to-primary text-white border-transparent shadow-2xl scale-[1.02]'
+                      : 'w-full h-[46px] rounded-2xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white border border-slate-200 dark:border-white/10'
                       } disabled:opacity-50 active:scale-[0.98] flex items-center justify-center`}
                     type="button"
                   >

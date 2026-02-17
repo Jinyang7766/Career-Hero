@@ -28,8 +28,8 @@ type Params = {
   resumeData: any;
   score: number;
   suggestions: any[];
+  plannedQuestionCount?: number;
   isAffirmative: (text: string) => boolean;
-  isEndInterviewCommand: (text: string) => boolean;
   splitNextQuestion: (text: string) => { cleaned: string; next: string };
   stripMarkdownTableSeparators: (text: string) => string;
   formatInterviewQuestion: (q: string) => string;
@@ -50,8 +50,8 @@ export const useInterviewChat = ({
   resumeData,
   score,
   suggestions,
+  plannedQuestionCount = 0,
   isAffirmative,
-  isEndInterviewCommand,
   splitNextQuestion,
   stripMarkdownTableSeparators,
   formatInterviewQuestion,
@@ -297,11 +297,13 @@ export const useInterviewChat = ({
   const handleSendMessage = async (
     textOverride?: string,
     audioOverride?: AudioOverride | null,
-    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string }
+    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string; forceEnd?: boolean }
   ) => {
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
-    const isEndCommand = currentStep === 'chat' && hasText && isEndInterviewCommand(textToSend);
+    const isEndCommand =
+      currentStep === 'chat' &&
+      (String(textOverride || '').trim() === '结束面试' || !!opts?.forceEnd);
     if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
@@ -344,7 +346,7 @@ export const useInterviewChat = ({
     }
 
     try {
-      if (!opts?.skipAddUserMessage && isEndCommand) {
+      if (isEndCommand) {
         endingInterviewRef.current = true;
         const summaryRaw = await generateInterviewSummary(baseMessages);
         const summary = stripMarkdownTableSeparators(summaryRaw);
@@ -467,6 +469,26 @@ export const useInterviewChat = ({
         });
       } catch (stateErr) {
         console.warn('Failed to refresh interview_in_progress state:', stateErr);
+      }
+
+      if (
+        isInterviewChat &&
+        plannedQuestionCount > 0 &&
+        !endingInterviewRef.current &&
+        !interviewEndedRef.current
+      ) {
+        const answeredCount = finalMessages.filter((m) => {
+          if (m.role !== 'user') return false;
+          const txt = String(m.text || '').trim();
+          const hasTextAnswer = !!txt && txt !== '结束面试';
+          const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
+          return hasTextAnswer || hasVoiceAnswer;
+        }).length;
+
+        if (answeredCount >= plannedQuestionCount) {
+          await handleSendMessage('结束面试', null, { skipAddUserMessage: true, forceEnd: true });
+          return;
+        }
       }
     } catch (error) {
       console.error('API failed:', error);
