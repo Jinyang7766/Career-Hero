@@ -569,10 +569,10 @@ const AllResumes: React.FC<ScreenProps> = () => {
               <>
                 <button
                   onClick={handleSelectAll}
-                  className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+                  className={`flex size-10 items-center justify-center rounded-full hover:bg-primary/10 transition-colors ${selectedIds.size === filteredResumes.length ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}`}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
-                    {selectedIds.size === filteredResumes.length ? 'deselect' : 'select_all'}
+                    {selectedIds.size === filteredResumes.length && filteredResumes.length > 0 ? 'check_circle' : 'radio_button_unchecked'}
                   </span>
                 </button>
                 <button

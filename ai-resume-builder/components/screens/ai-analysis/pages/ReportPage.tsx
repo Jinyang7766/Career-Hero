@@ -86,7 +86,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4">
+      <main className="flex-1 overflow-y-auto p-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))]">
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5 mb-6 relative overflow-hidden">
           <div className={`absolute top-0 left-0 w-full h-1 bg-gradient-to-r ${score >= 80 ? 'from-green-400 to-emerald-600' : 'from-orange-400 to-red-500'}`}></div>
 
@@ -330,7 +330,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           </div>
         )}
 
-        <div className="mb-20 flex gap-3">
+        <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 flex gap-3">
           <button
             onClick={handleAnalyzeOtherResume}
             className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20"
