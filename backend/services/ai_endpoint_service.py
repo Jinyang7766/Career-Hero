@@ -773,7 +773,6 @@ def ai_chat_core(data, deps):
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
-"""
             else:
                 persona_prompts = {
                     'technical': "你是极客型技术面试官（Technical Interviewer）。\n风格：深度挖掘技术细节，喜欢追问底层原理、系统设计与性能优化，对模糊回答零容忍。\n关注点：技术栈掌握度、解决复杂问题能力、代码质量、系统架构思维。",

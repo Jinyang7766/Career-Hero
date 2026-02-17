@@ -47,6 +47,31 @@ def _normalize_extracted_text(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
+def _env_flag(name: str, default: bool) -> bool:
+    raw = str(os.getenv(name, '1' if default else '0')).strip().lower()
+    return raw in ('1', 'true', 'yes', 'on')
+
+
+def _generate_content_with_timeout(model_name: str, contents, *, timeout_seconds: int = 18, want_json: bool = True):
+    timeout_seconds = max(5, int(timeout_seconds or 18))
+
+    def _call():
+        if want_json:
+            return gemini_client.models.generate_content(
+                model=model_name,
+                contents=contents,
+                config=types.GenerateContentConfig(response_mime_type="application/json")
+            )
+        return gemini_client.models.generate_content(
+            model=model_name,
+            contents=contents
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        future = executor.submit(_call)
+        return future.result(timeout=timeout_seconds)
+
+
 def _extract_text_via_pypdf(file_bytes):
     pages_text = []
     try:
@@ -82,8 +107,21 @@ def _extract_text_via_pymupdf(file_bytes):
 
 def extract_text_from_pdf(file_bytes):
     """Extract text content from a PDF file (bytes), fallback across multiple engines."""
-    text_pypdf = _extract_text_via_pypdf(file_bytes)
-    text_pymupdf = _extract_text_via_pymupdf(file_bytes)
+    text_pypdf = ""
+    text_pymupdf = ""
+
+    # Run two local extractors in parallel; this often halves extraction latency.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        fut_pypdf = executor.submit(_extract_text_via_pypdf, file_bytes)
+        fut_pymupdf = executor.submit(_extract_text_via_pymupdf, file_bytes)
+        try:
+            text_pypdf = fut_pypdf.result(timeout=8)
+        except Exception:
+            text_pypdf = ""
+        try:
+            text_pymupdf = fut_pymupdf.result(timeout=8)
+        except Exception:
+            text_pymupdf = ""
 
     # Prefer the longer candidate; different engines perform better on different PDFs.
     text = text_pypdf if len(text_pypdf) >= len(text_pymupdf) else text_pymupdf
@@ -107,8 +145,12 @@ def extract_text_multimodal(file_bytes):
         doc = fitz.open(stream=file_bytes, filetype="pdf")
         images = []
         
-        # 限制页数，防止超过 API 限制或过慢
-        max_pages = min(len(doc), 5)
+        # 默认只取前 3 页，显著降低 OCR 延迟；可通过环境变量调整。
+        try:
+            ocr_max_pages = max(1, int(os.getenv('OCR_MAX_PAGES', '3')))
+        except Exception:
+            ocr_max_pages = 3
+        max_pages = min(len(doc), ocr_max_pages)
         for i in range(max_pages):
             page = doc.load_page(i)
             # Keep resolution moderate to avoid request payload too large.
@@ -137,9 +179,9 @@ def extract_text_multimodal(file_bytes):
              contents.append(types.Part.from_bytes(data=img_bytes_decoded, mime_type=img['mime_type']))
 
         try:
-            ocr_call_timeout_seconds = max(5, int(os.getenv('OCR_CALL_TIMEOUT_SECONDS', '35')))
+            ocr_call_timeout_seconds = max(5, int(os.getenv('OCR_CALL_TIMEOUT_SECONDS', '12')))
         except Exception:
-            ocr_call_timeout_seconds = 35
+            ocr_call_timeout_seconds = 12
 
         def _ocr_with_model(model_name: str, model_contents):
             response = gemini_client.models.generate_content(
@@ -167,7 +209,9 @@ def extract_text_multimodal(file_bytes):
             except Exception as model_err:
                 logger.warning("OCR batch failed (%s): %s", model_name, model_err)
 
-            # Fallback: page-by-page OCR (more robust for large/complex PDFs).
+            # Fallback: page-by-page OCR (more robust but slower). Disabled by default for speed.
+            if not _env_flag('OCR_PER_PAGE_FALLBACK_ENABLED', False):
+                continue
             try:
                 per_page_texts = []
                 for idx, img in enumerate(images):
@@ -752,7 +796,34 @@ def parse_resume_text_with_ai(resume_text):
     if not gemini_client:
         raise ValueError('AI 服务未配置')
 
-    prompt = f"""
+    fast_prompt = f"""
+    你是简历解析器。请把下面简历文本提取为 JSON，只返回 JSON，不要解释。
+    字段缺失时返回空字符串或空数组，不要编造。
+
+    输出结构：
+    {{
+      "personalInfo": {{
+        "name": "",
+        "title": "",
+        "email": "",
+        "phone": "",
+        "location": "",
+        "age": "",
+        "summary": ""
+      }},
+      "workExps": [{{"company":"", "position":"", "startDate":"", "endDate":"", "description":""}}],
+      "educations": [{{"school":"", "degree":"", "major":"", "startDate":"", "endDate":""}}],
+      "projects": [{{"title":"", "subtitle":"", "startDate":"", "endDate":"", "description":""}}],
+      "skills": []
+    }}
+
+    简历文本：
+    ---
+    {resume_text}
+    ---
+    """
+
+    full_prompt = f"""
     你是一位顶尖的简历解析专家。请分析以下简历文本，并将其转换为精确的结构化 JSON。
     
     **解析准则：**
@@ -817,13 +888,29 @@ def parse_resume_text_with_ai(resume_text):
     """
 
     try:
-        response = gemini_client.models.generate_content(
-            model=GEMINI_RESUME_PARSE_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
+        fast_mode = _env_flag('RESUME_PARSE_FAST_PROMPT_ENABLED', True)
+        ai_timeout_seconds = max(8, int(os.getenv('RESUME_PARSE_AI_TIMEOUT_SECONDS', '18')))
+        response = None
+
+        if fast_mode:
+            try:
+                response = _generate_content_with_timeout(
+                    GEMINI_RESUME_PARSE_MODEL,
+                    fast_prompt,
+                    timeout_seconds=ai_timeout_seconds,
+                    want_json=True,
+                )
+            except Exception as fast_err:
+                logger.warning("Fast parse prompt failed, fallback to full prompt: %s", fast_err)
+
+        if response is None:
+            fallback_timeout = max(ai_timeout_seconds, int(os.getenv('RESUME_PARSE_AI_FALLBACK_TIMEOUT_SECONDS', '28')))
+            response = _generate_content_with_timeout(
+                GEMINI_RESUME_PARSE_MODEL,
+                full_prompt,
+                timeout_seconds=fallback_timeout,
+                want_json=True,
             )
-        )
     except Exception as e:
         logger.error(f"AI parse failed: {e}")
         raise RuntimeError('AI parse failed')
@@ -832,7 +919,8 @@ def parse_resume_text_with_ai(resume_text):
         raise RuntimeError('AI parse failed')
 
     parsed_data = _normalize_parsed_resume_result(ai_result)
-    parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
+    if _env_flag('RESUME_PARSE_SECOND_PASS_ENABLED', False):
+        parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
     parsed_data = _filter_unverifiable_entities(parsed_data, resume_text)
     parsed_data = _fill_skills_if_missing(parsed_data, resume_text)
 
