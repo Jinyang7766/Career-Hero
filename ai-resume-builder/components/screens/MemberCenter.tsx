@@ -1,25 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { View, ScreenProps, MembershipTier } from '../../types';
 import { useAppContext } from '../../src/app-context';
 import { ReferralModal } from '../ReferralModal';
+import { useUserProfile } from '../../src/useUserProfile';
 
 const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
     const { goBack, navigateToView } = useAppContext();
     const [selectedTier, setSelectedTier] = useState<MembershipTier>(MembershipTier.PLUS);
     const [showReferralModal, setShowReferralModal] = useState(false);
 
-    // Mock referral code - in real app, derive from user ID or backend
-    const referralCode = React.useMemo(() => {
-        return currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888';
-    }, [currentUser]);
+    // User Profile Hook & Avatar Logic (Unified with Profile page)
+    const { userProfile } = useUserProfile(currentUser?.id, currentUser);
+    const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
+    const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
 
-    // Mock user subscription data - replace with actual data from context/backend
+    useEffect(() => {
+        const savedAvatar = localStorage.getItem('user_avatar');
+        if (savedAvatar) setAvatar(savedAvatar);
+    }, []);
+
+    const displayName = useMemo(() =>
+        userProfile?.name || currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || '未登录用户'
+        , [userProfile, currentUser]);
+
+    const displayEmail = useMemo(() =>
+        userProfile?.email || currentUser?.email || ''
+        , [userProfile, currentUser]);
+
+    // Referral code logic
+    const referralCode = useMemo(() => {
+        return userProfile?.referral_code || (currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888');
+    }, [currentUser, userProfile?.referral_code]);
+
+    // Mock user subscription data - Sync with Profile state if available
     const userSub = {
         tier: MembershipTier.FREE,
         expireDate: '2024-12-31',
         autoRenew: false,
-        diagnosesRemaining: 0,
-        interviewsRemaining: 0,
+        diagnosesRemaining: Number(userProfile?.diagnoses_remaining ?? 0),
+        interviewsRemaining: Number(userProfile?.interviews_remaining ?? 0),
     };
 
     const tiers = [
@@ -163,43 +182,52 @@ const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
             </header>
 
             <main className="flex-1 p-5 space-y-8">
-                {/* User Status Card (Glassmorphism) with Dynamic Styles */}
-                <div className={`relative overflow-hidden rounded-3xl p-6 shadow-xl backdrop-blur-lg transition-colors duration-500 ${tierStyle.bg} border ${tierStyle.border}`}>
-                    <div className={`absolute top-0 right-0 w-32 h-32 blur-3xl rounded-full -mr-16 -mt-16 pointer-events-none transition-colors duration-500 ${tierStyle.orb}`} />
+                {/* User Info Card - Unified with Profile page style */}
+                <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative overflow-hidden">
+                    <div className="p-4">
+                        <div className="flex items-center gap-4 relative z-10">
+                            {/* Avatar */}
+                            <div className="shrink-0">
+                                <div
+                                    className="w-16 h-16 rounded-full bg-cover bg-center border-2 border-white dark:border-slate-700 shadow-sm"
+                                    style={{ backgroundImage: `url("${avatar}")` }}
+                                ></div>
+                            </div>
 
-                    <div className="flex items-center gap-4 relative z-10">
-                        <div className={`size-14 rounded-full flex items-center justify-center shadow-inner transition-colors duration-500 ${tierStyle.iconBg}`}>
-                            <span className={`material-symbols-outlined text-3xl transition-colors duration-500 ${tierStyle.iconColor}`}>
-                                {userSub.tier === MembershipTier.ULTRA ? 'diamond' :
-                                    userSub.tier === MembershipTier.PRO ? 'workspace_premium' :
-                                        userSub.tier === MembershipTier.PLUS ? 'verified' :
-                                            userSub.tier === MembershipTier.STARTER ? 'rocket_launch' : 'person'}
-                            </span>
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                                {currentUser?.name || '未登录用户'}
-                            </h2>
-                            <div className="flex items-center gap-2 mt-1">
-                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium transition-colors duration-500 ${tierStyle.iconBg} ${tierStyle.iconColor}`}>
-                                    {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
-                                </span>
-                                <span className="text-xs text-slate-500 dark:text-slate-400">
-                                    {userSub.tier === MembershipTier.FREE ? '暂未订阅' : `有效期至 ${userSub.expireDate}`}
-                                </span>
+                            {/* User Identity & Badge */}
+                            <div className="flex flex-col flex-1 min-w-0 pr-2">
+                                <div className="flex items-center gap-2 mb-1 min-w-0">
+                                    <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
+                                        {displayName}
+                                    </h2>
+                                    <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black ${tierStyle.iconBg} ${tierStyle.iconColor} border border-current opacity-90 uppercase tracking-tight`}>
+                                        {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {userSub.tier !== MembershipTier.FREE ? (
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                            有效期至 {userSub.expireDate}
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate font-medium">
+                                            {displayEmail}
+                                        </span>
+                                    )}
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    {/* Usage Stats */}
-                    <div className="mt-6 grid grid-cols-2 gap-4">
-                        <div className="bg-white/50 dark:bg-black/20 rounded-xl p-3 flex flex-col items-center border border-white/10">
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">剩余诊断</span>
-                            <span className="text-xl font-black text-slate-800 dark:text-slate-200">{userSub.diagnosesRemaining}</span>
-                        </div>
-                        <div className="bg-white/50 dark:bg-black/20 rounded-xl p-3 flex flex-col items-center border border-white/10">
-                            <span className="text-xs text-slate-500 dark:text-slate-400 mb-1">剩余面试</span>
-                            <span className="text-xl font-black text-slate-800 dark:text-slate-200">{userSub.interviewsRemaining}</span>
+                        {/* Integrated Usage Stats - Horizontal/Divided style */}
+                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center divide-x divide-slate-100 dark:divide-white/5">
+                            <div className="flex-1 flex flex-col items-center">
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余诊断</span>
+                                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.diagnosesRemaining}</span>
+                            </div>
+                            <div className="flex-1 flex flex-col items-center">
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余面试</span>
+                                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.interviewsRemaining}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

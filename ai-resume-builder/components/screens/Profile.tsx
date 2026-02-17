@@ -45,7 +45,7 @@ const Profile: React.FC<ScreenProps> = () => {
   }, []);
 
   // Get user profile with real name
-  const { userProfile, loading, error } = useUserProfile();
+  const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
   const displayName =
     userProfile?.name ||
     currentUser?.user_metadata?.name ||
@@ -87,8 +87,16 @@ const Profile: React.FC<ScreenProps> = () => {
 
   // Mock referral code - in real app, derive from user ID or backend
   const referralCode = React.useMemo(() => {
-    return currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888';
-  }, [currentUser]);
+    return userProfile?.referral_code || (currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888');
+  }, [currentUser, userProfile?.referral_code]);
+
+  // Mock user subscription data - keeps consistent with Member Center
+  const userSub = {
+    tier: MembershipTier.FREE,
+    expireDate: '2024-12-31',
+    diagnosesRemaining: Number(userProfile?.diagnoses_remaining ?? 0),
+    interviewsRemaining: Number(userProfile?.interviews_remaining ?? 0),
+  };
 
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
@@ -126,16 +134,31 @@ const Profile: React.FC<ScreenProps> = () => {
                 />
               </div>
               <div className="flex flex-col flex-1 min-w-0 pr-2">
-                <div className="flex items-center gap-2 mb-0.5">
-                  <h2 className="text-lg font-bold truncate text-slate-900 dark:text-white">
+                <div className="flex items-center gap-2 mb-1 min-w-0">
+                  <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                     {displayName || ' '}
                   </h2>
+                  <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-current opacity-90 uppercase tracking-tight">
+                    {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
+                  </span>
                 </div>
                 {displayEmail && (
-                  <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate">
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate font-medium">
                     {displayEmail}
                   </p>
                 )}
+              </div>
+            </div>
+
+            {/* Integrated Usage Stats (Synced style) */}
+            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center divide-x divide-slate-100 dark:divide-white/5">
+              <div className="flex-1 flex flex-col items-center">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余诊断</span>
+                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.diagnosesRemaining}</span>
+              </div>
+              <div className="flex-1 flex flex-col items-center">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余面试</span>
+                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.interviewsRemaining}</span>
               </div>
             </div>
           </div>

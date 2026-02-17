@@ -101,10 +101,24 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
       {/* Mode Indicator Banner */}
       <div className="px-4 pt-4 pb-1 shrink-0">
-        <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ${isInterviewMode
-          ? 'bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 shadow-xl shadow-violet-500/30'
+        <div className={`group relative overflow-hidden rounded-2xl p-6 text-white shadow-xl transition-all ${isInterviewMode
+          ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-indigo-500/30'
           : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 shadow-xl shadow-primary/30'
           }`}>
+
+          {/* Decorative shapes - Synced with Membership/Dashboard style for Interview mode */}
+          {isInterviewMode ? (
+            <>
+              <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse pointer-events-none" />
+              <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+            </>
+          ) : (
+            <>
+              <div className="absolute -right-8 -top-8 size-32 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+              <div className="absolute -left-8 -bottom-8 size-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+            </>
+          )}
+
           <div className="flex items-start gap-4 relative z-10">
             <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
               <span className="material-symbols-outlined text-[24px]">
@@ -122,10 +136,6 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               </p>
             </div>
           </div>
-
-          {/* Decorative shapes */}
-          <div className="absolute -right-8 -top-8 size-32 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-          <div className="absolute -left-8 -bottom-8 size-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
         </div>
       </div>
 

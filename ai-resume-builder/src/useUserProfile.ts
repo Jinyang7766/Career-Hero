@@ -10,6 +10,9 @@ export interface UserProfile {
   updated_at: string;
   deletion_pending_until?: string;
   phone?: string;
+  referral_code?: string;
+  diagnoses_remaining?: number;
+  interviews_remaining?: number;
 }
 
 // 缓存项接口
@@ -23,22 +26,48 @@ const userCache = new Map<string, CacheItem>();
 
 // 缓存过期时间（10分钟）
 const CACHE_EXPIRY = 10 * 60 * 1000;
+const PROFILE_CACHE_KEY_PREFIX = 'user_profile_cache:';
 
 // 缓存管理方法
 const cacheWithExpiry = {
   set: (key: string, profile: UserProfile) => {
-    userCache.set(key, {
+    const item: CacheItem = {
       profile,
       timestamp: Date.now()
-    });
+    };
+    userCache.set(key, item);
+    try {
+      localStorage.setItem(`${PROFILE_CACHE_KEY_PREFIX}${key}`, JSON.stringify(item));
+    } catch (_err) {
+      // Ignore localStorage write errors.
+    }
   },
   get: (key: string): UserProfile | null => {
-    const item = userCache.get(key);
+    let item = userCache.get(key);
+    if (!item) {
+      try {
+        const raw = localStorage.getItem(`${PROFILE_CACHE_KEY_PREFIX}${key}`);
+        if (raw) {
+          const parsed = JSON.parse(raw) as CacheItem;
+          if (parsed?.profile && typeof parsed.timestamp === 'number') {
+            userCache.set(key, parsed);
+            item = parsed;
+          }
+        }
+      } catch (_err) {
+        // Ignore localStorage parse errors.
+      }
+    }
     if (!item) return null;
 
     // 检查缓存是否过期
     if (Date.now() - item.timestamp > CACHE_EXPIRY) {
       userCache.delete(key);
+      try {
+        localStorage.removeItem(`${PROFILE_CACHE_KEY_PREFIX}${key}`);
+      } catch (_err) {
+        // Ignore localStorage remove errors.
+      }
       return null;
     }
 
@@ -46,6 +75,11 @@ const cacheWithExpiry = {
   },
   delete: (key: string) => {
     userCache.delete(key);
+    try {
+      localStorage.removeItem(`${PROFILE_CACHE_KEY_PREFIX}${key}`);
+    } catch (_err) {
+      // Ignore localStorage remove errors.
+    }
   }
 };
 
@@ -70,7 +104,7 @@ export const getUserFromLocalStorage = (): any => {
   }
 };
 
-export const useUserProfile = (userId?: string) => {
+export const useUserProfile = (userId?: string, seedUser?: any) => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,15 +112,20 @@ export const useUserProfile = (userId?: string) => {
   useEffect(() => {
     const loadUserProfile = async () => {
       try {
-        setLoading(true);
+        // Keep existing content stable while background refresh runs.
+        setLoading((prev) => (userProfile ? prev : true));
         setError(null);
 
         // Get current authenticated user if no userId provided
         let targetUserId = userId;
-        let authUser = null;
+        let authUser = seedUser || null;
 
         // 1. 优先从localStorage获取用户信息
         const localStorageUser = getUserFromLocalStorage();
+
+        if (!targetUserId && authUser?.id) {
+          targetUserId = authUser.id;
+        }
 
         if (!targetUserId) {
           // 2. 尝试从supabase获取当前用户
@@ -150,7 +189,7 @@ export const useUserProfile = (userId?: string) => {
     };
 
     loadUserProfile();
-  }, [userId]);
+  }, [userId, seedUser?.id]);
 
   return { userProfile, loading, error };
 };
