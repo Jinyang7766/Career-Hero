@@ -173,14 +173,33 @@ export const useOptimizedResumeStore = ({
     if (!originalRow.success || !originalRow.data?.resume_data) return null;
 
     const originalData = originalRow.data.resume_data || {};
-    const jdKey = makeJdKey(analysisJdText || originalData.lastJdText || '');
+    const effectiveJdText = (analysisJdText || originalData.lastJdText || '').trim();
+    const jdKey = makeJdKey(effectiveJdText);
+
+    // Backward compatibility: old binding stored on original resume.
     const bindings = originalData.analysisBindings || {};
     const currentBinding = bindings[jdKey];
-    if (!currentBinding) return null;
+    if (currentBinding) {
+      return {
+        analysisReportId: String(currentBinding.analysisReportId || '').trim() || buildAnalysisReportId(originalResumeId, effectiveJdText),
+        optimizedResumeId: currentBinding.optimizedResumeId ?? null,
+        jdKey,
+      };
+    }
+
+    // New path: derive from optimized resume record keyed by original + JD.
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) return null;
+
+    const hitId = await findExistingOptimizedResumeId(user.id, originalResumeId, jdKey);
+    if (!hitId) return null;
+    const hitRow = await DatabaseService.getResume(hitId);
+    if (!hitRow.success || !hitRow.data?.resume_data) return null;
+    const hitData = hitRow.data.resume_data || {};
 
     return {
-      analysisReportId: String(currentBinding.analysisReportId || '').trim() || buildAnalysisReportId(originalResumeId, analysisJdText),
-      optimizedResumeId: currentBinding.optimizedResumeId ?? null,
+      analysisReportId: String(hitData.analysisReportId || '').trim() || buildAnalysisReportId(originalResumeId, effectiveJdText),
+      optimizedResumeId: hitRow.data.id,
       jdKey,
     };
   };
@@ -204,16 +223,13 @@ export const useOptimizedResumeStore = ({
     const effectiveJdText = (analysisJdText || originalData.lastJdText || '').trim();
     const jdKey = makeJdKey(effectiveJdText);
     const analysisReportId = buildAnalysisReportId(originalResumeId, effectiveJdText);
-    const bindings = originalData.analysisBindings || {};
-    const currentBinding = bindings[jdKey] || {};
 
-    let optimizedResumeId: string | number | null = currentBinding.optimizedResumeId ?? null;
-    if (optimizedResumeId) {
-      const mappedRow = await DatabaseService.getResume(optimizedResumeId);
+    let optimizedResumeId: string | number | null = null;
+    const resolved = await resolveAnalysisBinding(originalResumeId, effectiveJdText);
+    if (resolved?.optimizedResumeId) {
+      const mappedRow = await DatabaseService.getResume(resolved.optimizedResumeId);
       const mappedData = mappedRow.success ? (mappedRow.data?.resume_data || {}) : null;
-      if (!(mappedRow.success && mappedRow.data && isValidOptimizedMatch(mappedData, normalizeResumeId(originalResumeId), jdKey))) {
-        optimizedResumeId = null;
-      } else {
+      if (mappedRow.success && mappedRow.data && isValidOptimizedMatch(mappedData, normalizeResumeId(originalResumeId), jdKey)) {
         optimizedResumeId = mappedRow.data.id;
       }
     }
@@ -230,21 +246,28 @@ export const useOptimizedResumeStore = ({
       updatedAt: new Date().toISOString(),
     };
 
-    const sameBinding =
-      String(currentBinding.analysisReportId || '') === String(nextBinding.analysisReportId) &&
-      isSameResumeId(currentBinding.optimizedResumeId, nextBinding.optimizedResumeId);
+    const optimizedRow = await DatabaseService.getResume(optimizedResumeId);
+    if (!optimizedRow.success || !optimizedRow.data?.resume_data) {
+      throw new Error('未找到已分析简历，无法建立分析绑定');
+    }
+    const optimizedData = optimizedRow.data.resume_data || {};
+    const needsPatch =
+      String(optimizedData.analysisReportId || '') !== String(nextBinding.analysisReportId) ||
+      String(optimizedData.optimizationJdKey || '') !== String(jdKey) ||
+      String(optimizedData.lastJdText || '') !== String(effectiveJdText || '') ||
+      String(optimizedData.targetCompany || '') !== String(targetCompany || optimizedData.targetCompany || '');
 
-    if (!sameBinding) {
-      await DatabaseService.updateResume(String(originalResumeId), {
+    if (needsPatch) {
+      await DatabaseService.updateResume(String(optimizedResumeId), {
         resume_data: {
-          ...originalData,
-          analysisBindings: {
-            ...bindings,
-            [jdKey]: nextBinding,
-          },
+          ...optimizedData,
+          optimizationStatus: 'optimized',
+          optimizedFromId: normalizeResumeId(originalResumeId),
+          optimizationJdKey: jdKey,
+          analysisReportId: nextBinding.analysisReportId,
           optimizedResumeId,
-          lastJdText: effectiveJdText || originalData.lastJdText || '',
-          targetCompany: targetCompany || originalData.targetCompany || '',
+          lastJdText: effectiveJdText || optimizedData.lastJdText || '',
+          targetCompany: targetCompany || optimizedData.targetCompany || '',
         },
       });
     }

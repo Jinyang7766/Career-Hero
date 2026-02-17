@@ -181,7 +181,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
             <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.total}</p>
           </div>
           <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已优化</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已分析</p>
             <p className="text-3xl font-black text-primary dark:text-primary mt-1">{stats.optimized}</p>
           </div>
         </div>
@@ -257,7 +257,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                   </div>
                   {resume.optimizationStatus === 'optimized' && (
                     <span className="px-2 py-0.5 border border-emerald-500 text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 text-[10px] rounded font-bold shrink-0 shadow-sm shadow-emerald-500/10">
-                      已优化
+                      已分析
                     </span>
                   )}
                 </div>

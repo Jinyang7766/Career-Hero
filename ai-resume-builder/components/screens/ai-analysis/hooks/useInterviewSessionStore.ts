@@ -88,6 +88,7 @@ export const useInterviewSessionStore = ({
     }>
   ) => {
     if (!resumeData?.id) return;
+    if (resumeData.optimizationStatus !== 'optimized') return;
     const sessionJdText = (patch?.jdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     if (!sessionJdText) return;
 
@@ -170,6 +171,7 @@ export const useInterviewSessionStore = ({
 
   const persistInterviewSession = async (messages: ChatMessage[], overrideJdText?: string) => {
     if (!resumeData?.id) return;
+    if (resumeData.optimizationStatus !== 'optimized') return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     const jdKey = makeJdKey(sessionJdText);
     const currentSessions = resumeData.interviewSessions || {};

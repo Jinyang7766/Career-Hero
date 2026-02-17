@@ -15,6 +15,7 @@ export enum View {
   FORGOT_PASSWORD = 'FORGOT_PASSWORD',
   DELETION_PENDING = 'DELETION_PENDING',
   MEMBER_CENTER = 'MEMBER_CENTER',
+  AI_INTERVIEW = 'AI_INTERVIEW',
 }
 
 export interface NavProps {
@@ -139,6 +140,7 @@ export interface ResumeSummary {
   score?: number;
   analysisScore?: number;
   analyzed?: boolean;
+  interviewInterrupted?: boolean;
   hasDot?: boolean;
   optimizationStatus?: 'optimized' | 'unoptimized';
   thumbnail: any;
@@ -160,4 +162,5 @@ export interface ScreenProps {
   loadUserResumes?: () => Promise<void>;
   currentUser?: any;
   setIsNavHidden?: (hidden: boolean) => void;
+  isInterviewMode?: boolean;
 }

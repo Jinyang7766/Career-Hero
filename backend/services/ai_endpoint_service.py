@@ -141,6 +141,72 @@ def _fallback_extract_company_from_jd(text: str) -> str:
     return company
 
 
+def _collect_resume_numeric_tokens(resume_data) -> set:
+    """Collect numeric tokens from resume content for anti-fabrication checks."""
+    try:
+        safe_resume = copy.deepcopy(resume_data) if isinstance(resume_data, dict) else {}
+    except Exception:
+        safe_resume = resume_data if isinstance(resume_data, dict) else {}
+
+    if isinstance(safe_resume, dict):
+        personal = safe_resume.get('personalInfo')
+        if isinstance(personal, dict):
+            personal.pop('phone', None)
+            personal.pop('email', None)
+
+    text = json.dumps(safe_resume or {}, ensure_ascii=False)
+    tokens = set()
+    for m in re.finditer(r'\d+(?:\.\d+)?%?', text):
+        t = m.group(0)
+        tokens.add(t)
+        if t.endswith('%'):
+            tokens.add(t[:-1])
+        else:
+            tokens.add(f"{t}%")
+    return tokens
+
+
+def _normalize_suggestion_metric_text(text: str, resume_numeric_tokens: set) -> str:
+    value = str(text or '')
+    if not value:
+        return value
+
+    # Normalize common placeholder variants to a single style.
+    value = re.sub(r'[\{\[\(（【]?\s*数字\s*[\}\]\)）】]?\s*%', 'XX%', value)
+    value = re.sub(r'(?<![\u4e00-\u9fffA-Za-z0-9])数字(?![\u4e00-\u9fffA-Za-z0-9])', 'XX', value)
+    value = re.sub(r'\b[XYZNMK]{1,3}\s*%\b', 'XX%', value)
+    value = re.sub(r'\b[XYZNMK]{1,3}\b', 'XX', value)
+
+    # Replace concrete numbers not present in the original resume with placeholders.
+    def _replace_unknown_number(match):
+        token = match.group(0)
+        if token in resume_numeric_tokens:
+            return token
+        return 'XX%' if token.endswith('%') else 'XX'
+
+    value = re.sub(r'\d+(?:\.\d+)?%?', _replace_unknown_number, value)
+    return value
+
+
+def _sanitize_suggestions_for_metric_consistency(suggestions, resume_data):
+    if not isinstance(suggestions, list):
+        return []
+    resume_numeric_tokens = _collect_resume_numeric_tokens(resume_data)
+    cleaned = []
+    for item in suggestions:
+        if not isinstance(item, dict):
+            continue
+        suggestion = dict(item)
+        target_section = str(suggestion.get('targetSection') or '').strip().lower()
+        suggested_value = suggestion.get('suggestedValue')
+        if target_section != 'skills' and isinstance(suggested_value, str):
+            suggestion['suggestedValue'] = _normalize_suggestion_metric_text(
+                suggested_value, resume_numeric_tokens
+            )
+        cleaned.append(suggestion)
+    return cleaned
+
+
 def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai):
     format_requirements = f"""
 重要格式要求（必须严格遵守）：
@@ -416,7 +482,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 logger.info("Dropped %d gender-related suggestions from AI analyze result", dropped_gender_suggestions)
             if dropped_education_suggestions > 0:
                 logger.info("Dropped %d education-related suggestions from AI analyze result", dropped_education_suggestions)
-            ai_result['suggestions'] = filtered_suggestions
+            ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -452,6 +518,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 suggestion for suggestion in (suggestions or [])
                 if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
             ]
+            suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
 
             return {
                 'score': score,
@@ -478,6 +545,7 @@ def analyze_resume_core(current_user_id, data, deps):
         suggestion for suggestion in (suggestions or [])
         if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
     ]
+    suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
@@ -600,6 +668,7 @@ def ai_chat_core(data, deps):
     resume_data = data.get('resumeData')
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
+    interview_type = str(data.get('interviewType') or 'general').strip().lower()
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
     audio_duration_sec = None
@@ -704,9 +773,18 @@ def ai_chat_core(data, deps):
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
+"""
             else:
+                persona_prompts = {
+                    'technical': "你是极客型技术面试官（Technical Interviewer）。\n风格：深度挖掘技术细节，喜欢追问底层原理、系统设计与性能优化，对模糊回答零容忍。\n关注点：技术栈掌握度、解决复杂问题能力、代码质量、系统架构思维。",
+                    'hr': "你是资深 HR 面试官（HR Interviewer）。\n风格：温和但敏锐，关注候选人的软性素质、动机匹配度与文化契合度，会用 STAR 法则挖掘行为细节。\n关注点：沟通协作、职业稳定性、驱动力、抗压能力、价值观。",
+                    'general': "你是专业且平衡的综合面试官（General Interviewer）。\n风格：既关注业务能力也关注综合素质，提问覆盖面广，节奏平稳。\n关注点：简历真实性、过往业绩、核心胜任力。"
+                }
+                persona_instruction = persona_prompts.get(interview_type, persona_prompts['general'])
+
                 prompt = f"""
- 【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
+ 【严格角色】{persona_instruction}
+ 基于职位描述和候选人简历进行模拟面试。
  禁止提及任何评分，禁止给出建议，保持面试官角色。
  规则：
  - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。

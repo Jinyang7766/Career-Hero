@@ -70,6 +70,7 @@ export const buildChatRequestBody = ({
   score,
   suggestions,
   isInterviewChat,
+  interviewType,
 }: {
   message: string;
   audio: any;
@@ -79,6 +80,7 @@ export const buildChatRequestBody = ({
   score: number;
   suggestions: any[];
   isInterviewChat: boolean;
+  interviewType?: string;
 }) => ({
   message,
   audio,
@@ -87,5 +89,6 @@ export const buildChatRequestBody = ({
   chatHistory,
   score,
   suggestions: isInterviewChat ? [] : suggestions,
+  interviewType,
 });
 

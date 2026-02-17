@@ -23,11 +23,12 @@ export type JdInputPageProps = {
 
   onBack: () => void;
   onPrev: () => void;
-  onStart: () => void;
+  onStart: (interviewType?: string) => void;
 
   showJdEmptyModal: boolean;
   setShowJdEmptyModal: (v: boolean) => void;
-  startAnalysis: () => void;
+  startAnalysis: (interviewType?: string) => void;
+  isInterviewMode?: boolean;
 };
 
 const JdInputPage: React.FC<JdInputPageProps> = ({
@@ -48,7 +49,10 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   showJdEmptyModal,
   setShowJdEmptyModal,
   startAnalysis,
+  isInterviewMode,
 }) => {
+  const [interviewType, setInterviewType] = React.useState('general');
+
   const selectedResumeLabel = (() => {
     const selected = (allResumes || []).find((item) => isSameResumeId(item.id, selectedResumeId));
     if (selected?.title) return selected.title;
@@ -107,7 +111,9 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="text-lg font-bold tracking-tight">添加职位描述</h1>
+          <h1 className="text-lg font-bold tracking-tight">
+            {isInterviewMode ? '设置面试岗位' : '添加职位描述'}
+          </h1>
           <div className="w-8" />
         </div>
       </header>
@@ -120,7 +126,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                 <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
               </div>
               <div className="flex flex-col">
-                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">当前分析简历</h4>
+                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isInterviewMode ? '面试简历' : '当前分析简历'}</h4>
                 <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
               </div>
             </div>
@@ -138,11 +144,38 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
         <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-md border border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-2 mb-3">
-            <span className="material-symbols-outlined text-primary">description</span>
-            <h3 className="font-bold text-slate-900 dark:text-white">职位描述 (JD)</h3>
+            <span className="material-symbols-outlined text-primary">{isInterviewMode ? 'forum' : 'description'}</span>
+            <h3 className="font-bold text-slate-900 dark:text-white">{isInterviewMode ? '面试场景设置' : '职位描述 (JD)'}</h3>
           </div>
+
+          {isInterviewMode && (
+            <div className="mb-4">
+              <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">面试类型</label>
+              <div className="grid grid-cols-3 gap-2 mt-2">
+                {[
+                  { id: 'general', label: '初试-基础面', icon: 'person' },
+                  { id: 'technical', label: '复试-项目深挖', icon: 'code' },
+                  { id: 'hr', label: 'HR面-文化匹配', icon: 'groups' }
+                ].map((type) => (
+                  <button
+                    key={type.id}
+                    onClick={() => setInterviewType(type.id)}
+                    className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${interviewType === type.id
+                      ? 'bg-primary/10 border-primary text-primary'
+                      : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                      }`}
+                    type="button"
+                  >
+                    <span className="material-symbols-outlined mb-1">{type.icon}</span>
+                    <span className="text-xs font-bold">{type.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="mb-3">
-            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">目标公司（可选）</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">{isInterviewMode ? '目标公司 / 岗位' : '目标公司（可选）'}</label>
             <input
               value={targetCompany}
               onChange={(e) => setTargetCompany(e.target.value)}
@@ -156,7 +189,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             <textarea
               value={jdText}
               onChange={(e) => setJdText(e.target.value)}
-              placeholder="请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."
+              placeholder={isInterviewMode ? "请输入目标岗位的 JD 内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."}
               className="mt-2 w-full h-40 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
               maxLength={1000}
             />
@@ -195,11 +228,11 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             上一步
           </button>
           <button
-            onClick={onStart}
+            onClick={() => onStart(interviewType)}
             className="flex-[2] py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >
-            开始分析
+            {isInterviewMode ? '开始模拟面试' : '开始分析'}
           </button>
         </div>
 
@@ -211,19 +244,19 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   <span className="material-symbols-outlined text-white text-[32px]">warning</span>
                 </div>
                 <p className="text-base text-white/95 leading-relaxed font-bold px-2">
-                  您未填写 JD，无法进行岗位定向匹配。是否坚持继续通用分析？
+                  {isInterviewMode ? '您未填写 JD，无法生成针对性的模拟面试题。是否坚持继续通用面试？' : '您未填写 JD，无法进行岗位定向匹配。是否坚持继续通用分析？'}
                 </p>
               </div>
               <div className="mt-8 flex flex-col gap-3">
                 <button
                   onClick={() => {
                     setShowJdEmptyModal(false);
-                    startAnalysis();
+                    startAnalysis(interviewType);
                   }}
                   className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
                   type="button"
                 >
-                  坚持继续分析
+                  {isInterviewMode ? '坚持进入面试' : '坚持继续分析'}
                 </button>
                 <button
                   onClick={() => setShowJdEmptyModal(false)}

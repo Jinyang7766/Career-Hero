@@ -32,6 +32,7 @@ type Params = {
   }) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
   isSameResumeId: (a: any, b: any) => boolean;
+  isInterviewMode?: boolean;
 };
 
 export const useResumeSelection = ({
@@ -50,6 +51,7 @@ export const useResumeSelection = ({
   saveLastAnalysis,
   showToast,
   isSameResumeId,
+  isInterviewMode,
 }: Params) => {
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
     status: 'idle',
@@ -68,7 +70,7 @@ export const useResumeSelection = ({
       message: `正在读取《${selectedTitle}》...`,
     });
 
-    if (!preferReport) {
+    if (!preferReport || isInterviewMode) {
       navigateToStep('jd_input');
     }
 
@@ -139,15 +141,15 @@ export const useResumeSelection = ({
           (finalResumeData as any).optimizedResumeId ||
           ((finalResumeData as any).optimizationStatus === 'optimized' ? resume.id : null)
         );
+        const restoredJdText = ((finalResumeData as any).lastJdText || '').trim();
+        if (restoredJdText) {
+          setJdText(restoredJdText);
+        }
         if ((finalResumeData as any).targetCompany) {
           setTargetCompany((finalResumeData as any).targetCompany);
         }
 
-        if (preferReport) {
-          const restoredJdText = ((finalResumeData as any).lastJdText || '').trim();
-          if (restoredJdText) {
-            setJdText(restoredJdText);
-          }
+        if (preferReport || isInterviewMode) {
           applyAnalysisSnapshot((finalResumeData as any).analysisSnapshot);
           if ((finalResumeData as any).analysisSnapshot) {
             saveLastAnalysis({
@@ -159,6 +161,9 @@ export const useResumeSelection = ({
             });
             setAnalysisResumeId(resume.id);
           }
+        }
+
+        if (preferReport && !isInterviewMode) {
           navigateToStep('report', true);
         }
       }

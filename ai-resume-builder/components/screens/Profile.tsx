@@ -164,6 +164,12 @@ const Profile: React.FC<ScreenProps> = () => {
         {/* Menu Items - Unified Colors */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
           <MenuItem
+            onClick={() => navigateToView(View.ALL_RESUMES)}
+            icon="description"
+            label="我的简历"
+            color="primary"
+          />
+          <MenuItem
             onClick={() => navigateToView(View.HISTORY)}
             icon="history"
             label="导出历史"

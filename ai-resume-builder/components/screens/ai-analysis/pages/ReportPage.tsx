@@ -21,12 +21,7 @@ export type ReportPageProps = {
   acceptingSuggestionIds?: Set<string>;
   handleAnalyzeOtherResume: () => void;
   handleExportPDF: () => void;
-  openChat: (source: 'internal' | 'preview') => void;
 };
-
-const AI_AVATAR_URL = '/ai-avatar.png';
-const AI_AVATAR_FALLBACK =
-  'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
 
 const ReportPage: React.FC<ReportPageProps> = (props) => {
   const {
@@ -46,7 +41,6 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
     acceptingSuggestionIds,
     handleAnalyzeOtherResume,
     handleExportPDF,
-    openChat,
   } = props;
 
   if (mode === 'analyzing') {
@@ -333,7 +327,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           </div>
         )}
 
-        <div className="mb-40 flex gap-3">
+        <div className="mb-20 flex gap-3">
           <button
             onClick={handleAnalyzeOtherResume}
             className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20"
@@ -356,32 +350,6 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           </button>
         </div>
       </main>
-
-      <div className="fixed bottom-[48px] left-0 right-0 px-4 py-3 bg-white/95 dark:bg-[#101922]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/10 z-[40]">
-        <button
-          onClick={() => openChat('internal')}
-          className="w-full flex items-center justify-between px-5 py-3 bg-gradient-to-r from-primary to-blue-600 text-white rounded-xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all group"
-          type="button"
-        >
-          <div className="flex items-center gap-3">
-            <div className="relative size-10 rounded-full overflow-hidden">
-              <img
-                src={AI_AVATAR_URL}
-                onError={(e) => { (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK; }}
-                alt="AI Advisor"
-                className="w-full h-full object-cover"
-              />
-            </div>
-            <div className="text-left">
-              <p className="text-[13px] font-bold">AI 模拟面试官</p>
-              <p className="text-[10px] text-blue-100 italic opacity-80">点击开始模拟面试</p>
-            </div>
-          </div>
-          <div className="size-9 rounded-full bg-white/10 flex items-center justify-center group-hover:bg-white/20 transition-colors">
-            <span className="material-symbols-outlined text-xl">arrow_forward</span>
-          </div>
-        </button>
-      </div>
     </div>
   );
 };

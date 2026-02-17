@@ -56,7 +56,7 @@ import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/type
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
-const AiAnalysis: React.FC<ScreenProps> = () => {
+const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const loadUserResumes = useAppContext((s) => s.loadUserResumes);
   const goBack = useAppContext((s) => s.goBack);
@@ -306,6 +306,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     saveLastAnalysis,
     showToast,
     isSameResumeId,
+    isInterviewMode,
   });
 
   const { persistAnalysisSnapshot, persistSuggestionFeedback } = useAnalysisPersistence({
@@ -318,6 +319,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   // --- Handlers ---
   const { cancelInFlightAnalysis, startAnalysis, handleStartAnalysisClick } = useAnalysisExecution({
     resumeData,
+    setResumeData: setResumeData as any,
     jdText,
     targetCompany,
     setTargetCompany,
@@ -349,6 +351,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     buildApiUrl,
     getRagEnabledFlag,
     setShowJdEmptyModal,
+    isInterviewMode,
+    openChat,
   });
 
   const updateScore = (points: number) => {
@@ -447,6 +451,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setCurrentStep,
     selectedResumeId,
     resumeData,
+    isInterviewMode,
   });
 
   useEffect(() => {
@@ -598,6 +603,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         onSelectResume={(resumeId, preferReport) => handleResumeSelect(resumeId, !!preferReport)}
         selectedResumeId={selectedResumeId}
         isReading={resumeReadState.status === 'loading'}
+        isInterviewMode={isInterviewMode}
       />
     );
   }
@@ -622,6 +628,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         showJdEmptyModal={showJdEmptyModal}
         setShowJdEmptyModal={setShowJdEmptyModal}
         startAnalysis={startAnalysis}
+        isInterviewMode={isInterviewMode}
       />
     );
   }
@@ -645,7 +652,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
-        openChat={openChat}
       />
     );
   }
@@ -669,7 +675,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
-        openChat={openChat}
       />
     );
   }

@@ -11,6 +11,7 @@ type Params = {
   setCurrentStep: (v: any) => void;
   selectedResumeId: string | number | null;
   resumeData: any;
+  isInterviewMode?: boolean;
 };
 
 export const useAiAnalysisLifecycle = ({
@@ -24,8 +25,10 @@ export const useAiAnalysisLifecycle = ({
   setCurrentStep,
   selectedResumeId,
   resumeData,
+  isInterviewMode,
 }: Params) => {
   useEffect(() => {
+    if (isInterviewMode) return;
     if (currentStep !== 'chat') return;
     if (chatEntrySource === 'internal') return;
 

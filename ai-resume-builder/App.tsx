@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, ResumeData } from './types';
+import { View, ResumeData, ResumeSummary } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -60,6 +60,7 @@ function App() {
       case View.HISTORY: return '/history';
       case View.DELETION_PENDING: return '/deletion-pending';
       case View.MEMBER_CENTER: return '/member-center';
+      case View.AI_INTERVIEW: return '/ai-interview';
       default: return '/dashboard';
     }
   };
@@ -82,6 +83,7 @@ function App() {
     if (p.startsWith('/deletion-pending')) return View.DELETION_PENDING;
     if (p.startsWith('/signup')) return View.SIGNUP;
     if (p.startsWith('/forgot-password')) return View.FORGOT_PASSWORD;
+    if (p.startsWith('/ai-interview')) return View.AI_INTERVIEW;
     return View.LOGIN;
   };
 
@@ -172,7 +174,7 @@ function App() {
   }, [showToast, confirmAsync]);
 
   // Show bottom nav on main tabs only (Editor has its own navigation)
-  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
+  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.AI_INTERVIEW, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
 
   // Basic route guards / root redirects.
   // IMPORTANT: Only run after the initial auth check completes to avoid
@@ -305,11 +307,18 @@ function App() {
           const analysisSnapshot = rowData.analysisSnapshot || null;
           const analysisBindings = rowData.analysisBindings || {};
           const analysisSessionByJd = rowData.analysisSessionByJd || {};
+          const interviewSessions = rowData.interviewSessions || {};
           const reportReadyInSession = Object.values(analysisSessionByJd || {}).some((s: any) => String(s?.state || '') === 'report_ready');
           const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
           const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
           const analysisScore = hasSnapshotScore ? Number(analysisSnapshot.score) : undefined;
           const analyzed = Boolean(hasSnapshotScore || hasBinding || reportReadyInSession);
+          const interviewInterrupted = Object.entries(analysisSessionByJd || {}).some(([jdKey, session]: [string, any]) => {
+            const state = String(session?.state || '');
+            if (state !== 'paused' && state !== 'interview_in_progress') return false;
+            const messages = interviewSessions?.[jdKey]?.messages;
+            return Array.isArray(messages) && messages.length > 0;
+          });
 
           return {
             id: resume.id,
@@ -318,6 +327,7 @@ function App() {
             score: resume.score,
             analysisScore,
             analyzed,
+            interviewInterrupted,
             hasDot: resume.has_dot,
             optimizationStatus: rowData.optimizationStatus || 'unoptimized',
             thumbnail: (
@@ -453,6 +463,15 @@ function App() {
       navigate('/ai-analysis', { replace: true });
       return;
     }
+    if (view === View.AI_INTERVIEW) {
+      localStorage.setItem('ai_analysis_force_resume_select', '1');
+      localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
+      localStorage.removeItem('ai_analysis_step');
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem('ai_analysis_has_activity');
+      navigate('/ai-interview', { replace: true });
+      return;
+    }
     handleNavigate(view, true);
   };
 
@@ -536,6 +555,8 @@ function App() {
         return <Editor />;
       case View.AI_ANALYSIS:
         return <AiAnalysis />;
+      case View.AI_INTERVIEW:
+        return <AiAnalysis isInterviewMode={true} />;
       case View.PROFILE:
         return <Profile />;
       case View.PREVIEW:

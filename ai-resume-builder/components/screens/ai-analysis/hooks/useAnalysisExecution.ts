@@ -10,6 +10,7 @@ import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
   resumeData: any;
+  setResumeData?: (value: any) => void;
   jdText: string;
   targetCompany: string;
   setTargetCompany: (value: string) => void;
@@ -51,10 +52,13 @@ type Params = {
   buildApiUrl: (path: string) => string;
   getRagEnabledFlag: () => boolean;
   setShowJdEmptyModal: (value: boolean) => void;
+  isInterviewMode?: boolean;
+  openChat: (source: 'internal' | 'preview') => void;
 };
 
 export const useAnalysisExecution = ({
   resumeData,
+  setResumeData,
   jdText,
   targetCompany,
   setTargetCompany,
@@ -86,9 +90,12 @@ export const useAnalysisExecution = ({
   buildApiUrl,
   getRagEnabledFlag,
   setShowJdEmptyModal,
+  isInterviewMode,
+  openChat,
 }: Params) => {
-  const generateRealAnalysis = useCallback(async (runId: string) => {
+  const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
     return runRealAnalysis({
+      interviewType,
       resumeData,
       jdText,
       getBackendAuthToken,
@@ -126,7 +133,7 @@ export const useAnalysisExecution = ({
     setCurrentStep('jd_input');
   }, [analysisAbortRef, analysisRunIdRef, setAnalysisInProgress, setCurrentStep, showToast]);
 
-  const startAnalysis = useCallback(async () => {
+  const startAnalysis = useCallback(async (interviewType?: string) => {
     if (!resumeData) {
       console.error('startAnalysis - resumeData is null or undefined');
       alert('无法进行 AI 分析：没有找到简历数据');
@@ -140,6 +147,31 @@ export const useAnalysisExecution = ({
     }
     const runId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
     analysisRunIdRef.current = runId;
+    if (interviewType) {
+      localStorage.setItem('ai_interview_type', interviewType);
+    }
+    const hasReusableInterviewContext = Boolean(
+      isInterviewMode &&
+      resumeData?.optimizationStatus === 'optimized' &&
+      (resumeData?.analysisSnapshot || (resumeData?.score || 0) > 0) &&
+      ((jdText || resumeData?.lastJdText || '').trim())
+    );
+
+    if (hasReusableInterviewContext) {
+      const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
+      try {
+        await persistAnalysisSessionState('interview_in_progress', {
+          jdText: effectiveJdText,
+          targetCompany: targetCompany || resumeData.targetCompany || '',
+          step: 'chat',
+          force: true,
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist interview_in_progress state:', stateErr);
+      }
+      openChat('internal');
+      return;
+    }
 
     setChatMessages([]);
     setChatInitialized(false);
@@ -158,7 +190,7 @@ export const useAnalysisExecution = ({
     navigateToStep('analyzing');
 
     try {
-      const aiAnalysisResult = await generateRealAnalysis(runId);
+      const aiAnalysisResult = await generateRealAnalysis(runId, interviewType);
       if (analysisRunIdRef.current !== runId) return;
       if (!aiAnalysisResult) return;
 
@@ -294,12 +326,18 @@ export const useAnalysisExecution = ({
           ? resumeData.id
           : (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
       if (persistTargetId) {
-        await persistAnalysisSnapshot(
+        const persistedResume = await persistAnalysisSnapshot(
           { ...resumeData, id: persistTargetId as any },
           newReport,
           totalScore,
           appliedSuggestions
         );
+        if (persistedResume && setResumeData) {
+          setResumeData({
+            ...persistedResume,
+            id: persistTargetId as any,
+          });
+        }
       }
       if (resumeData?.id) {
         saveLastAnalysis({
@@ -325,7 +363,11 @@ export const useAnalysisExecution = ({
         console.warn('Failed to persist report_ready session state:', stateErr);
       }
       markAnalysisCompleted();
-      navigateToStep('report', true);
+      if (isInterviewMode) {
+        openChat('internal');
+      } else {
+        navigateToStep('report', true);
+      }
     } catch (error) {
       if (analysisRunIdRef.current !== runId) return;
       console.error('AI analysis failed:', error);
@@ -361,6 +403,7 @@ export const useAnalysisExecution = ({
     persistAnalysisSessionState,
     persistAnalysisSnapshot,
     resumeData,
+    setResumeData,
     resolveOriginalResumeIdForOptimization,
     saveLastAnalysis,
     setAnalysisInProgress,
@@ -378,12 +421,12 @@ export const useAnalysisExecution = ({
     targetCompany,
   ]);
 
-  const handleStartAnalysisClick = useCallback(() => {
+  const handleStartAnalysisClick = useCallback((interviewType?: string) => {
     if (!jdText.trim()) {
       setShowJdEmptyModal(true);
       return;
     }
-    void startAnalysis();
+    void startAnalysis(interviewType);
   }, [jdText, setShowJdEmptyModal, startAnalysis]);
 
   return {

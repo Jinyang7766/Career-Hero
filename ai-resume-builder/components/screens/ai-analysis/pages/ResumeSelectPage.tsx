@@ -13,6 +13,7 @@ export type ResumeSelectPageProps = {
   onSelectResume: (resumeId: number, preferReport?: boolean) => void;
   selectedResumeId?: string | number | null;
   isReading?: boolean;
+  isInterviewMode?: boolean;
 };
 
 const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
@@ -27,6 +28,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   onSelectResume,
   selectedResumeId,
   isReading,
+  isInterviewMode,
 }) => {
   const filtered = (allResumes || []).filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -56,6 +58,11 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
               </p>
+              {isInterviewMode && resume.interviewInterrupted && (
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
+                  中断的面试 · 点击继续
+                </p>
+              )}
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
               {resume.analyzed && typeof (resume.analysisScore ?? resume.score) === 'number' && (() => {
@@ -96,8 +103,8 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
           >
             <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
           </button>
-          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-            选择简历
+          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">
+            {isInterviewMode ? 'AI 面试训练' : 'AI 诊断'}
           </h1>
           <div className="w-10" />
         </div>

@@ -17,6 +17,7 @@ type Params = {
   analysisRunIdRef: MutableRefObject<string | null>;
   runId: string;
   setIsFromCache: (v: boolean) => void;
+  interviewType?: string;
 };
 
 export const runRealAnalysis = async ({
@@ -31,6 +32,7 @@ export const runRealAnalysis = async ({
   analysisRunIdRef,
   runId,
   setIsFromCache,
+  interviewType,
 }: Params) => {
   if (!resumeData) return null;
 
@@ -77,7 +79,8 @@ export const runRealAnalysis = async ({
       body: JSON.stringify({
         resumeData: maskedResumeData,
         jobDescription: maskedJdText,
-        ragEnabled
+        ragEnabled,
+        interviewType
       })
     });
     clearTimeout(timeoutId);

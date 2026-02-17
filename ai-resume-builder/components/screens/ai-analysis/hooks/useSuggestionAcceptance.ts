@@ -128,6 +128,7 @@ export const useSuggestionAcceptance = ({
           originalResumeId,
           jdText || originalResume.lastJdText || ''
         );
+        let resolvedAnalysisReportId = analysisBinding?.analysisReportId || '';
         const mappedOptimizedId =
           analysisBinding?.optimizedResumeId ||
           (originResult.data.resume_data || {}).optimizedResumeId;
@@ -162,19 +163,37 @@ export const useSuggestionAcceptance = ({
             jdText || originalResume.lastJdText || ''
           );
           targetOptimizedId = ensuredBinding.optimizedResumeId;
+          resolvedAnalysisReportId = ensuredBinding.analysisReportId || resolvedAnalysisReportId;
         }
 
-        const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
+        let optimizedResult = await DatabaseService.getResume(targetOptimizedId);
         if (!optimizedResult.success || !optimizedResult.data?.resume_data) {
           throw new Error('未找到优化简历，无法采纳建议');
         }
 
-        const optimizedRowData = optimizedResult.data.resume_data || {};
-        const validTarget =
+        let optimizedRowData = optimizedResult.data.resume_data || {};
+        let validTarget =
           optimizedRowData.optimizationStatus === 'optimized' &&
           isSameResumeId(optimizedRowData.optimizedFromId, originalResumeId);
         if (!validTarget) {
-          throw new Error('检测到优化简历关联异常，已阻止覆盖原简历');
+          const rebound = await ensureAnalysisBinding(
+            originalResumeId,
+            originalResume,
+            jdText || originalResume.lastJdText || ''
+          );
+          targetOptimizedId = rebound.optimizedResumeId;
+          resolvedAnalysisReportId = rebound.analysisReportId || resolvedAnalysisReportId;
+          optimizedResult = await DatabaseService.getResume(targetOptimizedId);
+          if (!optimizedResult.success || !optimizedResult.data?.resume_data) {
+            throw new Error('未找到优化简历，无法采纳建议');
+          }
+          optimizedRowData = optimizedResult.data.resume_data || {};
+          validTarget =
+            optimizedRowData.optimizationStatus === 'optimized' &&
+            isSameResumeId(optimizedRowData.optimizedFromId, originalResumeId);
+          if (!validTarget) {
+            throw new Error('检测到优化简历关联异常，已阻止覆盖原简历');
+          }
         }
 
         const baseResume = {
@@ -197,7 +216,7 @@ export const useSuggestionAcceptance = ({
 
         const baseTitle = allResumes?.find(r => isSameResumeId(r.id, originalResumeId))?.title || '简历';
         const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true, targetCompany);
-        const analysisReportId = analysisBinding?.analysisReportId || '';
+        const analysisReportId = resolvedAnalysisReportId;
         let updatedOptimized: ResumeData = {
           ...nextResumeData,
           interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || originalResume.interviewSessions,

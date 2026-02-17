@@ -35,6 +35,19 @@ export const useAnalysisPersistence = ({
     suggestionItems: Suggestion[]
   ) => {
     if (!data?.id) return;
+    const targetId = String(data.id);
+    const latestRow = await DatabaseService.getResume(targetId);
+    const latestResumeData = latestRow.success && latestRow.data?.resume_data
+      ? latestRow.data.resume_data
+      : null;
+    const baseResumeData: ResumeData = (latestResumeData
+      ? {
+          id: latestRow.data.id,
+          ...latestResumeData,
+          resumeTitle: latestRow.data.title,
+        }
+      : data) as ResumeData;
+
     const snapshot = {
       score: scoreValue,
       summary: reportData.summary || '',
@@ -44,14 +57,19 @@ export const useAnalysisPersistence = ({
       scoreBreakdown: reportData.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
       suggestions: suggestionItems || [],
       updatedAt: new Date().toISOString(),
-      jdText: jdText || data.lastJdText || '',
-      targetCompany: targetCompany || data.targetCompany || ''
+      jdText: jdText || baseResumeData.lastJdText || '',
+      targetCompany: targetCompany || baseResumeData.targetCompany || ''
     };
-    const updatedResumeData = { ...data, analysisSnapshot: snapshot };
+    const updatedResumeData: ResumeData = {
+      ...baseResumeData,
+      analysisSnapshot: snapshot,
+      lastJdText: snapshot.jdText || baseResumeData.lastJdText || '',
+      targetCompany: snapshot.targetCompany || baseResumeData.targetCompany || '',
+    };
     if (setResumeData) {
       setResumeData(updatedResumeData);
     }
-    await DatabaseService.updateResume(String(data.id), {
+    await DatabaseService.updateResume(targetId, {
       resume_data: updatedResumeData,
       updated_at: new Date().toISOString()
     });
@@ -129,4 +147,3 @@ export const useAnalysisPersistence = ({
     persistSuggestionFeedback,
   };
 };
-

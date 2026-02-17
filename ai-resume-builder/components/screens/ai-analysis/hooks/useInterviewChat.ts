@@ -427,7 +427,8 @@ export const useInterviewChat = ({
         chatHistory: maskedChatHistory,
         score,
         suggestions,
-        isInterviewChat
+        isInterviewChat,
+        interviewType: isInterviewChat ? (localStorage.getItem('ai_interview_type') || 'general') : undefined
       });
 
       const streamId = `ai-stream-${Date.now()}`;

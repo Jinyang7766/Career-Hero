@@ -492,7 +492,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
                     <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus === 'optimized').length}
                     </span>
@@ -508,7 +508,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                       renderResumeList(optimizedResumes)
                     ) : (
                       <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无已优化简历
+                        暂无已分析简历
                       </div>
                     )
                   ) : null;
@@ -521,7 +521,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
                     <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus !== 'optimized').length}
                     </span>
@@ -537,7 +537,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                       renderResumeList(unoptimizedResumes)
                     ) : (
                       <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无未优化简历
+                        暂无未分析简历
                       </div>
                     )
                   ) : null;

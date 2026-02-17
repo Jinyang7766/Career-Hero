@@ -688,48 +688,6 @@ const Preview: React.FC<ScreenProps> = () => {
               ))}
             </div>
           </div>
-          {isOptimized && (
-            <button
-              onClick={() => {
-                if (resumeData?.id) {
-                  localStorage.setItem('ai_report_open', '1');
-                  localStorage.setItem('ai_report_resume_id', String(resumeData.id));
-                  localStorage.setItem('ai_analysis_step', 'report');
-                  localStorage.setItem('ai_analysis_resume_id', String(resumeData.id));
-                  localStorage.setItem('ai_report_resume_payload', JSON.stringify({
-                    id: resumeData.id,
-                    title: resumeData.resumeTitle || '简历',
-                    resume_data: resumeData
-                  }));
-                }
-                navigateToView(View.AI_ANALYSIS);
-              }}
-              className="w-full flex items-center justify-between px-5 py-4 bg-gradient-to-br from-primary via-blue-600 to-indigo-600 text-white rounded-2xl shadow-xl shadow-blue-500/25 active:scale-[0.98] transition-all group overflow-hidden relative"
-            >
-              {/* Decorative background elements */}
-              <div className="absolute -right-4 -top-4 size-24 bg-white/10 rounded-full blur-2xl group-hover:scale-110 transition-transform duration-500"></div>
-              <div className="absolute -left-4 -bottom-4 size-20 bg-blue-400/10 rounded-full blur-2xl"></div>
-
-              <div className="flex items-center gap-4 relative z-10">
-                <div className="relative size-12 rounded-full overflow-hidden shadow-md">
-                  <img
-                    src="/ai-avatar.png"
-                    onError={(e) => { (e.currentTarget as HTMLImageElement).src = "https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt"; }}
-                    alt="AI Interviewer"
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-                <div className="text-left space-y-0.5">
-                  <p className="text-base font-extrabold tracking-tight">查看AI评分</p>
-                  <p className="text-[11px] text-blue-50/90 font-medium">查看评分 & 参加模拟面试</p>
-                </div>
-              </div>
-
-              <div className="size-10 rounded-full bg-white/15 flex items-center justify-center border border-white/20 shadow-sm group-hover:bg-white/25 transition-all relative z-10 group-hover:translate-x-1 duration-300">
-                <span className="material-symbols-outlined text-xl">arrow_forward</span>
-              </div>
-            </button>
-          )}
           <button
             onClick={handleExportPDF}
             disabled={isGenerating}
