@@ -330,7 +330,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
           </div>
         )}
 
-        <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 flex gap-3">
+        <div className="mb-[calc(5.25rem+env(safe-area-inset-bottom))] flex gap-3">
           <button
             onClick={handleAnalyzeOtherResume}
             className="flex-1 flex items-center justify-center gap-2 h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20"
