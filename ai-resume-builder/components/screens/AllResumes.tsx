@@ -434,6 +434,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             onClick={goBack}
             className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
           >
+            <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">全部简历</h2>
           <div className="flex w-10 justify-end z-10">
