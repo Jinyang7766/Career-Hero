@@ -84,6 +84,9 @@ export const useAiAnalysisNavigation = ({
       const lastStep = prev.pop()!;
       setStepHistory(prev);
       setCurrentStep(lastStep);
+    } else if (currentStep === 'report') {
+      // Keep back navigation inside AI flow to avoid route-sync bouncing.
+      setCurrentStep('resume_select');
     } else if (goBack) {
       goBack();
     }
@@ -101,4 +104,3 @@ export const useAiAnalysisNavigation = ({
     handleStepBack,
   };
 };
-

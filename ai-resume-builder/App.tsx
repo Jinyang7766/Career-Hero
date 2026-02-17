@@ -301,14 +301,25 @@ function App() {
           const formattedDate = formatDateTime(resume.updated_at || resume.created_at);
           // 清理日期字符串，确保只包含纯数字和分隔符
           const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
+          const rowData = resume.resume_data || {};
+          const analysisSnapshot = rowData.analysisSnapshot || null;
+          const analysisBindings = rowData.analysisBindings || {};
+          const analysisSessionByJd = rowData.analysisSessionByJd || {};
+          const reportReadyInSession = Object.values(analysisSessionByJd || {}).some((s: any) => String(s?.state || '') === 'report_ready');
+          const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
+          const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
+          const analysisScore = hasSnapshotScore ? Number(analysisSnapshot.score) : undefined;
+          const analyzed = Boolean(hasSnapshotScore || hasBinding || reportReadyInSession);
 
           return {
             id: resume.id,
             title: resume.title,
             date: cleanedDate,
             score: resume.score,
+            analysisScore,
+            analyzed,
             hasDot: resume.has_dot,
-            optimizationStatus: resume.resume_data?.optimizationStatus || 'unoptimized',
+            optimizationStatus: rowData.optimizationStatus || 'unoptimized',
             thumbnail: (
               <>
                 <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
@@ -434,26 +445,13 @@ function App() {
       setResumeData(createEmptyResumeData());
     }
     if (view === View.AI_ANALYSIS) {
+      localStorage.setItem('ai_analysis_force_resume_select', '1');
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
-      // If user has active progress, restore them to the last step via sub-route URL.
-      // The AiAnalysis component derives its initial step from the URL, so navigating
-      // to the correct sub-route keeps everything in sync without flash.
-      const hasActivity = localStorage.getItem('ai_analysis_has_activity') === '1';
-      if (hasActivity) {
-        const savedStep = localStorage.getItem('ai_analysis_step');
-        const stepToPath: Record<string, string> = {
-          'jd_input': '/ai-analysis/jd',
-          'report': '/ai-analysis/report',
-          'chat': '/ai-analysis/chat',
-          'comparison': '/ai-analysis/comparison',
-        };
-        const targetPath = (savedStep && stepToPath[savedStep]) || '/ai-analysis';
-        navigate(targetPath, { replace: true });
-        return;
-      } else {
-        localStorage.removeItem('ai_analysis_step');
-        localStorage.removeItem('ai_analysis_in_progress');
-      }
+      localStorage.removeItem('ai_analysis_step');
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem('ai_analysis_has_activity');
+      navigate('/ai-analysis', { replace: true });
+      return;
     }
     handleNavigate(view, true);
   };

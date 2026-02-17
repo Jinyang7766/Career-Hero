@@ -10,7 +10,9 @@ export type ResumeSelectPageProps = {
   isUnoptimizedOpen: boolean;
   setIsUnoptimizedOpen: React.Dispatch<React.SetStateAction<boolean>>;
   onBack: () => void;
-  onSelectResume: (resumeId: number) => void;
+  onSelectResume: (resumeId: number, preferReport?: boolean) => void;
+  selectedResumeId?: string | number | null;
+  isReading?: boolean;
 };
 
 const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
@@ -23,6 +25,8 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   setIsUnoptimizedOpen,
   onBack,
   onSelectResume,
+  selectedResumeId,
+  isReading,
 }) => {
   const filtered = (allResumes || []).filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -34,13 +38,18 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         {resumes.map((resume) => (
           <div
             key={resume.id}
-            onClick={() => onSelectResume(resume.id)}
+            onClick={() => onSelectResume(resume.id, !!resume.analyzed)}
             className="group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
-            <div className="shrink-0 relative">
+            <div className={`shrink-0 relative ${isReading && String(selectedResumeId) === String(resume.id) ? 'opacity-50 pointer-events-none' : ''}`}>
               <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
                 {resume.thumbnail}
               </div>
+              {isReading && String(selectedResumeId) === String(resume.id) && (
+                <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
+                  <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                </div>
+              )}
             </div>
             <div className="flex flex-col flex-1 justify-center min-w-0">
               <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight mb-1">{resume.title}</p>
@@ -48,12 +57,28 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                 上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
               </p>
             </div>
-            <button
-              className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
-              type="button"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
-            </button>
+            <div className="shrink-0 flex items-center gap-1.5">
+              {resume.analyzed && typeof (resume.analysisScore ?? resume.score) === 'number' && (() => {
+                const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
+                // Define colors based on score
+                let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"; // Default/Normal
+                if (scoreValue >= 85) {
+                  colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"; // Excellent
+                } else if (scoreValue >= 70) {
+                  colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20"; // Good
+                }
+
+                return (
+                  <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
+                    <span className="text-[14px] font-black leading-none">{scoreValue}</span>
+                    <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
+                  </div>
+                );
+              })()}
+              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '18px' }}>
+                chevron_right
+              </span>
+            </div>
           </div>
         ))}
       </div>
@@ -124,7 +149,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已优化</h3>
+                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
                   <span
                     className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}
@@ -133,12 +158,12 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   </span>
                 </button>
                 {isOptimizedOpen && (() => {
-                  const optimized = filtered.filter((r) => r.optimizationStatus === 'optimized');
-                  return optimized.length > 0 ? (
-                    renderSelectionList(optimized)
+                  const analyzed = filtered.filter((r) => !!r.analyzed);
+                  return analyzed.length > 0 ? (
+                    renderSelectionList(analyzed)
                   ) : (
                     <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                      暂无已优化简历
+                      暂无已分析简历
                     </div>
                   );
                 })()}
@@ -150,7 +175,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未优化</h3>
+                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
                   <span
                     className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}
@@ -159,12 +184,12 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   </span>
                 </button>
                 {isUnoptimizedOpen && (() => {
-                  const unoptimized = filtered.filter((r) => r.optimizationStatus !== 'optimized');
-                  return unoptimized.length > 0 ? (
-                    renderSelectionList(unoptimized)
+                  const unanalyzed = filtered.filter((r) => !r.analyzed);
+                  return unanalyzed.length > 0 ? (
+                    renderSelectionList(unanalyzed)
                   ) : (
                     <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                      暂无未优化简历
+                      暂无未分析简历
                     </div>
                   );
                 })()}
@@ -186,4 +211,3 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 };
 
 export default ResumeSelectPage;
-

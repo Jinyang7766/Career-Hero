@@ -137,6 +137,8 @@ export interface ResumeSummary {
   title: string;
   date: string;
   score?: number;
+  analysisScore?: number;
+  analyzed?: boolean;
   hasDot?: boolean;
   optimizationStatus?: 'optimized' | 'unoptimized';
   thumbnail: any;

@@ -79,6 +79,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
   const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const sourceResumeIdRef = useRef<string | number | null>(null);
+  const forcedResumeSelectRef = useRef(false);
 
   useEffect(() => {
     if (setIsNavHidden) {
@@ -239,6 +240,27 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     setAnalysisResumeId,
     navigate,
   });
+
+  useEffect(() => {
+    const path = (location.pathname || '').toLowerCase();
+    if (path !== '/ai-analysis') return;
+    if (localStorage.getItem('ai_analysis_force_resume_select') !== '1') return;
+
+    localStorage.removeItem('ai_analysis_force_resume_select');
+    forcedResumeSelectRef.current = true;
+    setStepHistory([]);
+    setSelectedResumeId(null);
+    sourceResumeIdRef.current = null;
+    setOptimizedResumeId(null);
+    setAnalysisResumeId(null);
+    setCurrentStep('resume_select');
+  }, [location.pathname, setAnalysisResumeId, setStepHistory]);
+
+  useEffect(() => {
+    if (currentStep !== 'resume_select') {
+      forcedResumeSelectRef.current = false;
+    }
+  }, [currentStep]);
 
   const { applyAnalysisSnapshot } = useAnalysisSnapshotApplier({
     resumeFeedback: resumeData?.aiSuggestionFeedback,
@@ -429,6 +451,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 
   useEffect(() => {
     if (!resumeData) return;
+    if (forcedResumeSelectRef.current && currentStep === 'resume_select') return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
 
@@ -572,7 +595,9 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
         isUnoptimizedOpen={isUnoptimizedOpen}
         setIsUnoptimizedOpen={setIsUnoptimizedOpen}
         onBack={handleStepBack}
-        onSelectResume={(resumeId) => handleResumeSelect(resumeId, false)}
+        onSelectResume={(resumeId, preferReport) => handleResumeSelect(resumeId, !!preferReport)}
+        selectedResumeId={selectedResumeId}
+        isReading={resumeReadState.status === 'loading'}
       />
     );
   }

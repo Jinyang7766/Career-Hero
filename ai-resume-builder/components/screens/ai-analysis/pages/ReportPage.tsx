@@ -340,7 +340,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
             type="button"
           >
             <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-            <span className="text-[13px] font-bold tracking-wide">分析其他简历</span>
+            <span className="text-[13px] font-bold tracking-wide">返回简历选择页</span>
           </button>
           <button
             onClick={handleExportPDF}
@@ -387,4 +387,3 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
 };
 
 export default ReportPage;
-
