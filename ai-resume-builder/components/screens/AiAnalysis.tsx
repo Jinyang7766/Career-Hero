@@ -432,6 +432,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   useChatIntroMessages({
     currentStep,
+    chatMessagesLength: chatMessages.length,
     chatMessagesRef: chatMessagesRef as any,
     chatIntroScheduledRef: chatIntroScheduledRef as any,
     setChatInitialized,

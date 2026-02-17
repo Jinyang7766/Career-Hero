@@ -321,13 +321,18 @@ export const useAnalysisExecution = ({
         analysisReportId: resolvedAnalysisReportId || undefined,
         optimizedResumeId: resolvedOptimizedResumeId || undefined,
       };
+      const isSameId = (a: any, b: any) => String(a ?? '').trim() !== '' && String(a ?? '').trim() === String(b ?? '').trim();
       const persistTargetId =
         (resumeData.optimizationStatus === 'optimized' && resumeData.id)
           ? resumeData.id
           : (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
-      if (persistTargetId) {
+      const safePersistTargetId =
+        (originalResumeId && isSameId(persistTargetId, originalResumeId))
+          ? (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || null)
+          : persistTargetId;
+      if (safePersistTargetId) {
         const persistedResume = await persistAnalysisSnapshot(
-          { ...resumeData, id: persistTargetId as any },
+          { ...resumeData, id: safePersistTargetId as any },
           newReport,
           totalScore,
           appliedSuggestions
@@ -335,13 +340,13 @@ export const useAnalysisExecution = ({
         if (persistedResume && setResumeData) {
           setResumeData({
             ...persistedResume,
-            id: persistTargetId as any,
+            id: safePersistTargetId as any,
           });
         }
       }
       if (resumeData?.id) {
         saveLastAnalysis({
-          resumeId: persistTargetId || resumeData.id,
+          resumeId: safePersistTargetId || resumeData.id,
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: effectiveTargetCompany,
           snapshot: snapshotForPersist,
@@ -349,7 +354,7 @@ export const useAnalysisExecution = ({
           analysisReportId: resolvedAnalysisReportId || undefined,
           optimizedResumeId: resolvedOptimizedResumeId || undefined,
         });
-        setAnalysisResumeId((persistTargetId || resumeData.id) as any);
+        setAnalysisResumeId((safePersistTargetId || resumeData.id) as any);
       }
       try {
         await persistAnalysisSessionState('report_ready', {

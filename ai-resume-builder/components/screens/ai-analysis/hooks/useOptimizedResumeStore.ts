@@ -255,6 +255,9 @@ export const useOptimizedResumeStore = ({
     if (!optimizedResumeId) {
       optimizedResumeId = await ensureSingleOptimizedResume(user.id, canonicalOriginalId, baseResumeData, jdKey);
     }
+    if (normalizeResumeId(optimizedResumeId) === normalizeResumeId(canonicalOriginalId)) {
+      throw new Error('分析绑定异常：目标已分析简历不可与原简历相同');
+    }
 
     const nextBinding = {
       analysisReportId,

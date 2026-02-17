@@ -4,6 +4,7 @@ import type { ChatMessage } from '../types';
 
 type Params = {
   currentStep: string;
+  chatMessagesLength: number;
   chatMessagesRef: MutableRefObject<ChatMessage[]>;
   chatIntroScheduledRef: MutableRefObject<boolean>;
   setChatInitialized: (v: boolean) => void;
@@ -14,6 +15,7 @@ type Params = {
 
 export const useChatIntroMessages = ({
   currentStep,
+  chatMessagesLength,
   chatMessagesRef,
   chatIntroScheduledRef,
   setChatInitialized,
@@ -31,7 +33,7 @@ export const useChatIntroMessages = ({
   useEffect(() => {
     if (currentStep !== 'chat') return;
     if (chatIntroScheduledRef.current) return;
-    if (chatMessagesRef.current.length !== 0) return;
+    if (chatMessagesLength !== 0) return;
 
     chatIntroScheduledRef.current = true;
     setChatInitialized(true);
@@ -71,5 +73,5 @@ export const useChatIntroMessages = ({
       window.clearTimeout(t1);
       window.clearTimeout(t2);
     };
-  }, [currentStep, jdText, resumeData?.personalInfo?.name, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatMessagesLength, jdText, resumeData?.personalInfo?.name, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

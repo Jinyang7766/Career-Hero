@@ -84,6 +84,7 @@ export const useSuggestionAcceptance = ({
   showToast,
   updateScore,
 }: Params) => {
+  const normalizeId = (value: any) => String(value ?? '').trim();
   const acceptSuggestionQueueRef = useRef<Promise<void>>(Promise.resolve());
   const acceptingSuggestionIdsRef = useRef<Set<string>>(new Set());
   const [acceptingSuggestionIds, setAcceptingSuggestionIds] = useState<Set<string>>(new Set());
@@ -156,6 +157,10 @@ export const useSuggestionAcceptance = ({
             ? resumeData.id
             : await ensureSingleOptimizedResume(user.id, originalResumeId, originalResume)
         );
+        // Safety rail: never write accepted suggestions into the original(unoptimized) resume row.
+        if (normalizeId(targetOptimizedId) === normalizeId(originalResumeId)) {
+          targetOptimizedId = null;
+        }
         if (!targetOptimizedId) {
           const ensuredBinding = await ensureAnalysisBinding(
             originalResumeId,
@@ -164,6 +169,9 @@ export const useSuggestionAcceptance = ({
           );
           targetOptimizedId = ensuredBinding.optimizedResumeId;
           resolvedAnalysisReportId = ensuredBinding.analysisReportId || resolvedAnalysisReportId;
+        }
+        if (normalizeId(targetOptimizedId) === normalizeId(originalResumeId)) {
+          throw new Error('检测到目标简历仍指向原简历，已阻止覆盖。请刷新后重试。');
         }
 
         let optimizedResult = await DatabaseService.getResume(targetOptimizedId);
