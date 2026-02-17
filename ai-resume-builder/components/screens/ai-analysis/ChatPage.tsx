@@ -4,7 +4,6 @@ import { confirmDialog } from '../../../src/ui/dialogs';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
-const AI_AVATAR_URL = '/ai-avatar.png';
 const AI_AVATAR_FALLBACK =
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
 
@@ -62,6 +61,8 @@ export type ChatPageProps = {
   interviewPlan: string[];
   interviewAnsweredCount: number;
   interviewTotalCount: number;
+  interviewerTitle: string;
+  aiAvatarUrl: string;
 };
 
 const ThinkingIndicator: React.FC = () => {
@@ -125,6 +126,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
   interviewPlan,
   interviewAnsweredCount,
   interviewTotalCount,
+  interviewerTitle,
+  aiAvatarUrl,
 }) => {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [planExpanded, setPlanExpanded] = React.useState(false);
@@ -144,7 +147,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </button>
           <div className="size-10 rounded-full overflow-hidden">
             <img
-              src={AI_AVATAR_URL}
+              src={aiAvatarUrl}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
               }}
@@ -152,7 +155,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
             />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">AI 模拟面试官</h3>
+            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">{interviewerTitle}</h3>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">在线</span>
             </div>
@@ -334,7 +337,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}
               >
                 <img
-                  src={msg.role === 'user' ? userAvatar : AI_AVATAR_URL}
+                  src={msg.role === 'user' ? userAvatar : aiAvatarUrl}
                   onError={(e) => {
                     if (msg.role !== 'user') (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
                   }}

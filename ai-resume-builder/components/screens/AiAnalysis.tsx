@@ -66,9 +66,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const AI_AVATAR_URL = '/ai-avatar.png';
-  const AI_AVATAR_FALLBACK =
-    'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
   // Skill normalization moved to `src/skill-utils.ts` so resume import and suggestion generation stay consistent.
 
   const getDisplayOriginalValueOf = (suggestion: Suggestion) => getDisplayOriginalValue(suggestion, resumeData);
@@ -120,6 +117,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [interviewPlan, setInterviewPlan] = useState<string[]>([]);
   const [planFetchTrigger, setPlanFetchTrigger] = useState(0);
+  const planLoaderMountedRef = useRef(true);
 
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
@@ -203,11 +201,30 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     const interviewType = getActiveInterviewType();
     return `ai_interview_plan_${String(resumeData?.id || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}`;
   };
+  const getInterviewerTitle = () => {
+    const type = getActiveInterviewType();
+    if (type === 'technical') return 'AI 复试深挖面试官';
+    if (type === 'hr') return 'AI HR 面试官';
+    return 'AI 初试面试官';
+  };
+  const getInterviewerAvatarUrl = () => {
+    const type = getActiveInterviewType();
+    if (type === 'technical') return '/ai-avatar-technical-opt.png';
+    if (type === 'hr') return '/ai-avatar-hr-opt.png';
+    return '/ai-avatar.png';
+  };
+
+  useEffect(() => {
+    planLoaderMountedRef.current = true;
+    return () => {
+      planLoaderMountedRef.current = false;
+    };
+  }, []);
 
   const getWarmupQuestion = (interviewType: string) => {
-    if (interviewType === 'technical') return '你能跟我说说你最引以为傲的职业成就是什么？或者是一个你最近解决过的棘手问题？';
-    if (interviewType === 'hr') return '除了简历上写的那些硬技能，你觉得最能定义你个人风格的三个关键词是什么？并请简单解释一下原因。';
-    return '请做一个简单的自我介绍。你可以重点聊聊你的职业背景，以及为什么会对这个职位感兴趣？';
+    if (interviewType === 'technical') return '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
+    if (interviewType === 'hr') return '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
+    return '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
   };
 
   useEffect(() => {
@@ -620,7 +637,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   ]);
 
   useEffect(() => {
-    if (currentStep !== 'chat') return;
+    if (!isInterviewMode) return;
     if (!resumeData) return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
@@ -644,7 +661,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       // ignore cache parse errors
     }
 
-    let cancelled = false;
     const run = async () => {
       try {
         setInterviewPlan(prev => {
@@ -655,7 +671,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         const token = await getBackendAuthToken();
         if (!token) {
           const fallback = sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType);
-          if (!cancelled) setInterviewPlan(fallback);
+          if (planLoaderMountedRef.current) setInterviewPlan(fallback);
           return;
         }
         const resp = await fetch(buildApiUrl('/api/ai/chat'), {
@@ -679,12 +695,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
           interviewType,
           questions.length > 0 ? questions : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
         );
-        if (!cancelled) {
+        if (planLoaderMountedRef.current) {
           setInterviewPlan(finalPlan);
           try { localStorage.setItem(storageKey, JSON.stringify({ questions: finalPlan, interviewType, jdText: effectiveJdText })); } catch { }
         }
       } catch {
-        if (!cancelled) {
+        if (planLoaderMountedRef.current) {
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
@@ -695,8 +711,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       }
     };
     run();
-    return () => { cancelled = true; };
-  }, [buildApiUrl, currentStep, jdText, makeJdKey, resumeData, planFetchTrigger]);
+  }, [buildApiUrl, isInterviewMode, jdText, makeJdKey, resumeData, planFetchTrigger]);
 
   useReportSnapshotRestore({
     currentStep,
@@ -928,6 +943,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         interviewPlan={interviewPlan}
         interviewAnsweredCount={interviewAnsweredCount}
         interviewTotalCount={interviewPlan.length}
+        interviewerTitle={getInterviewerTitle()}
+        aiAvatarUrl={getInterviewerAvatarUrl()}
       />
     );
   }
