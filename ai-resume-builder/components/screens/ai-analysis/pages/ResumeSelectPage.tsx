@@ -105,6 +105,36 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         </div>
       </header>
 
+      {/* Mode Indicator Banner */}
+      <div className="px-4 pt-4 pb-1 shrink-0">
+        <div className={`relative overflow-hidden rounded-2xl p-6 text-white shadow-xl ${isInterviewMode
+          ? 'bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600 shadow-xl shadow-violet-500/30'
+          : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 shadow-xl shadow-primary/30'
+          }`}>
+          <div className="flex items-start gap-4 relative z-10">
+            <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
+              <span className="material-symbols-outlined text-[24px]">
+                {isInterviewMode ? 'forum' : 'assessment'}
+              </span>
+            </div>
+            <div className="flex flex-col pt-0.5">
+              <h2 className="text-lg font-black mb-1 text-white tracking-wide">
+                {isInterviewMode ? '模拟面试' : '简历诊断'}
+              </h2>
+              <p className="text-xs text-white/90 leading-relaxed font-medium">
+                {isInterviewMode
+                  ? '选择一份简历，AI 面试官将基于此向你提问，模拟真实面试场景。'
+                  : '选择一份简历，AI 将全方位分析亮点与不足，并提供专业优化建议。'}
+              </p>
+            </div>
+          </div>
+
+          {/* Decorative shapes */}
+          <div className="absolute -right-8 -top-8 size-32 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+          <div className="absolute -left-8 -bottom-8 size-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+        </div>
+      </div>
+
       <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>

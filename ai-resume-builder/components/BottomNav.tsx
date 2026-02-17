@@ -38,15 +38,8 @@ const BottomNav: React.FC = () => {
           onClick={() => navigateToView(View.AI_ANALYSIS, { root: true, replace: true })}
           className={getButtonClass(View.AI_ANALYSIS)}
         >
-          <div className="flex items-center justify-center rounded-xl transition-colors">
-            <svg className={`w-[22px] h-[22px] mb-0 transition-transform duration-200 ${currentView === View.AI_ANALYSIS ? 'text-primary scale-110' : ''}`} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M4 21L10 5L16 21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M7 15H13" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M20 5V21" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M21 1L22.2 3.8L25 5L22.2 6.2L21 9L19.8 6.2L17 5L19.8 3.8L21 1Z" fill="currentColor" transform="translate(-1, 0) scale(0.7)" />
-            </svg>
-          </div>
-          <span className={`text-[10px] font-medium leading-none ${currentView === View.AI_ANALYSIS ? 'text-primary' : ''}`}>AI 诊断</span>
+          <span className={getIconClass(View.AI_ANALYSIS, 'assessment')}>assessment</span>
+          <span className="text-[10px] font-medium leading-none">AI 诊断</span>
         </button>
 
         <button
