@@ -96,6 +96,20 @@ CORS(app,
 
 @app.before_request
 def handle_options_request():
+    # Anti-crawler guard (skip OPTIONS/static/non-API based on config)
+    allowed, body, status, extra_headers = anti_bot_guard.check(
+        path=request.path,
+        method=request.method,
+        headers=request.headers,
+        remote_addr=_extract_client_ip(),
+    )
+    if not allowed:
+        response = jsonify(body or {'error': '请求被拒绝'})
+        response.status_code = status
+        for k, v in (extra_headers or {}).items():
+            response.headers[k] = v
+        return response
+
     # Opportunistic low-frequency sweep for expired deletion requests.
     # This keeps cleanup running even without external cron.
     if AUTO_DELETION_SWEEP_ENABLED and request.path.startswith('/api/'):
@@ -172,6 +186,10 @@ try:
         check_gemini_quota,
         parse_bool_flag,
     )
+    from services.anti_bot_service import (
+        AntiBotGuard,
+        build_antibot_config_from_env,
+    )
     from services.deletion_service import (
         is_missing_deletion_column_error as is_missing_deletion_column_error_service,
         delete_supabase_auth_user as delete_supabase_auth_user_service,
@@ -185,6 +203,10 @@ except ImportError:
         token_required,
         check_gemini_quota,
         parse_bool_flag,
+    )
+    from backend.services.anti_bot_service import (
+        AntiBotGuard,
+        build_antibot_config_from_env,
     )
     from backend.services.deletion_service import (
         is_missing_deletion_column_error as is_missing_deletion_column_error_service,
@@ -251,6 +273,32 @@ if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 else:
     gemini_client = None
+
+# Anti-bot / anti-crawler guard (in-memory, per worker)
+antibot_config = build_antibot_config_from_env(os.getenv)
+anti_bot_guard = AntiBotGuard(antibot_config, logger=logger)
+logger.info(
+    "AntiBot enabled=%s mode=%s global=%s/%ss auth=%s/%ss heavy=%s/%ss",
+    antibot_config.enabled,
+    antibot_config.mode,
+    antibot_config.global_max_requests,
+    antibot_config.global_window_seconds,
+    antibot_config.auth_max_requests,
+    antibot_config.auth_window_seconds,
+    antibot_config.heavy_max_requests,
+    antibot_config.heavy_window_seconds,
+)
+
+
+def _extract_client_ip() -> str:
+    for header_name in ('X-Forwarded-For', 'CF-Connecting-IP', 'X-Real-IP'):
+        raw = request.headers.get(header_name, '')
+        if not raw:
+            continue
+        ip = raw.split(',')[0].strip()
+        if ip:
+            return ip
+    return (request.remote_addr or '').strip()
 
 try:
     supabase = init_supabase_client(

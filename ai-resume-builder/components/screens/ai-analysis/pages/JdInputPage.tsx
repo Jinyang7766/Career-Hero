@@ -147,7 +147,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <h1 className="text-lg font-bold tracking-tight">
-            {isInterviewMode ? '设置面试岗位' : '添加职位描述'}
+            {isInterviewMode ? '设置面试场景' : '添加职位描述'}
           </h1>
           <div className="w-8" />
         </div>

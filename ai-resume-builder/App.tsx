@@ -21,6 +21,8 @@ import Signup from './components/screens/Signup';
 import ForgotPassword from './components/screens/ForgotPassword';
 import DeletionPending from './components/screens/DeletionPending';
 import MemberCenter from './components/screens/MemberCenter';
+import TermsOfService from './components/screens/TermsOfService';
+import PrivacyPolicy from './components/screens/PrivacyPolicy';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -61,6 +63,8 @@ function App() {
       case View.DELETION_PENDING: return '/deletion-pending';
       case View.MEMBER_CENTER: return '/member-center';
       case View.AI_INTERVIEW: return '/ai-interview';
+      case View.TERMS_OF_SERVICE: return '/terms-of-service';
+      case View.PRIVACY_POLICY: return '/privacy-policy';
       default: return '/dashboard';
     }
   };
@@ -84,6 +88,8 @@ function App() {
     if (p.startsWith('/signup')) return View.SIGNUP;
     if (p.startsWith('/forgot-password')) return View.FORGOT_PASSWORD;
     if (p.startsWith('/ai-interview')) return View.AI_INTERVIEW;
+    if (p.startsWith('/terms-of-service')) return View.TERMS_OF_SERVICE;
+    if (p.startsWith('/privacy-policy')) return View.PRIVACY_POLICY;
     return View.LOGIN;
   };
 
@@ -577,6 +583,10 @@ function App() {
         return <MemberCenter />;
       case View.DELETION_PENDING:
         return <DeletionPending />;
+      case View.TERMS_OF_SERVICE:
+        return <TermsOfService />;
+      case View.PRIVACY_POLICY:
+        return <PrivacyPolicy />;
       default:
         // Fallback based on auth status
         return isAuthenticated

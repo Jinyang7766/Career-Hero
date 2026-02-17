@@ -180,7 +180,7 @@ const Signup: React.FC<ScreenProps> = () => {
                 <div className="flex items-center gap-2 ml-1">
                   <input id="terms" type="checkbox" className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded text-primary focus:ring-primary border-gray-300 dark:border-gray-600 bg-white dark:bg-white/5" required />
                   <label htmlFor="terms" className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
-                    我已阅读并同意 <a href="#" className="text-primary hover:underline">服务条款</a> 和 <a href="#" className="text-primary hover:underline">隐私政策</a>
+                    我已阅读并同意 <button type="button" onClick={() => navigateToView(View.TERMS_OF_SERVICE)} className="text-primary hover:underline">服务条款</button> 和 <button type="button" onClick={() => navigateToView(View.PRIVACY_POLICY)} className="text-primary hover:underline">隐私政策</button>
                   </label>
                 </div>
 

@@ -203,8 +203,23 @@ const Profile: React.FC<ScreenProps> = () => {
           />
         </div>
 
-        <div className="flex justify-center mt-2">
-          <p className="text-xs text-gray-400 dark:text-gray-600">版本 1.2.0 (Build 303)</p>
+        <div className="flex flex-col items-center gap-2 mt-4 pb-6">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigateToView(View.TERMS_OF_SERVICE)}
+              className="text-xs text-slate-400 dark:text-slate-500 hover:text-primary transition-colors font-medium"
+            >
+              服务条款
+            </button>
+            <div className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700"></div>
+            <button
+              onClick={() => navigateToView(View.PRIVACY_POLICY)}
+              className="text-xs text-slate-400 dark:text-slate-500 hover:text-primary transition-colors font-medium"
+            >
+              隐私政策
+            </button>
+          </div>
+          <p className="text-xs text-slate-300 dark:text-slate-700">版本 1.2.0 (Build 303)</p>
         </div>
       </main>
     </div>
