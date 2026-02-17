@@ -1,5 +1,6 @@
 import type { ResumeData } from '../../../types';
 import type { Suggestion } from './types';
+import { toSkillList } from '../../../src/skill-utils';
 
 export const inferTargetSection = (raw: any): Suggestion['targetSection'] => {
   const field = (raw?.targetField || '').toString().toLowerCase();
@@ -40,6 +41,15 @@ export const getDisplayOriginalValue = (suggestion: Suggestion, resumeData: Resu
   const section = normalizeTargetSection(suggestion.targetSection) || inferTargetSection(suggestion);
   const raw = suggestion.originalValue;
   if (raw === null || raw === undefined) return '';
+
+  if (section === 'skills') {
+    const fromRaw = Array.isArray(raw) ? raw : [raw];
+    const parsed = toSkillList(fromRaw);
+    const deduped = Array.from(new Set(parsed.map((s) => String(s || '').trim()).filter(Boolean)));
+    if (deduped.length > 0) return deduped.join('、');
+    const fallback = Array.from(new Set(fromRaw.map((s) => String(s || '').trim()).filter(Boolean)));
+    return fallback.join('、');
+  }
 
   if (section === 'educations') {
     const text = String(raw).trim();
