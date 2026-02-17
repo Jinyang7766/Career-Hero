@@ -15,7 +15,6 @@ type Params = {
   ) => Promise<void>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error', ms?: number) => void;
   getBackendAuthToken: () => Promise<string>;
-  blobToBase64: (blob: Blob) => Promise<string>;
 };
 
 export const useInterviewVoice = ({
@@ -25,7 +24,6 @@ export const useInterviewVoice = ({
   handleSendMessage,
   showToast,
   getBackendAuthToken,
-  blobToBase64,
 }: Params) => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -246,14 +244,16 @@ export const useInterviewVoice = ({
     const token = await getBackendAuthToken();
     if (!token) throw new Error('请先登录以使用 AI 功能');
     const apiEndpoint = buildApiUrl('/api/ai/transcribe');
-    const audioPayload = { mime_type: audioObj.mime, data: await blobToBase64(audioObj.blob) };
+    const form = new FormData();
+    form.append('file', audioObj.blob, `voice.${(audioObj.mime || 'audio/webm').includes('ogg') ? 'ogg' : 'webm'}`);
+    form.append('mime_type', audioObj.mime || 'audio/webm');
+    form.append('lang', 'zh-CN');
     const resp = await fetch(apiEndpoint, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
         'Authorization': `Bearer ${token.trim()}`,
       },
-      body: JSON.stringify({ audio: audioPayload, lang: 'zh-CN' }),
+      body: form,
     });
     const json = await resp.json().catch(() => ({} as any));
     if (!resp.ok) throw new Error(json?.error || '转写失败');
@@ -272,17 +272,6 @@ export const useInterviewVoice = ({
     if (cachedSilent === true) {
       showToast('未识别到语音内容', 'info');
       return;
-    }
-    if (cachedSilent === undefined) {
-      const verdict = await isAudioLikelySilent(audio.blob);
-      if (verdict === true) {
-        try { voiceSilenceByMsgIdRef.current.set(msgId, true); } catch { }
-        showToast('未识别到语音内容', 'info');
-        return;
-      }
-      if (verdict === false) {
-        try { voiceSilenceByMsgIdRef.current.set(msgId, false); } catch { }
-      }
     }
 
     setTranscribingByMsgId((prev) => ({ ...prev, [msgId]: true }));
@@ -643,4 +632,3 @@ export const useInterviewVoice = ({
     transcribeExistingVoiceMessage,
   };
 };
-

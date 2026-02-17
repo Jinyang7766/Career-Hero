@@ -552,7 +552,6 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     handleSendMessage: handleSendMessage as any,
     showToast,
     getBackendAuthToken,
-    blobToBase64,
   });
 
   const getScoreColor = (s: number) => {

@@ -137,11 +137,8 @@ GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview
 GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-pro-preview')
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-pro-preview')
-# 语音转写模型（优先选择更快更便宜的 Flash/Lite 型号）
+# 语音转文字模型（成本优先）
 GEMINI_TRANSCRIBE_MODEL = os.getenv('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash-lite')
-
-# Google Cloud Speech-to-Text (REST API key). This is NOT the Gemini key.
-GOOGLE_SPEECH_API_KEY = (os.getenv('GOOGLE_SPEECH_API_KEY') or '').strip()
 GEMINI_VISION_MODELS = [
     GEMINI_PDF_OCR_MODEL,
     os.getenv('GEMINI_VISION_MODEL', '').strip(),
@@ -198,6 +195,7 @@ try:
     from services.model_config_service import (
         get_ocr_model_candidates as get_ocr_model_candidates_service,
         get_analysis_model_candidates as get_analysis_model_candidates_service,
+        get_transcribe_model_candidates as get_transcribe_model_candidates_service,
     )
     from services.mock_store_service import (
         create_storage_context as create_storage_context_service,
@@ -212,6 +210,7 @@ except ImportError:
     from backend.services.model_config_service import (
         get_ocr_model_candidates as get_ocr_model_candidates_service,
         get_analysis_model_candidates as get_analysis_model_candidates_service,
+        get_transcribe_model_candidates as get_transcribe_model_candidates_service,
     )
     from backend.services.mock_store_service import (
         create_storage_context as create_storage_context_service,
@@ -230,6 +229,10 @@ def get_ocr_model_candidates():
 
 def get_analysis_model_candidates():
     return get_analysis_model_candidates_service(GEMINI_ANALYSIS_MODEL)
+
+
+def get_transcribe_model_candidates():
+    return get_transcribe_model_candidates_service(GEMINI_TRANSCRIBE_MODEL)
 
 if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -678,7 +681,6 @@ try:
         parse_resume_text_with_ai,
         _extract_text_via_pymupdf,
         _extract_text_via_pypdf,
-        _google_speech_transcribe,
         _gemini_generate_content_resilient,
         _parse_json_object_from_text,
     )
@@ -709,7 +711,6 @@ except ImportError:
         parse_resume_text_with_ai,
         _extract_text_via_pymupdf,
         _extract_text_via_pypdf,
-        _google_speech_transcribe,
         _gemini_generate_content_resilient,
         _parse_json_object_from_text,
     )
@@ -735,7 +736,6 @@ configure_resume_parse_service(
     logger_obj=logger,
     gemini_client_obj=gemini_client,
     gemini_resume_parse_model=GEMINI_RESUME_PARSE_MODEL,
-    google_speech_api_key=GOOGLE_SPEECH_API_KEY,
     pdf_parse_debug=PDF_PARSE_DEBUG,
     get_ocr_model_candidates_fn=get_ocr_model_candidates,
 )
@@ -852,8 +852,7 @@ def ai_chat(current_user_id):
                 'logger': logger,
                 'gemini_client': gemini_client,
                 'check_gemini_quota': check_gemini_quota,
-                'GOOGLE_SPEECH_API_KEY': GOOGLE_SPEECH_API_KEY,
-                '_google_speech_transcribe': _google_speech_transcribe,
+                'get_transcribe_model_candidates': get_transcribe_model_candidates,
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
                 '_parse_json_object_from_text': _parse_json_object_from_text,
                 'GEMINI_INTERVIEW_MODEL': GEMINI_INTERVIEW_MODEL,
@@ -880,8 +879,7 @@ def ai_chat_stream(current_user_id):
                 'logger': logger,
                 'gemini_client': gemini_client,
                 'check_gemini_quota': check_gemini_quota,
-                'GOOGLE_SPEECH_API_KEY': GOOGLE_SPEECH_API_KEY,
-                '_google_speech_transcribe': _google_speech_transcribe,
+                'get_transcribe_model_candidates': get_transcribe_model_candidates,
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
                 '_parse_json_object_from_text': _parse_json_object_from_text,
                 'GEMINI_INTERVIEW_MODEL': GEMINI_INTERVIEW_MODEL,
@@ -933,12 +931,30 @@ def ai_transcribe(current_user_id):
       { success: true, text: "...", model: "models/..." }
     """
     try:
+        payload = request.get_json(silent=True) or {}
+        # Fast path for frontend upload: multipart/form-data with raw audio file.
+        if not payload and request.files and request.files.get('file'):
+            import base64 as _base64
+            file_obj = request.files.get('file')
+            mime_type = (request.form.get('mime_type') or getattr(file_obj, 'mimetype', '') or 'audio/webm').strip()
+            lang = (request.form.get('lang') or 'zh-CN').strip() or 'zh-CN'
+            file_bytes = file_obj.read() if file_obj else b''
+            payload = {
+                'audio': {
+                    'mime_type': mime_type,
+                    'data': _base64.b64encode(file_bytes).decode('utf-8'),
+                },
+                'lang': lang,
+            }
+
         body, status = transcribe_core(
-            request.get_json() or {},
+            payload,
             {
                 'logger': logger,
-                'GOOGLE_SPEECH_API_KEY': GOOGLE_SPEECH_API_KEY,
-                '_google_speech_transcribe': _google_speech_transcribe,
+                'gemini_client': gemini_client,
+                'check_gemini_quota': check_gemini_quota,
+                'get_transcribe_model_candidates': get_transcribe_model_candidates,
+                '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
             },
         )
         return jsonify(body), status

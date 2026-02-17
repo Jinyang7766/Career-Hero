@@ -8,7 +8,6 @@ import re
 import traceback
 
 import fitz
-import requests
 from docx import Document
 from google.genai import types
 from pypdf import PdfReader
@@ -18,19 +17,17 @@ import logging
 logger = logging.getLogger(__name__)
 gemini_client = None
 GEMINI_RESUME_PARSE_MODEL = 'gemini-3-flash-preview'
-GOOGLE_SPEECH_API_KEY = ''
 PDF_PARSE_DEBUG = False
 _GET_OCR_MODEL_CANDIDATES = None
 
 
-def configure_resume_parse_service(*, logger_obj=None, gemini_client_obj=None, gemini_resume_parse_model=None, google_speech_api_key=None, pdf_parse_debug=False, get_ocr_model_candidates_fn=None):
-    global logger, gemini_client, GEMINI_RESUME_PARSE_MODEL, GOOGLE_SPEECH_API_KEY, PDF_PARSE_DEBUG, _GET_OCR_MODEL_CANDIDATES
+def configure_resume_parse_service(*, logger_obj=None, gemini_client_obj=None, gemini_resume_parse_model=None, pdf_parse_debug=False, get_ocr_model_candidates_fn=None):
+    global logger, gemini_client, GEMINI_RESUME_PARSE_MODEL, PDF_PARSE_DEBUG, _GET_OCR_MODEL_CANDIDATES
     if logger_obj is not None:
         logger = logger_obj
     gemini_client = gemini_client_obj
     if gemini_resume_parse_model:
         GEMINI_RESUME_PARSE_MODEL = str(gemini_resume_parse_model)
-    GOOGLE_SPEECH_API_KEY = str(google_speech_api_key or '').strip()
     PDF_PARSE_DEBUG = bool(pdf_parse_debug)
     _GET_OCR_MODEL_CANDIDATES = get_ocr_model_candidates_fn
 
@@ -273,72 +270,6 @@ def _gemini_generate_content_resilient(model_name: str, contents, *, want_json: 
 
     # Include variants for easier debugging in logs.
     raise RuntimeError(f"Gemini generate_content failed after variants={tried}. last_error={last_err}")
-
-
-def _google_speech_transcribe(audio_bytes: bytes, mime_type: str, lang: str) -> str:
-    """
-    Transcribe with Google Cloud Speech-to-Text v1 REST API.
-    Only supports a subset of formats without server-side transcoding.
-    """
-    if not GOOGLE_SPEECH_API_KEY:
-        raise RuntimeError("GOOGLE_SPEECH_API_KEY is not configured")
-
-    mt = (mime_type or '').lower()
-    # We record mainly Opus in WebM on Chrome/Android, and sometimes Ogg Opus.
-    if 'webm' in mt:
-        encoding = 'WEBM_OPUS'
-    elif 'ogg' in mt:
-        encoding = 'OGG_OPUS'
-    else:
-        # MP4/AAC etc would require transcoding to LINEAR16/FLAC which we don't do here.
-        raise ValueError(f"Unsupported audio mime_type for STT: {mime_type}")
-
-    url = f"https://speech.googleapis.com/v1/speech:recognize?key={GOOGLE_SPEECH_API_KEY}"
-    payload = {
-        "config": {
-            "encoding": encoding,
-            "languageCode": (lang or "zh-CN").strip() or "zh-CN",
-            "enableAutomaticPunctuation": True,
-        },
-        "audio": {
-            "content": base64.b64encode(audio_bytes).decode("utf-8")
-        }
-    }
-
-    # `model` is optional and not supported for all languages.
-    # Setting an unsupported model causes:
-    # Invalid recognition 'config': The requested model is currently not supported for language : zh-CN
-    # Use the API default for non-English languages.
-    try:
-      lc = payload["config"]["languageCode"].lower()
-      if lc.startswith("en-") or lc == "en":
-          payload["config"]["model"] = "latest_short"
-    except Exception:
-      pass
-
-    resp = requests.post(url, json=payload, timeout=30)
-    data = {}
-    try:
-        data = resp.json()
-    except Exception:
-        data = {}
-
-    if resp.status_code >= 400:
-        # Surface API error message if present.
-        msg = (data.get("error", {}) or {}).get("message") or f"speech api http {resp.status_code}"
-        raise RuntimeError(msg)
-
-    results = data.get("results") or []
-    transcripts = []
-    for r in results:
-        alts = (r or {}).get("alternatives") or []
-        if not alts:
-            continue
-        t = (alts[0] or {}).get("transcript") or ""
-        t = str(t).strip()
-        if t:
-            transcripts.append(t)
-    return " ".join(transcripts).strip()
 
 
 def _is_missing_resume_core_fields(parsed_data):
