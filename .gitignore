@@ -41,6 +41,7 @@ jspm_packages/
 
 # Optional npm cache directory
 .npm
+.npm-cache/
 
 # Optional eslint cache
 .eslintcache
@@ -131,3 +132,4 @@ __pycache__/
 *.old
 backup/
 dev.log
+C4-Documentation/
