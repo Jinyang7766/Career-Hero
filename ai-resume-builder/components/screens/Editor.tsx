@@ -1016,42 +1016,46 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     }));
   };
 
+  const applyResumeAndPersist = (nextData: ResumeData) => {
+    setResumeData(nextData);
+    // Clearing data should be persisted immediately; relying on 30s autosave can cause stale restore on re-entry.
+    triggerManualSave(nextData);
+  };
+
   const handleClearCurrentStep = () => {
     setShowClearPageConfirm(false);
-    setResumeData(prev => {
-      const next = { ...prev };
-      switch (currentStep) {
-        case 'personal':
-          next.personalInfo = {
-            name: '', title: '', email: '', phone: '', avatar: '', location: '', age: '', summary: prev.personalInfo.summary
-          };
-          next.gender = '';
-          break;
-        case 'work':
-          next.workExps = [];
-          break;
-        case 'education':
-          next.educations = [];
-          break;
-        case 'projects':
-          next.projects = [];
-          setHasTouchedProjects(false);
-          break;
-        case 'skills':
-          next.skills = [];
-          setNewSkill('');
-          break;
-        case 'summary':
-          next.summary = '';
-          setSummary('');
-          break;
-      }
-      return next;
-    });
+    const next = { ...resumeData };
+    switch (currentStep) {
+      case 'personal':
+        next.personalInfo = {
+          name: '', title: '', email: '', phone: '', avatar: '', location: '', age: '', summary: resumeData.personalInfo.summary
+        };
+        next.gender = '';
+        break;
+      case 'work':
+        next.workExps = [];
+        break;
+      case 'education':
+        next.educations = [];
+        break;
+      case 'projects':
+        next.projects = [];
+        setHasTouchedProjects(false);
+        break;
+      case 'skills':
+        next.skills = [];
+        setNewSkill('');
+        break;
+      case 'summary':
+        next.summary = '';
+        setSummary('');
+        break;
+    }
+    applyResumeAndPersist(next);
   };
 
   const handleClearAllData = () => {
-    setResumeData({
+    const clearedData: ResumeData = {
       id: resumeData.id,
       resumeTitle: resumeData.resumeTitle,
       personalInfo: { name: '', title: '', email: '', phone: '' },
@@ -1061,7 +1065,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       skills: [],
       summary: '',
       gender: '',
-    });
+    };
+    applyResumeAndPersist(clearedData);
     setSummary('');
     setHasTouchedProjects(false);
     setHasImportedResume(false);
