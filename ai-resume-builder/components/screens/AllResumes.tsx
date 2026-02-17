@@ -23,7 +23,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
   const [renameInputValue, setRenameInputValue] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const isSelectionMode = selectedIds.size > 0;
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const filteredResumes = (allResumes || []).filter(resume =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -97,6 +97,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
       }
 
       setSelectedIds(new Set());
+      setIsSelectionMode(false);
     } catch (error) {
       console.error('批量删除时出错:', error);
       alert('批量删除部分可能失败，请刷新查看');
@@ -397,6 +398,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                 e.stopPropagation();
                 if (!isSelectionMode) {
                   if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+                  setIsSelectionMode(true);
                   toggleSelection(resume.id);
                 }
               }}
@@ -541,7 +543,10 @@ const AllResumes: React.FC<ScreenProps> = () => {
         <div className="flex items-center justify-between h-14 px-4 relative">
           {isSelectionMode ? (
             <button
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => {
+                setSelectedIds(new Set());
+                setIsSelectionMode(false);
+              }}
               className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>

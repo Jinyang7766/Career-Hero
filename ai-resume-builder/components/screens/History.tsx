@@ -22,7 +22,7 @@ const History: React.FC<ScreenProps> = () => {
   const [items, setItems] = useState<ExportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const isSelectionMode = selectedIds.size > 0;
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
 
   const formatSize = (bytes: number) => {
     if (!bytes) return '0 KB';
@@ -157,6 +157,7 @@ const History: React.FC<ScreenProps> = () => {
 
       await loadHistory();
       setSelectedIds(new Set());
+      setIsSelectionMode(false);
     } finally {
       setLoading(false);
     }
@@ -226,7 +227,10 @@ const History: React.FC<ScreenProps> = () => {
         <div className="flex items-center px-4 h-14 relative justify-between">
           {isSelectionMode ? (
             <button
-              onClick={() => setSelectedIds(new Set())}
+              onClick={() => {
+                setSelectedIds(new Set());
+                setIsSelectionMode(false);
+              }}
               className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>
@@ -249,10 +253,10 @@ const History: React.FC<ScreenProps> = () => {
               <>
                 <button
                   onClick={handleSelectAll}
-                  className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+                  className={`flex size-10 items-center justify-center rounded-full hover:bg-primary/10 transition-colors ${selectedIds.size === items.length ? 'text-primary' : 'text-slate-400 dark:text-slate-500'}`}
                 >
-                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
-                    {selectedIds.size === items.length ? 'deselect' : 'select_all'}
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
+                    {selectedIds.size === items.length && items.length > 0 ? 'check_circle' : 'radio_button_unchecked'}
                   </span>
                 </button>
                 <button
@@ -321,6 +325,7 @@ const History: React.FC<ScreenProps> = () => {
                           e.preventDefault();
                           if (!isSelectionMode) {
                             if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+                            setIsSelectionMode(true);
                             toggleSelection(item.id);
                           }
                         }}
