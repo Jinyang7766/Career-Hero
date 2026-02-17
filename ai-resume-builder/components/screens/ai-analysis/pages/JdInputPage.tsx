@@ -153,7 +153,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
       </header>
 
-      <main className="p-4 flex flex-col gap-6">
+      <main className="p-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
         <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border} shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -257,10 +257,10 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           </div>
         </div>
 
-        <div className="flex gap-3 mt-2">
+        <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 flex gap-3 mt-2">
           <button
             onClick={onPrev}
-            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all"
+            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm"
             type="button"
           >
             上一步
