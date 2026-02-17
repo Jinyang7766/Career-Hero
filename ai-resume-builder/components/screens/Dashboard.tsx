@@ -145,7 +145,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   };
 
   return (
-    <div className="flex flex-col pb-24 animate-in fade-in duration-300">
+    <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Header */}
       <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5">
         <div className="flex flex-col">

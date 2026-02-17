@@ -370,7 +370,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   useEffect(() => {
     const path = (location.pathname || '').toLowerCase();
-    if (path !== '/ai-analysis') return;
+    if (path !== '/ai-analysis' && path !== '/ai-interview') return;
     if (localStorage.getItem('ai_analysis_force_resume_select') !== '1') return;
 
     localStorage.removeItem('ai_analysis_force_resume_select');

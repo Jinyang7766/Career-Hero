@@ -157,7 +157,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto pb-32 no-scrollbar">
+      <main className="flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] no-scrollbar">
         <div className="flex flex-col gap-2">
           {allResumes && allResumes.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">

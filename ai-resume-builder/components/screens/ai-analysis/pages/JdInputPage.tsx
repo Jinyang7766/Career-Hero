@@ -153,7 +153,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
       </header>
 
-      <main className="p-4 pb-[calc(8.5rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
+      <main className="p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
         <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border} shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -225,7 +225,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               value={jdText}
               onChange={(e) => setJdText((e.target.value || '').slice(0, JD_MAX_CHARS))}
               placeholder={isInterviewMode ? "请输入目标岗位的 JD 内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."}
-              className="mt-2 w-full h-40 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
+              className="mt-2 w-full h-56 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
               maxLength={JD_MAX_CHARS}
             />
             <div className="mt-1 text-right text-xs text-slate-500 dark:text-slate-400">
@@ -257,7 +257,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           </div>
         </div>
 
-        <div className="sticky bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-30 flex gap-3 mt-2">
+        <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex gap-3 mt-2">
           <button
             onClick={onPrev}
             className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm"

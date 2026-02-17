@@ -616,7 +616,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto no-scrollbar pb-32">
+      <div className="flex-1 overflow-y-auto no-scrollbar pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
         <div className="flex flex-col gap-2">
           {allResumes && allResumes.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">

@@ -22,9 +22,9 @@ const BottomNav: React.FC = () => {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-[100] h-12 min-h-12 max-h-12 bg-white/95 dark:bg-[#111a22]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/5 mx-auto max-w-md overflow-hidden"
+      className="fixed bottom-0 left-0 right-0 z-[100] h-[calc(3rem+env(safe-area-inset-bottom))] pb-[env(safe-area-inset-bottom)] bg-white/95 dark:bg-[#111a22]/95 backdrop-blur-md border-t border-slate-200 dark:border-white/5 mx-auto max-w-md overflow-hidden"
     >
-      <div className="flex justify-around items-center h-full leading-none">
+      <div className="flex justify-around items-center h-12 leading-none">
         <button
           onClick={() => navigateToView(View.DASHBOARD, { root: true, replace: true })}
           className={getButtonClass(View.DASHBOARD)}

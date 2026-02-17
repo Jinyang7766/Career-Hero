@@ -81,7 +81,7 @@ const Profile: React.FC<ScreenProps> = () => {
   };
 
   return (
-    <div className="flex flex-col pb-24 animate-in fade-in duration-300">
+    <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
         <div className="flex items-center justify-center h-14 px-4 relative">
           <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">个人中心</h1>
