@@ -5,6 +5,12 @@ export class DatabaseService {
     return String(id ?? '').trim();
   }
 
+  private static isNoRowsError(error: any) {
+    const code = String(error?.code || '').trim().toUpperCase();
+    const msg = String(error?.message || '').toLowerCase();
+    return code === 'PGRST116' || msg.includes('contains 0 rows') || msg.includes('single json object');
+  }
+
   private static async findExistingOptimizedResume(userId: string, optimizedFromId: any, optimizationJdKey?: any) {
     const normalizedOriginalId = DatabaseService.normalizeResumeId(optimizedFromId);
     const normalizedJdKey = String(optimizationJdKey ?? '').trim();
@@ -92,9 +98,12 @@ export class DatabaseService {
         .from('users')
         .select('*')
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
+        if (DatabaseService.isNoRowsError(error)) {
+          return { success: false, error: null, data: null };
+        }
         console.error('Error fetching user:', error);
         return { success: false, error, data: null };
       }
@@ -176,12 +185,13 @@ export class DatabaseService {
             })
             .eq('id', existing.data.id)
             .select()
-            .single();
+            .maybeSingle();
           if (updateError) {
             console.error('❌ Error updating existing optimized resume:', updateError);
             return { success: false, error: updateError, data: null };
           }
-          return { success: true, data: updated };
+          if (updated) return { success: true, data: updated };
+          // Row may have been deleted/changed between lookup and update; continue with insert path.
         }
       }
 
@@ -197,7 +207,7 @@ export class DatabaseService {
           updated_at: new Date().toISOString()
         })
         .select()
-        .single();
+        .maybeSingle();
 
       console.log('Supabase insert result:', { data, error });
 
@@ -210,6 +220,21 @@ export class DatabaseService {
           code: error.code
         });
         return { success: false, error, data: null };
+      }
+
+      if (!data) {
+        const fallback = await supabase
+          .from('resumes')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('title', title)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!fallback.error && fallback.data) {
+          return { success: true, data: fallback.data };
+        }
+        return { success: false, error: { code: 'RESUME_CREATE_EMPTY', message: '创建后未返回简历数据' }, data: null };
       }
 
       console.log('✅ Resume created successfully:', data);
@@ -312,11 +337,18 @@ export class DatabaseService {
         .from('resumes')
         .select('*')
         .eq('id', resumeId)
-        .single();
+        .maybeSingle();
 
       if (error) {
+        if (DatabaseService.isNoRowsError(error)) {
+          return { success: false, error: null, data: null };
+        }
         console.error('Error fetching resume:', error);
         return { success: false, error, data: null };
+      }
+
+      if (!data) {
+        return { success: false, error: null, data: null };
       }
 
       return { success: true, data };

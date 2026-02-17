@@ -178,10 +178,18 @@ def resolve_pdf_font_path() -> str:
             candidates.append(os.path.abspath(os.path.join(os.path.dirname(__file__), env_path)))
 
     base_dir = os.path.dirname(__file__)
-    # Strongly prefer project-shipped font.ttf to keep rendering deterministic.
-    candidates = [os.path.join(base_dir, "font.ttf")] + candidates + [
-        os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "public", "font.ttf")),
-        os.path.abspath(os.path.join(base_dir, "..", "ai-resume-builder", "dist", "font.ttf")),
+    backend_dir = os.path.abspath(os.path.join(base_dir, ".."))
+    project_root = os.path.abspath(os.path.join(base_dir, "..", ".."))
+
+    # Strongly prefer repo-shipped font.ttf to keep rendering deterministic.
+    candidates = [
+        # New split layout fallback
+        os.path.join(backend_dir, "font.ttf"),
+        # Legacy location next to this service module
+        os.path.join(base_dir, "font.ttf"),
+    ] + candidates + [
+        os.path.join(project_root, "ai-resume-builder", "public", "font.ttf"),
+        os.path.join(project_root, "ai-resume-builder", "dist", "font.ttf"),
     ]
 
     seen = set()
