@@ -71,7 +71,7 @@ function App() {
 
   const pathToView = (pathname: string): View => {
     const p = (pathname || '').toLowerCase();
-    if (p === '/' || p === '') return isAuthenticated ? View.DASHBOARD : View.LOGIN;
+    if (p === '/' || p === '') return View.DASHBOARD;
     if (p.startsWith('/ai-analysis')) return View.AI_ANALYSIS;
     if (p.startsWith('/dashboard')) return View.DASHBOARD;
     if (p.startsWith('/all-resumes')) return View.ALL_RESUMES;
@@ -179,8 +179,11 @@ function App() {
     };
   }, [showToast, confirmAsync]);
 
-  // Show bottom nav on main tabs only (Editor has its own navigation)
-  const showBottomNav = isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.AI_INTERVIEW, View.PROFILE, View.ALL_RESUMES].includes(currentView) && !isNavHidden;
+  // Show bottom nav on main tabs (allow unauth users to see Home/My entry on dashboard)
+  const showBottomNav = (
+    (isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.AI_INTERVIEW, View.PROFILE, View.ALL_RESUMES].includes(currentView))
+    || (!isAuthenticated && currentView === View.DASHBOARD)
+  ) && !isNavHidden;
 
   // Basic route guards / root redirects.
   // IMPORTANT: Only run after the initial auth check completes to avoid
@@ -192,7 +195,12 @@ function App() {
     const publicPaths = ['/login', '/signup', '/forgot-password'];
 
     if (p === '/' || p === '') {
-      navigate(viewToPath(isAuthenticated ? View.DASHBOARD : View.LOGIN), { replace: true });
+      navigate(viewToPath(View.DASHBOARD), { replace: true });
+      return;
+    }
+
+    // Unauthenticated users can stay on dashboard (visitor mode).
+    if (!isAuthenticated && p.startsWith('/dashboard')) {
       return;
     }
 
@@ -457,6 +465,10 @@ function App() {
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
+    if (!isAuthenticated && view === View.PROFILE) {
+      navigate(viewToPath(View.SIGNUP), { replace: true });
+      return;
+    }
     if (view === View.ALL_RESUMES) {
       setResumeData(createEmptyResumeData());
     }
@@ -549,6 +561,10 @@ function App() {
         return <ForgotPassword />;
       case View.DASHBOARD:
         return <Dashboard createNewResume={() => {
+          if (!isAuthenticated) {
+            navigate(viewToPath(View.SIGNUP), { replace: true });
+            return;
+          }
           // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
           // (especially when the user viewed an existing resume but didn't edit).
           setResumeData(createEmptyResumeData());

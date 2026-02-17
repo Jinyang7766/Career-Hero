@@ -386,7 +386,10 @@ def analyze_resume_core(current_user_id, data, deps):
                     phone=personal.get('phone') or '',
                 )
 
-    if deps['gemini_client'] and deps['check_gemini_quota']():
+    can_run_analysis_ai = deps.get('can_run_analysis_ai')
+    analysis_ai_enabled = bool(can_run_analysis_ai(current_user_id, data)) if callable(can_run_analysis_ai) else bool(deps['gemini_client'] and deps['check_gemini_quota']())
+
+    if analysis_ai_enabled:
         try:
             masked_resume_data = pii_masker.mask_object(copy.deepcopy(resume_data)) if pii_masker else resume_data
             masked_job_description = pii_masker.mask_text(job_description) if pii_masker else job_description
@@ -441,20 +444,12 @@ def analyze_resume_core(current_user_id, data, deps):
             )
 
             analysis_models_tried = deps['get_analysis_model_candidates']()
-            last_model_error = None
-            response = None
-            used_model = None
-
-            for model_name in analysis_models_tried:
-                try:
-                    response, used_model = deps['_gemini_generate_content_resilient'](model_name, prompt, want_json=True)
-                    break
-                except Exception as model_error:
-                    last_model_error = model_error
-                    logger.warning("Analysis model failed: %s, error=%s", model_name, model_error)
-
-            if response is None:
-                raise last_model_error or RuntimeError("No available Gemini analysis model")
+            response, used_model = deps['analysis_generate_content_resilient'](
+                current_user_id=current_user_id,
+                data=data,
+                prompt=prompt,
+                analysis_models_tried=analysis_models_tried,
+            )
 
             ai_result = deps['parse_ai_response'](response.text)
             if pii_masker:

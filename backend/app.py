@@ -13,6 +13,8 @@ import traceback
 import logging
 import requests
 import threading
+import hashlib
+from types import SimpleNamespace
 import google.genai as genai
 
 app = Flask(__name__)
@@ -151,6 +153,16 @@ GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview
 GEMINI_JD_OCR_MODEL = os.getenv('GEMINI_JD_OCR_MODEL', GEMINI_PDF_OCR_MODEL)
 # 简历分析（优化建议）模型
 GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-pro-preview')
+# 简历分析模型路由：gemini | deepseek | ab
+ANALYSIS_LLM_MODE = (os.getenv('ANALYSIS_LLM_MODE', 'gemini') or 'gemini').strip().lower()
+try:
+    ANALYSIS_DEEPSEEK_RATIO = int(os.getenv('ANALYSIS_DEEPSEEK_RATIO', '0'))
+except Exception:
+    ANALYSIS_DEEPSEEK_RATIO = 0
+ANALYSIS_DEEPSEEK_RATIO = max(0, min(100, ANALYSIS_DEEPSEEK_RATIO))
+DEEPSEEK_API_KEY = (os.getenv('DEEPSEEK_API_KEY', '') or '').strip()
+DEEPSEEK_BASE_URL = (os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com') or 'https://api.deepseek.com').rstrip('/')
+DEEPSEEK_ANALYSIS_MODEL = (os.getenv('DEEPSEEK_ANALYSIS_MODEL', 'deepseek-chat') or 'deepseek-chat').strip()
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-pro-preview')
 # 语音转文字模型（成本优先）
@@ -273,6 +285,93 @@ if GEMINI_API_KEY != 'your-gemini-api-key':
     gemini_client = genai.Client(api_key=GEMINI_API_KEY)
 else:
     gemini_client = None
+
+
+def _stable_percent_bucket(seed: str) -> int:
+    digest = hashlib.sha256(str(seed or '').encode('utf-8')).hexdigest()
+    return int(digest[:8], 16) % 100
+
+
+def _should_route_analysis_to_deepseek(current_user_id: str, data: dict) -> bool:
+    if ANALYSIS_LLM_MODE == 'deepseek':
+        return True
+    if ANALYSIS_LLM_MODE == 'gemini':
+        return False
+    if ANALYSIS_LLM_MODE != 'ab':
+        return False
+    resume_id = str((data or {}).get('resumeId') or '')
+    jd_text = str((data or {}).get('jobDescription') or '')
+    seed = f"{current_user_id}|{resume_id}|{len(jd_text)}"
+    return _stable_percent_bucket(seed) < ANALYSIS_DEEPSEEK_RATIO
+
+
+def _deepseek_generate_json(prompt: str, *, timeout_seconds: int = 90):
+    if not DEEPSEEK_API_KEY:
+        raise RuntimeError('DEEPSEEK_API_KEY not configured')
+
+    response = requests.post(
+        f"{DEEPSEEK_BASE_URL}/chat/completions",
+        headers={
+            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
+            'Content-Type': 'application/json',
+        },
+        json={
+            'model': DEEPSEEK_ANALYSIS_MODEL,
+            'messages': [{'role': 'user', 'content': prompt}],
+            'temperature': 0.2,
+            'response_format': {'type': 'json_object'},
+        },
+        timeout=timeout_seconds,
+    )
+    response.raise_for_status()
+    payload = response.json() or {}
+    choices = payload.get('choices') or []
+    if not choices:
+        raise RuntimeError('DeepSeek returned empty choices')
+
+    message = choices[0].get('message') or {}
+    content = message.get('content')
+    if isinstance(content, list):
+        text_parts = []
+        for part in content:
+            if isinstance(part, dict):
+                txt = part.get('text')
+                if txt:
+                    text_parts.append(str(txt))
+        content = ''.join(text_parts)
+
+    text = str(content or '').strip()
+    if not text:
+        raise RuntimeError('DeepSeek returned empty content')
+    return SimpleNamespace(text=text), str(payload.get('model') or DEEPSEEK_ANALYSIS_MODEL)
+
+
+def _analysis_generate_content_resilient(*, current_user_id: str, data: dict, prompt: str, analysis_models_tried):
+    use_deepseek = _should_route_analysis_to_deepseek(current_user_id, data)
+    if use_deepseek:
+        try:
+            response, model_name = _deepseek_generate_json(prompt)
+            return response, f"deepseek:{model_name}"
+        except Exception as deepseek_error:
+            logger.warning("DeepSeek analysis failed, fallback to Gemini: %s", deepseek_error)
+
+    last_error = None
+    for model_name in (analysis_models_tried or []):
+        try:
+            return _gemini_generate_content_resilient(model_name, prompt, want_json=True)
+        except Exception as model_error:
+            last_error = model_error
+            logger.warning("Analysis model failed: %s, error=%s", model_name, model_error)
+
+    if use_deepseek and not analysis_models_tried:
+        raise RuntimeError("No available analysis model (DeepSeek failed; Gemini candidates empty)")
+    raise last_error or RuntimeError("No available analysis model")
+
+
+def _can_run_analysis_ai(current_user_id: str, data: dict) -> bool:
+    if _should_route_analysis_to_deepseek(current_user_id, data) and DEEPSEEK_API_KEY:
+        return True
+    return bool(gemini_client and check_gemini_quota())
 
 # Anti-bot / anti-crawler guard (in-memory, per worker)
 antibot_config = build_antibot_config_from_env(os.getenv)
@@ -868,10 +967,12 @@ def analyze_resume(current_user_id):
                 '_payload_pii_types': _payload_pii_types,
                 'gemini_client': gemini_client,
                 'check_gemini_quota': check_gemini_quota,
+                'can_run_analysis_ai': _can_run_analysis_ai,
                 'find_relevant_cases_vector': find_relevant_cases_vector,
                 'format_resume_for_ai': format_resume_for_ai,
                 'get_analysis_model_candidates': get_analysis_model_candidates,
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
+                'analysis_generate_content_resilient': _analysis_generate_content_resilient,
                 'parse_ai_response': parse_ai_response,
                 'is_gender_related_suggestion': is_gender_related_suggestion,
                 'is_education_related_suggestion': is_education_related_suggestion,

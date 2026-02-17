@@ -20,6 +20,22 @@ export enum View {
   PRIVACY_POLICY = 'PRIVACY_POLICY',
 }
 
+export enum MembershipTier {
+  FREE = 'FREE',
+  STARTER = 'STARTER',
+  PLUS = 'PLUS',
+  PRO = 'PRO',
+  ULTRA = 'ULTRA',
+}
+
+export interface UserSubscription {
+  tier: MembershipTier;
+  expireDate: string;
+  autoRenew: boolean;
+  diagnosesRemaining: number;
+  interviewsRemaining: number;
+}
+
 export interface NavProps {
   currentView: View;
   setCurrentView: (view: View) => void;

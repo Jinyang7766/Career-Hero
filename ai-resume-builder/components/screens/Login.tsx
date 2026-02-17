@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
-import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useAppContext } from '../../src/app-context';
 
 const Login: React.FC<ScreenProps> = () => {
+  const SHOW_SOCIAL_LOGIN = false;
   const login = useAppContext((s) => s.login);
   const navigateToView = useAppContext((s) => s.navigateToView);
   const isDarkMode = useAppContext((s) => s.isDarkMode);
@@ -191,29 +191,31 @@ const Login: React.FC<ScreenProps> = () => {
                 </div>
               </form>
 
-              <div className="mt-10">
-                <div className="flex items-center gap-4">
-                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
-                  <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-slate-400 shrink-0 whitespace-nowrap">
-                    其他方式
-                  </span>
-                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
-                </div>
+              {SHOW_SOCIAL_LOGIN && (
+                <div className="mt-10">
+                  <div className="flex items-center gap-4">
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                    <span className="text-[10px] sm:text-xs uppercase tracking-widest font-bold text-slate-400 shrink-0 whitespace-nowrap">
+                      其他方式
+                    </span>
+                    <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                  </div>
 
-                <div className="mt-8 grid grid-cols-2 gap-4">
-                  <button className="flex w-full items-center justify-center gap-3 rounded-xl bg-white dark:bg-white/5 px-3 py-3 text-sm font-bold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all active:scale-95 hover:shadow-md">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
-                      <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z" />
-                    </svg>
-                    <span className="text-sm">微信</span>
-                  </button>
-                  <button className="flex w-full items-center justify-center gap-3 rounded-xl bg-white dark:bg-white/5 px-3 py-3 text-sm font-bold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all active:scale-95 hover:shadow-md">
-                    <QqPenguinIcon className="h-5 w-5" />
-                    <span className="text-sm">QQ</span>
-                  </button>
+                  <div className="mt-8 grid grid-cols-2 gap-4">
+                    <button className="flex w-full items-center justify-center gap-3 rounded-xl bg-white dark:bg-white/5 px-3 py-3 text-sm font-bold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all active:scale-95 hover:shadow-md">
+                      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
+                        <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z" />
+                      </svg>
+                      <span className="text-sm">微信</span>
+                    </button>
+                    <button className="flex w-full items-center justify-center gap-3 rounded-xl bg-white dark:bg-white/5 px-3 py-3 text-sm font-bold text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all active:scale-95 hover:shadow-md">
+                      <span className="material-symbols-outlined text-[20px]">chat</span>
+                      <span className="text-sm">QQ</span>
+                    </button>
+                  </div>
                 </div>
-              </div>
+              )}
 
               <p className="mt-10 text-center text-sm text-slate-500 dark:text-slate-400 font-medium">
                 还没有账号？{' '}

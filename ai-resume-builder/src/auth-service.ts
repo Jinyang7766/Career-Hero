@@ -2,7 +2,7 @@ import { supabase } from './supabase-client';
 
 export class AuthService {
   // 注册用户 - 使用触发器自动创建数据库记录
-  static async signUp(email: string, password: string, name: string) {
+  static async signUp(email: string, password: string, name: string, referralCode?: string) {
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -10,6 +10,7 @@ export class AuthService {
         options: {
           data: {
             name: name,
+            referral_code: referralCode,
           },
           emailRedirectTo: `${window.location.origin}/login`
         }
@@ -22,11 +23,11 @@ export class AuthService {
 
       // 数据库记录由触发器自动创建
       console.log('User created successfully, database record created by trigger');
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         data,
-        needsEmailVerification: !data.session 
+        needsEmailVerification: !data.session
       };
     } catch (err) {
       console.error('Signup exception:', err);
@@ -58,7 +59,7 @@ export class AuthService {
   static async getCurrentUser() {
     try {
       const { data: { user }, error } = await supabase.auth.getUser();
-      
+
       if (error) {
         console.error('Get user error:', error);
         return { success: false, error, user: null };
@@ -75,7 +76,7 @@ export class AuthService {
   static async signOut() {
     try {
       const { error } = await supabase.auth.signOut();
-      
+
       if (error) {
         console.error('Signout error:', error);
         return { success: false, error };

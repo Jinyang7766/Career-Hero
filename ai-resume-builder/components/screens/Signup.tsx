@@ -19,6 +19,7 @@ const Signup: React.FC<ScreenProps> = () => {
     const name = formData.get('name') as string;
     const email = formData.get('email') as string;
     const password = formData.get('password') as string;
+    const referralCode = formData.get('referralCode') as string;
 
     try {
       console.log('Attempting signup with:', { email, name });
@@ -33,7 +34,7 @@ const Signup: React.FC<ScreenProps> = () => {
       }
 
       // 使用AuthService进行注册
-      const result = await AuthService.signUp(email, password, name);
+      const result = await AuthService.signUp(email, password, name, referralCode);
 
       if (!result.success) {
         console.error('Signup failed:', result.error);
@@ -175,6 +176,21 @@ const Signup: React.FC<ScreenProps> = () => {
                     />
                   </div>
                   <p className="mt-1 text-[10px] text-slate-500 ml-1">密码长度至少 8 位，包含字母和数字。</p>
+                </div>
+
+                <div>
+                  <label htmlFor="referralCode" className="block text-xs sm:text-sm font-semibold leading-6 text-slate-900 dark:text-white ml-1">
+                    邀请码 (选填)
+                  </label>
+                  <div className="mt-1.5 sm:mt-2">
+                    <input
+                      id="referralCode"
+                      name="referralCode"
+                      type="text"
+                      className="block w-full rounded-xl border-0 bg-white/50 dark:bg-white/5 py-2.5 sm:py-3 px-4 text-slate-900 dark:text-white shadow-sm ring-1 ring-inset ring-slate-200 dark:ring-white/10 placeholder:text-slate-400 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm sm:leading-6 outline-none transition-all hover:ring-slate-300 dark:hover:ring-white/20"
+                      placeholder="如有邀请码，请输入"
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 ml-1">

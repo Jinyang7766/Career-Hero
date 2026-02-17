@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
-import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
@@ -8,6 +7,7 @@ import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
+  const SHOW_THIRD_PARTY_BINDING = false;
   const logout = useAppContext((s) => s.logout);
   const goBack = useAppContext((s) => s.goBack);
   const currentUser = useAppContext((s) => s.currentUser);
@@ -181,37 +181,35 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
           </div>
         </div>
 
-        {/* Third-party Binding */}
-        <div className="mt-6 px-4">
-          <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">第三方账号绑定</h3>
-          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
-            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#07c160]/10 dark:bg-[#07c160]/20 flex items-center justify-center text-[#07c160]">
-                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M9.5 4C5.91 4 3 6.47 3 9.5c0 1.75 1 3.34 2.65 4.43l-.6 1.97 2.28-1.2c.7.2 1.44.31 2.17.31.24 0 .48-.01.71-.03-.06-.25-.09-.52-.09-.79 0-2.63 2.48-4.75 5.55-4.75.42 0 .83.04 1.23.11C15.78 6.35 12.92 4 9.5 4zm-2 4.2a1 1 0 1 1 0 2 1 1 0 0 1 0-2zm4 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2z" />
-                    <path d="M16.55 10.5c-3.01 0-5.45 2.03-5.45 4.5s2.44 4.5 5.45 4.5c.59 0 1.17-.08 1.72-.22l2.08 1.1-.55-1.82c1.26-.82 2.03-2.06 2.03-3.56 0-2.47-2.44-4.5-5.28-4.5zm-1.95 2.7a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8zm3.6 0a.9.9 0 1 1 0 1.8.9.9 0 0 1 0-1.8z" />
-                  </svg>
+        {SHOW_THIRD_PARTY_BINDING && (
+          <div className="mt-6 px-4">
+            <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">第三方账号绑定</h3>
+            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+              <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#07c160]/10 dark:bg-[#07c160]/20 flex items-center justify-center text-[#07c160]">
+                    <span className="material-symbols-outlined text-[20px]">chat</span>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">微信</span>
                 </div>
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">微信</span>
+                <button className="text-[14px] font-medium text-primary hover:opacity-80">
+                  去绑定
+                </button>
               </div>
-              <button className="text-[14px] font-medium text-primary hover:opacity-80">
-                去绑定
-              </button>
-            </div>
-            <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#12b7f5]/10 dark:bg-[#12b7f5]/20 flex items-center justify-center text-[#12b7f5]">
-                  <QqPenguinIcon className="h-5 w-5" monochromeWhite={false} />
+              <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-[#12b7f5]/10 dark:bg-[#12b7f5]/20 flex items-center justify-center text-[#12b7f5]">
+                    <span className="material-symbols-outlined text-[20px]">chat</span>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-900 dark:text-white">QQ</span>
                 </div>
-                <span className="text-sm font-semibold text-slate-900 dark:text-white">QQ</span>
+                <button className="text-[14px] font-medium text-primary hover:opacity-80">
+                  去绑定
+                </button>
               </div>
-              <button className="text-[14px] font-medium text-primary hover:opacity-80">
-                去绑定
-              </button>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-8 px-4 space-y-3 mb-8">
           <div className="pt-2">

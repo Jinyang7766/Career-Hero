@@ -1,7 +1,10 @@
-import React, { useRef } from 'react';
-import { View, ScreenProps } from '../../types';
+import React, { useRef, useState, Fragment } from 'react';
+import { View, ScreenProps, MembershipTier } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { useAppContext } from '../../src/app-context';
+import { ReferralModal } from '../ReferralModal';
+
+
 
 const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, color: string, badge?: string }> = ({ onClick, icon, label, color, badge }) => (
   <button
@@ -80,8 +83,21 @@ const Profile: React.FC<ScreenProps> = () => {
     }
   };
 
+  const [showReferralModal, setShowReferralModal] = useState(false);
+
+  // Mock referral code - in real app, derive from user ID or backend
+  const referralCode = React.useMemo(() => {
+    return currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888';
+  }, [currentUser]);
+
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
+      <ReferralModal
+        isOpen={showReferralModal}
+        onClose={() => setShowReferralModal(false)}
+        referralCode={referralCode}
+      />
+
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
         <div className="flex items-center justify-center h-14 px-4 relative">
           <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">个人中心</h1>
@@ -125,40 +141,113 @@ const Profile: React.FC<ScreenProps> = () => {
           </div>
         </div>
 
-        {/* Pro Upgrade Card - Adaptive Style */}
-        <div className={`relative overflow-hidden rounded-2xl p-4 shadow-xl transition-all duration-500 group ${isDarkMode
-          ? 'bg-slate-900/80 backdrop-blur-xl border border-blue-500/20 shadow-blue-900/40'
-          : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 border-transparent shadow-blue-500/25'
-          }`}>
-          {/* Decorative Orbs */}
-          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full blur-3xl -mr-16 -mt-16 transition-all duration-700 ${isDarkMode ? 'bg-blue-500/10 group-hover:bg-blue-500/20' : 'bg-white/20 group-hover:bg-white/30'
-            }`}></div>
-          <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full blur-2xl -ml-12 -mb-12 transition-all duration-700 ${isDarkMode ? 'bg-indigo-500/5 group-hover:bg-indigo-500/10' : 'bg-blue-400/10 group-hover:bg-blue-400/20'
-            }`}></div>
+        {/* Dynamic Upgrade Card */}
+        {(() => {
+          // Mock user subscription - in real app this comes from context/props
+          const userSub = {
+            tier: MembershipTier.FREE,
+            expireDate: '2024-12-31'
+          };
 
-          <div className="relative z-10 flex items-center justify-between gap-4">
-            <div className="flex flex-col min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <span className={`material-symbols-outlined text-[18px] ${isDarkMode ? 'text-primary' : 'text-blue-100'}`}>rocket_launch</span>
-                <h3 className="text-white text-[15px] font-black tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
-                  当前版本：免费版
-                </h3>
+          const getTierStyle = (tier: MembershipTier) => {
+            switch (tier) {
+              case MembershipTier.STARTER:
+                return {
+                  bg: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700',
+                  icon: 'rocket_launch',
+                  iconColor: 'text-slate-600 dark:text-slate-400',
+                  title: '入门版权益已生效',
+                  subtitle: '享有基础AI简历诊断与模拟面试权益',
+                  titleColor: 'text-slate-900 dark:text-white',
+                  subColor: 'text-slate-500 dark:text-slate-400',
+                  btnStyle: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900',
+                  shadow: 'shadow-sm'
+                };
+              case MembershipTier.PLUS:
+                return {
+                  bg: 'bg-gradient-to-br from-blue-600 to-blue-700',
+                  icon: 'verified',
+                  iconColor: 'text-white',
+                  title: 'Plus 会员权益已生效',
+                  subtitle: '尊享更多AI诊断次数与极速生成',
+                  titleColor: 'text-white',
+                  subColor: 'text-blue-100',
+                  btnStyle: 'bg-white text-blue-700 shadow-sm',
+                  shadow: 'shadow-md shadow-blue-500/20'
+                };
+              case MembershipTier.PRO:
+                return {
+                  bg: 'bg-gradient-to-br from-indigo-600 to-indigo-700',
+                  icon: 'workspace_premium',
+                  iconColor: 'text-white',
+                  title: 'Pro 会员权益已生效',
+                  subtitle: '解锁PDF导出与海量AI模拟面试',
+                  titleColor: 'text-white',
+                  subColor: 'text-indigo-100',
+                  btnStyle: 'bg-white text-indigo-700 shadow-sm',
+                  shadow: 'shadow-md shadow-indigo-500/20'
+                };
+              case MembershipTier.ULTRA:
+                return {
+                  bg: 'bg-slate-900',
+                  icon: 'diamond',
+                  iconColor: 'text-amber-400',
+                  title: 'Ultra 尊享版权益已生效',
+                  subtitle: '全能旗舰体验，无限可能',
+                  titleColor: 'text-white',
+                  subColor: 'text-slate-400',
+                  btnStyle: 'bg-amber-500 text-slate-900 font-bold',
+                  shadow: 'shadow-xl shadow-black/20'
+                };
+              default: // FREE
+                return {
+                  bg: isDarkMode
+                    ? 'bg-slate-800 border border-slate-700'
+                    : 'bg-white border border-slate-200',
+                  icon: 'rocket_launch',
+                  iconColor: 'text-primary',
+                  title: '当前版本：免费版',
+                  subtitle: '升级以解锁更多AI简历优化次数及模拟面试',
+                  titleColor: 'text-slate-900 dark:text-white',
+                  subColor: 'text-slate-500 dark:text-slate-400',
+                  btnStyle: 'bg-primary text-white shadow-primary/20 shadow-lg',
+                  shadow: 'shadow-sm'
+                };
+            }
+          };
+
+          const style = getTierStyle(userSub.tier);
+
+          // For paid tiers, we might want a different layout or just consistent styling
+          return (
+            <div className={`relative overflow-hidden rounded-xl p-5 transition-all duration-500 group ${style.bg} ${style.shadow}`}>
+              {/* Subtle Texture for Premium Tiers */}
+              {userSub.tier !== MembershipTier.FREE && userSub.tier !== MembershipTier.STARTER && (
+                <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
+              )}
+
+              <div className="relative z-10 flex items-center justify-between gap-4">
+                <div className="flex flex-col min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`material-symbols-outlined text-[20px] ${style.iconColor}`}>{style.icon}</span>
+                    <h3 className={`${style.titleColor} text-[15px] font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis`}>
+                      {style.title}
+                    </h3>
+                  </div>
+                  <p className={`text-[12px] font-medium line-clamp-2 ${style.subColor}`}>
+                    {style.subtitle}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigateToView(View.MEMBER_CENTER)}
+                  className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 whitespace-nowrap ${style.btnStyle}`}
+                >
+                  {userSub.tier === MembershipTier.FREE ? '立即升级' : '查看权益'}
+                </button>
               </div>
-              <p className={`text-[11px] font-medium line-clamp-2 italic ${isDarkMode ? 'text-blue-200/60' : 'text-blue-100/80'}`}>
-                升级以解锁更多AI简历优化次数及模拟面试
-              </p>
             </div>
-            <button
-              onClick={() => navigateToView(View.MEMBER_CENTER)}
-              className={`shrink-0 px-5 py-2.5 rounded-xl text-sm font-black shadow-lg transition-all active:scale-95 whitespace-nowrap ${isDarkMode
-                ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-blue-600/30'
-                : 'bg-white text-primary shadow-white/10'
-                }`}
-            >
-              立即升级
-            </button>
-          </div>
-        </div>
+          );
+        })()}
 
 
         {/* Menu Items - Unified Colors */}
@@ -189,11 +278,11 @@ const Profile: React.FC<ScreenProps> = () => {
             color="primary"
           />
           <MenuItem
-            onClick={() => { }}
+            onClick={() => setShowReferralModal(true)}
             icon="share"
             label="邀请好友"
             color="primary"
-            badge="得会员"
+            badge="得次数"
           />
           <MenuItem
             onClick={() => navigateToView(View.HELP)}
