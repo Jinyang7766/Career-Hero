@@ -51,6 +51,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   startAnalysis,
   isInterviewMode,
 }) => {
+  const JD_MAX_CHARS = 1000;
   const [interviewType, setInterviewType] = React.useState('general');
 
   const selectedResumeLabel = (() => {
@@ -188,11 +189,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">JD内容</label>
             <textarea
               value={jdText}
-              onChange={(e) => setJdText(e.target.value)}
+              onChange={(e) => setJdText((e.target.value || '').slice(0, JD_MAX_CHARS))}
               placeholder={isInterviewMode ? "请输入目标岗位的 JD 内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."}
               className="mt-2 w-full h-40 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
-              maxLength={1000}
+              maxLength={JD_MAX_CHARS}
             />
+            <div className="mt-1 text-right text-xs text-slate-500 dark:text-slate-400">
+              {jdText.length}/{JD_MAX_CHARS}
+            </div>
           </div>
 
           <div className="mt-3">
@@ -275,4 +279,3 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 };
 
 export default JdInputPage;
-

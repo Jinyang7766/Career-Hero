@@ -1,5 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { ResumeData } from '../../../types';
+import { PERSONAL_FIELD_LIMITS } from '../../../src/editor-field-limits';
 
 type PersonalStepProps = {
   resumeData: ResumeData;
@@ -22,7 +23,6 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
     </summary>
     <div className="p-4 pt-0 border-t border-slate-200 dark:border-white/5 mt-2">
       <div className="grid gap-4 pt-4">
-        {/* Avatar Upload */}
         <div className="flex flex-col gap-2">
           <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">上传证件照（可选）</label>
           <div className="flex items-center gap-4">
@@ -72,6 +72,7 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
             type="text"
             value={resumeData.personalInfo.name}
             onChange={(e) => onInfoChange('name', e.target.value)}
+            maxLength={PERSONAL_FIELD_LIMITS.name}
           />
           {showValidation && !resumeData.personalInfo.name && (
             <p className="text-xs text-red-500">请填写姓名</p>
@@ -93,6 +94,7 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
             type="text"
             value={resumeData.personalInfo.title}
             onChange={(e) => onInfoChange('title', e.target.value)}
+            maxLength={PERSONAL_FIELD_LIMITS.title}
           />
           {showValidation && !resumeData.personalInfo.title && (
             <p className="text-xs text-red-500">请填写求职意向</p>
@@ -135,6 +137,7 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
               type="text"
               value={resumeData.personalInfo.age || ''}
               onChange={(e) => onInfoChange('age', e.target.value)}
+              maxLength={PERSONAL_FIELD_LIMITS.age}
             />
           </div>
         </div>
@@ -152,6 +155,7 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
               type="email"
               value={resumeData.personalInfo.email}
               onChange={(e) => onInfoChange('email', e.target.value)}
+              maxLength={PERSONAL_FIELD_LIMITS.email}
             />
             {showValidation && !resumeData.personalInfo.email && (
               <p className="text-xs text-red-500">请填写电子邮箱</p>
@@ -172,6 +176,7 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
               type="tel"
               value={resumeData.personalInfo.phone}
               onChange={(e) => onInfoChange('phone', e.target.value)}
+              maxLength={PERSONAL_FIELD_LIMITS.phone}
             />
             {showValidation && !resumeData.personalInfo.phone && (
               <p className="text-xs text-red-500">请填写电话号码</p>

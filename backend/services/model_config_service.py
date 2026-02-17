@@ -12,9 +12,13 @@ def get_ocr_model_candidates(vision_models):
 
 
 def get_analysis_model_candidates(primary_model):
+    speed_priority = str(os.getenv('ANALYSIS_SPEED_PRIORITY', '0')).strip().lower() in ('1', 'true', 'yes', 'on')
     raw_fallback = os.getenv('GEMINI_ANALYSIS_FALLBACK_MODELS', '')
     env_fallback = [item.strip() for item in raw_fallback.split(',') if item.strip()]
-    candidates = [primary_model, *env_fallback, 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
+    if speed_priority:
+        candidates = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', primary_model, *env_fallback]
+    else:
+        candidates = [primary_model, *env_fallback, 'gemini-2.5-flash', 'gemini-2.5-flash-lite']
     deduped = []
     for model_name in candidates:
         if not model_name:

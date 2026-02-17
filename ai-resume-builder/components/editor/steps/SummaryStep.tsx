@@ -1,4 +1,5 @@
-﻿import React from 'react';
+import React from 'react';
+import { SUMMARY_MAX_CHARS } from '../../../src/editor-field-limits';
 
 type SummaryStepProps = {
   summary: string;
@@ -11,6 +12,7 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ summary, onSummaryChange, sho
     <div className="bg-white dark:bg-surface-dark rounded-xl shadow-sm border border-slate-200 dark:border-[#324d67] p-4 space-y-4">
       <div className="flex justify-between items-center">
         <h3 className="font-semibold text-slate-900 dark:text-white">个人总结 *</h3>
+        <span className="text-xs text-slate-400">{summary.length}/{SUMMARY_MAX_CHARS}</span>
       </div>
       <textarea
         value={summary}
@@ -21,6 +23,7 @@ const SummaryStep: React.FC<SummaryStepProps> = ({ summary, onSummaryChange, sho
             ? 'border-red-400 focus:ring-red-400/50 focus:border-red-400'
             : 'border-slate-300 dark:border-[#334155] focus:ring-primary focus:border-transparent'
         }`}
+        maxLength={SUMMARY_MAX_CHARS}
       />
       {showValidation && !summary.trim() && (
         <p className="text-xs text-red-500">请填写个人总结</p>

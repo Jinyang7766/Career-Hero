@@ -1,5 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { ResumeData } from '../../../types';
+import { SKILL_MAX_CHARS } from '../../../src/editor-field-limits';
 
 type SkillsStepProps = {
   resumeData: ResumeData;
@@ -64,7 +65,7 @@ const SkillsStep: React.FC<SkillsStepProps> = ({
             } text-slate-900 dark:text-white`}
             placeholder="添加技能 (例如: 领导力)"
             type="text"
-            maxLength={10}
+            maxLength={SKILL_MAX_CHARS}
           />
           <button
             onClick={onAddSkill}
@@ -73,6 +74,7 @@ const SkillsStep: React.FC<SkillsStepProps> = ({
             <span className="material-symbols-outlined text-[20px]">add_circle</span>
           </button>
         </div>
+        <div className="mt-1 text-right text-xs text-slate-400">{newSkill.length}/{SKILL_MAX_CHARS}</div>
         {showValidation && resumeData.skills.length === 0 && (
           <p className="text-xs text-red-500 mt-2">请至少添加一项技能</p>
         )}

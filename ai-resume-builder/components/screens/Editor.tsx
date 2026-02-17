@@ -5,6 +5,15 @@ import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
 import { toSkillList, mergeSkills } from '../../src/skill-utils';
 import { buildResumeTitle } from '../../src/resume-utils';
+import {
+  PERSONAL_FIELD_LIMITS,
+  WORK_FIELD_LIMITS,
+  EDUCATION_FIELD_LIMITS,
+  PROJECT_FIELD_LIMITS,
+  SKILL_MAX_CHARS,
+  SUMMARY_MAX_CHARS,
+  clampByLimit,
+} from '../../src/editor-field-limits';
 import ImportStep from '../editor/steps/ImportStep';
 import PersonalStep from '../editor/steps/PersonalStep';
 import WorkStep from '../editor/steps/WorkStep';
@@ -73,7 +82,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const wizardMode = true;
   const [currentStep, setCurrentStep] = useState<WizardStep>('import');
 
-  const [summary, setSummary] = useState(resumeData?.summary || '');
+  const [summary, setSummary] = useState(clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS));
 
   useEffect(() => {
     latestResumeDataRef.current = resumeData;
@@ -119,8 +128,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   // Sync resumeData.summary to local state if it changes externally
   useEffect(() => {
-    if (resumeData?.summary && resumeData.summary !== summary) {
-      setSummary(resumeData.summary);
+    if (typeof resumeData?.summary === 'string' && resumeData.summary !== summary) {
+      setSummary(clampByLimit(resumeData.summary, SUMMARY_MAX_CHARS));
     }
   }, [resumeData?.summary]);
 
@@ -140,7 +149,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
         id: undefined,
       }));
       if (typeof draftData.summary === 'string') {
-        setSummary(draftData.summary);
+        setSummary(clampByLimit(draftData.summary, SUMMARY_MAX_CHARS));
       }
       setHasImportedResume(true);
       setCurrentStep('personal');
@@ -626,7 +635,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setResumeData(finalData);
 
     if (importedSummary) {
-      setSummary(importedSummary);
+      setSummary(clampByLimit(importedSummary, SUMMARY_MAX_CHARS));
     }
 
     console.log('简历导入完成，触发保存');
@@ -755,15 +764,20 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   };
 
   const handleInfoChange = (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => {
+    const personalLimit = field !== 'gender'
+      ? (PERSONAL_FIELD_LIMITS as Record<string, number>)[field]
+      : undefined;
+    const nextValue = typeof personalLimit === 'number' ? clampByLimit(value, personalLimit) : value;
+
     if (field === 'gender') {
       setResumeData(prev => ({
         ...prev,
-        gender: value
+        gender: nextValue
       }));
     } else {
       setResumeData(prev => ({
         ...prev,
-        personalInfo: { ...prev.personalInfo, [field]: value }
+        personalInfo: { ...prev.personalInfo, [field]: nextValue }
       }));
     }
     if (validationStep === 'personal') {
@@ -772,7 +786,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
         if (field !== 'gender') {
           const updated: ResumeData = {
             ...resumeData,
-            personalInfo: { ...resumeData.personalInfo, [field]: value }
+            personalInfo: { ...resumeData.personalInfo, [field]: nextValue }
           };
           return validatePersonalFormats(updated);
         }
@@ -803,23 +817,33 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   // Helper for updating fields in array items
   const updateItem = <S extends EditableSection>(section: S, id: number, field: keyof ItemBySection[S], value: string) => {
+    const limitMap =
+      section === 'workExps'
+        ? WORK_FIELD_LIMITS
+        : section === 'educations'
+          ? EDUCATION_FIELD_LIMITS
+          : PROJECT_FIELD_LIMITS;
+    const key = String(field);
+    const fieldLimit = (limitMap as Record<string, number>)[key];
+    const nextValue = typeof fieldLimit === 'number' ? clampByLimit(value, fieldLimit) : value;
+
     setResumeData(prev => ({
       ...prev,
       [section]: (prev[section] as Array<ItemBySection[S]>).map(item => {
         if (item.id !== id) return item;
 
-        const next: any = { ...item, [field]: value };
+        const next: any = { ...item, [field]: nextValue };
 
         // Keep alias fields in sync so preview/export (which may read company/school)
         // always reflect latest editor input.
         if (section === 'workExps') {
-          if (field === 'title') next.company = value;
-          if (field === 'subtitle') next.position = value;
+          if (field === 'title') next.company = nextValue;
+          if (field === 'subtitle') next.position = nextValue;
         } else if (section === 'educations') {
-          if (field === 'title') next.school = value;
-          if (field === 'subtitle') next.major = value;
+          if (field === 'title') next.school = nextValue;
+          if (field === 'subtitle') next.major = nextValue;
         } else if (section === 'projects') {
-          if (field === 'subtitle') next.role = value;
+          if (field === 'subtitle') next.role = nextValue;
         }
 
         if (field === 'startDate' || field === 'endDate') {
@@ -910,7 +934,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   };
 
   const handleAddSkill = () => {
-    const tokens = toSkillList(newSkill);
+    const tokens = toSkillList(clampByLimit(newSkill, SKILL_MAX_CHARS)).map((token) => clampByLimit(token, SKILL_MAX_CHARS));
     if (!tokens.length) {
       setNewSkill('');
       return;
@@ -1318,7 +1342,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
             isComplete={isSkillsComplete()}
             wizardMode={wizardMode}
             newSkill={newSkill}
-            onNewSkillChange={setNewSkill}
+            onNewSkillChange={(value) => setNewSkill(clampByLimit(value, SKILL_MAX_CHARS))}
             onAddSkill={handleAddSkill}
             onRemoveSkill={handleRemoveSkill}
             showValidation={validationStep === 'skills'}
@@ -1327,7 +1351,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
         {/* Wizard Mode: Summary Step */}
         {wizardMode && currentStep === 'summary' && (
-          <SummaryStep summary={summary} onSummaryChange={setSummary} showValidation={validationStep === 'summary'} />
+          <SummaryStep
+            summary={summary}
+            onSummaryChange={(value) => setSummary(clampByLimit(value, SUMMARY_MAX_CHARS))}
+            showValidation={validationStep === 'summary'}
+          />
         )}
       </main>
 

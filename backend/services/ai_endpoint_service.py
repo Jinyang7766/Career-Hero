@@ -444,6 +444,7 @@ def analyze_resume_core(current_user_id, data, deps):
             last_model_error = None
             response = None
             used_model = None
+
             for model_name in analysis_models_tried:
                 try:
                     response, used_model = deps['_gemini_generate_content_resilient'](model_name, prompt, want_json=True)

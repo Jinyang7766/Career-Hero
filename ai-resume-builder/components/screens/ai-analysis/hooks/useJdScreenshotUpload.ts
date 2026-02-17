@@ -11,6 +11,7 @@ export const useJdScreenshotUpload = ({
   buildApiUrl,
   setJdText,
 }: Params) => {
+  const JD_MAX_CHARS = 1000;
   const [isUploading, setIsUploading] = useState(false);
 
   const readFileAsDataUrl = (file: File) =>
@@ -106,8 +107,14 @@ export const useJdScreenshotUpload = ({
       if (response.ok) {
         const result = await response.json();
         if (result?.success && result?.text) {
-          setJdText(result.text);
-          alert('截图识别成功，已填充到文本框');
+          const text = String(result.text || '');
+          const clipped = text.slice(0, JD_MAX_CHARS);
+          setJdText(clipped);
+          if (text.length > JD_MAX_CHARS) {
+            alert(`截图识别成功，内容较长，已截取前 ${JD_MAX_CHARS} 字填充到文本框`);
+          } else {
+            alert('截图识别成功，已填充到文本框');
+          }
         } else {
           alert(result?.error || '截图识别失败，请重试');
         }

@@ -1,5 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { ResumeData, ExperienceItem } from '../../../types';
+import { WORK_FIELD_LIMITS } from '../../../src/editor-field-limits';
 
 type WorkStepProps = {
   resumeData: ResumeData;
@@ -28,6 +29,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
         const missingSubtitle = showValidation && !exp.subtitle;
         const missingStart = showValidation && !exp.startDate;
         const missingEnd = showValidation && !exp.endDate;
+        const descLen = String(exp.description || '').length;
         return (
           <div key={exp.id} className="mt-4 flex flex-col gap-4 pb-6 border-b border-slate-200 dark:border-white/5 last:border-0 relative">
             <div className="flex justify-between items-center">
@@ -51,6 +53,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   type="text"
                   value={exp.title}
                   onChange={(e) => onUpdate(exp.id, 'title', e.target.value)}
+                  maxLength={WORK_FIELD_LIMITS.title}
                 />
                 {missingTitle && <p className="text-xs text-red-500">请填写公司名称</p>}
               </div>
@@ -65,6 +68,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   type="text"
                   value={exp.subtitle}
                   onChange={(e) => onUpdate(exp.id, 'subtitle', e.target.value)}
+                  maxLength={WORK_FIELD_LIMITS.subtitle}
                 />
                 {missingSubtitle && <p className="text-xs text-red-500">请填写职位名称</p>}
               </div>
@@ -80,6 +84,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                     type="text"
                     value={exp.startDate || ''}
                     onChange={(e) => onUpdate(exp.id, 'startDate', e.target.value)}
+                    maxLength={WORK_FIELD_LIMITS.startDate}
                   />
                   <span className="text-slate-400">-</span>
                   <input
@@ -91,6 +96,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                     type="text"
                     value={exp.endDate || ''}
                     onChange={(e) => onUpdate(exp.id, 'endDate', e.target.value)}
+                    maxLength={WORK_FIELD_LIMITS.endDate}
                   />
                 </div>
                 {(missingStart || missingEnd) && (
@@ -100,6 +106,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
               <div className="relative">
                 <div className="flex items-center justify-between mb-2">
                   <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">工作内容（可选）</label>
+                  <span className="text-xs text-slate-400">{descLen}/{WORK_FIELD_LIMITS.description}</span>
                 </div>
                 <textarea
                   className="w-full rounded-lg bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed shadow-sm"
@@ -107,6 +114,7 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   rows={4}
                   value={exp.description}
                   onChange={(e) => onUpdate(exp.id, 'description', e.target.value)}
+                  maxLength={WORK_FIELD_LIMITS.description}
                 ></textarea>
               </div>
             </div>

@@ -64,6 +64,9 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
             ? 'AI 正在对比您的简历与目标职位描述，分析关键词覆盖率与核心能力差距。'
             : 'AI 正在检查您的简历内容完整性、格式规范以及语言表达的专业度。'}
         </p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-4 animate-pulse">
+          这会需要比较长的时间，请耐心等待
+        </p>
       </div>
     );
   }

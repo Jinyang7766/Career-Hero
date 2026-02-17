@@ -1,5 +1,6 @@
-﻿import React from 'react';
+import React from 'react';
 import { ResumeData, Education } from '../../../types';
+import { EDUCATION_FIELD_LIMITS } from '../../../src/editor-field-limits';
 
 type EducationStepProps = {
   resumeData: ResumeData;
@@ -52,6 +53,7 @@ const EducationStep: React.FC<EducationStepProps> = ({ resumeData, isComplete, w
                   type="text"
                   value={edu.title}
                   onChange={(e) => onUpdate(edu.id, 'title', e.target.value)}
+                  maxLength={EDUCATION_FIELD_LIMITS.title}
                 />
                 {missingSchool && <p className="text-xs text-red-500">请填写学校名称</p>}
               </div>
@@ -67,6 +69,7 @@ const EducationStep: React.FC<EducationStepProps> = ({ resumeData, isComplete, w
                     type="text"
                     value={edu.subtitle}
                     onChange={(e) => onUpdate(edu.id, 'subtitle', e.target.value)}
+                    maxLength={EDUCATION_FIELD_LIMITS.subtitle}
                   />
                   {missingMajor && <p className="text-xs text-red-500">请填写专业</p>}
                 </div>
@@ -81,6 +84,7 @@ const EducationStep: React.FC<EducationStepProps> = ({ resumeData, isComplete, w
                     type="text"
                     value={edu.degree || ''}
                     onChange={(e) => onUpdate(edu.id, 'degree', e.target.value)}
+                    maxLength={EDUCATION_FIELD_LIMITS.degree}
                   />
                   {missingDegree && <p className="text-xs text-red-500">请填写学历</p>}
                 </div>
@@ -97,6 +101,7 @@ const EducationStep: React.FC<EducationStepProps> = ({ resumeData, isComplete, w
                     type="text"
                     value={edu.startDate || ''}
                     onChange={(e) => onUpdate(edu.id, 'startDate', e.target.value)}
+                    maxLength={EDUCATION_FIELD_LIMITS.startDate}
                   />
                   <span className="text-slate-400">-</span>
                   <input
@@ -108,6 +113,7 @@ const EducationStep: React.FC<EducationStepProps> = ({ resumeData, isComplete, w
                     type="text"
                     value={edu.endDate || ''}
                     onChange={(e) => onUpdate(edu.id, 'endDate', e.target.value)}
+                    maxLength={EDUCATION_FIELD_LIMITS.endDate}
                   />
                 </div>
                 {(missingStart || missingEnd) && (
