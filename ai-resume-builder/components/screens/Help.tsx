@@ -4,7 +4,7 @@ import { buildApiUrl } from '../../src/api-config';
 import { useAppContext } from '../../src/app-context';
 
 const Help: React.FC<ScreenProps> = () => {
-  const { goBack } = useAppContext();
+  const goBack = useAppContext((s) => s.goBack);
   const [images, setImages] = useState<string[]>([]);
   const [description, setDescription] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

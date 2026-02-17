@@ -5,7 +5,9 @@ import { buildApiUrl } from '../../src/api-config';
 import { useAppContext } from '../../src/app-context';
 
 const DeletionPending: React.FC<ScreenProps> = () => {
-    const { currentUser, navigateToView, logout } = useAppContext();
+    const currentUser = useAppContext((s) => s.currentUser);
+    const navigateToView = useAppContext((s) => s.navigateToView);
+    const logout = useAppContext((s) => s.logout);
     const deletionUntil = currentUser?.deletion_pending_until;
 
     const handleRestore = async () => {

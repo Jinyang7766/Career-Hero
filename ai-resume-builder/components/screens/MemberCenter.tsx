@@ -3,7 +3,7 @@ import { View, ScreenProps } from '../../types';
 import { useAppContext } from '../../src/app-context';
 
 const MemberCenter: React.FC<ScreenProps> = () => {
-    const { goBack } = useAppContext();
+    const goBack = useAppContext((s) => s.goBack);
     return (
         <div className="flex h-screen flex-col bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
             <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">

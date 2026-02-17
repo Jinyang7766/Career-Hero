@@ -44,6 +44,7 @@ import {
 import { getRagEnabledFlag } from './ai-analysis/analysis-config';
 import WaveformVisualizer from './ai-analysis/WaveformVisualizer';
 import { isSameResumeId, normalizeResumeId } from './ai-analysis/id-utils';
+import { useAppStore } from '../../src/app-store';
 import {
   parseReferenceReply,
   splitNextQuestion,
@@ -56,7 +57,13 @@ import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/type
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
 
 const AiAnalysis: React.FC<ScreenProps> = () => {
-  const { navigateToView, resumeData, setResumeData, allResumes, loadUserResumes, goBack, setIsNavHidden } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const loadUserResumes = useAppContext((s) => s.loadUserResumes);
+  const goBack = useAppContext((s) => s.goBack);
+  const resumeData = useAppStore((state) => state.resumeData);
+  const setResumeData = useAppStore((state) => state.setResumeData);
+  const allResumes = useAppStore((state) => state.allResumes);
+  const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -291,6 +298,7 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     resumeData,
     jdText,
     targetCompany,
+    setTargetCompany,
     optimizedResumeId,
     setOptimizedResumeId,
     optimizedResumeIdRef: optimizedResumeIdRef as any,

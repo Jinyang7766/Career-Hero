@@ -5,6 +5,7 @@ import { DatabaseService } from '../../src/database-service';
 import { buildApiUrl } from '../../src/api-config';
 import BottomNav from '../BottomNav';
 import { useAppContext } from '../../src/app-context';
+import { useAppStore } from '../../src/app-store';
 
 // --- Helper Functions ---
 
@@ -479,7 +480,10 @@ const buildExportFilename = (title?: string) => {
 };
 
 const Preview: React.FC<ScreenProps> = () => {
-  const { navigateToView, goBack, resumeData, setResumeData } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const goBack = useAppContext((s) => s.goBack);
+  const resumeData = useAppStore((state) => state.resumeData);
+  const setResumeData = useAppStore((state) => state.setResumeData);
   const [isGenerating, setIsGenerating] = useState(false);
   const isOptimized = resumeData?.optimizationStatus === 'optimized';
   const currentTemplateId = resumeData?.templateId || 'modern';

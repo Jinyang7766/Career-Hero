@@ -5,7 +5,8 @@ import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 
 const Settings: React.FC<ScreenProps> = () => {
-  const { logout, goBack } = useAppContext();
+  const logout = useAppContext((s) => s.logout);
+  const goBack = useAppContext((s) => s.goBack);
   const [cacheSize, setCacheSize] = useState<string>('0 B');
   const [isClearing, setIsClearing] = useState(false);
 

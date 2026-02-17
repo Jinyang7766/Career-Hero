@@ -11,13 +11,26 @@ export const getCompanyNameFromJd = (text: string): string => {
     const lines = cleanText.split('\n').filter(l => l.trim().length > 0);
 
     // 黑名单关键词：包含这些词的一定不是公司名
-    const invalidKeywords = ['职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利', '一、', '二、', '三、', '1.', '2.', '3.', '任职', '优先', '加分', '简历', '投递', '招聘'];
+    const invalidKeywords = [
+        '职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利',
+        '任职', '优先', '加分', '简历', '投递', '招聘', '急聘', '高薪',
+        '职责描述', '岗位职责', '任职要求', '工作地点', '职位描述', '岗位说明'
+    ];
 
     const isValid = (name: string) => {
-        const n = name.trim();
+        const n = name.trim().replace(/^[【\[]?.{0,10}(急聘|高薪|诚聘)[】\]]?/g, '').trim();
         if (n.length < 2 || n.length > 50) return false;
+        if (/^(一|二|三|四|五|六|七|八|九|十)[、.\s]/.test(n)) return false;
+        if (/^\d+[、.\s]/.test(n)) return false;
         return !invalidKeywords.some(kw => n.includes(kw));
     };
+
+    const normalizeCandidate = (raw: string) =>
+        (raw || '')
+            .replace(/[|｜].*$/, '')
+            .replace(/^[【\[]?(急聘|高薪|诚聘)[】\]]?/g, '')
+            .replace(/^\s*(公司|企业|Employer|Company)\s*[:：-]?\s*/i, '')
+            .trim();
 
     // 1. 优先匹配明确的标签
     const patterns = [
@@ -28,17 +41,18 @@ export const getCompanyNameFromJd = (text: string): string => {
     for (const pattern of patterns) {
         const match = cleanText.match(pattern);
         if (match && match[1]) {
-            const candidate = match[1].trim();
+            const candidate = normalizeCandidate(match[1]);
             if (isValid(candidate)) return candidate;
         }
     }
 
-    // 2. 尝试从第一行判断（必须包含公司相关后缀）
-    if (lines.length > 0) {
-        const firstLine = lines[0].trim();
-        // 必须包含公司实体后缀，且不包含黑名单
-        if (/(?:公司|集团|工作室|科技|网络|技术|Consulting|Inc\.|Ltd\.|Co\.)/i.test(firstLine)) {
-            if (isValid(firstLine)) return firstLine;
+    // 2. 尝试从前几行中找“像公司”的实体名称，而不是盲目取第一行
+    const companySuffix = /(?:公司|集团|工作室|研究院|事务所|科技|网络|技术|咨询|银行|证券|基金|保险|Inc\.?|Ltd\.?|LLC|Co\.?|Corporation|Group)$/i;
+    for (const line of lines.slice(0, 6)) {
+        const candidate = normalizeCandidate(line);
+        if (!candidate) continue;
+        if (companySuffix.test(candidate) && isValid(candidate)) {
+            return candidate;
         }
     }
 

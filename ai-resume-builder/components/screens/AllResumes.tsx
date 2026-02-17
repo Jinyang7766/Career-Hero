@@ -4,9 +4,15 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
+import { useAppStore } from '../../src/app-store';
 
 const AllResumes: React.FC<ScreenProps> = () => {
-  const { navigateToView, goBack, allResumes, setAllResumes, currentUser, setResumeData } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const goBack = useAppContext((s) => s.goBack);
+  const currentUser = useAppContext((s) => s.currentUser);
+  const allResumes = useAppStore((state) => state.allResumes);
+  const setAllResumes = useAppStore((state) => state.setAllResumes);
+  const setResumeData = useAppStore((state) => state.setResumeData);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);

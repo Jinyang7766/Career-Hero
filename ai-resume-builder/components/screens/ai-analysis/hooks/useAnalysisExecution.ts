@@ -5,12 +5,14 @@ import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mapper
 import { applySuggestionFeedback, consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
+import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
   resumeData: any;
   jdText: string;
   targetCompany: string;
+  setTargetCompany: (value: string) => void;
   optimizedResumeId: string | number | null;
   setOptimizedResumeId: (value: string | number | null) => void;
   optimizedResumeIdRef: { current: string | number | null };
@@ -55,6 +57,7 @@ export const useAnalysisExecution = ({
   resumeData,
   jdText,
   targetCompany,
+  setTargetCompany,
   optimizedResumeId,
   setOptimizedResumeId,
   optimizedResumeIdRef,
@@ -222,6 +225,26 @@ export const useAnalysisExecution = ({
       };
 
       const totalScore = resolveDisplayScore(aiAnalysisResult.score || 0, newReport.scoreBreakdown);
+      const extractedTargetCompany = String(aiAnalysisResult.targetCompany || '').trim();
+      const extractedTargetCompanyConfidence = Math.max(
+        0,
+        Math.min(1, Number(aiAnalysisResult.targetCompanyConfidence || 0))
+      );
+      const autofillMinConfidence = getTargetCompanyAutofillMinConfidence();
+      const shouldAutofillTargetCompany = Boolean(
+        !targetCompany &&
+        extractedTargetCompany &&
+        extractedTargetCompanyConfidence >= autofillMinConfidence
+      );
+      const effectiveTargetCompany = String(
+        targetCompany ||
+        (shouldAutofillTargetCompany ? extractedTargetCompany : '') ||
+        resumeData.targetCompany ||
+        ''
+      ).trim();
+      if (shouldAutofillTargetCompany && effectiveTargetCompany) {
+        setTargetCompany(effectiveTargetCompany);
+      }
       setOriginalScore(totalScore);
       setScore(totalScore);
       const appliedSuggestions = applySuggestionFeedback(
@@ -261,7 +284,8 @@ export const useAnalysisExecution = ({
         suggestions: appliedSuggestions,
         updatedAt: new Date().toISOString(),
         jdText: jdText || resumeData.lastJdText || '',
-        targetCompany: targetCompany || resumeData.targetCompany || '',
+        targetCompany: effectiveTargetCompany,
+        targetCompanyConfidence: extractedTargetCompanyConfidence,
         analysisReportId: resolvedAnalysisReportId || undefined,
         optimizedResumeId: resolvedOptimizedResumeId || undefined,
       };
@@ -281,7 +305,7 @@ export const useAnalysisExecution = ({
         saveLastAnalysis({
           resumeId: persistTargetId || resumeData.id,
           jdText: jdText || resumeData.lastJdText || '',
-          targetCompany: targetCompany || resumeData.targetCompany || '',
+          targetCompany: effectiveTargetCompany,
           snapshot: snapshotForPersist,
           updatedAt: snapshotForPersist.updatedAt,
           analysisReportId: resolvedAnalysisReportId || undefined,
@@ -292,7 +316,7 @@ export const useAnalysisExecution = ({
       try {
         await persistAnalysisSessionState('report_ready', {
           jdText: jdText || resumeData.lastJdText || '',
-          targetCompany: targetCompany || resumeData.targetCompany || '',
+          targetCompany: effectiveTargetCompany,
           score: totalScore,
           step: 'report',
           force: true,
@@ -350,6 +374,7 @@ export const useAnalysisExecution = ({
     setScore,
     setSuggestions,
     showToast,
+    setTargetCompany,
     targetCompany,
   ]);
 

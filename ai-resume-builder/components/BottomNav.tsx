@@ -3,7 +3,8 @@ import { View } from '../types';
 import { useAppContext } from '../src/app-context';
 
 const BottomNav: React.FC = () => {
-  const { currentView, navigateToView } = useAppContext();
+  const currentView = useAppContext((s) => s.currentView);
+  const navigateToView = useAppContext((s) => s.navigateToView);
 
   const getIconClass = (view: View, baseIcon: string) => {
     const isActive = currentView === view;

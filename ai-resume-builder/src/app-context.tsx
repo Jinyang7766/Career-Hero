@@ -1,4 +1,4 @@
-import React, { createContext, useContext } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react';
 import type { ResumeData, ResumeSummary, View } from '../types';
 
 export type AppContextValue = {
@@ -28,14 +28,55 @@ export type AppContextValue = {
   toggleTheme: () => void;
 };
 
-const AppContext = createContext<AppContextValue | null>(null);
+type AppContextStore = {
+  getState: () => AppContextValue;
+  setState: (nextState: AppContextValue) => void;
+  subscribe: (listener: () => void) => () => void;
+};
 
-export const AppProvider = AppContext.Provider;
+const createAppContextStore = (initialState: AppContextValue): AppContextStore => {
+  let state = initialState;
+  const listeners = new Set<() => void>();
 
-export const useAppContext = () => {
-  const ctx = useContext(AppContext);
-  if (!ctx) {
+  return {
+    getState: () => state,
+    setState: (nextState: AppContextValue) => {
+      state = nextState;
+      listeners.forEach((listener) => listener());
+    },
+    subscribe: (listener: () => void) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+};
+
+const AppContext = createContext<AppContextStore | null>(null);
+
+export const AppProvider: React.FC<{ value: AppContextValue; children: React.ReactNode }> = ({ value, children }) => {
+  const storeRef = useRef<AppContextStore | null>(null);
+  if (!storeRef.current) {
+    storeRef.current = createAppContextStore(value);
+  }
+
+  useEffect(() => {
+    storeRef.current?.setState(value);
+  }, [value]);
+
+  return <AppContext.Provider value={storeRef.current}>{children}</AppContext.Provider>;
+};
+
+export function useAppContext(): AppContextValue;
+export function useAppContext<T>(selector: (state: AppContextValue) => T): T;
+export function useAppContext<T>(selector?: (state: AppContextValue) => T) {
+  const store = useContext(AppContext);
+  if (!store) {
     throw new Error('useAppContext must be used within <AppProvider>');
   }
-  return ctx;
-};
+  const select = selector || ((state: AppContextValue) => state as unknown as T);
+  return useSyncExternalStore(
+    store.subscribe,
+    () => select(store.getState()),
+    () => select(store.getState())
+  );
+}

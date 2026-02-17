@@ -4,6 +4,7 @@ import { useUserProfile } from '../../src/useUserProfile';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
+import { useAppStore } from '../../src/app-store';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力。",
@@ -17,7 +18,12 @@ const CAREER_TIPS = [
 ];
 
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
-  const { currentUser, allResumes, navigateToView, setResumeData, isDarkMode, toggleTheme } = useAppContext();
+  const currentUser = useAppContext((s) => s.currentUser);
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const isDarkMode = useAppContext((s) => s.isDarkMode);
+  const toggleTheme = useAppContext((s) => s.toggleTheme);
+  const allResumes = useAppStore((state) => state.allResumes);
+  const setResumeData = useAppStore((state) => state.setResumeData);
   const [greeting, setGreeting] = useState('');
   const [dailyTip, setDailyTip] = useState('');
 

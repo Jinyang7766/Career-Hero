@@ -5,7 +5,10 @@ import QqPenguinIcon from '../icons/QqPenguinIcon';
 import { useAppContext } from '../../src/app-context';
 
 const Login: React.FC<ScreenProps> = () => {
-  const { login, navigateToView, isDarkMode, toggleTheme } = useAppContext();
+  const login = useAppContext((s) => s.login);
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const isDarkMode = useAppContext((s) => s.isDarkMode);
+  const toggleTheme = useAppContext((s) => s.toggleTheme);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 

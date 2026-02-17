@@ -3,7 +3,8 @@ import { View, ScreenProps } from '../../types';
 import { useAppContext } from '../../src/app-context';
 
 const ForgotPassword: React.FC<ScreenProps> = () => {
-  const { navigateToView, goBack } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const goBack = useAppContext((s) => s.goBack);
   const [isSent, setIsSent] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 

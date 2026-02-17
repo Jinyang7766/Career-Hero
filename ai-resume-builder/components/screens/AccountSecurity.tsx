@@ -8,7 +8,10 @@ import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
-  const { logout, goBack, currentUser, navigateToView } = useAppContext();
+  const logout = useAppContext((s) => s.logout);
+  const goBack = useAppContext((s) => s.goBack);
+  const currentUser = useAppContext((s) => s.currentUser);
+  const navigateToView = useAppContext((s) => s.navigateToView);
   const { userProfile } = useUserProfile();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);

@@ -5,7 +5,8 @@ import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
 
 const Signup: React.FC<ScreenProps> = () => {
-  const { login, navigateToView } = useAppContext();
+  const login = useAppContext((s) => s.login);
+  const navigateToView = useAppContext((s) => s.navigateToView);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 

@@ -97,6 +97,8 @@ export const runRealAnalysis = async ({
 
     const analysisResult = {
       summary: unmaskedResult.summary || 'AI分析完成',
+      targetCompany: unmaskedResult.targetCompany || '',
+      targetCompanyConfidence: Number(unmaskedResult.targetCompanyConfidence || 0),
       strengths: unmaskedResult.strengths || [],
       weaknesses: unmaskedResult.weaknesses || [],
       missingKeywords: unmaskedResult.missingKeywords,

@@ -75,6 +75,72 @@ class PIIMasker:
         return value
 
 
+def _normalize_company_confidence(value, default: float = 0.0) -> float:
+    try:
+        n = float(value)
+    except Exception:
+        n = default
+    if n < 0:
+        return 0.0
+    if n > 1:
+        return 1.0
+    return round(n, 4)
+
+
+def _fallback_extract_company_with_confidence(text: str):
+    raw = str(text or '').strip()
+    if not raw:
+        return '', 0.0
+
+    invalid_keywords = [
+        '职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利',
+        '任职', '优先', '加分', '简历', '投递', '招聘', '急聘', '高薪',
+        '职责描述', '岗位职责', '任职要求', '工作地点', '职位描述', '岗位说明'
+    ]
+
+    def _normalize(value: str) -> str:
+        candidate = str(value or '').strip().replace('｜', '|')
+        candidate = candidate.split('|', 1)[0].strip()
+        return candidate
+
+    def _is_valid(name: str) -> bool:
+        n = _normalize(name)
+        if len(n) < 2 or len(n) > 60:
+            return False
+        if re.match(r'^(?:[一二三四五六七八九十]|\d+)[、.\s]', n):
+            return False
+        return not any(k in n for k in invalid_keywords)
+
+    lines = [ln.strip() for ln in raw.split('\n') if ln.strip()]
+    labeled_patterns = [
+        r'(?:公司|企业|Employer|Company)\s*[:：\s-]*([^\n]+)',
+        r'招聘单位\s*[:：\s-]*([^\n]+)',
+    ]
+    for pattern in labeled_patterns:
+        match = re.search(pattern, raw, flags=re.IGNORECASE)
+        if match and match.group(1):
+            candidate = _normalize(match.group(1))
+            if _is_valid(candidate):
+                return candidate, 0.78
+
+    company_suffix = re.compile(
+        r'(?:公司|集团|有限公司|有限责任公司|工作室|研究院|事务所|科技|网络|技术|咨询|银行|证券|基金|保险|'
+        r'Inc\.?|Ltd\.?|LLC|Co\.?|Corporation|Group)$',
+        re.IGNORECASE,
+    )
+    for line in lines[:6]:
+        candidate = _normalize(line)
+        if company_suffix.search(candidate) and _is_valid(candidate):
+            return candidate, 0.62
+
+    return '', 0.0
+
+
+def _fallback_extract_company_from_jd(text: str) -> str:
+    company, _confidence = _fallback_extract_company_with_confidence(text)
+    return company
+
+
 def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai):
     format_requirements = f"""
 重要格式要求（必须严格遵守）：
@@ -87,6 +153,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
 6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
+7.1 **目标公司提取（强制）**：若 JD 中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
+7.2 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
 8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
    - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
    - 严禁尝试猜测或还原真实隐私信息。
@@ -138,6 +206,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     "format": 25
   }},
   "summary": "简历整体评估简述（控制在100字以内）。",
+  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -186,6 +256,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     "format": 25
   }},
   "summary": "简历整体评估简述（控制在100字以内）。",
+  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -320,6 +392,11 @@ def analyze_resume_core(current_user_id, data, deps):
             ai_result = deps['parse_ai_response'](response.text)
             if pii_masker:
                 ai_result = pii_masker.unmask_object(ai_result)
+            model_target_company = str(ai_result.get('targetCompany') or '').strip()
+            fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
+            model_confidence = _normalize_company_confidence(ai_result.get('targetCompanyConfidence'), default=0.0)
+            extracted_target_company = model_target_company or fallback_target_company
+            target_company_confidence = model_confidence if model_target_company else fallback_confidence
             raw_suggestions = ai_result.get('suggestions', [])
             filtered_suggestions = []
             dropped_gender_suggestions = 0
@@ -356,6 +433,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 'strengths': ai_result.get('strengths', []),
                 'weaknesses': ai_result.get('weaknesses', []),
                 'missingKeywords': ai_result.get('missingKeywords', []),
+                'targetCompany': extracted_target_company,
+                'targetCompanyConfidence': _normalize_company_confidence(target_company_confidence),
                 'reference_cases': reference_cases,
                 'rag_enabled': rag_enabled,
                 'rag_requested': rag_requested,
@@ -368,6 +447,7 @@ def analyze_resume_core(current_user_id, data, deps):
             logger.error("Full traceback: %s", traceback.format_exc())
             score = deps['calculate_resume_score'](resume_data)
             suggestions = deps['generate_enhanced_suggestions'](resume_data, score, job_description)
+            fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
             suggestions = [
                 suggestion for suggestion in (suggestions or [])
                 if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
@@ -380,6 +460,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 'strengths': ['结构清晰', '格式规范'],
                 'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
                 'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
+                'targetCompany': fallback_target_company,
+                'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
                 'reference_cases': reference_cases,
                 'rag_enabled': rag_enabled,
                 'rag_requested': rag_requested,
@@ -391,6 +473,7 @@ def analyze_resume_core(current_user_id, data, deps):
 
     score = deps['calculate_resume_score'](resume_data)
     suggestions = deps['generate_suggestions'](resume_data, score)
+    fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
     suggestions = [
         suggestion for suggestion in (suggestions or [])
         if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
@@ -402,6 +485,8 @@ def analyze_resume_core(current_user_id, data, deps):
         'strengths': ['结构清晰', '格式规范'],
         'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
         'missingKeywords': [] if not job_description else ['正在分析关键词...'],
+        'targetCompany': fallback_target_company,
+        'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
         'reference_cases': reference_cases,
         'rag_enabled': rag_enabled,
         'rag_requested': rag_requested,

@@ -4,6 +4,7 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
+import { useAppStore } from '../../src/app-store';
 
 type ExportItem = {
   id: string;
@@ -15,7 +16,9 @@ type ExportItem = {
 };
 
 const History: React.FC<ScreenProps> = () => {
-  const { navigateToView, goBack, setResumeData } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const goBack = useAppContext((s) => s.goBack);
+  const setResumeData = useAppStore((state) => state.setResumeData);
   const [items, setItems] = useState<ExportItem[]>([]);
   const [loading, setLoading] = useState(true);
 

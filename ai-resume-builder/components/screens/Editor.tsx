@@ -14,6 +14,7 @@ import SkillsStep from '../editor/steps/SkillsStep';
 import SummaryStep from '../editor/steps/SummaryStep';
 // Popup import removed; inline import UI only
 import { useAppContext } from '../../src/app-context';
+import { selectCompleteness, useAppStore } from '../../src/app-store';
 
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
@@ -29,7 +30,15 @@ const WIZARD_STEPS: { key: WizardStep; label: string; icon: string }[] = [
 ];
 
 const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: initialWizardMode = false }) => {
-  const { navigateToView, goBack, resumeData, setResumeData, setAllResumes, completeness, createResume, loadUserResumes, currentUser } = useAppContext();
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const goBack = useAppContext((s) => s.goBack);
+  const createResume = useAppContext((s) => s.createResume);
+  const loadUserResumes = useAppContext((s) => s.loadUserResumes);
+  const currentUser = useAppContext((s) => s.currentUser);
+  const resumeData = useAppStore((state) => state.resumeData);
+  const setResumeData = useAppStore((state) => state.setResumeData);
+  const setAllResumes = useAppStore((state) => state.setAllResumes);
+  const completeness = useAppStore(selectCompleteness);
   const hasBottomNav = false;
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);

@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
+from datetime import datetime
 
 from google.genai import types
 
@@ -51,6 +53,85 @@ def parse_seniority_refined(years, job_title=""):
     except:
         return 'mid'
 
+
+_DATE_RANGE_SPLIT_RE = re.compile(r'\s*(?:-|–|—|~|至|到|to)\s*', re.IGNORECASE)
+_PRESENT_RE = re.compile(r'^(?:至今|现在|present|current|now)$', re.IGNORECASE)
+
+
+def _parse_date_point(raw: str):
+    text = str(raw or '').strip().lower()
+    if not text:
+        return None
+    if _PRESENT_RE.match(text):
+        now = datetime.utcnow()
+        return datetime(now.year, now.month, 1)
+
+    text = text.replace('年', '-').replace('月', '').replace('/', '-').replace('.', '-')
+    text = re.sub(r'[^0-9\-]', '', text)
+    text = re.sub(r'-+', '-', text).strip('-')
+
+    for fmt in ('%Y-%m-%d', '%Y-%m', '%Y'):
+        try:
+            parsed = datetime.strptime(text, fmt)
+            return datetime(parsed.year, parsed.month, 1)
+        except Exception:
+            continue
+    return None
+
+
+def _parse_date_range(exp: dict):
+    start_raw = (exp or {}).get('startDate') or ''
+    end_raw = (exp or {}).get('endDate') or ''
+    date_raw = (exp or {}).get('date') or ''
+
+    start = _parse_date_point(start_raw)
+    end = _parse_date_point(end_raw)
+
+    if not start and not end and date_raw:
+        parts = [p for p in _DATE_RANGE_SPLIT_RE.split(str(date_raw).strip()) if p]
+        if len(parts) >= 2:
+            start = _parse_date_point(parts[0])
+            end = _parse_date_point(parts[1])
+        elif len(parts) == 1:
+            start = _parse_date_point(parts[0])
+
+    if not start:
+        return None
+
+    if not end:
+        now = datetime.utcnow()
+        end = datetime(now.year, now.month, 1)
+
+    if end < start:
+        start, end = end, start
+    return (start, end)
+
+
+def _estimate_experience_years(work_exps):
+    intervals = []
+    for exp in (work_exps or []):
+        interval = _parse_date_range(exp or {})
+        if interval:
+            intervals.append(interval)
+
+    if not intervals:
+        return 1.0 if (work_exps or []) else 0.0
+
+    intervals.sort(key=lambda x: x[0])
+    merged = [intervals[0]]
+    for start, end in intervals[1:]:
+        last_start, last_end = merged[-1]
+        if start <= last_end:
+            merged[-1] = (last_start, max(last_end, end))
+        else:
+            merged.append((start, end))
+
+    total_months = 0
+    for start, end in merged:
+        total_months += max(0, (end.year - start.year) * 12 + (end.month - start.month) + 1)
+
+    return round(total_months / 12.0, 2)
+
 def find_relevant_cases_vector(resume_data, limit=3):
     """三层降级向量检索调度逻辑"""
     try:
@@ -60,9 +141,8 @@ def find_relevant_cases_vector(resume_data, limit=3):
         skills = resume_data.get('skills', [])
         summary = personal.get('summary', '')
         
-        # 估算工龄 (实际生产中建议解析日期，此处做简化)
-        years_exp = 0
-        for exp in resume_data.get('workExps', []): years_exp += 2
+        # Parse work date ranges to estimate total experience years with overlap merge.
+        years_exp = _estimate_experience_years(resume_data.get('workExps', []))
         
         seniority = parse_seniority_refined(years_exp, job_role)
         

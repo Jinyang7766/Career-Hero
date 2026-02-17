@@ -5,6 +5,7 @@ import os
 import re
 import socket
 import unicodedata
+from datetime import datetime
 from urllib.parse import urlparse
 
 import requests
@@ -17,17 +18,56 @@ from reportlab.pdfbase.ttfonts import TTFont
 def extract_company_name_from_jd(text: str) -> str:
     if not text:
         return ''
-    patterns = [
-        r'(?:公司|企业|Employer|Company)[:：\s]*([^\n]+)',
-        r'招聘单位[:：\s]*([^\n]+)',
-        r'^([^\n]+(?:公司|集团|有限公司|有限责任公司|Company|Group|Ltd|Inc|LLC))',
+
+    invalid_keywords = [
+        '职位', '岗位', '要求', '职责', '描述', '薪资', '地点', '福利',
+        '任职', '优先', '加分', '简历', '投递', '招聘', '急聘', '高薪',
+        '职责描述', '岗位职责', '任职要求', '工作地点', '职位描述', '岗位说明'
     ]
-    for pattern in patterns:
-        match = re.search(pattern, text)
+
+    def _normalize_candidate(raw: str) -> str:
+        return (
+            str(raw or '')
+            .strip()
+            .split('|')[0]
+            .replace('｜', '|')
+            .split('|')[0]
+            .strip()
+        )
+
+    def _is_valid(name: str) -> bool:
+        n = _normalize_candidate(name)
+        if len(n) < 2 or len(n) > 60:
+            return False
+        if re.match(r'^(?:[一二三四五六七八九十]|\d+)[、.\s]', n):
+            return False
+        return not any(k in n for k in invalid_keywords)
+
+    text = text.strip()
+    lines = [ln.strip() for ln in text.split('\n') if ln.strip()]
+
+    labeled_patterns = [
+        r'(?:公司|企业|Employer|Company)\s*[:：\s-]*([^\n]+)',
+        r'招聘单位\s*[:：\s-]*([^\n]+)',
+    ]
+    for pattern in labeled_patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
         if match and match.group(1):
-            return match.group(1).strip().rstrip()
-    first_line = text.split('\n')[0].strip()
-    return first_line if len(first_line) < 20 else ''
+            candidate = _normalize_candidate(match.group(1))
+            if _is_valid(candidate):
+                return candidate
+
+    company_suffix = re.compile(
+        r'(?:公司|集团|有限公司|有限责任公司|工作室|研究院|事务所|科技|网络|技术|咨询|银行|证券|基金|保险|'
+        r'Inc\.?|Ltd\.?|LLC|Co\.?|Corporation|Group)$',
+        re.IGNORECASE,
+    )
+    for line in lines[:6]:
+        candidate = _normalize_candidate(line)
+        if company_suffix.search(candidate) and _is_valid(candidate):
+            return candidate
+
+    return ''
 
 def build_pdf_filename(name: str, direction: str, company: str) -> str:
     safe_name = sanitize_filename_part(name)

@@ -1,6 +1,8 @@
 import base64
 import io
 import os
+import threading
+import time
 
 from playwright.sync_api import sync_playwright
 
@@ -26,6 +28,33 @@ except ImportError:
         inject_font_css_into_html,
         generate_resume_html,
     )
+
+
+class PDFExportBusyError(RuntimeError):
+    """Raised when PDF export concurrency limit is reached."""
+
+
+def _read_int_env(name: str, default: int) -> int:
+    raw = (os.getenv(name, str(default)) or str(default)).strip()
+    try:
+        value = int(raw)
+    except Exception:
+        value = default
+    return value if value > 0 else default
+
+
+def _read_float_env(name: str, default: float) -> float:
+    raw = (os.getenv(name, str(default)) or str(default)).strip()
+    try:
+        value = float(raw)
+    except Exception:
+        value = default
+    return value
+
+
+PDF_EXPORT_MAX_CONCURRENCY = _read_int_env("PDF_EXPORT_MAX_CONCURRENCY", 1)
+PDF_EXPORT_ACQUIRE_TIMEOUT_SECONDS = _read_float_env("PDF_EXPORT_ACQUIRE_TIMEOUT_SECONDS", 8.0)
+_PDF_EXPORT_SEMAPHORE = threading.BoundedSemaphore(PDF_EXPORT_MAX_CONCURRENCY)
 
 
 def _generate_pdf_with_playwright(html_content: str, logger):
@@ -191,7 +220,30 @@ def build_pdf_export_payload(data: dict, logger, patch_version: str):
         pass
     logger.info("Generated HTML content length: %s", len(html_content))
 
-    pdf_bytes = _generate_pdf_with_playwright(html_content, logger)
+    acquire_timeout = PDF_EXPORT_ACQUIRE_TIMEOUT_SECONDS
+    if acquire_timeout is not None and acquire_timeout < 0:
+        acquire_timeout = None
+
+    start_wait = time.monotonic()
+    acquired = _PDF_EXPORT_SEMAPHORE.acquire(timeout=acquire_timeout)
+    wait_seconds = round(time.monotonic() - start_wait, 3)
+
+    if not acquired:
+        raise PDFExportBusyError(
+            f"PDF 导出繁忙：并发上限 {PDF_EXPORT_MAX_CONCURRENCY}，"
+            f"请稍后重试（等待超时 {PDF_EXPORT_ACQUIRE_TIMEOUT_SECONDS}s）"
+        )
+
+    try:
+        logger.info(
+            "PDF export slot acquired, concurrency_limit=%s wait_seconds=%s",
+            PDF_EXPORT_MAX_CONCURRENCY,
+            wait_seconds,
+        )
+        pdf_bytes = _generate_pdf_with_playwright(html_content, logger)
+    finally:
+        _PDF_EXPORT_SEMAPHORE.release()
+        logger.info("PDF export slot released")
 
     custom_title = data.get('resumeTitle') or data.get('filename') or ''
     custom_title = str(custom_title).strip()

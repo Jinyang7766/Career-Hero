@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { View, ResumeData, ResumeSummary } from './types';
+import { View, ResumeData } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppProvider } from './src/app-context';
+import { createEmptyResumeData, selectCompleteness, useAppStore } from './src/app-store';
 import BottomNav from './components/BottomNav';
 import Dashboard from './components/screens/Dashboard';
 import Profile from './components/screens/Profile';
@@ -25,8 +26,13 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authChecked, setAuthChecked] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
-  const [isNavHidden, setIsNavHidden] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
+  const setResumeData = useAppStore((state) => state.setResumeData);
+  const allResumes = useAppStore((state) => state.allResumes);
+  const setAllResumes = useAppStore((state) => state.setAllResumes);
+  const isNavHidden = useAppStore((state) => state.isNavHidden);
+  const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
     return saved ? saved === 'dark' : true; // Default to dark
@@ -338,7 +344,7 @@ function App() {
 
       console.log('Creating resume for user:', user.id);
 
-      const result = await DatabaseService.createResume(user.id, title, resumeData);
+      const result = await DatabaseService.createResume(user.id, title, useAppStore.getState().resumeData);
 
       if (result.success) {
         console.log('Resume created successfully:', result.data);
@@ -354,43 +360,6 @@ function App() {
       throw error;
     }
   };
-
-  // Centralized Resume Data (Active Editing) - Start with empty data
-  const [resumeData, setResumeData] = useState<ResumeData>({
-    personalInfo: {
-      name: '',
-      title: '',
-      email: '',
-      phone: '',
-      age: ''
-    },
-    workExps: [],
-    educations: [],
-    projects: [],
-    skills: [],
-    gender: ''
-  });
-
-  // Centralized All Resumes List - Start empty for new users
-  const [allResumes, setAllResumes] = useState<ResumeSummary[]>([]);
-
-  // Calculate Completeness
-  const completeness = useMemo(() => {
-    let score = 0;
-    // Personal Info: 40 points total (10 each)
-    if (resumeData.personalInfo.name) score += 10;
-    if (resumeData.personalInfo.title) score += 10;
-    if (resumeData.personalInfo.email) score += 10;
-    if (resumeData.personalInfo.phone) score += 10;
-
-    // Sections: 60 points total
-    if (resumeData.workExps.length > 0) score += 20;
-    if (resumeData.educations.length > 0) score += 20;
-    if (resumeData.skills.length > 0) score += 10;
-    if (resumeData.projects.length > 0) score += 10;
-
-    return Math.min(score, 100);
-  }, [resumeData]);
 
   // If user is authenticated, don't allow staying on auth pages.
   useEffect(() => {
@@ -460,30 +429,9 @@ function App() {
 
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
-    const makeEmptyResumeData = () => ({
-      personalInfo: {
-        name: '',
-        title: '',
-        email: '',
-        phone: '',
-        location: '',
-        linkedin: '',
-        website: '',
-        summary: '',
-        avatar: '',
-        age: ''
-      },
-      workExps: [],
-      educations: [],
-      projects: [],
-      skills: [],
-      summary: '',
-      gender: ''
-    });
-
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
     if (view === View.ALL_RESUMES) {
-      setResumeData(makeEmptyResumeData());
+      setResumeData(createEmptyResumeData());
     }
     if (view === View.AI_ANALYSIS) {
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
@@ -509,9 +457,6 @@ function App() {
     }
     handleNavigate(view, true);
   };
-
-  // Onboarding Wizard State
-  const [showWizard, setShowWizard] = useState(false);
 
   // Check if first time user on auth
   useEffect(() => {
@@ -583,36 +528,7 @@ function App() {
         return <Dashboard createNewResume={() => {
           // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
           // (especially when the user viewed an existing resume but didn't edit).
-          setResumeData({
-            personalInfo: {
-              name: '',
-              title: '',
-              email: '',
-              phone: '',
-              location: '',
-              linkedin: '',
-              website: '',
-              summary: '',
-              avatar: '',
-              age: ''
-            },
-            workExps: [],
-            educations: [],
-            projects: [],
-            skills: [],
-            summary: '',
-            gender: '',
-            templateId: undefined,
-            optimizationStatus: undefined,
-            optimizedResumeId: undefined,
-            optimizedFromId: undefined,
-            lastJdText: '',
-            targetCompany: '',
-            analysisSnapshot: undefined,
-            aiSuggestionFeedback: undefined,
-            interviewSessions: undefined,
-            exportHistory: undefined
-          });
+          setResumeData(createEmptyResumeData());
           setShowWizard(true);
           handleNavigate(View.EDITOR);
         }} />;
@@ -713,13 +629,13 @@ function App() {
         isAuthenticated,
         currentUser,
         currentView,
-        resumeData,
+        resumeData: useAppStore.getState().resumeData,
         setResumeData,
-        allResumes,
+        allResumes: useAppStore.getState().allResumes,
         setAllResumes,
         loadUserResumes,
         createResume,
-        completeness,
+        completeness: selectCompleteness(useAppStore.getState()),
         isNavHidden,
         setIsNavHidden,
         navigateToView: (view, opts) => {

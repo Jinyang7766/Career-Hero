@@ -33,7 +33,28 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-PDF_EXPORT_PATCH_VERSION = "pdf-export-patch-2026-02-16-v3"
+
+
+def _resolve_pdf_export_patch_version() -> str:
+    configured = (os.getenv('PDF_EXPORT_PATCH_VERSION') or '').strip()
+    if configured:
+        return configured
+
+    # Prefer platform-provided commit identifiers when available.
+    commit_like = (
+        os.getenv('RAILWAY_GIT_COMMIT_SHA')
+        or os.getenv('RENDER_GIT_COMMIT')
+        or os.getenv('VERCEL_GIT_COMMIT_SHA')
+        or os.getenv('GITHUB_SHA')
+        or ''
+    ).strip()
+    if commit_like:
+        return f"pdf-export-{commit_like[:12]}"
+
+    return "pdf-export-dev"
+
+
+PDF_EXPORT_PATCH_VERSION = _resolve_pdf_export_patch_version()
 
 
 def _is_missing_deletion_column_error(err: Exception) -> bool:
@@ -636,6 +657,11 @@ def export_pdf():
 
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
+    except PDFExportBusyError as e:
+        response = jsonify({'error': str(e)})
+        response.status_code = 429
+        response.headers['Retry-After'] = str(int(os.getenv('PDF_EXPORT_ACQUIRE_TIMEOUT_SECONDS', '8') or '8'))
+        return response
     except Exception as e:
         logger.error(f"PDF generation error: {str(e)}")
         logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -643,7 +669,7 @@ def export_pdf():
         return jsonify({'error': '生成 PDF 失败'}), 500
 
 try:
-    from services.export_service import build_pdf_export_payload
+    from services.export_service import build_pdf_export_payload, PDFExportBusyError
     from services.resume_parse_service import (
         configure_resume_parse_service,
         extract_text_from_pdf,
@@ -674,7 +700,7 @@ try:
         transcribe_core,
     )
 except ImportError:
-    from backend.services.export_service import build_pdf_export_payload
+    from backend.services.export_service import build_pdf_export_payload, PDFExportBusyError
     from backend.services.resume_parse_service import (
         configure_resume_parse_service,
         extract_text_from_pdf,
