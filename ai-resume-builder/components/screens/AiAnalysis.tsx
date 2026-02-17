@@ -786,6 +786,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     if (s >= 70) return 'text-primary';
     return 'text-orange-500';
   };
+  const handleResumeSelectBack = () => {
+    navigateToView(View.DASHBOARD, { root: true, replace: true });
+  };
 
   // ================= RENDER STEPS =================
   if (currentStep === 'resume_select') {
@@ -798,7 +801,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         setIsOptimizedOpen={setIsOptimizedOpen}
         isUnoptimizedOpen={isUnoptimizedOpen}
         setIsUnoptimizedOpen={setIsUnoptimizedOpen}
-        onBack={handleStepBack}
+        onBack={handleResumeSelectBack}
         onSelectResume={(resumeId, preferReport) => handleResumeSelect(resumeId, !!preferReport)}
         selectedResumeId={selectedResumeId}
         isReading={resumeReadState.status === 'loading'}
