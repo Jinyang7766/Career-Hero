@@ -17,6 +17,20 @@ type Params = {
   isSameResumeId: (a: any, b: any) => boolean;
   resolveOriginalResumeIdForOptimization: () => any;
   ensureSingleOptimizedResume: (userId: string, originalResumeId: string | number, originalResumeData: ResumeData) => Promise<string | number>;
+  resolveAnalysisBinding: (originalResumeId: string | number, analysisJdText: string) => Promise<{
+    analysisReportId: string;
+    optimizedResumeId: string | number | null;
+    jdKey: string;
+  } | null>;
+  ensureAnalysisBinding: (
+    originalResumeId: string | number,
+    baseResumeData: ResumeData,
+    analysisJdText: string
+  ) => Promise<{
+    analysisReportId: string;
+    optimizedResumeId: string | number;
+    jdKey: string;
+  }>;
   normalizeTargetSection: (section: any) => Suggestion['targetSection'] | '';
   inferTargetSection: (raw: any) => Suggestion['targetSection'];
   sanitizeSuggestedValue: (value: any, targetSection?: string) => any;
@@ -31,6 +45,8 @@ type Params = {
     targetCompany?: string;
     snapshot: any;
     updatedAt: string;
+    analysisReportId?: string;
+    optimizedResumeId?: string | number;
   }) => void;
   setAnalysisResumeId: (id: string | number | null) => void;
   optimizedResumeIdRef: MutableRefObject<string | number | null>;
@@ -50,6 +66,8 @@ export const useSuggestionAcceptance = ({
   isSameResumeId,
   resolveOriginalResumeIdForOptimization,
   ensureSingleOptimizedResume,
+  resolveAnalysisBinding,
+  ensureAnalysisBinding,
   normalizeTargetSection,
   inferTargetSection,
   sanitizeSuggestedValue,
@@ -106,7 +124,13 @@ export const useSuggestionAcceptance = ({
           resumeTitle: originResult.data.title
         } as ResumeData;
 
-        const mappedOptimizedId = (originResult.data.resume_data || {}).optimizedResumeId;
+        const analysisBinding = await resolveAnalysisBinding(
+          originalResumeId,
+          jdText || originalResume.lastJdText || ''
+        );
+        const mappedOptimizedId =
+          analysisBinding?.optimizedResumeId ||
+          (originResult.data.resume_data || {}).optimizedResumeId;
         let targetOptimizedId: string | number | null = null;
         if (mappedOptimizedId) {
           const mappedResult = await DatabaseService.getResume(mappedOptimizedId);
@@ -120,6 +144,9 @@ export const useSuggestionAcceptance = ({
             targetOptimizedId = mappedResult.data.id;
           }
         }
+        if (!targetOptimizedId && analysisBinding?.optimizedResumeId) {
+          targetOptimizedId = analysisBinding.optimizedResumeId;
+        }
 
         targetOptimizedId = targetOptimizedId || (
           (resumeData.optimizationStatus === 'optimized' &&
@@ -128,6 +155,14 @@ export const useSuggestionAcceptance = ({
             ? resumeData.id
             : await ensureSingleOptimizedResume(user.id, originalResumeId, originalResume)
         );
+        if (!targetOptimizedId) {
+          const ensuredBinding = await ensureAnalysisBinding(
+            originalResumeId,
+            originalResume,
+            jdText || originalResume.lastJdText || ''
+          );
+          targetOptimizedId = ensuredBinding.optimizedResumeId;
+        }
 
         const optimizedResult = await DatabaseService.getResume(targetOptimizedId);
         if (!optimizedResult.success || !optimizedResult.data?.resume_data) {
@@ -162,6 +197,7 @@ export const useSuggestionAcceptance = ({
 
         const baseTitle = allResumes?.find(r => isSameResumeId(r.id, originalResumeId))?.title || '简历';
         const newTitle = buildResumeTitle(baseTitle, nextResumeData, jdText, true, targetCompany);
+        const analysisReportId = analysisBinding?.analysisReportId || '';
         let updatedOptimized: ResumeData = {
           ...nextResumeData,
           interviewSessions: nextResumeData.interviewSessions || baseResume.interviewSessions || originalResume.interviewSessions,
@@ -169,6 +205,7 @@ export const useSuggestionAcceptance = ({
           optimizationStatus: 'optimized' as const,
           optimizedFromId: originalResumeId as any,
           optimizedResumeId: targetOptimizedId as any,
+          analysisReportId: analysisReportId || undefined,
           lastJdText: jdText || baseResume.lastJdText || originalResume.lastJdText || '',
           targetCompany: targetCompany || baseResume.targetCompany || originalResume.targetCompany || ''
         };
@@ -185,7 +222,9 @@ export const useSuggestionAcceptance = ({
             suggestions: updatedSuggestions,
             updatedAt: new Date().toISOString(),
             jdText: jdText || updatedOptimized.lastJdText || '',
-            targetCompany: targetCompany || updatedOptimized.targetCompany || ''
+            targetCompany: targetCompany || updatedOptimized.targetCompany || '',
+            analysisReportId: analysisReportId || undefined,
+            optimizedResumeId: targetOptimizedId as any,
           };
           updatedOptimized = {
             ...updatedOptimized,
@@ -223,25 +262,10 @@ export const useSuggestionAcceptance = ({
             jdText: snapshotForPersist.jdText || '',
             targetCompany: snapshotForPersist.targetCompany || '',
             snapshot: snapshotForPersist,
-            updatedAt: snapshotForPersist.updatedAt || new Date().toISOString()
-          });
-        }
-
-        const originalRowData = originResult.data.resume_data || {};
-        if (!isSameResumeId(originalRowData.optimizedResumeId, targetOptimizedId)) {
-          const updatedOriginal = {
-            ...originalRowData,
+            updatedAt: snapshotForPersist.updatedAt || new Date().toISOString(),
+            analysisReportId: analysisReportId || undefined,
             optimizedResumeId: targetOptimizedId,
-            lastJdText: jdText || originalRowData.lastJdText || '',
-            targetCompany: targetCompany || originalRowData.targetCompany || ''
-          };
-          const originalUpdateResult = await DatabaseService.updateResume(String(originalResumeId), {
-            resume_data: updatedOriginal,
-            updated_at: new Date().toISOString()
           });
-          if (!originalUpdateResult.success) {
-            console.warn('Failed to persist optimized resume mapping on original resume:', originalUpdateResult.error);
-          }
         }
 
         if (loadUserResumes) {

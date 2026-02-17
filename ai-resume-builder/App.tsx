@@ -34,6 +34,7 @@ function App() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const appContainerRef = useRef<HTMLDivElement | null>(null);
 
   const viewToPath = (view: View) => {
     switch (view) {
@@ -79,6 +80,44 @@ function App() {
   };
 
   const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
+
+  // Always reset scroll position when entering a new page/route so headers/back buttons stay visible.
+  useEffect(() => {
+    const scrollToTop = () => {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+
+      const scroller = document.scrollingElement as HTMLElement | null;
+      if (scroller) {
+        scroller.scrollTop = 0;
+      }
+
+      const docEl = document.documentElement as HTMLElement | null;
+      if (docEl) {
+        docEl.scrollTop = 0;
+      }
+
+      const bodyEl = document.body as HTMLElement | null;
+      if (bodyEl) {
+        bodyEl.scrollTop = 0;
+      }
+
+      if (appContainerRef.current) {
+        appContainerRef.current.scrollTop = 0;
+      }
+    };
+
+    scrollToTop();
+    const raf = window.requestAnimationFrame(scrollToTop);
+    const timer = window.setTimeout(scrollToTop, 60);
+    return () => {
+      window.cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [location.pathname]);
 
   // Global toast + confirm overlays to avoid browser-native alert/confirm (which show the site URL).
   const toastTimerRef = useRef<number | null>(null);
@@ -697,7 +736,7 @@ function App() {
         toggleTheme,
       }}
     >
-      <div className={`min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative`}>
+      <div ref={appContainerRef} className={`min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative`}>
         <ToastOverlay />
         <ConfirmModal />
         {renderView()}

@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
+import { supabase } from '../../../../src/supabase-client';
 import { buildResumeTitle } from '../../../../src/resume-utils';
 import type { ResumeData } from '../../../../types';
+import { buildAnalysisReportId, makeJdKey } from '../id-utils';
 
 type Params = {
   optimizedResumeId: string | number | null;
@@ -31,19 +33,15 @@ export const useOptimizedResumeStore = ({
 }: Params) => {
   const optimizedResumeIdRef = useRef<string | number | null>(null);
   const creatingOptimizedResumeRef = useRef<Promise<string | number | null> | null>(null);
-  const creatingOptimizedForOriginalIdRef = useRef<string | null>(null);
+  const creatingOptimizedForKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     optimizedResumeIdRef.current = optimizedResumeId;
   }, [optimizedResumeId]);
 
   const resolveOriginalResumeIdForOptimization = () => {
-    if (sourceResumeIdRef.current) {
-      return sourceResumeIdRef.current;
-    }
-    if (selectedResumeId) {
-      return selectedResumeId;
-    }
+    if (sourceResumeIdRef.current) return sourceResumeIdRef.current;
+    if (selectedResumeId) return selectedResumeId;
     if (!resumeData?.id) return null;
     if (resumeData.optimizationStatus === 'optimized') {
       return resumeData.optimizedFromId || resumeData.id;
@@ -51,14 +49,27 @@ export const useOptimizedResumeStore = ({
     return resumeData.id;
   };
 
-  const findExistingOptimizedResumeId = async (userId: string, originalResumeId: string | number) => {
+  const isValidOptimizedMatch = (rowData: any, normalizedOriginalId: string, jdKey?: string) => {
+    const rowJdKey = String(rowData?.optimizationJdKey || '').trim();
+    const keyMatches = !jdKey || rowJdKey === jdKey || !rowJdKey;
+    return (
+      rowData?.optimizationStatus === 'optimized' &&
+      isSameResumeId(rowData?.optimizedFromId, normalizedOriginalId) &&
+      keyMatches
+    );
+  };
+
+  const findExistingOptimizedResumeId = async (
+    userId: string,
+    originalResumeId: string | number,
+    jdKey?: string
+  ) => {
     const normalizedOriginalId = normalizeResumeId(originalResumeId);
     const list = await DatabaseService.getUserResumes(userId);
     if (!list.success || !Array.isArray(list.data)) return null;
     const hit = list.data.find((r: any) => {
       const data = r?.resume_data || {};
-      const isOptimized = data?.optimizationStatus === 'optimized';
-      return isOptimized && isSameResumeId(data?.optimizedFromId, normalizedOriginalId);
+      return isValidOptimizedMatch(data, normalizedOriginalId, jdKey);
     });
     return hit?.id ? hit.id : null;
   };
@@ -66,9 +77,12 @@ export const useOptimizedResumeStore = ({
   const ensureSingleOptimizedResume = async (
     userId: string,
     originalResumeId: string | number,
-    baseResumeData: ResumeData
+    baseResumeData: ResumeData,
+    jdKeyOverride?: string
   ): Promise<string | number> => {
     const normalizedOriginalId = normalizeResumeId(originalResumeId);
+    const jdKey = jdKeyOverride || makeJdKey(jdText || baseResumeData.lastJdText || '');
+
     const current = optimizedResumeIdRef.current;
     if (current) {
       const currentRow = await DatabaseService.getResume(current);
@@ -76,8 +90,7 @@ export const useOptimizedResumeStore = ({
       const isValidCurrent =
         !!currentRow.success &&
         !!currentRow.data &&
-        currentData?.optimizationStatus === 'optimized' &&
-        isSameResumeId(currentData?.optimizedFromId, normalizedOriginalId);
+        isValidOptimizedMatch(currentData, normalizedOriginalId, jdKey);
       if (isValidCurrent) {
         return currentRow.data.id;
       }
@@ -95,8 +108,7 @@ export const useOptimizedResumeStore = ({
       const mappedValid =
         !!mappedRow.success &&
         !!mappedRow.data &&
-        mappedData?.optimizationStatus === 'optimized' &&
-        isSameResumeId(mappedData?.optimizedFromId, normalizedOriginalId);
+        isValidOptimizedMatch(mappedData, normalizedOriginalId, jdKey);
       if (mappedValid) {
         setOptimizedResumeId(mappedRow.data.id);
         optimizedResumeIdRef.current = mappedRow.data.id;
@@ -104,25 +116,21 @@ export const useOptimizedResumeStore = ({
       }
     }
 
-    const existingId = await findExistingOptimizedResumeId(userId, normalizedOriginalId);
+    const existingId = await findExistingOptimizedResumeId(userId, normalizedOriginalId, jdKey);
     if (existingId) {
       setOptimizedResumeId(existingId);
       optimizedResumeIdRef.current = existingId;
       return existingId;
     }
 
-    if (
-      creatingOptimizedResumeRef.current &&
-      creatingOptimizedForOriginalIdRef.current === normalizedOriginalId
-    ) {
+    const dedupeKey = `${normalizedOriginalId}::${jdKey}`;
+    if (creatingOptimizedResumeRef.current && creatingOptimizedForKeyRef.current === dedupeKey) {
       const pendingId = await creatingOptimizedResumeRef.current;
-      if (!pendingId) {
-        throw new Error('创建优化简历失败');
-      }
+      if (!pendingId) throw new Error('创建优化简历失败');
       return pendingId;
     }
 
-    creatingOptimizedForOriginalIdRef.current = normalizedOriginalId;
+    creatingOptimizedForKeyRef.current = dedupeKey;
     creatingOptimizedResumeRef.current = (async () => {
       const baseTitle = allResumes?.find(r => isSameResumeId(r.id, baseResumeData.id))?.title || '简历';
       const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, targetCompany);
@@ -130,15 +138,15 @@ export const useOptimizedResumeStore = ({
         ...baseResumeData,
         optimizationStatus: 'optimized' as const,
         optimizedFromId: normalizedOriginalId,
+        optimizationJdKey: jdKey,
         lastJdText: jdText || baseResumeData.lastJdText || '',
         targetCompany: targetCompany || baseResumeData.targetCompany || ''
       });
+
       if (!createResult.success || !createResult.data?.id) {
         console.error('ensureSingleOptimizedResume create failed:', createResult.error);
-        const fallbackId = await findExistingOptimizedResumeId(userId, normalizedOriginalId);
-        if (fallbackId) {
-          return fallbackId;
-        }
+        const fallbackId = await findExistingOptimizedResumeId(userId, normalizedOriginalId, jdKey);
+        if (fallbackId) return fallbackId;
         const errMsg =
           (createResult.error as any)?.message ||
           (createResult.error as any)?.details ||
@@ -147,31 +155,117 @@ export const useOptimizedResumeStore = ({
         throw new Error(errMsg);
       }
       return createResult.data.id;
-    })()
-      .finally(() => {
-        creatingOptimizedResumeRef.current = null;
-        creatingOptimizedForOriginalIdRef.current = null;
-      });
+    })().finally(() => {
+      creatingOptimizedResumeRef.current = null;
+      creatingOptimizedForKeyRef.current = null;
+    });
 
     const createdId = await creatingOptimizedResumeRef.current;
-    if (!createdId) {
-      throw new Error('创建优化简历失败');
-    }
+    if (!createdId) throw new Error('创建优化简历失败');
+
     setOptimizedResumeId(createdId);
     optimizedResumeIdRef.current = createdId;
     return createdId;
   };
 
+  const resolveAnalysisBinding = async (originalResumeId: string | number, analysisJdText: string) => {
+    const originalRow = await DatabaseService.getResume(originalResumeId);
+    if (!originalRow.success || !originalRow.data?.resume_data) return null;
+
+    const originalData = originalRow.data.resume_data || {};
+    const jdKey = makeJdKey(analysisJdText || originalData.lastJdText || '');
+    const bindings = originalData.analysisBindings || {};
+    const currentBinding = bindings[jdKey];
+    if (!currentBinding) return null;
+
+    return {
+      analysisReportId: String(currentBinding.analysisReportId || '').trim() || buildAnalysisReportId(originalResumeId, analysisJdText),
+      optimizedResumeId: currentBinding.optimizedResumeId ?? null,
+      jdKey,
+    };
+  };
+
+  const ensureAnalysisBinding = async (
+    originalResumeId: string | number,
+    baseResumeData: ResumeData,
+    analysisJdText: string
+  ) => {
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    if (userError || !user) {
+      throw new Error('登录已过期，请重新登录后再分析');
+    }
+
+    const originalRow = await DatabaseService.getResume(originalResumeId);
+    if (!originalRow.success || !originalRow.data?.resume_data) {
+      throw new Error('未找到原始简历，无法建立分析绑定');
+    }
+
+    const originalData = originalRow.data.resume_data || {};
+    const effectiveJdText = (analysisJdText || originalData.lastJdText || '').trim();
+    const jdKey = makeJdKey(effectiveJdText);
+    const analysisReportId = buildAnalysisReportId(originalResumeId, effectiveJdText);
+    const bindings = originalData.analysisBindings || {};
+    const currentBinding = bindings[jdKey] || {};
+
+    let optimizedResumeId: string | number | null = currentBinding.optimizedResumeId ?? null;
+    if (optimizedResumeId) {
+      const mappedRow = await DatabaseService.getResume(optimizedResumeId);
+      const mappedData = mappedRow.success ? (mappedRow.data?.resume_data || {}) : null;
+      if (!(mappedRow.success && mappedRow.data && isValidOptimizedMatch(mappedData, normalizeResumeId(originalResumeId), jdKey))) {
+        optimizedResumeId = null;
+      } else {
+        optimizedResumeId = mappedRow.data.id;
+      }
+    }
+
+    if (!optimizedResumeId) {
+      optimizedResumeId = await ensureSingleOptimizedResume(user.id, originalResumeId, baseResumeData, jdKey);
+    }
+
+    const nextBinding = {
+      analysisReportId,
+      optimizedResumeId,
+      jdKey,
+      jdText: effectiveJdText,
+      updatedAt: new Date().toISOString(),
+    };
+
+    const sameBinding =
+      String(currentBinding.analysisReportId || '') === String(nextBinding.analysisReportId) &&
+      isSameResumeId(currentBinding.optimizedResumeId, nextBinding.optimizedResumeId);
+
+    if (!sameBinding) {
+      await DatabaseService.updateResume(String(originalResumeId), {
+        resume_data: {
+          ...originalData,
+          analysisBindings: {
+            ...bindings,
+            [jdKey]: nextBinding,
+          },
+          optimizedResumeId,
+          lastJdText: effectiveJdText || originalData.lastJdText || '',
+          targetCompany: targetCompany || originalData.targetCompany || '',
+        },
+      });
+    }
+
+    setOptimizedResumeId(optimizedResumeId);
+    optimizedResumeIdRef.current = optimizedResumeId;
+    return nextBinding;
+  };
+
   const resetOptimizedCreationState = () => {
     optimizedResumeIdRef.current = null;
     creatingOptimizedResumeRef.current = null;
-    creatingOptimizedForOriginalIdRef.current = null;
+    creatingOptimizedForKeyRef.current = null;
   };
 
   return {
     optimizedResumeIdRef,
     resolveOriginalResumeIdForOptimization,
     ensureSingleOptimizedResume,
+    resolveAnalysisBinding,
+    ensureAnalysisBinding,
     resetOptimizedCreationState,
   };
 };

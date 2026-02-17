@@ -242,6 +242,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     optimizedResumeIdRef,
     resolveOriginalResumeIdForOptimization,
     ensureSingleOptimizedResume,
+    resolveAnalysisBinding,
+    ensureAnalysisBinding,
     resetOptimizedCreationState,
   } = useOptimizedResumeStore({
     optimizedResumeId,
@@ -286,7 +288,10 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     jdText,
     targetCompany,
     optimizedResumeId,
+    setOptimizedResumeId,
     optimizedResumeIdRef: optimizedResumeIdRef as any,
+    resolveOriginalResumeIdForOptimization,
+    ensureAnalysisBinding: ensureAnalysisBinding as any,
     analysisRunIdRef: analysisRunIdRef as any,
     analysisAbortRef: analysisAbortRef as any,
     setIsFromCache,
@@ -324,6 +329,8 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
     isSameResumeId,
     resolveOriginalResumeIdForOptimization,
     ensureSingleOptimizedResume: ensureSingleOptimizedResume as any,
+    resolveAnalysisBinding: resolveAnalysisBinding as any,
+    ensureAnalysisBinding: ensureAnalysisBinding as any,
     normalizeTargetSection,
     inferTargetSection,
     sanitizeSuggestedValue,
@@ -625,4 +632,3 @@ const AiAnalysis: React.FC<ScreenProps> = () => {
 };
 
 export default AiAnalysis;
-

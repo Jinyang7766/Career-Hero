@@ -1,6 +1,7 @@
 import { DatabaseService } from '../../../../src/database-service';
 import type { ResumeData } from '../../../../types';
 import type { ChatMessage } from '../types';
+import { makeJdKey } from '../id-utils';
 
 type Params = {
   resumeData: ResumeData;
@@ -31,6 +32,8 @@ export const useInterviewSessionStore = ({
     targetCompany?: string;
     snapshot: any;
     updatedAt: string;
+    analysisReportId?: string;
+    optimizedResumeId?: string | number;
   }) => {
     try {
       localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(payload));
@@ -52,16 +55,6 @@ export const useInterviewSessionStore = ({
 
   const clearLastAnalysis = () => {
     localStorage.removeItem(LAST_ANALYSIS_KEY);
-  };
-
-  const makeJdKey = (text: string) => {
-    const normalized = (text || '').trim().toLowerCase();
-    if (!normalized) return 'jd_default';
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i += 1) {
-      hash = (hash * 31 + normalized.charCodeAt(i)) | 0;
-    }
-    return `jd_${Math.abs(hash)}`;
   };
 
   const restoreInterviewSession = (overrideJdText?: string) => {
@@ -133,4 +126,3 @@ export const useInterviewSessionStore = ({
     persistInterviewSession,
   };
 };
-

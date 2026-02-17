@@ -71,10 +71,19 @@ export interface ResumeData {
   gender?: string;
   templateId?: string;
   optimizationStatus?: 'optimized' | 'unoptimized';
-  optimizedResumeId?: number;
-  optimizedFromId?: number;
+  optimizedResumeId?: string | number;
+  optimizedFromId?: string | number;
+  optimizationJdKey?: string;
+  analysisReportId?: string;
   lastJdText?: string;
   targetCompany?: string;
+  analysisBindings?: Record<string, {
+    analysisReportId: string;
+    optimizedResumeId?: string | number | null;
+    jdKey?: string;
+    jdText?: string;
+    updatedAt?: string;
+  }>;
   analysisSnapshot?: {
     score: number;
     summary: string;
@@ -90,6 +99,8 @@ export interface ResumeData {
     updatedAt: string;
     jdText?: string;
     targetCompany?: string;
+    analysisReportId?: string;
+    optimizedResumeId?: string | number;
   };
   aiSuggestionFeedback?: Record<string, {
     rating: 'up' | 'down';

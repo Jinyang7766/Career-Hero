@@ -27,6 +27,8 @@ type Params = {
     targetCompany?: string;
     snapshot: any;
     updatedAt: string;
+    analysisReportId?: string;
+    optimizedResumeId?: string | number;
   }) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
   isSameResumeId: (a: any, b: any) => boolean;
@@ -189,4 +191,3 @@ export const useResumeSelection = ({
     handleResumeSelect,
   };
 };
-

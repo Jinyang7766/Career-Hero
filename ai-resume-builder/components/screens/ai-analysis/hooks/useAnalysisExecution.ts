@@ -12,7 +12,17 @@ type Params = {
   jdText: string;
   targetCompany: string;
   optimizedResumeId: string | number | null;
+  setOptimizedResumeId: (value: string | number | null) => void;
   optimizedResumeIdRef: { current: string | number | null };
+  resolveOriginalResumeIdForOptimization: () => any;
+  ensureAnalysisBinding: (
+    originalResumeId: string | number,
+    baseResumeData: any,
+    analysisJdText: string
+  ) => Promise<{
+    analysisReportId: string;
+    optimizedResumeId: string | number;
+  }>;
   analysisRunIdRef: { current: string | null };
   analysisAbortRef: { current: AbortController | null };
   setIsFromCache: (value: boolean) => void;
@@ -42,7 +52,10 @@ export const useAnalysisExecution = ({
   jdText,
   targetCompany,
   optimizedResumeId,
+  setOptimizedResumeId,
   optimizedResumeIdRef,
+  resolveOriginalResumeIdForOptimization,
+  ensureAnalysisBinding,
   analysisRunIdRef,
   analysisAbortRef,
   setIsFromCache,
@@ -202,6 +215,27 @@ export const useAnalysisExecution = ({
       );
       setSuggestions(appliedSuggestions);
       setReport(newReport);
+      const originalResumeId = resolveOriginalResumeIdForOptimization();
+      let resolvedAnalysisReportId = '';
+      let resolvedOptimizedResumeId: string | number | null =
+        (resumeData.optimizationStatus === 'optimized' && resumeData.id)
+          ? resumeData.id
+          : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
+      if (originalResumeId) {
+        const baseResumeForBinding = resumeData.optimizationStatus === 'optimized'
+          ? { ...resumeData, id: originalResumeId }
+          : resumeData;
+        const binding = await ensureAnalysisBinding(
+          originalResumeId,
+          baseResumeForBinding,
+          jdText || resumeData.lastJdText || ''
+        );
+        resolvedAnalysisReportId = binding.analysisReportId;
+        resolvedOptimizedResumeId = binding.optimizedResumeId;
+        optimizedResumeIdRef.current = binding.optimizedResumeId;
+        setOptimizedResumeId(binding.optimizedResumeId);
+      }
+
       const snapshotForPersist = {
         score: totalScore,
         summary: newReport.summary,
@@ -212,12 +246,14 @@ export const useAnalysisExecution = ({
         suggestions: appliedSuggestions,
         updatedAt: new Date().toISOString(),
         jdText: jdText || resumeData.lastJdText || '',
-        targetCompany: targetCompany || resumeData.targetCompany || ''
+        targetCompany: targetCompany || resumeData.targetCompany || '',
+        analysisReportId: resolvedAnalysisReportId || undefined,
+        optimizedResumeId: resolvedOptimizedResumeId || undefined,
       };
       const persistTargetId =
         (resumeData.optimizationStatus === 'optimized' && resumeData.id)
           ? resumeData.id
-          : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
+          : (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
       if (persistTargetId) {
         await persistAnalysisSnapshot(
           { ...resumeData, id: persistTargetId as any },
@@ -228,13 +264,15 @@ export const useAnalysisExecution = ({
       }
       if (resumeData?.id) {
         saveLastAnalysis({
-          resumeId: resumeData.id,
+          resumeId: persistTargetId || resumeData.id,
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: targetCompany || resumeData.targetCompany || '',
           snapshot: snapshotForPersist,
-          updatedAt: snapshotForPersist.updatedAt
+          updatedAt: snapshotForPersist.updatedAt,
+          analysisReportId: resolvedAnalysisReportId || undefined,
+          optimizedResumeId: resolvedOptimizedResumeId || undefined,
         });
-        setAnalysisResumeId(resumeData.id);
+        setAnalysisResumeId((persistTargetId || resumeData.id) as any);
       }
       markAnalysisCompleted();
       navigateToStep('report', true);
@@ -257,14 +295,17 @@ export const useAnalysisExecution = ({
     markAnalysisCompleted,
     navigateToStep,
     optimizedResumeId,
+    ensureAnalysisBinding,
     optimizedResumeIdRef,
     persistAnalysisSnapshot,
     resumeData,
+    resolveOriginalResumeIdForOptimization,
     saveLastAnalysis,
     setAnalysisInProgress,
     setAnalysisResumeId,
     setChatInitialized,
     setChatMessages,
+    setOptimizedResumeId,
     setOriginalResumeData,
     setOriginalScore,
     setReport,

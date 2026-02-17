@@ -5,12 +5,13 @@ export class DatabaseService {
     return String(id ?? '').trim();
   }
 
-  private static async findExistingOptimizedResume(userId: string, optimizedFromId: any) {
+  private static async findExistingOptimizedResume(userId: string, optimizedFromId: any, optimizationJdKey?: any) {
     const normalizedOriginalId = DatabaseService.normalizeResumeId(optimizedFromId);
+    const normalizedJdKey = String(optimizationJdKey ?? '').trim();
     if (!normalizedOriginalId) return { success: true, data: null as any, error: null as any };
 
     // Try server-side JSON path filtering first.
-    const filtered = await supabase
+    let filtered = await supabase
       .from('resumes')
       .select('*')
       .eq('user_id', userId)
@@ -19,6 +20,19 @@ export class DatabaseService {
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (normalizedJdKey) {
+      filtered = await supabase
+        .from('resumes')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('resume_data->>optimizationStatus', 'optimized')
+        .eq('resume_data->>optimizedFromId', normalizedOriginalId)
+        .eq('resume_data->>optimizationJdKey', normalizedJdKey)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+    }
 
     if (!filtered.error) {
       return { success: true, data: filtered.data, error: null as any };
@@ -38,7 +52,9 @@ export class DatabaseService {
       const resumeData = r?.resume_data || {};
       const status = String(resumeData?.optimizationStatus || '').trim().toLowerCase();
       const fromId = DatabaseService.normalizeResumeId(resumeData?.optimizedFromId);
-      return status === 'optimized' && fromId === normalizedOriginalId;
+      const rowJdKey = String(resumeData?.optimizationJdKey ?? '').trim();
+      const jdMatches = !normalizedJdKey || rowJdKey === normalizedJdKey || !rowJdKey;
+      return status === 'optimized' && fromId === normalizedOriginalId && jdMatches;
     }) || null;
 
     return { success: true, data: hit, error: null as any };
@@ -143,8 +159,9 @@ export class DatabaseService {
 
       const optimizationStatus = String(resumeData?.optimizationStatus || '').trim().toLowerCase();
       const optimizedFromId = DatabaseService.normalizeResumeId(resumeData?.optimizedFromId);
+      const optimizationJdKey = String(resumeData?.optimizationJdKey ?? '').trim();
       if (optimizationStatus === 'optimized' && optimizedFromId) {
-        const existing = await DatabaseService.findExistingOptimizedResume(userId, optimizedFromId);
+        const existing = await DatabaseService.findExistingOptimizedResume(userId, optimizedFromId, optimizationJdKey);
         if (!existing.success) {
           console.error('❌ Error finding existing optimized resume:', existing.error);
           return { success: false, error: existing.error, data: null };
