@@ -22,6 +22,8 @@ const AllResumes: React.FC<ScreenProps> = () => {
   const [isRenamingId, setIsRenamingId] = useState<number | null>(null);
   const [renameInputValue, setRenameInputValue] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const isSelectionMode = selectedIds.size > 0;
 
   const filteredResumes = (allResumes || []).filter(resume =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -61,15 +63,64 @@ const AllResumes: React.FC<ScreenProps> = () => {
       } else {
         console.error('删除失败:', result.error);
         alert(`删除失败: ${result.error?.message || '请重试'}`);
+        return false;
       }
+      return true;
     } catch (error) {
       console.error('删除简历时出错:', error);
       alert('删除失败，请检查网络连接');
+      return false;
     } finally {
       setIsDeleting(null);
       setActiveMenuId(null);
     }
   };
+
+  const handleDeleteSelected = async () => {
+    if (!(await confirmDialog(`确定要删除选中的 ${selectedIds.size} 份简历吗？此操作不可恢复。`))) return;
+
+    try {
+      const selectedItems = Array.from(selectedIds);
+      let successCount = 0;
+
+      // Sequential deletion to report individual failures if needed, or Parallel.
+      // Parallel is better for UX.
+      await Promise.all(selectedItems.map(id => DatabaseService.deleteResume(String(id))));
+
+      // Optimistic update or refresh
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const result = await DatabaseService.getUserResumes(user.id);
+        if (result.success && setAllResumes) {
+          setAllResumes(result.data as any);
+        }
+      }
+
+      setSelectedIds(new Set());
+    } catch (error) {
+      console.error('批量删除时出错:', error);
+      alert('批量删除部分可能失败，请刷新查看');
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === filteredResumes.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredResumes.map(r => r.id)));
+    }
+  };
+
+  const toggleSelection = (id: number) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
 
   const handleEdit = async (resumeId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -328,125 +379,155 @@ const AllResumes: React.FC<ScreenProps> = () => {
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="px-4 mt-1">
       <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
-        {resumes.map((resume, index) => (
-          <div
-            key={resume.id}
-            onClick={() => handlePreview(resume.id)}
-            className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
-          >
-            <div className="shrink-0 relative">
-              <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
-                {resume.thumbnail}
-              </div>
-              {isLoadingResume === resume.id && (
-                <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
-                  <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                </div>
-              )}
-              {resume.hasDot && (
-                <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
-              )}
-              {typeof resume.score === 'number' && resume.score > 0 && (
-                <div className="absolute -top-1.5 -left-1 bg-primary text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-background-light dark:border-background-dark shadow-sm">
-                  {resume.score}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-col flex-1 justify-center min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
-                <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{resume.title}</p>
-              </div>
-              <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
-                上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
-              </p>
-            </div>
-
-            <div className="shrink-0 flex items-center gap-1.5">
-              {typeof (resume.analysisScore ?? resume.score) === 'number' && (resume.analysisScore ?? resume.score) > 0 && (() => {
-                const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
-                let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
-                if (scoreValue >= 85) {
-                  colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
-                } else if (scoreValue >= 70) {
-                  colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20";
+        {resumes.map((resume, index) => {
+          const isSelected = selectedIds.has(resume.id);
+          return (
+            <div
+              key={resume.id}
+              onClick={(e) => {
+                if (isSelectionMode) {
+                  e.stopPropagation();
+                  toggleSelection(resume.id);
+                } else {
+                  handlePreview(resume.id, e);
                 }
-
-                return (
-                  <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
-                    <span className="text-[14px] font-black leading-none">{scoreValue}</span>
-                    <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={(e) => toggleMenu(resume.id, e)}
-                className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
-              </button>
-
-              {/* Popover Menu */}
-              {activeMenuId === resume.id && (
-                <div className="absolute right-0 top-10 w-32 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                  <button
-                    onClick={(e) => handleEdit(resume.id, e)}
-                    disabled={isLoadingResume !== null}
-                    className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoadingResume === resume.id ? (
-                      <>
-                        <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
-                        加载中...
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-[18px]">edit</span>
-                        编辑
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={(e) => handleRenameClick(resume.id, resume.title, e)}
-                    className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">drive_file_rename_outline</span>
-                    重命名
-                  </button>
-                  <div className="h-px bg-slate-100 dark:bg-white/5"></div>
-                  <button
-                    onClick={(e) => handleDelete(resume.id, e)}
-                    disabled={isDeleting === resume.id}
-                    className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isDeleting === resume.id ? (
-                      <>
-                        <span className="size-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin"></span>
-                        删除中...
-                      </>
-                    ) : (
-                      <>
-                        <span className="material-symbols-outlined text-[18px]">delete</span>
-                        删除
-                      </>
-                    )}
-                  </button>
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (!isSelectionMode) {
+                  if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+                  toggleSelection(resume.id);
+                }
+              }}
+              className={`group relative flex items-center gap-4 px-4 py-3.5 transition-colors cursor-pointer select-none ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
+            >
+              {isSelectionMode && (
+                <div className={`shrink-0 flex items-center justify-center size-10 rounded-full transition-colors ${isSelected ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}>
+                  <span className="material-symbols-outlined text-[24px]">
+                    {isSelected ? 'check_circle' : 'radio_button_unchecked'}
+                  </span>
                 </div>
               )}
-              {activeMenuId === resume.id && (
-                <div
-                  className="fixed inset-0 z-[45]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setActiveMenuId(null);
-                  }}
-                />
+
+              <div className="shrink-0 relative">
+                <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                  {resume.thumbnail}
+                </div>
+                {isLoadingResume === resume.id && (
+                  <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
+                    <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                  </div>
+                )}
+                {resume.hasDot && !isSelectionMode && (
+                  <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
+                )}
+                {typeof resume.score === 'number' && resume.score > 0 && !isSelectionMode && (
+                  <div className="absolute -top-1.5 -left-1 bg-primary text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-background-light dark:border-background-dark shadow-sm">
+                    {resume.score}
+                  </div>
+                )}
+              </div>
+              <div className="flex flex-col flex-1 justify-center min-w-0">
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className={`text-sm font-bold truncate leading-tight ${isSelected ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>{resume.title}</p>
+                </div>
+                <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
+                  上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                </p>
+              </div>
+
+              {!isSelectionMode && (
+                <div className="shrink-0 flex items-center gap-1.5">
+                  {typeof (resume.analysisScore ?? resume.score) === 'number' && (resume.analysisScore ?? resume.score) > 0 && (() => {
+                    const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
+                    let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
+                    if (scoreValue >= 85) {
+                      colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+                    } else if (scoreValue >= 70) {
+                      colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20";
+                    }
+
+                    return (
+                      <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
+                        <span className="text-[14px] font-black leading-none">{scoreValue}</span>
+                        <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {!isSelectionMode && (
+                <div className="relative">
+                  <button
+                    onClick={(e) => toggleMenu(resume.id, e)}
+                    className="shrink-0 size-9 flex items-center justify-center rounded-full text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors"
+                  >
+                    <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>more_vert</span>
+                  </button>
+
+                  {/* Popover Menu */}
+                  {activeMenuId === resume.id && (
+                    <div className="absolute right-0 top-10 w-32 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                      <button
+                        onClick={(e) => handleEdit(resume.id, e)}
+                        disabled={isLoadingResume !== null}
+                        className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isLoadingResume === resume.id ? (
+                          <>
+                            <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
+                            加载中...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                            编辑
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={(e) => handleRenameClick(resume.id, resume.title, e)}
+                        className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">drive_file_rename_outline</span>
+                        重命名
+                      </button>
+                      <div className="h-px bg-slate-100 dark:bg-white/5"></div>
+                      <button
+                        onClick={(e) => handleDelete(resume.id, e)}
+                        disabled={isDeleting === resume.id}
+                        className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isDeleting === resume.id ? (
+                          <>
+                            <span className="size-4 border-2 border-red-600/30 border-t-red-600 rounded-full animate-spin"></span>
+                            删除中...
+                          </>
+                        ) : (
+                          <>
+                            <span className="material-symbols-outlined text-[18px]">delete</span>
+                            删除
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                  {activeMenuId === resume.id && (
+                    <div
+                      className="fixed inset-0 z-[45]"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setActiveMenuId(null);
+                      }}
+                    />
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -458,20 +539,52 @@ const AllResumes: React.FC<ScreenProps> = () => {
     >
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <button
-            onClick={goBack}
-            className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
-          >
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">全部简历</h2>
-          <div className="flex w-10 justify-end z-10">
+          {isSelectionMode ? (
             <button
-              onClick={() => navigateToView(View.TEMPLATES)}
-              className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+              onClick={() => setSelectedIds(new Set())}
+              className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>
             </button>
+          ) : (
+            <button
+              onClick={goBack}
+              className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
+            >
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+          )}
+
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
+            {isSelectionMode ? `已选择 ${selectedIds.size} 项` : '全部简历'}
+          </h2>
+
+          <div className="flex w-auto gap-2 justify-end z-10 h-full items-center">
+            {isSelectionMode ? (
+              <>
+                <button
+                  onClick={handleSelectAll}
+                  className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>
+                    {selectedIds.size === filteredResumes.length ? 'deselect' : 'select_all'}
+                  </span>
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="flex size-10 items-center justify-center rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>delete</span>
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => navigateToView(View.TEMPLATES)}
+                className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
+              </button>
+            )}
           </div>
         </div>
       </header>

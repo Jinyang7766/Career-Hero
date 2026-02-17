@@ -21,6 +21,8 @@ const History: React.FC<ScreenProps> = () => {
   const setResumeData = useAppStore((state) => state.setResumeData);
   const [items, setItems] = useState<ExportItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const isSelectionMode = selectedIds.size > 0;
 
   const formatSize = (bytes: number) => {
     if (!bytes) return '0 KB';
@@ -112,8 +114,6 @@ const History: React.FC<ScreenProps> = () => {
   };
 
   const handleDeleteExport = async (item: ExportItem) => {
-    if (!(await confirmDialog('确定要删除这条导出记录吗？'))) return;
-
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) return;
@@ -124,20 +124,62 @@ const History: React.FC<ScreenProps> = () => {
       const currentHistory = result.data.resume_data.exportHistory || [];
       const updatedHistory = currentHistory.filter((h: any) => h.exportedAt !== item.exportedAt);
 
-      const updateResult = await DatabaseService.updateResume(item.resumeId.toString(), {
+      await DatabaseService.updateResume(item.resumeId.toString(), {
         resume_data: {
           ...result.data.resume_data,
           exportHistory: updatedHistory
         }
       });
-
-      if (updateResult.success) {
-        loadHistory();
-      }
+      return true;
     } catch (err) {
       console.error('Failed to delete export record:', err);
+      return false;
     }
   };
+
+  const handleDeleteSelected = async () => {
+    if (!(await confirmDialog(`确定要删除选中的 ${selectedIds.size} 条记录吗？`))) return;
+
+    try {
+      setLoading(true);
+      // Group selected items by resumeId to minimize DB calls
+      const selectedItems = items.filter(i => selectedIds.has(i.id));
+
+      let successCount = 0;
+      // We can reuse handleDeleteExport but it fetches resume every time. 
+      // For efficiency, we should probably group. But given low volume, simple loop is fine or we can optimize if needed.
+      // Let's stick to parallel calls for now or sequential to avoid race conditions on same resume.
+
+      for (const item of selectedItems) {
+        await handleDeleteExport(item);
+        successCount++;
+      }
+
+      await loadHistory();
+      setSelectedIds(new Set());
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    if (selectedIds.size === items.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(items.map(i => i.id)));
+    }
+  };
+
+  const toggleSelection = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) {
+      next.delete(id);
+    } else {
+      next.add(id);
+    }
+    setSelectedIds(next);
+  };
+
 
   const handleDeleteAllExports = async () => {
     if (!(await confirmDialog('确定要清空所有导出记录吗？此操作无法撤销。'))) return;
@@ -181,22 +223,46 @@ const History: React.FC<ScreenProps> = () => {
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
-        <div className="flex items-center px-4 h-14 relative">
-          <button
-            onClick={goBack}
-            className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
-          </button>
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">导出历史</h2>
-          <div className="absolute right-4 z-10">
+        <div className="flex items-center px-4 h-14 relative justify-between">
+          {isSelectionMode ? (
             <button
-              onClick={handleDeleteAllExports}
-              disabled={items.length === 0}
-              className="flex size-10 items-center justify-center rounded-full text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-all active:scale-95 disabled:opacity-30"
+              onClick={() => setSelectedIds(new Set())}
+              className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
             >
-              <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>delete_sweep</span>
+              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>
             </button>
+          ) : (
+            <button
+              onClick={goBack}
+              className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
+            </button>
+          )}
+
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
+            {isSelectionMode ? `已选择 ${selectedIds.size} 项` : '导出历史'}
+          </h2>
+
+          <div className="flex items-center gap-2 z-10">
+            {isSelectionMode && (
+              <>
+                <button
+                  onClick={handleSelectAll}
+                  className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>
+                    {selectedIds.size === items.length ? 'deselect' : 'select_all'}
+                  </span>
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="flex size-10 items-center justify-center rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '22px' }}>delete</span>
+                </button>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -239,27 +305,46 @@ const History: React.FC<ScreenProps> = () => {
                 <div className="px-4 mt-1">
                   <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
                     {group.map((item) => (
-                      <div key={item.id} className="relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors group">
-                        <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
-                          <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
-                        </div>
-                        <div className="flex flex-col flex-1 min-w-0" onClick={() => handleReExport(item.resumeId)}>
-                          <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{item.filename}</p>
+                      <div
+                        key={item.id}
+                        className={`relative flex items-center gap-4 px-4 py-3.5 transition-colors cursor-pointer select-none
+                          ${selectedIds.has(item.id) ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}
+                        `}
+                        onClick={() => {
+                          if (isSelectionMode) {
+                            toggleSelection(item.id);
+                          } else {
+                            handleReExport(item.resumeId);
+                          }
+                        }}
+                        onContextMenu={(e) => {
+                          e.preventDefault();
+                          if (!isSelectionMode) {
+                            if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(50);
+                            toggleSelection(item.id);
+                          }
+                        }}
+                      >
+                        {isSelectionMode ? (
+                          <div className={`shrink-0 flex items-center justify-center size-10 rounded-full transition-colors ${selectedIds.has(item.id) ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}>
+                            <span className="material-symbols-outlined text-[24px]">
+                              {selectedIds.has(item.id) ? 'check_circle' : 'radio_button_unchecked'}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
+                            <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                          </div>
+                        )}
+
+                        <div className="flex flex-col flex-1 min-w-0">
+                          <p className={`text-sm font-bold truncate leading-tight ${selectedIds.has(item.id) ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>{item.filename}</p>
                           <div className="flex items-center gap-2 mt-1">
                             <p className="text-slate-500 dark:text-slate-500 text-[12px] font-medium leading-normal mt-0.5">
                               {new Date(item.exportedAt).toLocaleString('zh-CN', { hour12: false })} · {(item.size / 1024 / 1024).toFixed(2)} MB
                             </p>
                           </div>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteExport(item);
-                          }}
-                          className="p-2 text-slate-300 hover:text-rose-500 dark:text-slate-600 dark:hover:text-rose-400 transition-colors"
-                        >
-                          <span className="material-symbols-outlined text-[20px]">delete</span>
-                        </button>
                       </div>
                     ))}
                   </div>
