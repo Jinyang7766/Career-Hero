@@ -62,6 +62,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
   const [showClearPageConfirm, setShowClearPageConfirm] = useState(false);
   const lastNormalizedResumeIdRef = useRef<number | null>(null);
+  const suppressStepResetOnNextIdChangeRef = useRef(false);
   const draftSaveTimerRef = useRef<number | null>(null);
   const editorDraftKey = useMemo(
     () => `editor_resume_draft_${currentUser?.id || 'anonymous'}`,
@@ -154,6 +155,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     // Only initialize wizard state when a NEW resume is loaded (or ID changes from undefined -> number).
     // If the ID is the same as before (e.g. after a save), do NOT reset the step.
     if (resumeData?.id && resumeData.id !== lastProcessedResumeIdRef.current) {
+      if (suppressStepResetOnNextIdChangeRef.current) {
+        lastProcessedResumeIdRef.current = resumeData.id;
+        suppressStepResetOnNextIdChangeRef.current = false;
+        return;
+      }
       setCurrentStep('personal');
       setHasImportedResume(true);
       setShowImportSuccess(false);
@@ -969,6 +975,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
           ...(savedId ? { id: savedId } : {}),
           resumeTitle: title,
         };
+        // Avoid transient jump back to "personal" when id changes during save->preview flow.
+        suppressStepResetOnNextIdChangeRef.current = true;
         setResumeData(savedData);
 
         // Reload resumes to get the latest list
