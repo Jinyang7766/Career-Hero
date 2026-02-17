@@ -6,7 +6,7 @@
 
 - 🤖 **AI 深度分析** - 基于 **Gemini 3.0 Pro** 的简历多维度评估与智能润色建议。
 - 🔍 **Vector RAG 增强** - 集成 Supabase `pgvector` 与语义检索，针对 **技术/财务/供应链** 等硬核行业实现定制化深度优化。
-- 🎙️ **沉浸式 AI 面试** - 模拟真实 HR 提问，支持**流式文本**与**多模态语音**输入，提供针对性实时反馈。
+- 🎙️ **沉浸式 AI 面试** - 模拟真实 HR 提问，支持**流式文本**与**多模态语音**输入（采用 Cloud Speech-to-Text），提供针对性实时反馈。
 - 💭 **极致响应体验** - 优化的渲染架构与 **AI 思考指示器**，确保交互链路无缝顺畅。
 - 📊 **高保真 PDF 导出** - 采用 **Playwright** 后端渲染引擎，生成 100% 还原样式的 ATS 友好型简历。
 - 🎯 **猎头级策略** - 根据 JD (职位描述) 自动提取关键技能，实现精准的“人岗匹配”策略指导。
@@ -24,7 +24,7 @@
 | :--- | :--- |
 | **前端** | React 18 / TypeScript / Vite / Tailwind CSS / Zustand / Framer Motion |
 | **后端** | Python 3.12 / Flask 3.0 / Gunicorn (Async Gevent) / Playwright |
-| **AI 引擎** | Google Gemini 3.0 (Pro/Flash/Vision/Transcribe/Embedding) |
+| **AI 引擎** | Google Gemini 3.0 (Pro/Flash/Vision/Embedding) + Cloud Speech-to-Text |
 | **数据/认证** | Supabase (PostgreSQL + Auth + Storage) |
 | **语义搜索** | pgvector (Vector Similarity Search) |
 
@@ -69,11 +69,7 @@ GEMINI_API_KEY=your_gemini_key
 GEMINI_RESUME_PARSE_MODEL=gemini-3-flash-preview
 GEMINI_ANALYSIS_MODEL=gemini-3-pro-preview
 GEMINI_INTERVIEW_MODEL=gemini-3-pro-preview
-GEMINI_TRANSCRIBE_MODEL=gemini-2.5-flash-lite
-
-# RAG 配置
-RAG_ENABLED=1
-RAG_MATCH_THRESHOLD=0.75
+# 语音识别采用 Cloud Speech-to-Text 处理
 ```
 
 #### 前端 (`ai-resume-builder/.env`)
@@ -119,7 +115,7 @@ cd ai-resume-builder && npm install && npm run dev
   - 🚀 **全新 AI 思考指示器**：移除传统的聊天气泡式“思考中”，改为更简约、动态的灰色点状指示器，优化交互节奏。
   - 🎨 **面试体验增强**：优化了 AI 发送第一条消息的加载逻辑，减少等待焦虑。
 - **架构重构**：
-  - �️ **Service 模块解耦**：后端逻辑由 `app.py` 彻底迁移至 `services/` 目录，实现了 Auth、AI、PDF、RAG 等业务的完全解耦。
+  - 🏗️ **Service 模块解耦**：后端逻辑由 `app.py` 彻底迁移至 `services/` 目录，实现了 Auth、AI、PDF、RAG 等业务的完全解耦。
   - 📄 **C4 文档体系**：引入了从 Context 到 Code 的全链路架构文档，极大提升了项目的技术透明度。
 - **RAG 行业策略**：
   - 🎯 **自适应检索逻辑**：针对不同行业背景动态调整 RAG 检索深度和 Prompt 策略（由 `rag_service.py` 驱动）。
