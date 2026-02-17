@@ -770,6 +770,16 @@ def ai_chat_core(data, deps):
                 msg_text = message_obj.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
                 if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):
                     formatted_chat += f"{role}: {msg_text}\n"
+            self_intro_asked_before = False
+            for message_obj in chat_history:
+                if not isinstance(message_obj, dict):
+                    continue
+                if message_obj.get('role') != 'model':
+                    continue
+                model_text = str(message_obj.get('text') or '')
+                if re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', model_text):
+                    self_intro_asked_before = True
+                    break
 
             if mode == 'interview_summary':
                 prompt = f"""
@@ -797,11 +807,25 @@ def ai_chat_core(data, deps):
                     'general': "你是专业且平衡的综合面试官（General Interviewer）。\n风格：既关注业务能力也关注综合素质，提问覆盖面广，节奏平稳。\n关注点：简历真实性、过往业绩、核心胜任力。"
                 }
                 persona_instruction = persona_prompts.get(interview_type, persona_prompts['general'])
+                style_rules = {
+                    'technical': "提问要求：优先围绕候选人项目做技术深挖，至少覆盖1个技术决策追问和1个性能/稳定性追问。问题尽量具体到技术栈、架构、trade-off。",
+                    'hr': "提问要求：优先行为面与动机面，使用 STAR 导向追问，重点覆盖沟通冲突、压力场景、职业选择与文化匹配，不问底层技术细节。",
+                    'general': "提问要求：在业务结果、项目实践、协作能力间保持平衡，问题覆盖广但不过度深挖单一方向。"
+                }
+                interview_style_instruction = style_rules.get(interview_type, style_rules['general'])
+                if interview_type in ('technical', 'hr'):
+                    self_intro_policy_instruction = "自我介绍规则：当前不是初试场景，严禁要求候选人做自我介绍。"
+                elif self_intro_asked_before:
+                    self_intro_policy_instruction = "自我介绍规则：历史对话中已完成自我介绍，后续严禁再次要求自我介绍。"
+                else:
+                    self_intro_policy_instruction = "自我介绍规则：仅在初试场景可出现一次自我介绍题，且只能作为开场首题。"
 
                 prompt = f"""
  【严格角色】{persona_instruction}
  基于职位描述和候选人简历进行模拟面试。
  禁止提及任何评分，禁止给出建议，保持面试官角色。
+ {interview_style_instruction}
+ {self_intro_policy_instruction}
  规则：
  - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
  - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
@@ -869,6 +893,7 @@ def ai_chat_stream_core(data, deps):
     resume_data = data.get('resumeData')
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
+    interview_type = str(data.get('interviewType') or 'general').strip().lower()
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
     audio_duration_sec = None
@@ -954,6 +979,16 @@ def ai_chat_stream_core(data, deps):
         msg_text = message_obj.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
         if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):
             formatted_chat += f"{role}: {msg_text}\n"
+    self_intro_asked_before = False
+    for message_obj in chat_history:
+        if not isinstance(message_obj, dict):
+            continue
+        if message_obj.get('role') != 'model':
+            continue
+        model_text = str(message_obj.get('text') or '')
+        if re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', model_text):
+            self_intro_asked_before = True
+            break
 
     is_self_intro_q = bool(re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', _get_last_interviewer_question(chat_history) or ''))
 
@@ -977,9 +1012,30 @@ def ai_chat_stream_core(data, deps):
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
     else:
+        persona_prompts = {
+            'technical': "你是极客型技术面试官（Technical Interviewer）。\n风格：深度挖掘技术细节，喜欢追问底层原理、系统设计与性能优化，对模糊回答零容忍。\n关注点：技术栈掌握度、解决复杂问题能力、代码质量、系统架构思维。",
+            'hr': "你是资深 HR 面试官（HR Interviewer）。\n风格：温和但敏锐，关注候选人的软性素质、动机匹配度与文化契合度，会用 STAR 法则挖掘行为细节。\n关注点：沟通协作、职业稳定性、驱动力、抗压能力、价值观。",
+            'general': "你是专业且平衡的综合面试官（General Interviewer）。\n风格：既关注业务能力也关注综合素质，提问覆盖面广，节奏平稳。\n关注点：简历真实性、过往业绩、核心胜任力。"
+        }
+        persona_instruction = persona_prompts.get(interview_type, persona_prompts['general'])
+        style_rules = {
+            'technical': "提问要求：优先围绕候选人项目做技术深挖，至少覆盖1个技术决策追问和1个性能/稳定性追问。问题尽量具体到技术栈、架构、trade-off。",
+            'hr': "提问要求：优先行为面与动机面，使用 STAR 导向追问，重点覆盖沟通冲突、压力场景、职业选择与文化匹配，不问底层技术细节。",
+            'general': "提问要求：在业务结果、项目实践、协作能力间保持平衡，问题覆盖广但不过度深挖单一方向。"
+        }
+        interview_style_instruction = style_rules.get(interview_type, style_rules['general'])
+        if interview_type in ('technical', 'hr'):
+            self_intro_policy_instruction = "自我介绍规则：当前不是初试场景，严禁要求候选人做自我介绍。"
+        elif self_intro_asked_before:
+            self_intro_policy_instruction = "自我介绍规则：历史对话中已完成自我介绍，后续严禁再次要求自我介绍。"
+        else:
+            self_intro_policy_instruction = "自我介绍规则：仅在初试场景可出现一次自我介绍题，且只能作为开场首题。"
         prompt = f"""
-【严格角色】你是专业 AI 面试官，基于职位描述和候选人简历进行模拟面试。
+【严格角色】{persona_instruction}
+基于职位描述和候选人简历进行模拟面试。
 禁止提及任何评分，禁止给出建议，保持面试官角色。
+{interview_style_instruction}
+{self_intro_policy_instruction}
 规则：
 - 如果候选人回答为空、无法识别、与问题无关或信息量明显不足：不要肯定/夸赞；不要进入下一题；请要求候选人重答，并重复当前问题。
 - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。

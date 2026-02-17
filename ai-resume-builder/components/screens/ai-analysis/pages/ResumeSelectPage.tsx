@@ -58,11 +58,6 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
               </p>
-              {isInterviewMode && resume.interviewInterrupted && (
-                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400 mt-0.5">
-                  中断的面试 · 点击继续
-                </p>
-              )}
             </div>
             <div className="shrink-0 flex items-center gap-1.5">
               {resume.analyzed && typeof (resume.analysisScore ?? resume.score) === 'number' && (() => {
@@ -156,7 +151,13 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
+                  <div className="flex items-center gap-2 ml-4">
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>task_alt</span>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
+                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
+                      {filtered.filter((r) => !!r.analyzed).length}
+                    </span>
+                  </div>
                   <span
                     className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}
@@ -182,7 +183,13 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                   className="w-full flex items-center justify-between px-4 py-2 group"
                   type="button"
                 >
-                  <h3 className="ml-4 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
+                  <div className="flex items-center gap-2 ml-4">
+                    <span className="material-symbols-outlined text-slate-400" style={{ fontSize: '18px' }}>fiber_manual_record</span>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
+                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
+                      {filtered.filter((r) => !r.analyzed).length}
+                    </span>
+                  </div>
                   <span
                     className="material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-600 transition-transform duration-300 mr-4"
                     style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}

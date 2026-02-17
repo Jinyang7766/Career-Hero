@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ResumeData, ResumeSummary } from '../../../../types';
+import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
 
 export type ResumeReadState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -51,8 +52,41 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   startAnalysis,
   isInterviewMode,
 }) => {
-  const JD_MAX_CHARS = 1000;
-  const [interviewType, setInterviewType] = React.useState('general');
+  const JD_MAX_CHARS = 1500;
+  const INTERVIEW_TYPE_STORAGE_KEY = 'ai_interview_type';
+  const [interviewType, setInterviewType] = React.useState(() => {
+    try {
+      const saved = String(localStorage.getItem(INTERVIEW_TYPE_STORAGE_KEY) || '').trim().toLowerCase();
+      if (saved === 'general' || saved === 'technical' || saved === 'hr') return saved;
+    } catch {
+      // ignore localStorage access errors
+    }
+    return 'general';
+  });
+
+  React.useEffect(() => {
+    if (!isInterviewMode) return;
+    try {
+      localStorage.setItem(INTERVIEW_TYPE_STORAGE_KEY, interviewType);
+    } catch {
+      // ignore localStorage access errors
+    }
+  }, [interviewType, isInterviewMode]);
+
+  const shouldShowContinueInterview = React.useMemo(() => {
+    if (!isInterviewMode) return false;
+    const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+    if (!effectiveJdText) return false;
+    const sessions = (resumeData as any)?.interviewSessions || {};
+    const typedKey = makeInterviewSessionKey(effectiveJdText, interviewType);
+    const legacyKey = makeJdKey(effectiveJdText);
+    const session = sessions[typedKey] || sessions[legacyKey];
+    const hasMessages = !!(session && Array.isArray(session.messages) && session.messages.length > 0);
+    if (!hasMessages) return false;
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const analysisState = String(analysisSessionByJd[makeJdKey(effectiveJdText)]?.state || '').toLowerCase();
+    return analysisState === 'interview_in_progress' || analysisState === 'paused';
+  }, [interviewType, isInterviewMode, jdText, resumeData]);
 
   const selectedResumeLabel = (() => {
     const selected = (allResumes || []).find((item) => isSameResumeId(item.id, selectedResumeId));
@@ -236,7 +270,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             className="flex-[2] py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >
-            {isInterviewMode ? '开始模拟面试' : '开始分析'}
+            {isInterviewMode ? (shouldShowContinueInterview ? '继续模拟面试' : '开始模拟面试') : '开始分析'}
           </button>
         </div>
 

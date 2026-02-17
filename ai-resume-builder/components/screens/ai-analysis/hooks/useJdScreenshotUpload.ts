@@ -11,7 +11,7 @@ export const useJdScreenshotUpload = ({
   buildApiUrl,
   setJdText,
 }: Params) => {
-  const JD_MAX_CHARS = 1000;
+  const JD_MAX_CHARS = 1500;
   const [isUploading, setIsUploading] = useState(false);
 
   const readFileAsDataUrl = (file: File) =>

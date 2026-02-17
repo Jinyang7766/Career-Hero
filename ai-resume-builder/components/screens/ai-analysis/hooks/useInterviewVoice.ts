@@ -60,6 +60,11 @@ export const useInterviewVoice = ({
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const holdVoicePeakRef = useRef(0);
   const holdAudioDiscardRef = useRef(false);
+  const stopMicStreamNow = () => {
+    if (!mediaStreamRef.current) return;
+    try { mediaStreamRef.current.getTracks().forEach((t) => t.stop()); } catch { }
+    mediaStreamRef.current = null;
+  };
 
   const voiceDebugEnabled = () => {
     try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
@@ -319,8 +324,7 @@ export const useInterviewVoice = ({
       rec.onstop = () => {
         if (holdAudioDiscardRef.current) {
           holdAudioDiscardRef.current = false;
-          try { mediaStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { }
-          mediaStreamRef.current = null;
+          stopMicStreamNow();
           mediaRecorderRef.current = null;
           recordChunksRef.current = [];
           return;
@@ -331,8 +335,7 @@ export const useInterviewVoice = ({
           blob = new Blob(recordChunksRef.current, { type: mime || 'audio/webm' });
         } catch { }
 
-        try { mediaStreamRef.current?.getTracks().forEach((t) => t.stop()); } catch { }
-        mediaStreamRef.current = null;
+        stopMicStreamNow();
         mediaRecorderRef.current = null;
         recordChunksRef.current = [];
 
@@ -420,6 +423,8 @@ export const useInterviewVoice = ({
       } else {
         setAudioError('麦克风启动失败，请重试');
       }
+      stopMicStreamNow();
+      mediaRecorderRef.current = null;
       setRecording(false);
       cleanupVoiceMeter();
       if (voiceDebugEnabled()) console.debug('[voice] startAudioRecorder failed', e);
@@ -428,11 +433,27 @@ export const useInterviewVoice = ({
 
   const stopAudioRecorder = (discard: boolean) => {
     const rec = mediaRecorderRef.current;
-    if (!rec) return;
+    if (!rec) {
+      stopMicStreamNow();
+      return;
+    }
     holdAudioDiscardRef.current = !!discard;
     if (discard) holdAwaitAudioSendRef.current = false;
-    try { (rec as any).requestData?.(); } catch { }
-    try { rec.stop(); } catch { }
+    try {
+      if (rec.state !== 'inactive') {
+        try { (rec as any).requestData?.(); } catch { }
+        rec.stop();
+      } else {
+        stopMicStreamNow();
+      }
+    } catch {
+      stopMicStreamNow();
+      mediaRecorderRef.current = null;
+    }
+    // Hard fallback: ensure microphone is released even if onstop is delayed.
+    window.setTimeout(() => {
+      stopMicStreamNow();
+    }, 450);
   };
 
   const MIN_VOICE_HOLD_MS = 600;
@@ -602,12 +623,26 @@ export const useInterviewVoice = ({
           }
         } catch { }
       }
+      stopMicStreamNow();
       cleanupVoiceMeter();
       clearHoldMaxTimer();
       holdCancelRef.current = false;
       setHoldCancel(false);
     }
   }, [currentStep]);
+
+  useEffect(() => {
+    return () => {
+      try {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+          mediaRecorderRef.current.stop();
+        }
+      } catch { }
+      stopMicStreamNow();
+      cleanupVoiceMeter();
+      clearHoldMaxTimer();
+    };
+  }, []);
 
   const toggleChatInputMode = () => setMode(inputMode === 'text' ? 'voice' : 'text');
   const hasVoiceBlobForMsg = (msgId: string) => !!voiceBlobByMsgIdRef.current.get(msgId)?.blob;

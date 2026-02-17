@@ -1,7 +1,7 @@
 import { DatabaseService } from '../../../../src/database-service';
 import type { ResumeData } from '../../../../types';
 import type { ChatMessage } from '../types';
-import { makeJdKey } from '../id-utils';
+import { makeInterviewSessionKey, makeJdKey, normalizeInterviewType } from '../id-utils';
 
 type AnalysisSessionState =
   | 'idle'
@@ -35,6 +35,22 @@ export const useInterviewSessionStore = ({
   setChatInitialized,
 }: Params) => {
   const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
+  const getActiveInterviewType = () =>
+    normalizeInterviewType(typeof window !== 'undefined' ? localStorage.getItem('ai_interview_type') : 'general');
+
+  const resolveInterviewSession = (sessions: any, sessionJdText: string, overrideInterviewType?: string) => {
+    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const typedKey = makeInterviewSessionKey(sessionJdText, interviewType);
+    const legacyJdKey = makeJdKey(sessionJdText);
+    const typedSession = sessions?.[typedKey];
+    const legacySession = sessions?.[legacyJdKey];
+    return {
+      interviewType,
+      typedKey,
+      legacyJdKey,
+      session: typedSession || legacySession || null,
+    };
+  };
 
   const saveLastAnalysis = (payload: {
     resumeId: string | number;
@@ -140,7 +156,7 @@ export const useInterviewSessionStore = ({
     });
   };
 
-  const restoreInterviewSession = (overrideJdText?: string) => {
+  const restoreInterviewSession = (overrideJdText?: string, overrideInterviewType?: string) => {
     if (!resumeData) return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     if (!jdText && sessionJdText) {
@@ -157,8 +173,7 @@ export const useInterviewSessionStore = ({
     }
 
     const sessions = resumeData.interviewSessions || {};
-    const sessionKey = makeJdKey(sessionJdText);
-    const session = sessions[sessionKey];
+    const { session } = resolveInterviewSession(sessions, sessionJdText, overrideInterviewType);
 
     if (session && session.messages?.length) {
       setChatMessages(session.messages as ChatMessage[]);
@@ -169,16 +184,22 @@ export const useInterviewSessionStore = ({
     }
   };
 
-  const persistInterviewSession = async (messages: ChatMessage[], overrideJdText?: string) => {
+  const persistInterviewSession = async (
+    messages: ChatMessage[],
+    overrideJdText?: string,
+    overrideInterviewType?: string
+  ) => {
     if (!resumeData?.id) return;
     if (resumeData.optimizationStatus !== 'optimized') return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    const jdKey = makeJdKey(sessionJdText);
+    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const currentSessions = resumeData.interviewSessions || {};
     const updatedSessions = {
       ...currentSessions,
-      [jdKey]: {
+      [sessionKey]: {
         jdText: sessionJdText,
+        interviewType,
         messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
         updatedAt: new Date().toISOString(),
       },
@@ -201,6 +222,15 @@ export const useInterviewSessionStore = ({
     });
   };
 
+  const hasInterviewSessionMessages = (overrideJdText?: string, overrideInterviewType?: string) => {
+    if (!resumeData) return false;
+    const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
+    if (!sessionJdText) return false;
+    const sessions = resumeData.interviewSessions || {};
+    const { session } = resolveInterviewSession(sessions, sessionJdText, overrideInterviewType);
+    return !!(session && Array.isArray(session.messages) && session.messages.length > 0);
+  };
+
   return {
     saveLastAnalysis,
     loadLastAnalysis,
@@ -210,5 +240,6 @@ export const useInterviewSessionStore = ({
     persistAnalysisSessionState,
     restoreInterviewSession,
     persistInterviewSession,
+    hasInterviewSessionMessages,
   };
 };

@@ -361,6 +361,25 @@ const AllResumes: React.FC<ScreenProps> = () => {
               </p>
             </div>
 
+            <div className="shrink-0 flex items-center gap-1.5">
+              {typeof (resume.analysisScore ?? resume.score) === 'number' && (resume.analysisScore ?? resume.score) > 0 && (() => {
+                const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
+                let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
+                if (scoreValue >= 85) {
+                  colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
+                } else if (scoreValue >= 70) {
+                  colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20";
+                }
+
+                return (
+                  <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
+                    <span className="text-[14px] font-black leading-none">{scoreValue}</span>
+                    <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
+                  </div>
+                );
+              })()}
+            </div>
+
             <div className="relative">
               <button
                 onClick={(e) => toggleMenu(resume.id, e)}
@@ -493,8 +512,9 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
+                    <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>task_alt</span>
                     <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
+                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus === 'optimized').length}
                     </span>
                   </div>
@@ -522,8 +542,9 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   className="w-full flex items-center justify-between px-4 py-2 group"
                 >
                   <div className="flex items-center gap-2 ml-4">
+                    <span className="material-symbols-outlined text-slate-400" style={{ fontSize: '18px' }}>fiber_manual_record</span>
                     <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
-                    <span className="px-1.5 py-0.5 rounded-md bg-slate-100 dark:bg-white/5 text-[10px] text-slate-600 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
+                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filteredResumes.filter(r => r.optimizationStatus !== 'optimized').length}
                     </span>
                   </div>

@@ -135,6 +135,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     persistAnalysisSessionState,
     restoreInterviewSession,
     persistInterviewSession,
+    hasInterviewSessionMessages,
   } = useInterviewSessionStore({
     resumeData,
     setResumeData: setResumeData as any,
@@ -432,7 +433,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   useChatIntroMessages({
     currentStep,
-    chatMessagesLength: chatMessages.length,
     chatMessagesRef: chatMessagesRef as any,
     chatIntroScheduledRef: chatIntroScheduledRef as any,
     setChatInitialized,
@@ -460,16 +460,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     if (forcedResumeSelectRef.current && currentStep === 'resume_select') return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
+    const activeInterviewType = String(localStorage.getItem('ai_interview_type') || 'general').toLowerCase();
 
     const jdKey = makeJdKey(effectiveJdText);
-    const marker = `${String(resumeData.id || '')}:${jdKey}:${currentStep}`;
+    const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${currentStep}`;
     if (recoveredSessionKeyRef.current === marker) return;
 
     const session = getAnalysisSession(effectiveJdText) as any;
     if (!session) return;
 
     const status = String(session.state || '');
-    const hasInterviewMessages = !!(resumeData.interviewSessions?.[jdKey]?.messages?.length);
+    const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType);
 
     // Refresh/re-entry recovery: interrupted interview should resume in chat with existing history.
     if (
@@ -478,7 +479,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       currentStep !== 'chat'
     ) {
       if (!jdText) setJdText(effectiveJdText);
-      restoreInterviewSession(effectiveJdText);
+      restoreInterviewSession(effectiveJdText, activeInterviewType);
       openChat('internal');
       recoveredSessionKeyRef.current = marker;
       return;
@@ -503,17 +504,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigateToStep,
     openChat,
     resumeData,
+    hasInterviewSessionMessages,
     restoreInterviewSession,
     setJdText,
   ]);
-
-  useEffect(() => {
-    if (currentStep !== 'chat') return;
-    if (chatInitialized) return;
-    restoreInterviewSession();
-  }, [chatInitialized, currentStep, restoreInterviewSession]);
-
-
 
   useReportSnapshotRestore({
     currentStep,

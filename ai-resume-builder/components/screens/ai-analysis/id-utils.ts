@@ -19,6 +19,18 @@ export const makeJdKey = (text: string) => {
   return `jd_${Math.abs(hash)}`;
 };
 
+export const normalizeInterviewType = (value: any) => {
+  const t = String(value ?? '').trim().toLowerCase();
+  if (t === 'technical' || t === 'hr' || t === 'general') return t;
+  return 'general';
+};
+
+export const makeInterviewSessionKey = (jdText: string, interviewType: any) => {
+  const jdKey = makeJdKey(jdText);
+  const typeKey = normalizeInterviewType(interviewType);
+  return `${jdKey}__${typeKey}`;
+};
+
 export const buildAnalysisReportId = (originalResumeId: any, jdText: string) => {
   const normalizedOriginalId = normalizeResumeId(originalResumeId) || 'unknown';
   return `analysis_${normalizedOriginalId}_${makeJdKey(jdText)}`;
