@@ -26,6 +26,7 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   resumeData: any;
+  diagnosisDossier?: any;
   score: number;
   suggestions: any[];
   plannedQuestionCount?: number;
@@ -48,6 +49,7 @@ export const useInterviewChat = ({
   getBackendAuthToken,
   buildApiUrl,
   resumeData,
+  diagnosisDossier,
   score,
   suggestions,
   plannedQuestionCount = 0,
@@ -379,6 +381,29 @@ export const useInterviewChat = ({
       const masker = createMasker();
       const isInterviewChat = currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
+      const detectFollowUpNeed = (raw: string) => {
+        const text = String(raw || '').trim();
+        if (!text) return { shouldFollowUp: false, hint: '' };
+        const normalized = text.replace(/\s+/g, '');
+        const isShort = normalized.length < 18;
+        const hasNumberEvidence = /(\d+(\.\d+)?%?)|(\d+\s*(ms|s|秒|天|周|月|年|人|次|万|百万|亿元|k|K|w|W))/i.test(text);
+        const vagueWords = ['负责', '参与', '很多', '一些', '一般', '还行', '差不多', '优化了', '提升了', '做过', '了解'];
+        const uncertainWords = ['记不清', '不太清楚', '不确定', '可能', '大概', '应该', '差不多'];
+        const vagueHits = vagueWords.filter((w) => text.includes(w)).length;
+        const uncertainHits = uncertainWords.filter((w) => text.includes(w)).length;
+        const shouldFollowUp = isShort || uncertainHits > 0 || (vagueHits >= 2 && !hasNumberEvidence);
+        const reasons: string[] = [];
+        if (isShort) reasons.push('回答过短');
+        if (uncertainHits > 0) reasons.push('不确定表达较多');
+        if (vagueHits >= 2 && !hasNumberEvidence) reasons.push('缺少量化证据');
+        return {
+          shouldFollowUp,
+          hint: reasons.join('、') || '细节不够具体',
+        };
+      };
+      const followUpDecision = isInterviewChat && hasText
+        ? detectFollowUpNeed(textToSend)
+        : { shouldFollowUp: false, hint: '' };
       const lastMsgBeforeUser = (() => {
         const last = baseMessages[baseMessages.length - 1];
         if (last && last.id === userMessage.id && baseMessages.length >= 2) return baseMessages[baseMessages.length - 2];
@@ -396,10 +421,18 @@ export const useInterviewChat = ({
         hasText,
         textToSend,
         hasAudio,
+        shouldFollowUp: followUpDecision.shouldFollowUp,
+        followUpHint: followUpDecision.hint,
       });
 
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
+      const diagnosisDossierRaw =
+        diagnosisDossier ||
+        (resumeData as any)?.analysisDossierLatest ||
+        (Array.isArray((resumeData as any)?.analysisDossierHistory) ? (resumeData as any).analysisDossierHistory[0] : null) ||
+        null;
+      const maskedDiagnosisDossier = diagnosisDossierRaw ? masker.maskObject(diagnosisDossierRaw) : null;
       const historyForBackend = baseMessages.filter(m => m.id !== userMessage.id);
       const maskedChatHistory = maskChatHistory(historyForBackend, masker.maskText);
       const maskedJdText = masker.maskText(jdText || '');
@@ -425,6 +458,7 @@ export const useInterviewChat = ({
         message: maskedMessage,
         audio: audioPayload,
         resumeData: maskedResumeData,
+        diagnosisDossier: maskedDiagnosisDossier,
         jobDescription: maskedJdText,
         chatHistory: maskedChatHistory,
         score,

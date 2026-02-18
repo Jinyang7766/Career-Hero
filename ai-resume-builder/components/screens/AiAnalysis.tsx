@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { toSkillList } from '../../src/skill-utils';
 import { buildApiUrl } from '../../src/api-config';
+import { confirmDialog } from '../../src/ui/dialogs';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPage from './ai-analysis/ChatPage';
 import { useAppContext } from '../../src/app-context';
@@ -46,6 +47,7 @@ import { getRagEnabledFlag } from './ai-analysis/analysis-config';
 import WaveformVisualizer from './ai-analysis/WaveformVisualizer';
 import { isSameResumeId, normalizeResumeId } from './ai-analysis/id-utils';
 import { useAppStore } from '../../src/app-store';
+import { useUserProfile } from '../../src/useUserProfile';
 import {
   parseReferenceReply,
   splitNextQuestion,
@@ -54,11 +56,12 @@ import {
 } from './ai-analysis/chat-text';
 import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
 
 const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const currentUser = useAppContext((s) => s.currentUser);
+  const { userProfile } = useUserProfile(currentUser?.id, currentUser);
   const loadUserResumes = useAppContext((s) => s.loadUserResumes);
   const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
@@ -183,6 +186,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getBackendAuthToken,
     buildApiUrl,
     resumeData,
+    diagnosisDossier: (userProfile as any)?.analysis_dossier_latest || null,
     score,
     suggestions,
     plannedQuestionCount: interviewPlan.length,
@@ -438,7 +442,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isInterviewMode,
   });
 
-  const { persistAnalysisSnapshot, persistSuggestionFeedback } = useAnalysisPersistence({
+  const { persistAnalysisSnapshot, persistSuggestionFeedback, persistSuggestionsState } = useAnalysisPersistence({
     resumeData,
     setResumeData: setResumeData as any,
     jdText,
@@ -523,23 +527,45 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     updateScore,
   });
 
-  const handleIgnoreSuggestionInChat = (suggestionId: string) => {
-    setSuggestions(prev => prev.map(s => s.id === suggestionId ? { ...s, status: 'ignored' as const } : s));
+  const handleIgnoreSuggestion = async (suggestion: any) => {
+    const suggestionId = String(suggestion?.id || '').trim();
+    if (!suggestionId) return;
+    const confirmed = await confirmDialog('确认忽略这条优化建议吗？忽略后将不再显示。');
+    if (!confirmed) return;
 
+    const nextSuggestions = (suggestions || []).filter((s: any) => String(s?.id || '') !== suggestionId);
+    setSuggestions(nextSuggestions as any);
     setChatMessages(prev => prev.map(msg =>
       msg.suggestion?.id === suggestionId
         ? { ...msg, suggestion: { ...msg.suggestion!, status: 'ignored' as const } }
         : msg
     ));
+    await persistSuggestionsState(nextSuggestions as any);
 
-    // AI Follow up with conversation instead of automatic suggestion
-    setTimeout(() => {
-      setChatMessages(prev => [...prev, {
-        id: `ai-ignore-${Date.now()}`,
-        role: 'model' as const,
-        text: '没问题，我们继续下一题。'
-      }]);
-    }, 600);
+    if (resumeData?.id && report) {
+      const updatedAt = new Date().toISOString();
+      const snapshotForPersist = {
+        score,
+        summary: report.summary || '',
+        strengths: report.strengths || [],
+        weaknesses: report.weaknesses || [],
+        missingKeywords: report.missingKeywords || [],
+        scoreBreakdown: report.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
+        suggestions: nextSuggestions,
+        updatedAt,
+        jdText: jdText || resumeData.lastJdText || '',
+        targetCompany: targetCompany || resumeData.targetCompany || '',
+      };
+      saveLastAnalysis({
+        resumeId: resumeData.id,
+        jdText: snapshotForPersist.jdText,
+        targetCompany: snapshotForPersist.targetCompany,
+        snapshot: snapshotForPersist,
+        updatedAt,
+      });
+    }
+
+    showToast('已忽略该建议', 'info');
   };
 
   const handleExportPDF = () => {
@@ -617,6 +643,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       if (!jdText) setJdText(effectiveJdText);
       restoreInterviewSession(effectiveJdText, activeInterviewType);
       openChat('internal');
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+
+    // If interview state is prepared but no chat history yet, route to micro-intro instead of JD input.
+    if (
+      !hasInterviewMessages &&
+      status === 'interview_in_progress' &&
+      (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
+    ) {
+      navigateToStep('micro_intro', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }
@@ -798,6 +835,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const handleResumeSelectBack = () => {
     navigateToView(View.DASHBOARD, { root: true, replace: true });
   };
+  const handleStartMicroInterview = () => {
+    openChat('internal');
+  };
 
   // ================= RENDER STEPS =================
   if (currentStep === 'resume_select') {
@@ -859,10 +899,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         getSuggestionModuleLabel={getSuggestionModuleLabelOf}
         getDisplayOriginalValue={getDisplayOriginalValueOf}
         persistSuggestionFeedback={persistSuggestionFeedback as any}
+        handleIgnoreSuggestion={handleIgnoreSuggestion as any}
         handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
         acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
+        handleStartMicroInterview={handleStartMicroInterview}
       />
     );
   }
@@ -882,11 +924,72 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         getSuggestionModuleLabel={getSuggestionModuleLabelOf}
         getDisplayOriginalValue={getDisplayOriginalValueOf}
         persistSuggestionFeedback={persistSuggestionFeedback as any}
+        handleIgnoreSuggestion={handleIgnoreSuggestion as any}
         handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
         acceptingSuggestionIds={acceptingSuggestionIds}
         handleAnalyzeOtherResume={handleAnalyzeOtherResume}
         handleExportPDF={handleExportPDF}
+        handleStartMicroInterview={handleStartMicroInterview}
       />
+    );
+  }
+  if (currentStep === 'micro_intro') {
+    return (
+      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
+        <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+          <div className="flex items-center justify-between h-14 px-4 relative">
+            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
+              <span className="material-symbols-outlined">arrow_back</span>
+            </button>
+            <h1 className="text-base font-bold tracking-tight">进入微访谈前</h1>
+            <div className="w-8"></div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))]">
+          <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5 mb-4">
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">初始评分</p>
+            <div className={`text-6xl font-black tracking-tight ${getScoreColor(originalScore || score)}`}>
+              {Math.round(originalScore || score)}
+              <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
+            </div>
+            {report?.scoreBreakdown && (
+              <div className="grid grid-cols-3 gap-2 mt-4 text-center">
+                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">经验</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.experience}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">技能</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.skills}</p>
+                </div>
+                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400">格式</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.format}</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20 mb-6">
+            <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
+              <span className="material-symbols-outlined text-[20px]">summarize</span>
+              诊断总结
+            </h3>
+            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+              {report?.summary || 'AI 已完成诊断，建议通过微访谈补齐关键细节后再进入最终版本。'}
+            </p>
+          </div>
+
+          <button
+            onClick={handleStartMicroInterview}
+            className="w-full h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20 text-sm font-bold"
+            type="button"
+          >
+            进入微访谈
+          </button>
+        </main>
+      </div>
     );
   }
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };

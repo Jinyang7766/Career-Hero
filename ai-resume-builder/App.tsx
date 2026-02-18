@@ -37,10 +37,14 @@ function App() {
   const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(() => {
     const saved = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
-    return saved || 'system';
+    if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
+    return 'system';
   });
 
-  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window === 'undefined') return 'light';
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
 
   // Sync theme with HTML class and handle system preference
   useEffect(() => {

@@ -105,6 +105,30 @@ const Profile: React.FC<ScreenProps> = () => {
     interviewsRemaining: Number(userProfile?.interviews_remaining ?? 0),
   };
 
+  const handleProtectedAction = async (action: () => void, message: string = '该功能需要登录后使用，是否立即去登录？') => {
+    if (isLoggedIn) {
+      action();
+      return;
+    }
+
+    try {
+      const confirmAsync = (window as any).__careerHeroConfirm;
+      let confirmed = false;
+      if (typeof confirmAsync === 'function') {
+        confirmed = await confirmAsync(message);
+      } else {
+        confirmed = window.confirm(message);
+      }
+
+      if (confirmed) {
+        navigateToView(View.LOGIN);
+      }
+    } catch {
+      // Fallback
+      navigateToView(View.LOGIN);
+    }
+  };
+
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       <ReferralModal
@@ -290,39 +314,39 @@ const Profile: React.FC<ScreenProps> = () => {
         {/* Menu Items - Unified Colors */}
         <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
           <MenuItem
-            onClick={() => navigateToView(View.ALL_RESUMES)}
+            onClick={() => handleProtectedAction(() => navigateToView(View.ALL_RESUMES))}
             icon="description"
             label="我的简历"
             color="primary"
           />
           <MenuItem
-            onClick={() => navigateToView(View.HISTORY)}
+            onClick={() => handleProtectedAction(() => navigateToView(View.HISTORY))}
             icon="history"
             label="导出历史"
             color="primary"
           />
 
           <MenuItem
-            onClick={() => navigateToView(View.ACCOUNT_SECURITY)}
+            onClick={() => handleProtectedAction(() => navigateToView(View.ACCOUNT_SECURITY))}
             icon="verified_user"
             label="账号与安全"
             color="primary"
           />
           <MenuItem
-            onClick={() => navigateToView(View.SETTINGS)}
+            onClick={() => handleProtectedAction(() => navigateToView(View.SETTINGS))}
             icon="settings"
             label="设置"
             color="primary"
           />
           <MenuItem
-            onClick={() => setShowReferralModal(true)}
+            onClick={() => handleProtectedAction(() => setShowReferralModal(true), '该功能需要登录后使用，登录即可通过分发邀请码换取免费次数。是否立即去登录？')}
             icon="share"
             label="邀请好友"
             color="primary"
             badge="得次数"
           />
           <MenuItem
-            onClick={() => navigateToView(View.HELP)}
+            onClick={() => handleProtectedAction(() => navigateToView(View.HELP))}
             icon="help_center"
             label="帮助与反馈"
             color="primary"

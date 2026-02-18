@@ -223,6 +223,22 @@ export const useAnalysisExecution = ({
       const currentSkillsText = Array.isArray(resumeData?.skills) && resumeData.skills.length > 0
         ? resumeData.skills.filter(Boolean).join('、')
         : '';
+      const hasProjectExperience = Array.isArray(resumeData?.projects) && resumeData.projects.some((item: any) => {
+        const title = String(item?.title || '').trim();
+        const subtitle = String(item?.subtitle || '').trim();
+        const description = String(item?.description || '').trim();
+        return !!(title || subtitle || description);
+      });
+      const isProjectSuggestion = (item: any) => {
+        const blob = String([
+          item?.targetSection,
+          item?.targetField,
+          item?.title,
+          item?.reason,
+          typeof item?.suggestedValue === 'string' ? item.suggestedValue : ''
+        ].filter(Boolean).join(' ')).toLowerCase();
+        return /(项目|project)/.test(blob) && /(补充|新增|添加|完善|增加|缺少|缺失|补全|丰富)/.test(blob);
+      };
 
       backendSuggestions.forEach((suggestion: any, index: number) => {
         if (isGenderRelatedSuggestion(suggestion)) return;
@@ -243,7 +259,10 @@ export const useAnalysisExecution = ({
           return;
         }
 
-        const inferredSection = normalizeTargetSection(suggestion.targetSection) || inferTargetSection(suggestion);
+        let inferredSection = normalizeTargetSection(suggestion.targetSection) || inferTargetSection(suggestion);
+        if (!hasProjectExperience && isProjectSuggestion(suggestion)) {
+          inferredSection = 'projects';
+        }
         const originalValue =
           suggestion.originalValue ||
           (inferredSection === 'skills' ? (currentSkillsText || undefined) : undefined);
@@ -262,6 +281,23 @@ export const useAnalysisExecution = ({
           status: 'pending' as const
         });
       });
+
+      if (!hasProjectExperience) {
+        const hasProjectAdvice = newSuggestions.some((s) => s.targetSection === 'projects');
+        if (!hasProjectAdvice) {
+          newSuggestions.push({
+            id: `ai-suggestion-project-bootstrap-${Date.now()}`,
+            type: 'missing',
+            title: '补充项目经历',
+            reason: '当前简历缺少项目经历。建议新增 1-2 个与目标岗位高度相关的项目，突出目标、行动与量化结果。',
+            targetSection: 'projects',
+            targetField: 'description',
+            suggestedValue: '示例结构：项目背景与目标、个人职责、关键行动、量化结果（如效率提升/成本下降/转化提升）。',
+            originalValue: '',
+            status: 'pending',
+          });
+        }
+      }
 
       const normalizedBreakdown = normalizeScoreBreakdown(
         aiAnalysisResult.scoreBreakdown || {
@@ -392,9 +428,52 @@ export const useAnalysisExecution = ({
         console.warn('Failed to persist report_ready session state:', stateErr);
       }
       markAnalysisCompleted();
-      if (isInterviewMode) {
-        openChat('internal');
+      const decideMicroInterviewNeeded = () => {
+        if (isInterviewMode) return true;
+
+        // Prefer backend explicit decision if provided.
+        const backendDecisionRaw =
+          (aiAnalysisResult as any)?.microInterviewNeeded ??
+          (aiAnalysisResult as any)?.needsMicroInterview ??
+          (aiAnalysisResult as any)?.followUpRequired;
+        if (typeof backendDecisionRaw === 'boolean') {
+          return backendDecisionRaw;
+        }
+
+        const pendingSuggestions = (appliedSuggestions || []).filter((s) => s?.status !== 'accepted').length;
+        const weaknessCount = (newReport.weaknesses || [])
+          .filter((w) => String(w || '').trim() && !/需要进一步优化/.test(String(w))).length;
+        const missingKeywordCount = (newReport.missingKeywords || [])
+          .filter((k) => String(k || '').trim()).length;
+        const summary = String(newReport.summary || '').toLowerCase();
+        const strongSummarySignal = /(非常完善|可直接投递|匹配度高|无明显短板|无明显问题)/.test(summary);
+
+        // Heuristic: very complete profile can skip micro-interview.
+        const looksComplete =
+          totalScore >= 92 &&
+          pendingSuggestions <= 1 &&
+          weaknessCount <= 1 &&
+          missingKeywordCount <= 2;
+
+        return !(looksComplete || strongSummarySignal);
+      };
+
+      const shouldEnterMicroInterview = decideMicroInterviewNeeded();
+      if (shouldEnterMicroInterview) {
+        try {
+          await persistAnalysisSessionState('interview_in_progress', {
+            jdText: jdText || resumeData.lastJdText || '',
+            targetCompany: effectiveTargetCompany,
+            score: totalScore,
+            step: 'chat',
+            force: true,
+          });
+        } catch (stateErr) {
+          console.warn('Failed to persist interview_in_progress session state:', stateErr);
+        }
+        navigateToStep('micro_intro', true);
       } else {
+        showToast('本次诊断结果较完善，已跳过微访谈。', 'success', 2200);
         navigateToStep('report', true);
       }
     } catch (error) {
@@ -448,6 +527,7 @@ export const useAnalysisExecution = ({
     showToast,
     setTargetCompany,
     targetCompany,
+    isInterviewMode,
     consumeUsageQuota,
   ]);
 

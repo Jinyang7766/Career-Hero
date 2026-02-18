@@ -132,6 +132,50 @@ export interface ResumeData {
     analysisReportId?: string;
     optimizedResumeId?: string | number;
   };
+  analysisDossierLatest?: {
+    id: string;
+    createdAt: string;
+    score: number;
+    summary: string;
+    targetCompany?: string;
+    jdText?: string;
+    scoreBreakdown?: {
+      experience: number;
+      skills: number;
+      format: number;
+    };
+    suggestionsOverview?: {
+      total: number;
+      pending: number;
+      accepted: number;
+      ignored: number;
+    };
+    strengths?: string[];
+    weaknesses?: string[];
+    missingKeywords?: string[];
+  };
+  analysisDossierHistory?: Array<{
+    id: string;
+    createdAt: string;
+    score: number;
+    summary: string;
+    targetCompany?: string;
+    jdText?: string;
+    scoreBreakdown?: {
+      experience: number;
+      skills: number;
+      format: number;
+    };
+    suggestionsOverview?: {
+      total: number;
+      pending: number;
+      accepted: number;
+      ignored: number;
+    };
+    strengths?: string[];
+    weaknesses?: string[];
+    missingKeywords?: string[];
+  }>;
   aiSuggestionFeedback?: Record<string, {
     rating: 'up' | 'down';
     ratedAt: string;

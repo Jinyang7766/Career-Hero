@@ -17,10 +17,12 @@ export type ReportPageProps = {
   getSuggestionModuleLabel: (s: any) => string;
   getDisplayOriginalValue: (s: any) => React.ReactNode;
   persistSuggestionFeedback: (suggestion: any, rating: 'up' | 'down') => void;
+  handleIgnoreSuggestion: (suggestion: any) => void | Promise<void>;
   handleAcceptSuggestionInChat: (suggestion: any) => void;
   acceptingSuggestionIds?: Set<string>;
   handleAnalyzeOtherResume: () => void;
   handleExportPDF: () => void;
+  handleStartMicroInterview: () => void;
 };
 
 const ReportPage: React.FC<ReportPageProps> = (props) => {
@@ -37,10 +39,12 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
     getSuggestionModuleLabel,
     getDisplayOriginalValue,
     persistSuggestionFeedback,
+    handleIgnoreSuggestion,
     handleAcceptSuggestionInChat,
     acceptingSuggestionIds,
     handleAnalyzeOtherResume,
     handleExportPDF,
+    handleStartMicroInterview,
   } = props;
 
   if (mode === 'analyzing') {
@@ -73,6 +77,13 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
 
   const hasAcceptedSuggestion = (suggestions || []).some((s) => s.status === 'accepted');
   const pendingSuggestions = (suggestions || []).filter((s) => s.status === 'pending');
+  const hasJd = hasJdInput();
+  const topMissingKeywords = (report?.missingKeywords || []).slice(0, 8);
+  const topWeaknesses = (report?.weaknesses || []).slice(0, 4);
+  const deepDiveCandidates = pendingSuggestions.slice(0, 3);
+  const antiTemplateHints = pendingSuggestions
+    .filter((s) => /(量化|数据|证据|具体|笼统|黑话|空泛|影响|结果|指标)/.test(String(s.reason || '')))
+    .slice(0, 3);
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
@@ -144,6 +155,85 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
             </p>
           </div>
         )}
+
+        <div className="bg-white dark:bg-surface-dark rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm mb-6 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-white/5">
+            <h3 className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-white">
+              <span className="material-symbols-outlined text-primary text-[20px]">route</span>
+              综合版 AI 诊断流程
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-7">
+              从单向建议升级为阶段化诊断与引导式深挖。
+            </p>
+          </div>
+          <div className="p-4 space-y-3">
+            <div className="rounded-xl border border-emerald-200/80 dark:border-emerald-900/30 bg-emerald-50/60 dark:bg-emerald-900/10 p-3">
+              <p className="text-xs font-bold text-emerald-700 dark:text-emerald-300 mb-1">阶段 1: 全量体检</p>
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                已完成逐条扫描，当前生成 {pendingSuggestions.length + ((suggestions || []).length - pendingSuggestions.length)} 条可执行建议。
+              </p>
+            </div>
+            <div className={`rounded-xl border p-3 ${hasJd ? 'border-blue-200/80 dark:border-blue-900/30 bg-blue-50/60 dark:bg-blue-900/10' : 'border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-white/5'}`}>
+              <p className={`text-xs font-bold mb-1 ${hasJd ? 'text-blue-700 dark:text-blue-300' : 'text-slate-600 dark:text-slate-300'}`}>阶段 2: 岗位任务对齐 (JD Match)</p>
+              {hasJd ? (
+                <div className="space-y-2">
+                  {topMissingKeywords.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {topMissingKeywords.map((kw: string, idx: number) => (
+                        <span key={`${kw}-${idx}`} className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                          {kw}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {topWeaknesses.length > 0 && (
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      核心缺口: {topWeaknesses.join('；')}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">未输入 JD，当前以通用岗位标准完成诊断。</p>
+              )}
+            </div>
+            <div className="rounded-xl border border-violet-200/80 dark:border-violet-900/30 bg-violet-50/60 dark:bg-violet-900/10 p-3">
+              <p className="text-xs font-bold text-violet-700 dark:text-violet-300 mb-1">阶段 3: 反模板化与去黑话</p>
+              {antiTemplateHints.length > 0 ? (
+                <div className="space-y-1.5">
+                  {antiTemplateHints.map((item) => (
+                    <p key={item.id} className="text-xs text-slate-600 dark:text-slate-300">
+                      {item.title}: {String(item.reason || '').slice(0, 70)}
+                    </p>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400">当前建议中未发现明显模板化表述，可进入微访谈补充量化证据。</p>
+              )}
+            </div>
+            <div className="rounded-xl border border-amber-200/80 dark:border-amber-900/30 bg-amber-50/60 dark:bg-amber-900/10 p-3">
+              <p className="text-xs font-bold text-amber-700 dark:text-amber-300 mb-1">阶段 4: 微访谈深挖</p>
+              <p className="text-xs text-slate-600 dark:text-slate-300 mb-3">
+                针对空泛描述追问“数据、动作、影响”，再回写高含金量表达。
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {deepDiveCandidates.length > 0 ? deepDiveCandidates.map((item) => (
+                  <span key={item.id} className="px-2 py-1 rounded-md text-[11px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    {item.title}
+                  </span>
+                )) : (
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">暂无待深挖项，仍可进入面试式追问。</span>
+                )}
+              </div>
+              <button
+                onClick={handleStartMicroInterview}
+                className="w-full sm:w-auto px-4 py-2 text-xs font-bold rounded-lg bg-primary hover:bg-blue-600 text-white shadow-blue-500/20 shadow-sm transition-all active:scale-[0.98]"
+                type="button"
+              >
+                进入微访谈深挖
+              </button>
+            </div>
+          </div>
+        </div>
 
         {pendingSuggestions.length > 0 && (
           <div className="mb-6">
@@ -293,9 +383,7 @@ const ReportPage: React.FC<ReportPageProps> = (props) => {
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
                       <button
-                        onClick={() => {
-                          setSuggestions((prev: any[]) => prev.map((s) => s.id === suggestion.id ? { ...s, status: 'ignored' } : s));
-                        }}
+                        onClick={() => { void handleIgnoreSuggestion(suggestion); }}
                         className="px-3 py-2 text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 font-bold transition-colors"
                         type="button"
                       >

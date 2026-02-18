@@ -170,6 +170,20 @@ export const applySuggestionToResume = ({
   if (effectiveSection === 'projects' && Array.isArray(newData.projects)) {
     const targetIndex = findBestTargetIndex(newData.projects, 'description');
     if (targetIndex < 0) {
+      if (!newData.projects || newData.projects.length === 0) {
+        const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+        const desc = String(value || '').trim() || '请填写与你目标岗位相关的项目经历，突出目标、行动与量化结果。';
+        const newProject = {
+          id: Date.now(),
+          title: '项目经历',
+          subtitle: '',
+          date: '',
+          description: desc,
+          link: '',
+        } as any;
+        newData.projects = [newProject];
+        return newData;
+      }
       console.warn('Skip projects suggestion: unable to resolve target item', suggestion);
       return newData;
     }
@@ -229,4 +243,3 @@ export const applySuggestionToResume = ({
 
   return newData;
 };
-

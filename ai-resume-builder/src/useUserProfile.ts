@@ -14,6 +14,50 @@ export interface UserProfile {
   diagnoses_remaining?: number;
   interviews_remaining?: number;
   membership_tier?: string;
+  analysis_dossier_latest?: {
+    id: string;
+    createdAt: string;
+    score: number;
+    summary: string;
+    targetCompany?: string;
+    jdText?: string;
+    scoreBreakdown?: {
+      experience: number;
+      skills: number;
+      format: number;
+    };
+    suggestionsOverview?: {
+      total: number;
+      pending: number;
+      accepted: number;
+      ignored: number;
+    };
+    strengths?: string[];
+    weaknesses?: string[];
+    missingKeywords?: string[];
+  };
+  analysis_dossier_history?: Array<{
+    id: string;
+    createdAt: string;
+    score: number;
+    summary: string;
+    targetCompany?: string;
+    jdText?: string;
+    scoreBreakdown?: {
+      experience: number;
+      skills: number;
+      format: number;
+    };
+    suggestionsOverview?: {
+      total: number;
+      pending: number;
+      accepted: number;
+      ignored: number;
+    };
+    strengths?: string[];
+    weaknesses?: string[];
+    missingKeywords?: string[];
+  }>;
 }
 
 // 缓存项接口

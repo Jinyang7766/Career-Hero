@@ -1,19 +1,20 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'comparison';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
 
 export const deriveInitialStepFromPath = (): Step => {
   const path = (window.location.pathname || '').toLowerCase();
-  if (path.startsWith('/ai-analysis')) {
-    const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
-    const sub = (rest.split('/').filter(Boolean)[0] || '');
-    if (sub === 'jd') return 'jd_input';
-    if (sub === 'analyzing') return 'analyzing';
-    if (sub === 'report') return 'report';
-    if (sub === 'chat') return 'chat';
-    if (sub === 'comparison') return 'comparison';
-  }
+    if (path.startsWith('/ai-analysis')) {
+      const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
+      const sub = (rest.split('/').filter(Boolean)[0] || '');
+      if (sub === 'jd') return 'jd_input';
+      if (sub === 'analyzing') return 'analyzing';
+      if (sub === 'report') return 'report';
+      if (sub === 'micro-interview') return 'micro_intro';
+      if (sub === 'chat') return 'chat';
+      if (sub === 'comparison') return 'comparison';
+    }
   return 'resume_select';
 };
 
@@ -45,6 +46,7 @@ export const useAiRouteSync = ({
         case 'jd_input': return `${base}/jd`;
         case 'analyzing': return `${base}/analyzing`;
         case 'report': return selectedResumeId ? `${base}/report/${selectedResumeId}` : `${base}/report`;
+        case 'micro_intro': return `${base}/micro-interview`;
         case 'chat': return `${base}/chat`;
         case 'comparison': return selectedResumeId ? `${base}/comparison/${selectedResumeId}` : `${base}/comparison`;
         default: return base;

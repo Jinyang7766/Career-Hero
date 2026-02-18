@@ -22,6 +22,8 @@ export const buildInterviewWrappedMessage = ({
   hasText,
   textToSend,
   hasAudio,
+  shouldFollowUp,
+  followUpHint,
 }: {
   isInterviewChat: boolean;
   isStartPhase: boolean;
@@ -30,12 +32,17 @@ export const buildInterviewWrappedMessage = ({
   hasText: boolean;
   textToSend: string;
   hasAudio: boolean;
+  shouldFollowUp?: boolean;
+  followUpHint?: string;
 }) => {
   if (!isInterviewChat) return hasText ? textToSend : (hasAudio ? '（语音）' : '');
   if (isStartPhase && isAffirmative(cleanTextForWrap)) {
     return `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请先让候选人做自我介绍，并提醒：自我介绍时间为1分钟。随后进入正常面试提问。】`;
   }
-  return `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。输出为纯文本，不要使用任何 Markdown 标记，尤其不要出现 * 号。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.自然地提出下一题。并且：下一题必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。】\n\n候选人回答：${cleanTextForWrap}`;
+  const deepDiveRule = shouldFollowUp
+    ? `【当前回答信息不足（${followUpHint || '细节不够具体'}）。本轮必须先追问1个最关键澄清问题（数据/动作/结果三选一优先），不要切换到下一题。追问行必须以“追问：”开头。】`
+    : `【若候选人回答模糊、缺少可验证细节，先进行1-2轮追问（优先追问数据、动作、影响），补齐后再进入下一题。】`;
+  return `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。输出为纯文本，不要使用任何 Markdown 标记，尤其不要出现 * 号。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.提问动作。${deepDiveRule} 若进入下一题，则下一题必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。】\n\n候选人回答：${cleanTextForWrap}`;
 };
 
 export const buildSummaryRequestBody = ({
@@ -65,6 +72,7 @@ export const buildChatRequestBody = ({
   message,
   audio,
   resumeData,
+  diagnosisDossier,
   jobDescription,
   chatHistory,
   score,
@@ -75,6 +83,7 @@ export const buildChatRequestBody = ({
   message: string;
   audio: any;
   resumeData: any;
+  diagnosisDossier?: any;
   jobDescription: string;
   chatHistory: ChatMessage[];
   score: number;
@@ -85,10 +94,10 @@ export const buildChatRequestBody = ({
   message,
   audio,
   resumeData,
+  diagnosisDossier: diagnosisDossier || null,
   jobDescription,
   chatHistory,
   score,
   suggestions: isInterviewChat ? [] : suggestions,
   interviewType,
 });
-

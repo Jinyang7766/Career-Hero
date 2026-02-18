@@ -207,6 +207,131 @@ def _sanitize_suggestions_for_metric_consistency(suggestions, resume_data):
     return cleaned
 
 
+def _format_diagnosis_dossier(dossier):
+    if not isinstance(dossier, dict):
+        return ''
+    try:
+        summary = str(dossier.get('summary') or '').strip()
+        score = dossier.get('score')
+        target_company = str(dossier.get('targetCompany') or '').strip()
+        jd_text = str(dossier.get('jdText') or '').strip()
+        score_breakdown = dossier.get('scoreBreakdown') or {}
+        overview = dossier.get('suggestionsOverview') or {}
+        strengths = dossier.get('strengths') or []
+        weaknesses = dossier.get('weaknesses') or []
+        missing_keywords = dossier.get('missingKeywords') or []
+
+        lines = []
+        if summary:
+            lines.append(f"- 诊断总结：{summary}")
+        if isinstance(score, (int, float)):
+            lines.append(f"- 诊断总分：{int(score)}")
+        if target_company:
+            lines.append(f"- 目标公司：{target_company}")
+        if jd_text:
+            lines.append(f"- 目标岗位JD（摘要）：{jd_text[:500]}")
+        if isinstance(score_breakdown, dict) and score_breakdown:
+            lines.append(
+                f"- 评分拆解：经验{score_breakdown.get('experience', 0)} / 技能{score_breakdown.get('skills', 0)} / 格式{score_breakdown.get('format', 0)}"
+            )
+        if isinstance(overview, dict) and overview:
+            lines.append(
+                f"- 建议概览：总计{overview.get('total', 0)}，待处理{overview.get('pending', 0)}，已采纳{overview.get('accepted', 0)}，已忽略{overview.get('ignored', 0)}"
+            )
+        if strengths:
+            lines.append(f"- 亮点：{'；'.join([str(x) for x in strengths[:6]])}")
+        if weaknesses:
+            lines.append(f"- 短板：{'；'.join([str(x) for x in weaknesses[:6]])}")
+        if missing_keywords:
+            lines.append(f"- 缺失关键词：{'、'.join([str(x) for x in missing_keywords[:12]])}")
+
+        return '\n'.join(lines)
+    except Exception:
+        return ''
+
+
+def _split_into_sentences(text: str):
+    raw = str(text or '').strip()
+    if not raw:
+        return []
+    parts = re.split(r'[\n\r；;。！？!?]+', raw)
+    return [p.strip() for p in parts if len(p.strip()) >= 4]
+
+
+def _collect_resume_fragments_for_coverage(resume_data):
+    fragments = []
+    if not isinstance(resume_data, dict):
+        return fragments
+
+    personal = resume_data.get('personalInfo') or {}
+    summary = str(resume_data.get('summary') or personal.get('summary') or '').strip()
+    for sentence in _split_into_sentences(summary):
+        fragments.append({'section': 'summary', 'text': sentence, 'label': '个人简介'})
+
+    for exp in (resume_data.get('workExps') or []):
+        desc = str(exp.get('description') or '').strip()
+        role = str(exp.get('subtitle') or exp.get('title') or exp.get('company') or '工作经历').strip()
+        for sentence in _split_into_sentences(desc):
+            fragments.append({'section': 'workExps', 'text': sentence, 'label': role})
+
+    for proj in (resume_data.get('projects') or []):
+        desc = str(proj.get('description') or '').strip()
+        role = str(proj.get('title') or proj.get('subtitle') or '项目经历').strip()
+        for sentence in _split_into_sentences(desc):
+            fragments.append({'section': 'projects', 'text': sentence, 'label': role})
+
+    return fragments
+
+
+def _ensure_sentence_level_coverage(suggestions, resume_data):
+    base = suggestions if isinstance(suggestions, list) else []
+    fragments = _collect_resume_fragments_for_coverage(resume_data)
+    if not fragments:
+        return base
+
+    # Hard cap to prevent extreme payloads from exploding UI.
+    target_count = min(max(10, len(fragments)), 30)
+    if len(base) >= target_count:
+        return base
+
+    def _norm(v: str):
+        return re.sub(r'[\s\W_]+', '', str(v or '').lower())
+
+    existing_blob = _norm(' '.join([
+        str(item.get('originalValue') or '') + ' ' + str(item.get('reason') or '') + ' ' + str(item.get('title') or '')
+        for item in base if isinstance(item, dict)
+    ]))
+
+    augmented = list(base)
+    used = len(augmented)
+    for frag in fragments:
+        if used >= target_count:
+            break
+        sentence = str(frag.get('text') or '').strip()
+        if not sentence:
+            continue
+        ns = _norm(sentence)
+        if ns and ns in existing_blob:
+            continue
+        section = str(frag.get('section') or 'workExps')
+        label = str(frag.get('label') or '简历内容')
+        suggested = (
+            f"在{label}中，我主导/参与了【具体任务】，通过【关键行动与方法】实现了【可量化结果，如效率提升XX%、成本下降XX%、转化提升XX%】。"
+        )
+        augmented.append({
+            'id': f'suggestion-coverage-{used + 1}',
+            'type': 'optimization',
+            'title': f'{label}句子精修',
+            'reason': '该句描述偏简略，缺少职责边界、行动细节与量化结果，建议按 STAR 结构完整表达。',
+            'targetSection': section,
+            'targetField': 'description' if section in ('workExps', 'projects') else ('summary' if section == 'summary' else None),
+            'originalValue': sentence,
+            'suggestedValue': suggested
+        })
+        used += 1
+    return augmented
+
+
 def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai):
     format_requirements = f"""
 重要格式要求（必须严格遵守）：
@@ -218,6 +343,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
    - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
 5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
 6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
+6.1 **逐句覆盖要求（强制）**：对简历中每条可见叙述句（尤其是工作经历/项目经历/个人简介中的句子）都要进行详细评测；每条句子至少对应 1 条可执行优化建议，禁止“挑重点略过”。
+6.2 **一次性完整优化（强制）**：本次输出必须覆盖整份简历，不允许只优化一部分后结束。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 7.1 **目标公司提取（强制）**：若 JD 中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
 7.2 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
@@ -244,6 +371,10 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
    - 技能词条禁止使用斜杠拼接长短语（如“A/B/C/...”），如需多个技能请拆分为多个数组元素。
    - 如果某项更适合写在工作经历中，请不要放在 skills 建议里。
    - 生成后请自检：skills.suggestedValue 中每一项都必须是可验证的硬技能名词。若包含上述动词/残片/泛词，先改写为硬技能（例如“Python自动化脚本”改为“Python”，“LoRA模型与精调”改为“LoRA模型”，“ComfyUI工作流搭建”改为“ComfyUI工作流”，“智能化数据看板”改为“Tableau/Power BI（择一）”）。
+12. **项目经历补全规则（强制）**：
+   - 若简历缺少项目经历（projects 为空或几乎无有效内容），必须至少生成 1 条“补充项目经历”建议。
+   - 该建议的 targetSection 必须为 "projects"，禁止写入 "workExps"。
+   - 建议内容应围绕项目结构化要素：项目背景/目标、个人职责、关键行动、量化结果。
 {rag_context}
 """
 
@@ -479,6 +610,7 @@ def analyze_resume_core(current_user_id, data, deps):
             if dropped_education_suggestions > 0:
                 logger.info("Dropped %d education-related suggestions from AI analyze result", dropped_education_suggestions)
             ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
+            ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -515,6 +647,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
             ]
             suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
+            suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
 
             return {
                 'score': score,
@@ -542,6 +675,7 @@ def analyze_resume_core(current_user_id, data, deps):
         if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
     ]
     suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
+    suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
@@ -678,9 +812,11 @@ def ai_chat_core(data, deps):
     message = data.get('message', '')
     audio = data.get('audio')
     resume_data = data.get('resumeData')
+    diagnosis_dossier = data.get('diagnosisDossier') or {}
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
+    diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
     audio_duration_sec = None
@@ -795,6 +931,7 @@ def ai_chat_core(data, deps):
 
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
 """
             response, _used = deps['_gemini_generate_content_resilient'](deps['GEMINI_INTERVIEW_MODEL'], prompt, want_json=False)
             raw_text = (response.text or "").strip()
@@ -955,6 +1092,7 @@ def ai_chat_core(data, deps):
  - 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
  职位描述：{job_description if job_description else '未提供'}
  简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+ 诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
  对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
  候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
  候选人语音时长（秒）：{audio_duration_sec if audio_duration_sec is not None else '未知'}
@@ -1012,9 +1150,11 @@ def ai_chat_stream_core(data, deps):
     message = data.get('message', '')
     audio = data.get('audio')
     resume_data = data.get('resumeData')
+    diagnosis_dossier = data.get('diagnosisDossier') or {}
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
+    diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
     audio_duration_sec = None
@@ -1131,6 +1271,7 @@ def ai_chat_stream_core(data, deps):
 
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
@@ -1169,6 +1310,7 @@ def ai_chat_stream_core(data, deps):
 - 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
 对话历史：{formatted_chat if formatted_chat else '面试刚开始'}
 候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
 候选人语音时长（秒）：{audio_duration_sec if audio_duration_sec is not None else '未知'}

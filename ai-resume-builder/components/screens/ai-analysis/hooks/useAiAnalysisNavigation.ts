@@ -5,6 +5,7 @@ type Step =
   | 'jd_input'
   | 'analyzing'
   | 'report'
+  | 'micro_intro'
   | 'chat'
   | 'comparison';
 
@@ -30,7 +31,7 @@ export const useAiAnalysisNavigation = ({
   });
   const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
     const stored = localStorage.getItem('ai_chat_prev_step');
-    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'comparison'];
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'comparison'];
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
@@ -46,7 +47,11 @@ export const useAiAnalysisNavigation = ({
   const openChat = (source: 'internal' | 'preview') => {
     if (source === 'internal') {
       setIsInterviewEntry(false);
-      const prevStep = currentStep !== 'chat' ? currentStep : lastChatStep;
+      // If chat is auto-opened right after analysis, treat report as previous step
+      // so back navigation returns to report instead of the transient analyzing screen.
+      const prevStep = currentStep === 'analyzing'
+        ? 'report'
+        : (currentStep !== 'chat' ? currentStep : lastChatStep);
       if (prevStep && prevStep !== 'chat') {
         setLastChatStep(prevStep);
         localStorage.setItem('ai_chat_prev_step', prevStep);
@@ -84,6 +89,8 @@ export const useAiAnalysisNavigation = ({
       const lastStep = prev.pop()!;
       setStepHistory(prev);
       setCurrentStep(lastStep);
+    } else if (currentStep === 'micro_intro') {
+      setCurrentStep('report');
     } else if (currentStep === 'report') {
       // Keep back navigation inside AI flow to avoid route-sync bouncing.
       setCurrentStep('resume_select');
