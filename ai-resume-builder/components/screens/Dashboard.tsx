@@ -15,6 +15,28 @@ const CAREER_TIPS = [
   "展示你的软技能，如团队合作和沟通能力。",
   "量化你的成果，例如：'提升了20%的效率'。",
   "不要忽视你的业余项目，它们也能展示能力。",
+  "面试结束后的感谢信是展示职业素养的好机会。",
+  "在领英上保持活跃，能增加被猎头发现的概率。",
+  "不要只是列出工作职责，要展示你的成就和影响。",
+  "每一段工作经历都应该有一个‘核心成就’。",
+  "在简历中合理使用留白，提升阅读体验。",
+  "准备3-5个真实案例，用于回答行为面试题（STAR原则）。",
+  "了解行业薪资水平，为薪资谈判做好准备。",
+  "持续学习新技术，保持职业竞争力。",
+  "面试前的模拟练习能显著降低紧张感。",
+  "简历文件命名应清晰：姓名-期待职位-手机号。",
+  "自我介绍应控制在1-2分钟，突出核心卖点。",
+  "关注STAR原则：情境 (S)、任务 (T)、行动 (A)、结果 (R)。",
+  "内推通常比网申更有可能获得面试机会。",
+  "在简历中展示你解决复杂问题的闭环思维。",
+  "面试中保持真诚，遇到不懂的问题坦诚交流。",
+  "在简历中突出你对目标公司的价值贡献。",
+  "保持简历版本的最新，哪怕你当前没有跳槽计划。",
+  "个人评价不要堆砌形容词，要用事实说话。",
+  "面试时提问环节是展示你对职位理解深度的绝佳机会。",
+  "通过参加行业会议或在线社区拓展你的职业人脉。",
+  "在简历中展示你的学习能力和适应新环境的能力。",
+  "准备一份针对不同垂直行业的简历版本。",
 ];
 
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
@@ -59,12 +81,35 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       setGreeting(getBeijingGreeting());
     };
 
-    updateGreeting();
-    const interval = setInterval(updateGreeting, 60000); // Update every minute
+    // Set daily tip (fixed per calendar day in Beijing time)
+    const setDeterministicDailyTip = () => {
+      // Calculate Beijing current date string (YYYY-MM-DD)
+      const now = new Date();
+      const beijingTime = new Date(now.getTime() + (8 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
+      const year = beijingTime.getFullYear();
+      const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
+      const day = String(beijingTime.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
 
-    // Set random tip
-    const randomTip = CAREER_TIPS[Math.floor(Math.random() * CAREER_TIPS.length)];
-    setDailyTip(randomTip);
+      // Create a simple hash/seed from date string to get consistent index
+      let hash = 0;
+      for (let i = 0; i < dateString.length; i++) {
+        hash = ((hash << 5) - hash) + dateString.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+      }
+
+      const index = Math.abs(hash) % CAREER_TIPS.length;
+      setDailyTip(CAREER_TIPS[index]);
+    };
+
+    updateGreeting();
+    setDeterministicDailyTip();
+
+    const interval = setInterval(() => {
+      updateGreeting();
+      // Check for day change every minute to refresh at midnight
+      setDeterministicDailyTip();
+    }, 60000); // Check every minute
 
     return () => clearInterval(interval);
   }, []);
