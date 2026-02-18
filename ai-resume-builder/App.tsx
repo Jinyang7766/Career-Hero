@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { View, ResumeData, ResumeSummary } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { AppProvider } from './src/app-context';
 import { createEmptyResumeData, selectCompleteness, useAppStore } from './src/app-store';
 import BottomNav from './components/BottomNav';
@@ -82,7 +82,9 @@ function App() {
 
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
+  const routeHistoryRef = useRef<string[]>([]);
 
   const viewToPath = (view: View) => {
     switch (view) {
@@ -134,6 +136,36 @@ function App() {
   };
 
   const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
+  const currentRoute = useMemo(() => `${location.pathname}${location.search || ''}`, [location.pathname, location.search]);
+
+  // Maintain an app-level route stack so in-app back buttons always return to the previous app page.
+  useEffect(() => {
+    const stack = routeHistoryRef.current;
+    if (!stack.length) {
+      routeHistoryRef.current = [currentRoute];
+      return;
+    }
+
+    const last = stack[stack.length - 1];
+    if (last === currentRoute) return;
+
+    if (navigationType === 'REPLACE') {
+      routeHistoryRef.current = [...stack.slice(0, -1), currentRoute];
+      return;
+    }
+
+    if (navigationType === 'POP') {
+      const idx = stack.lastIndexOf(currentRoute);
+      if (idx >= 0) {
+        routeHistoryRef.current = stack.slice(0, idx + 1);
+      } else {
+        routeHistoryRef.current = [...stack, currentRoute];
+      }
+      return;
+    }
+
+    routeHistoryRef.current = [...stack, currentRoute];
+  }, [currentRoute, navigationType]);
 
   // Always reset scroll position when entering a new page/route so headers/back buttons stay visible.
   useEffect(() => {
@@ -527,14 +559,12 @@ function App() {
       navigate(viewToPath(View.LOGIN), { replace: true });
       return;
     }
-    // Prefer browser history; if none, fall back to dashboard.
-    try {
-      if (window.history.length > 1) {
-        navigate(-1);
-        return;
-      }
-    } catch {
-      // ignore
+    const stack = routeHistoryRef.current;
+    if (stack.length > 1) {
+      const prev = stack[stack.length - 2];
+      routeHistoryRef.current = stack.slice(0, -1);
+      navigate(prev, { replace: true });
+      return;
     }
     setShowWizard(false);
     navigate(viewToPath(View.DASHBOARD), { replace: true });
@@ -552,6 +582,7 @@ function App() {
       localStorage.removeItem('ai_analysis_step');
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem('ai_analysis_has_activity');
+      routeHistoryRef.current = ['/ai-analysis'];
       navigate('/ai-analysis', { replace: true });
       return;
     }
@@ -561,9 +592,11 @@ function App() {
       localStorage.removeItem('ai_analysis_step');
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem('ai_analysis_has_activity');
+      routeHistoryRef.current = ['/ai-interview'];
       navigate('/ai-interview', { replace: true });
       return;
     }
+    routeHistoryRef.current = [viewToPath(view)];
     handleNavigate(view, true);
   };
 

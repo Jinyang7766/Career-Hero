@@ -5,7 +5,7 @@ import copy
 
 from google.genai import types
 
-ANALYSIS_PROMPT_VERSION = "analysis-v2.1"
+ANALYSIS_PROMPT_VERSION = "analysis-v2.2"
 
 
 class PIIMasker:
@@ -334,7 +334,17 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
     return augmented
 
 
-def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai, analysis_stage='pre_interview'):
+def _build_analysis_prompt(
+    *,
+    resume_data,
+    job_description,
+    rag_context,
+    format_resume_for_ai,
+    analysis_stage='pre_interview',
+    interview_summary='',
+    interview_chat_history='',
+    diagnosis_context='',
+):
     stage = str(analysis_stage or '').strip().lower()
     if stage == 'pre_interview':
         if job_description:
@@ -406,6 +416,31 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 {rag_context}
 """
 
+    is_final_stage = stage in {
+        'final',
+        'final_report',
+        'final_optimization',
+        'post_interview',
+        'report',
+        'optimization',
+    }
+
+    final_stage_requirements = """
+13. **任务胜任力模块（最终阶段强制）**：
+   - 你必须逐条对照职位描述中的关键任务（不仅是关键词），判断简历是否存在“可验证案例支撑”。
+   - 对每条关键任务给出“有支撑 / 支撑不足 / 无支撑”判断，并把缺口写入 weaknesses 与 suggestions 的 reason。
+   - reason 必须使用“任务要求 -> 现有证据 -> 缺口 -> 如何补齐”的链路表达，不得只写泛泛结论。
+14. **多版本管理引导（最终阶段强制）**：
+   - 若发现简历主叙事方向与JD方向不一致（例如“前台研发” vs “中台架构”），必须给出版本化引导。
+   - 至少提供 2 条版本化建议，明确：当前版本偏向、目标版本方向、应提升的模块权重（如架构设计/并发治理/稳定性建设等）。
+   - 版本化引导必须落在 suggestions 中，且 suggestedValue 仍需是可直接写入简历的文本。
+15. **反模板化与行业脱水（最终阶段强制）**：
+   - 严禁空泛水话：如“优秀的团队合作能力”“逻辑性强”“沟通能力好”“有责任心”等。
+   - 必须优先使用“动作动词 + 方法/工具 + 可验证结果”的写法。
+   - 技术岗位默认脱水词典：禁止高频使用“负责了/参与了”；优先改为“重构了/压测了/支撑了/设计并落地了/优化了”。
+   - 若原文无量化数据，不得编造；使用“XX/某核心指标”占位并在 reason 明确需用户补数。
+""" if is_final_stage else ""
+
     format_requirements = f"""
 重要格式要求（必须严格遵守）：
 1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
@@ -452,7 +487,20 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
    - 若简历缺少项目经历（projects 为空或几乎无有效内容），必须至少生成 1 条“补充项目经历”建议。
    - 该建议的 targetSection 必须为 "projects"，禁止写入 "workExps"。
    - 建议内容应围绕项目结构化要素：项目背景/目标、个人职责、关键行动、量化结果。
+{final_stage_requirements}
 {rag_context}
+"""
+
+    final_context_block = ""
+    if is_final_stage:
+        final_context_block = f"""
+最终报告补充上下文（仅用于事实校验与归纳，不得臆造）：
+- 微访谈总结：
+{str(interview_summary or '').strip() or '未提供'}
+- 微访谈关键对话：
+{str(interview_chat_history or '').strip() or '未提供'}
+- 用户画像（历史诊断档案）：
+{str(diagnosis_context or '').strip() or '未提供'}
 """
 
     if job_description:
@@ -470,6 +518,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 
 职位描述：
 {job_description}
+{final_context_block}
 
 请仅返回 JSON（仅中文内容）：
 {{
@@ -520,6 +569,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 
 简历：
 {format_resume_for_ai(resume_data)}
+{final_context_block}
 
 请仅返回 JSON（仅中文内容）：
 {{
@@ -564,6 +614,23 @@ def analyze_resume_core(current_user_id, data, deps):
     logger = deps['logger']
     resume_data = data.get('resumeData')
     job_description = data.get('jobDescription', '')
+    interview_summary = str((data or {}).get('interviewSummary') or '').strip()
+    diagnosis_dossier = (data or {}).get('diagnosisDossier') or {}
+    diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
+    raw_chat_history = (data or {}).get('chatHistory') or []
+    if isinstance(raw_chat_history, list):
+        chat_lines = []
+        for item in raw_chat_history[-20:]:
+            if not isinstance(item, dict):
+                continue
+            role = '候选人' if str(item.get('role') or '').strip() == 'user' else '面试官'
+            text = str(item.get('text') or '').strip()
+            if not text:
+                continue
+            chat_lines.append(f"{role}: {text}")
+        interview_chat_history = '\n'.join(chat_lines)
+    else:
+        interview_chat_history = ''
     analysis_stage = str((data or {}).get('analysisStage') or 'pre_interview').strip().lower()
     rag_enabled_stages = {
         'final',
@@ -682,9 +749,24 @@ def analyze_resume_core(current_user_id, data, deps):
                 rag_context=rag_context,
                 format_resume_for_ai=deps['format_resume_for_ai'],
                 analysis_stage=analysis_stage,
+                interview_summary=interview_summary,
+                interview_chat_history=interview_chat_history,
+                diagnosis_context=diagnosis_context,
             )
 
-            analysis_models_tried = deps['get_analysis_model_candidates']()
+            final_stage_model = str(deps.get('GEMINI_RESUME_GENERATION_MODEL') or '').strip()
+            base_models = deps['get_analysis_model_candidates']()
+            if analysis_stage in rag_enabled_stages and final_stage_model:
+                analysis_models_tried = [final_stage_model, *base_models]
+            else:
+                analysis_models_tried = list(base_models or [])
+            deduped_models = []
+            for model_name in analysis_models_tried:
+                m = str(model_name or '').strip()
+                if not m or m in deduped_models:
+                    continue
+                deduped_models.append(m)
+            analysis_models_tried = deduped_models
             response, used_model = deps['analysis_generate_content_resilient'](
                 current_user_id=current_user_id,
                 data=data,

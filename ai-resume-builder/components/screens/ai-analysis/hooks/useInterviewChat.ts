@@ -8,6 +8,7 @@ import {
   buildInterviewWrappedMessage,
   buildSummaryRequestBody
 } from '../chat-request-builders';
+import { persistUserDossierToProfile } from '../dossier-persistence';
 
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
 
@@ -26,9 +27,9 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   resumeData: any;
-  diagnosisDossier?: any;
   score: number;
   suggestions: any[];
+  interviewPlan?: string[];
   plannedQuestionCount?: number;
   isAffirmative: (text: string) => boolean;
   splitNextQuestion: (text: string) => { cleaned: string; next: string };
@@ -50,9 +51,9 @@ export const useInterviewChat = ({
   getBackendAuthToken,
   buildApiUrl,
   resumeData,
-  diagnosisDossier,
   score,
   suggestions,
+  interviewPlan = [],
   plannedQuestionCount = 0,
   isAffirmative,
   splitNextQuestion,
@@ -373,6 +374,18 @@ export const useInterviewChat = ({
         } catch (stateErr) {
           console.warn('Failed to persist interview_done state:', stateErr);
         }
+        try {
+          await persistUserDossierToProfile({
+            source: 'interview',
+            score,
+            summary: summary || '面试已结束',
+            jdText,
+            targetCompany: String((resumeData as any)?.targetCompany || '').trim(),
+            suggestionsTotal: Array.isArray(suggestions) ? suggestions.length : 0,
+          });
+        } catch (dossierErr) {
+          console.warn('Failed to persist interview dossier to user profile:', dossierErr);
+        }
         if (onInterviewCompleted) {
           try {
             onInterviewCompleted(summary || '', finalMessages);
@@ -413,6 +426,29 @@ export const useInterviewChat = ({
       const followUpDecision = isInterviewChat && hasText
         ? detectFollowUpNeed(textToSend)
         : { shouldFollowUp: false, hint: '' };
+      const answeredCountAtThisTurn = baseMessages.filter((m) => {
+        if (m.role !== 'user') return false;
+        const txt = String(m.text || '').trim();
+        const hasTextAnswer = !!txt && txt !== '结束面试';
+        const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
+        return hasTextAnswer || hasVoiceAnswer;
+      }).length;
+      const isClosingPhase = (
+        isInterviewChat &&
+        plannedQuestionCount > 0 &&
+        answeredCountAtThisTurn >= plannedQuestionCount
+      );
+      const normalizedFollowUpDecision = isClosingPhase
+        ? { shouldFollowUp: false, hint: '' }
+        : followUpDecision;
+      const strictNextQuestion = (
+        isInterviewChat &&
+        !normalizedFollowUpDecision.shouldFollowUp &&
+        Array.isArray(interviewPlan) &&
+        interviewPlan.length > answeredCountAtThisTurn
+      )
+        ? formatInterviewQuestion(String(interviewPlan[answeredCountAtThisTurn] || ''))
+        : '';
       const lastMsgBeforeUser = (() => {
         const last = baseMessages[baseMessages.length - 1];
         if (last && last.id === userMessage.id && baseMessages.length >= 2) return baseMessages[baseMessages.length - 2];
@@ -430,18 +466,14 @@ export const useInterviewChat = ({
         hasText,
         textToSend,
         hasAudio,
-        shouldFollowUp: followUpDecision.shouldFollowUp,
-        followUpHint: followUpDecision.hint,
+        shouldFollowUp: normalizedFollowUpDecision.shouldFollowUp,
+        followUpHint: normalizedFollowUpDecision.hint,
+        forcedNextQuestion: strictNextQuestion,
+        shouldEnterClosing: isClosingPhase && !strictNextQuestion,
       });
 
       const maskedMessage = masker.maskText(interviewWrapped);
       const maskedResumeData = masker.maskObject(resumeData);
-      const diagnosisDossierRaw =
-        diagnosisDossier ||
-        (resumeData as any)?.analysisDossierLatest ||
-        (Array.isArray((resumeData as any)?.analysisDossierHistory) ? (resumeData as any).analysisDossierHistory[0] : null) ||
-        null;
-      const maskedDiagnosisDossier = diagnosisDossierRaw ? masker.maskObject(diagnosisDossierRaw) : null;
       const historyForBackend = baseMessages.filter(m => m.id !== userMessage.id);
       const maskedChatHistory = maskChatHistory(historyForBackend, masker.maskText);
       const maskedJdText = masker.maskText(jdText || '');
@@ -467,7 +499,7 @@ export const useInterviewChat = ({
         message: maskedMessage,
         audio: audioPayload,
         resumeData: maskedResumeData,
-        diagnosisDossier: maskedDiagnosisDossier,
+        diagnosisDossier: null,
         jobDescription: maskedJdText,
         chatHistory: maskedChatHistory,
         score,
@@ -485,6 +517,10 @@ export const useInterviewChat = ({
       }));
 
       const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
+      if (safeText === '结束面试') {
+        await handleSendMessage('结束面试', null, { skipAddUserMessage: true, forceEnd: true });
+        return;
+      }
       const { cleaned, next } = splitNextQuestion(safeText);
       const aiMessage: ChatMessage = {
         id: `ai-${Date.now()}`,
@@ -492,7 +528,14 @@ export const useInterviewChat = ({
         text: (cleaned || safeText).trim()
       };
       let finalMessages: ChatMessage[] = [...baseMessages, aiMessage];
-      if (next) {
+      if (strictNextQuestion) {
+        const nextMsg: ChatMessage = {
+          id: `ai-next-${Date.now()}`,
+          role: 'model',
+          text: isSelfIntroQuestion(strictNextQuestion) ? strictNextQuestion : `下一题：${strictNextQuestion}`
+        };
+        finalMessages = [...finalMessages, nextMsg];
+      } else if (next) {
         const formattedQ = formatInterviewQuestion(next);
         const nextMsg: ChatMessage = {
           id: `ai-next-${Date.now()}`,
@@ -514,25 +557,6 @@ export const useInterviewChat = ({
         console.warn('Failed to refresh interview_in_progress state:', stateErr);
       }
 
-      if (
-        isInterviewChat &&
-        plannedQuestionCount > 0 &&
-        !endingInterviewRef.current &&
-        !interviewEndedRef.current
-      ) {
-        const answeredCount = finalMessages.filter((m) => {
-          if (m.role !== 'user') return false;
-          const txt = String(m.text || '').trim();
-          const hasTextAnswer = !!txt && txt !== '结束面试';
-          const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
-          return hasTextAnswer || hasVoiceAnswer;
-        }).length;
-
-        if (answeredCount >= plannedQuestionCount) {
-          await handleSendMessage('结束面试', null, { skipAddUserMessage: true, forceEnd: true });
-          return;
-        }
-      }
     } catch (error) {
       console.error('API failed:', error);
       try {

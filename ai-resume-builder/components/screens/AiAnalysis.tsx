@@ -33,6 +33,7 @@ import { useInterviewEntryActions } from './ai-analysis/hooks/useInterviewEntryA
 import { useAiAnalysisActions } from './ai-analysis/hooks/useAiAnalysisActions';
 import { useOptimizedResumeListSync } from './ai-analysis/hooks/useOptimizedResumeListSync';
 import { useAnalysisStepCheckpoint } from './ai-analysis/hooks/useAnalysisStepCheckpoint';
+import { useFinalDiagnosisReportGenerator } from './ai-analysis/hooks/useFinalDiagnosisReportGenerator';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -187,9 +188,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getBackendAuthToken,
     buildApiUrl,
     resumeData,
-    diagnosisDossier: (userProfile as any)?.analysis_dossier_latest || null,
     score,
     suggestions,
+    interviewPlan,
     plannedQuestionCount: interviewPlan.length,
     isAffirmative,
     splitNextQuestion,
@@ -554,6 +555,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigateToView,
     navigateToStep: navigateToStep as any,
     openChat,
+    currentStep,
   });
   const {
     postInterviewOriginalResume,
@@ -571,6 +573,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     reportSummary: report?.summary,
     baseScore: score,
     weaknesses: report?.weaknesses || [],
+  });
+  const finalReportOverride = useFinalDiagnosisReportGenerator({
+    currentStep,
+    resumeData,
+    postInterviewGeneratedResume,
+    jdText,
+    effectivePostInterviewSummary,
+    finalReportSummary,
+    finalReportScore,
+    finalReportAdvice,
+    makeJdKey,
+    userProfile,
+    getRagEnabledFlag,
+    getBackendAuthToken,
+    buildApiUrl,
+    chatMessagesRef: chatMessagesRef as any,
   });
   const { handlePostInterviewFeedback } = usePostInterviewFeedback({
     currentUserId: currentUser?.id,
@@ -597,6 +615,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setOptimizedResumeId,
     showToast,
     navigateToStep: navigateToStep as any,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
   });
 
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
@@ -705,9 +726,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     postInterviewAnnotations,
     handlePostInterviewFeedback,
     handleCompleteAndSavePostInterview,
-    finalReportScore,
-    finalReportSummary,
-    finalReportAdvice,
+    finalReportSummary: finalReportOverride?.summary || finalReportSummary,
+    finalReportAdvice: finalReportOverride?.advice || finalReportAdvice,
+    finalReportScore: finalReportOverride?.score ?? finalReportScore,
     handleStartInterviewFromFinalReport,
   });
 };

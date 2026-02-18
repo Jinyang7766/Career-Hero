@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
+import { DatabaseService } from '../../src/database-service';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
   const SHOW_THIRD_PARTY_BINDING = false;
@@ -20,9 +21,18 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneInput, setPhoneInput] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+  const [isUpdatingPhone, setIsUpdatingPhone] = useState(false);
+  const [phoneDisplay, setPhoneDisplay] = useState('');
 
   const email = currentUser?.email || userProfile?.email || '';
-  const phone = userProfile?.phone || '';
+  const phone = phoneDisplay || userProfile?.phone || '';
+
+  useEffect(() => {
+    setPhoneDisplay(userProfile?.phone || '');
+  }, [userProfile?.phone]);
 
   const handleDeleteAccount = async (immediate: boolean) => {
     setIsDeleting(true);
@@ -118,6 +128,48 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
     }
   };
 
+  const handleOpenPhoneModal = () => {
+    setPhoneInput(phone || '');
+    setPhoneError('');
+    setShowPhoneModal(true);
+  };
+
+  const handleUpdatePhone = async () => {
+    const normalized = phoneInput.replace(/\s+/g, '').trim();
+    if (!normalized) {
+      setPhoneError('请输入手机号');
+      return;
+    }
+
+    const phonePattern = /^(\+?86)?1[3-9]\d{9}$/;
+    if (!phonePattern.test(normalized)) {
+      setPhoneError('手机号格式不正确');
+      return;
+    }
+
+    if (!currentUser?.id) {
+      setPhoneError('登录状态已失效，请重新登录后再试');
+      return;
+    }
+
+    setPhoneError('');
+    setIsUpdatingPhone(true);
+    try {
+      const result = await DatabaseService.updateUser(currentUser.id, { phone: normalized });
+      if (!result.success) {
+        throw new Error((result as any)?.error?.message || '更新失败');
+      }
+      setPhoneDisplay(normalized);
+      setShowPhoneModal(false);
+      alert('手机号绑定成功');
+    } catch (err) {
+      console.error('Update phone error:', err);
+      setPhoneError(`绑定失败：${err instanceof Error ? err.message : '请稍后重试'}`);
+    } finally {
+      setIsUpdatingPhone(false);
+    }
+  };
+
   return (
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
@@ -153,7 +205,10 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
               <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
             </button>
 
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
+            <button
+              onClick={handleOpenPhoneModal}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group"
+            >
               <div className="flex items-center gap-3 shrink-0 mr-4">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">smartphone</span>
@@ -280,6 +335,61 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
                   onClick={() => {
                     setShowPasswordModal(false);
                     resetPasswordModalState();
+                  }}
+                  className="w-full rounded-2xl bg-black/10 dark:bg-white/10 text-slate-700 dark:text-slate-200 py-3.5 font-bold hover:opacity-90 active:scale-[0.98] transition-all"
+                >
+                  取消
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Update Phone Modal */}
+        {showPhoneModal && (
+          <div className="fixed inset-0 z-[100] flex items-end justify-center animate-in fade-in duration-300">
+            <div
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => {
+                if (isUpdatingPhone) return;
+                setShowPhoneModal(false);
+                setPhoneError('');
+              }}
+            />
+            <div className="relative w-full max-w-md bg-white dark:bg-[#1c1c1e] rounded-t-[32px] p-8 pb-12 shadow-2xl animate-in slide-in-from-bottom duration-500">
+              <div className="w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full mx-auto mb-6"></div>
+              <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">{phone ? '修改手机号' : '绑定手机号'}</h3>
+              <p className="text-slate-500 dark:text-slate-400 mb-6">请输入常用手机号，用于账号安全与通知。</p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm text-slate-500 dark:text-slate-400">手机号</label>
+                  <input
+                    type="tel"
+                    value={phoneInput}
+                    onChange={(e) => setPhoneInput(e.target.value)}
+                    placeholder="例如 13800138000"
+                    className="mt-2 w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-4 py-3 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                  />
+                </div>
+                {phoneError && (
+                  <p className="text-sm text-red-500">{phoneError}</p>
+                )}
+              </div>
+
+              <div className="mt-8 space-y-3">
+                <button
+                  disabled={isUpdatingPhone}
+                  onClick={handleUpdatePhone}
+                  className="w-full rounded-2xl bg-primary text-white py-3.5 font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-60"
+                >
+                  {isUpdatingPhone ? '提交中...' : (phone ? '确认修改' : '确认绑定')}
+                </button>
+                <button
+                  disabled={isUpdatingPhone}
+                  onClick={() => {
+                    setShowPhoneModal(false);
+                    setPhoneError('');
                   }}
                   className="w-full rounded-2xl bg-black/10 dark:bg-white/10 text-slate-700 dark:text-slate-200 py-3.5 font-bold hover:opacity-90 active:scale-[0.98] transition-all"
                 >

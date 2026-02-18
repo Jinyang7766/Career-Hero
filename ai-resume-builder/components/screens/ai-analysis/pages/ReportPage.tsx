@@ -49,7 +49,7 @@ const ReportPage: React.FC<ReportPageProps> = ({
           <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="text-base font-bold tracking-tight">诊断报告</h1>
+          <h1 className="text-base font-bold tracking-tight">初步诊断</h1>
           <div className="w-8"></div>
         </div>
       </header>

@@ -95,7 +95,10 @@ export const useAiAnalysisNavigation = ({
     } else if (currentStep === 'micro_intro') {
       setCurrentStep('report');
     } else if (currentStep === 'report') {
-      // Keep back navigation inside AI flow to avoid route-sync bouncing.
+      if (goBack) {
+        goBack();
+        return;
+      }
       setCurrentStep('resume_select');
     } else if (goBack) {
       goBack();

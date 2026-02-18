@@ -3,6 +3,7 @@ import type { MutableRefObject } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { buildResumeTitle } from '../../../../src/resume-utils';
 import type { ResumeData } from '../../../../types';
+import { persistUserDossierToProfile } from '../dossier-persistence';
 
 type Params = {
   currentUserId?: string;
@@ -20,6 +21,9 @@ type Params = {
   setOptimizedResumeId: (v: string | number | null) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
   navigateToStep: (step: any, replace?: boolean) => void;
+  finalReportScore?: number;
+  finalReportSummary?: string;
+  finalReportAdvice?: string[];
 };
 
 export const usePostInterviewFinalize = ({
@@ -38,6 +42,9 @@ export const usePostInterviewFinalize = ({
   setOptimizedResumeId,
   showToast,
   navigateToStep,
+  finalReportScore,
+  finalReportSummary,
+  finalReportAdvice,
 }: Params) => {
   const handleCompleteAndSavePostInterview = useCallback(async () => {
     if (!currentUserId) {
@@ -90,6 +97,18 @@ export const usePostInterviewFinalize = ({
     setSelectedResumeId(savedRow.id);
     setAnalysisResumeId(savedRow.id);
     setOptimizedResumeId(savedRow.id);
+    try {
+      await persistUserDossierToProfile({
+        source: 'final_diagnosis',
+        score: Number(finalReportScore || 0),
+        summary: String(finalReportSummary || '').trim() || '最终诊断已完成',
+        jdText: effectiveJdText,
+        targetCompany: targetCompany || (resumeData as any)?.targetCompany || '',
+        weaknesses: Array.isArray(finalReportAdvice) ? finalReportAdvice : [],
+      });
+    } catch (dossierErr) {
+      console.warn('Failed to persist final diagnosis dossier to user profile:', dossierErr);
+    }
 
     showToast('优化简历已保存', 'success');
     navigateToStep('final_report', true);
@@ -109,8 +128,10 @@ export const usePostInterviewFinalize = ({
     setOptimizedResumeId,
     showToast,
     navigateToStep,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
   ]);
 
   return { handleCompleteAndSavePostInterview };
 };
-

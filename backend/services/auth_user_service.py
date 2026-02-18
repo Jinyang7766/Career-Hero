@@ -104,11 +104,12 @@ def get_profile(current_user_id, deps):
             'id': user.get('id'),
             'email': user.get('email'),
             'name': user.get('name'),
+            'phone': user.get('phone'),
             'deletion_pending_until': user.get('deletion_pending_until')
         }, 200
 
     try:
-        row = storage_context.get_user_by_id(current_user_id, fields='id,email,name,deletion_pending_until')
+        row = storage_context.get_user_by_id(current_user_id, fields='id,email,name,phone,deletion_pending_until')
     except Exception as col_err:
         if deps['_is_missing_deletion_column_error'](col_err):
             row = storage_context.get_user_by_id(current_user_id, fields='id,email,name')
@@ -158,10 +159,28 @@ def delete_account_immediate(current_user_id, deps):
 
 def update_profile(current_user_id, data, deps):
     name = data.get('name')
-    if not name:
-        return {'error': '姓名为必填项'}, 400
+    phone = data.get('phone')
 
-    updated = deps['storage_context'].update_user(current_user_id, {'name': name})
+    updates = {}
+    if name is not None:
+        cleaned_name = str(name).strip()
+        if not cleaned_name:
+            return {'error': '姓名不能为空'}, 400
+        updates['name'] = cleaned_name
+
+    if phone is not None:
+        cleaned_phone = str(phone).strip().replace(' ', '')
+        if cleaned_phone:
+            if len(cleaned_phone) > 24:
+                return {'error': '手机号长度超出限制'}, 400
+            updates['phone'] = cleaned_phone
+        else:
+            updates['phone'] = None
+
+    if not updates:
+        return {'error': '至少提供一个可更新字段'}, 400
+
+    updated = deps['storage_context'].update_user(current_user_id, updates)
     if updated:
         return {'message': '个人信息更新成功', 'user': updated}, 200
     return {'error': '更新个人信息失败'}, 500

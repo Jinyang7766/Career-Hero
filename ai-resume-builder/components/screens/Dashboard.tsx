@@ -5,6 +5,7 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
+import DashboardProgressModule from './DashboardProgressModule';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力，量化成果是金标准。",
@@ -187,6 +188,27 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     }
   };
 
+  const handleContinueDiagnosis = (resume: any) => {
+    const resumeId = String(resume?.id || '').trim();
+    if (!resumeId) return;
+    const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
+    const isFinalDone = diagnosisProgress >= 100;
+    localStorage.setItem('ai_result_open', '1');
+    localStorage.setItem('ai_result_resume_id', resumeId);
+    localStorage.setItem('ai_result_step', isFinalDone ? 'comparison' : 'report');
+    navigateToView(View.AI_ANALYSIS, { replace: true });
+  };
+
+  const handleContinueInterview = (resume: any) => {
+    const resumeId = String(resume?.id || '').trim();
+    if (!resumeId) return;
+    localStorage.removeItem('ai_analysis_force_resume_select');
+    localStorage.setItem('ai_interview_open', '1');
+    localStorage.setItem('ai_interview_resume_id', resumeId);
+    localStorage.setItem('ai_interview_entry_mode', 'scene_select');
+    navigateToView(View.AI_INTERVIEW, { replace: true });
+  };
+
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Header */}
@@ -220,80 +242,44 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
           </div>
         </div>
 
-        {/* Quick Actions - Reverted to Vibrant Style */}
+        {/* Progress Module or Create New Resume */}
         <div>
-          <div
-            onClick={createNewResume}
-            className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[160px] flex flex-col justify-center"
-          >
-            <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
-            <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
-            <div className="relative z-10 flex flex-col items-start gap-4">
-              <div className="flex items-center justify-center h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
-                <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>add</span>
-              </div>
-              <div>
-                <div className="flex items-center gap-3 mb-1.5">
-                  <h3 className="text-xl font-black text-white tracking-tight">新建简历</h3>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
+          {recentResumes && recentResumes.length > 0 && recentResumes[0] ? (
+            <DashboardProgressModule
+              resume={recentResumes[0]}
+              onContinueDiagnosis={handleContinueDiagnosis}
+              onContinueInterview={handleContinueInterview}
+            />
+          ) : (
+            <div
+              onClick={createNewResume}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[160px] flex flex-col justify-center"
+            >
+              <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
+              <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+              <div className="relative z-10 flex flex-col items-start gap-4">
+                <div className="flex items-center justify-center h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
+                  <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>add</span>
                 </div>
-                <p className="text-blue-100 text-sm font-medium opacity-90 max-w-[85%] leading-relaxed">
-                  通过智能 AI 向导，轻松定制专属于你的高光简历，几步操作即可开启职场新篇章。
-                </p>
-              </div>
+                <div>
+                  <div className="flex items-center gap-3 mb-1.5">
+                    <h3 className="text-xl font-black text-white tracking-tight">新建简历</h3>
+                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
+                  </div>
+                  <p className="text-blue-100 text-sm font-medium opacity-90 max-w-[85%] leading-relaxed">
+                    通过智能 AI 向导，轻松定制专属于你的高光简历，几步操作即可开启职场新篇章。
+                  </p>
+                </div>
 
-              <div className="mt-1 flex items-center gap-3 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
-                <span>立即开始</span>
-                <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                <div className="mt-1 flex items-center gap-3 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
+                  <span>立即开始</span>
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Recent Resumes */}
-        {recentResumes.length > 0 && (
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                最近编辑
-              </h3>
-              <button
-                onClick={() => navigateToView(View.ALL_RESUMES)}
-                className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-0.5 hover:text-slate-700 dark:hover:text-slate-200"
-              >
-                全部
-                <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-              </button>
-            </div>
-
-            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5 flex flex-col">
-              {recentResumes.map(resume => (
-                <div
-                  key={resume.id}
-                  onClick={() => handleResumeClick(resume.id)}
-                  className={`group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''}`}
-                >
-                  <div className="shrink-0 relative">
-                    <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
-                      {resume.thumbnail}
-                      {isLoadingResume === resume.id && (
-                        <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10">
-                          <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex flex-col flex-1 justify-center min-w-0">
-                    <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight">{resume.title}</p>
-                    <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1 mt-1">
-                      上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Daily Tip */}
         <div className="bg-blue-50/50 dark:bg-surface-dark rounded-xl p-5 border border-blue-100 dark:border-white/5 relative overflow-hidden shadow-sm">
@@ -309,4 +295,3 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 };
 
 export default Dashboard;
-

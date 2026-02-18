@@ -977,6 +977,7 @@ def analyze_resume(current_user_id):
                 'get_analysis_model_candidates': get_analysis_model_candidates,
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
                 'analysis_generate_content_resilient': _analysis_generate_content_resilient,
+                'GEMINI_RESUME_GENERATION_MODEL': GEMINI_RESUME_GENERATION_MODEL,
                 'parse_ai_response': parse_ai_response,
                 'is_gender_related_suggestion': is_gender_related_suggestion,
                 'is_education_related_suggestion': is_education_related_suggestion,

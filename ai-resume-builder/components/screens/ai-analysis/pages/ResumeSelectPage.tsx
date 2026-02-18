@@ -18,8 +18,7 @@ export type ResumeSelectPageProps = {
   interviewsRemaining?: number | null;
 };
 
-const DIAGNOSIS_STAGES = ['初步诊断', '微访谈', '最终报告'] as const;
-const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
+import { DiagnosisProgressBar } from '../../../shared/DiagnosisProgressBar';
 
 const formatResumeModifiedAt = (rawDate: string) => {
   const source = String(rawDate || '').trim();
@@ -54,93 +53,6 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const renderDiagnosisStageProgress = (resume: ResumeSummary) => {
-    const progress = Math.max(0, Math.min(100, Math.round(Number(resume.diagnosisProgress))));
-
-    // Both modes use a 3-stage visual approach
-    const stageLabels = isInterviewMode ? INTERVIEW_STAGES : DIAGNOSIS_STAGES;
-
-    // Determine status for each stage
-    const stageStatuses: Array<'todo' | 'current' | 'done'> = stageLabels.map((_, idx) => {
-      if (isInterviewMode) {
-        // For Interview Mode: Independent lighting
-        return resume.interviewStageStatus?.[idx] || 'todo';
-      } else {
-        // For Diagnosis Mode: Sequential lighting
-        let currentStageIndex = -1;
-        if (progress >= 95) currentStageIndex = 2;
-        else if (progress >= 80) currentStageIndex = 1;
-        else if (progress >= 15) currentStageIndex = 0;
-
-        if (idx < currentStageIndex) return 'done';
-        if (idx === currentStageIndex) return 'current';
-        return 'todo';
-      }
-    });
-
-    if (!resume.analyzed) return null;
-
-    return (
-      <div className="mt-3">
-        <div className="flex items-center justify-between mb-1.5 px-0.5">
-          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-            {isInterviewMode ? '面试进程' : '诊断阶段'}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5 h-1">
-          {stageLabels.map((_, idx) => {
-            const status = stageStatuses[idx];
-            const isDone = status === 'done';
-            const isCurrent = status === 'current';
-
-            return (
-              <div
-                key={idx}
-                className={`flex-1 h-full rounded-full transition-all duration-500 ${isDone
-                  ? 'bg-emerald-500 dark:bg-emerald-500/80'
-                  : isCurrent
-                    ? 'bg-primary/80 dark:bg-blue-400/70'
-                    : 'bg-slate-100 dark:bg-white/5'
-                  }`}
-              />
-            );
-          })}
-        </div>
-
-        <div className="flex items-center mt-2">
-          {stageLabels.map((label, idx) => {
-            const status = stageStatuses[idx];
-            const isDone = status === 'done';
-            const isCurrent = status === 'current';
-
-            return (
-              <div key={idx} className="flex-1 flex flex-col items-center">
-                <div className="flex items-center gap-1 min-h-[12px]">
-                  {isDone ? (
-                    <span className="material-symbols-outlined text-[10px] text-emerald-500 font-bold" style={{ fontSize: '10px' }}>check_circle</span>
-                  ) : isCurrent ? (
-                    <div className="size-1.5 rounded-full bg-primary animate-pulse" />
-                  ) : (
-                    <div className="size-1 rounded-full bg-slate-300 dark:bg-slate-700" />
-                  )}
-                  <span className={`text-[9px] font-bold tracking-tight whitespace-nowrap ${isCurrent
-                    ? 'text-slate-900 dark:text-white'
-                    : isDone
-                      ? 'text-slate-600 dark:text-slate-400'
-                      : 'text-slate-400 dark:text-slate-500'
-                    }`}>
-                    {label}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
   const renderSelectionList = (resumes: ResumeSummary[]) => (
     <div className="px-4 mt-1">
       <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
@@ -165,7 +77,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {formatResumeModifiedAt(resume.date)}
               </p>
-              {resume.analyzed && renderDiagnosisStageProgress(resume)}
+              {resume.analyzed && <DiagnosisProgressBar resume={resume} isInterviewMode={!!isInterviewMode} />}
             </div>
             <div className="shrink-0 flex items-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '18px' }}>

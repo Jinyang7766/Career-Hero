@@ -40,10 +40,16 @@ export const useAiExternalEntries = ({
   useEffect(() => {
     const shouldOpen = localStorage.getItem('ai_interview_open') === '1';
     const targetId = localStorage.getItem('ai_interview_resume_id');
+    const interviewEntryMode = localStorage.getItem('ai_interview_entry_mode') || 'chat';
     if (!shouldOpen || !targetId) return;
 
     localStorage.removeItem('ai_interview_open');
     localStorage.removeItem('ai_interview_resume_id');
+    localStorage.removeItem('ai_interview_entry_mode');
+    if (interviewEntryMode === 'scene_select') {
+      setStepHistory([]);
+      setCurrentStep('jd_input');
+    }
 
     (async () => {
       const resumeId = targetId;
@@ -75,7 +81,7 @@ export const useAiExternalEntries = ({
           const sessions = finalResumeData.interviewSessions || {};
           const sessionKey = makeJdKey(savedJdText);
           const session = sessions[sessionKey];
-          if (session && session.messages?.length) {
+          if (interviewEntryMode !== 'scene_select' && session && session.messages?.length) {
             setChatMessages(session.messages as any);
             setChatInitialized(true);
           } else {
@@ -86,7 +92,9 @@ export const useAiExternalEntries = ({
           setChatMessages([]);
           setChatInitialized(false);
         }
-        openChat('preview');
+        if (interviewEntryMode !== 'scene_select') {
+          openChat('preview');
+        }
       }
     })();
   }, []);

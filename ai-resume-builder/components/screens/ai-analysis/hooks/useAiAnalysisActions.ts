@@ -5,12 +5,14 @@ type Params = {
   navigateToView: (view: View, options?: any) => void;
   navigateToStep: (step: any, replace?: boolean) => void;
   openChat: (source: 'internal' | 'preview') => void;
+  currentStep?: string;
 };
 
 export const useAiAnalysisActions = ({
   navigateToView,
   navigateToStep,
   openChat,
+  currentStep,
 }: Params) => {
   const getScoreColor = useCallback((s: number) => {
     if (s >= 90) return 'text-green-500';
@@ -23,8 +25,12 @@ export const useAiAnalysisActions = ({
   }, [navigateToView]);
 
   const handleStartMicroInterview = useCallback(() => {
-    openChat('internal');
-  }, [openChat]);
+    if (currentStep === 'micro_intro') {
+      openChat('internal');
+      return;
+    }
+    navigateToStep('micro_intro');
+  }, [currentStep, navigateToStep, openChat]);
 
   const handleRetryAnalysisFromIntro = useCallback(() => {
     navigateToStep('jd_input', true);
@@ -37,4 +43,3 @@ export const useAiAnalysisActions = ({
     handleRetryAnalysisFromIntro,
   };
 };
-

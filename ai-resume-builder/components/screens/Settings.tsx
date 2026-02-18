@@ -12,6 +12,23 @@ const Settings: React.FC<ScreenProps> = () => {
   const setTheme = useAppContext((s) => s.setTheme);
   const [cacheSize, setCacheSize] = useState<string>('0 B');
   const [isClearing, setIsClearing] = useState(false);
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied'>('default');
+  const [notificationSettings, setNotificationSettings] = useState({
+    pushEnabled: false,
+    analysisReminder: true,
+    interviewReminder: true,
+    productUpdates: true,
+  });
+
+  const saveNotificationSettings = (next: typeof notificationSettings) => {
+    setNotificationSettings(next);
+    try {
+      localStorage.setItem('settings_notifications', JSON.stringify(next));
+    } catch (e) {
+      console.warn('Failed to save notification settings:', e);
+    }
+  };
 
   const calculateCacheSize = () => {
     try {
@@ -37,7 +54,44 @@ const Settings: React.FC<ScreenProps> = () => {
 
   useEffect(() => {
     setCacheSize(calculateCacheSize());
+    try {
+      const raw = localStorage.getItem('settings_notifications');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          setNotificationSettings((prev) => ({
+            ...prev,
+            ...parsed,
+          }));
+        }
+      }
+    } catch (e) {
+      console.warn('Failed to load notification settings:', e);
+    }
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationPermission(Notification.permission);
+    }
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('当前浏览器不支持系统通知');
+      return false;
+    }
+    try {
+      const result = await Notification.requestPermission();
+      setNotificationPermission(result);
+      if (result !== 'granted') {
+        alert('未开启系统通知权限，消息提醒将仅在应用内显示');
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Failed to request notification permission:', e);
+      alert('通知权限申请失败，请稍后重试');
+      return false;
+    }
+  };
 
   const handleClearCache = async () => {
     if (!(await confirmDialog('确定要清除缓存吗？这会清理本地诊断记录。'))) return;
@@ -51,6 +105,8 @@ const Settings: React.FC<ScreenProps> = () => {
       const keysToKeep = [
         'supabase.auth.token',
         'sb-qpxisqizyzqfsczfzfzv-auth-token', // Example Supabase project ref
+        'theme',
+        'settings_notifications',
       ];
 
       for (let i = localStorage.length - 1; i >= 0; i--) {
@@ -116,15 +172,89 @@ const Settings: React.FC<ScreenProps> = () => {
         <div className="mt-8 px-4">
           <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">通用</h3>
           <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
-            <button className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
+            <button
+              onClick={() => setIsNotificationOpen((v) => !v)}
+              className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group"
+            >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center text-primary">
                   <span className="material-symbols-outlined text-[20px]">notifications</span>
                 </div>
                 <span className="text-sm font-semibold text-slate-900 dark:text-white">通知设置</span>
               </div>
-              <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
+              <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] transition-transform group-hover:text-primary">
+                {isNotificationOpen ? 'expand_less' : 'chevron_right'}
+              </span>
             </button>
+            {isNotificationOpen && (
+              <div className="bg-slate-50/50 dark:bg-black/20 px-4 py-4 space-y-4 border-t border-slate-100 dark:border-white/5 animate-in fade-in slide-in-from-top-2 duration-300">
+                {/* Permission Card */}
+                <div className="rounded-2xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-4 relative overflow-hidden group/perm">
+                  <div className="absolute -right-8 -top-8 size-24 rounded-full bg-primary/5 blur-2xl transition-all group-hover/perm:scale-150"></div>
+                  <div className="flex items-center justify-between relative z-10">
+                    <div className="flex-1 pr-4">
+                      <p className="text-[13px] font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px] text-primary">verified_user</span>
+                        系统通知权限
+                      </p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 font-medium italic">
+                        当前状态：<span className={notificationPermission === 'granted' ? 'text-emerald-500 font-bold' : 'text-slate-400'}>
+                          {notificationPermission === 'granted' ? '已开启' : notificationPermission === 'denied' ? '已拒绝' : '未设置'}
+                        </span>
+                      </p>
+                    </div>
+                    {notificationPermission !== 'granted' && (
+                      <button
+                        type="button"
+                        onClick={() => { void requestNotificationPermission(); }}
+                        className="h-8 px-4 rounded-xl text-xs font-black bg-primary text-white shadow-lg shadow-primary/20 hover:scale-[1.05] active:scale-[0.95] transition-all"
+                      >
+                        开启
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Toggle Items */}
+                <div className="space-y-1">
+                  {[
+                    { key: 'pushEnabled', label: '接收系统通知', icon: 'notifications_active' },
+                    { key: 'analysisReminder', label: '诊断进度提醒', icon: 'analytics' },
+                    { key: 'interviewReminder', label: '面试进度提醒', icon: 'record_voice_over' },
+                    { key: 'productUpdates', label: '产品更新通知', icon: 'new_releases' },
+                  ].map((item) => (
+                    <div key={item.key} className="flex items-center justify-between py-2 group/item">
+                      <div className="flex items-center gap-3">
+                        <span className="material-symbols-outlined text-[18px] text-slate-400 dark:text-slate-500 group-hover/item:text-primary transition-colors">
+                          {item.icon}
+                        </span>
+                        <span className="text-[13px] text-slate-700 dark:text-slate-300 font-bold">{item.label}</span>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          const nextValue = !(notificationSettings as any)[item.key];
+                          if (item.key === 'pushEnabled' && nextValue) {
+                            const ok = await requestNotificationPermission();
+                            if (!ok) return;
+                          }
+                          saveNotificationSettings({
+                            ...notificationSettings,
+                            [item.key]: nextValue,
+                          } as any);
+                        }}
+                        className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-300 focus:outline-none ${Boolean((notificationSettings as any)[item.key]) ? 'bg-primary' : 'bg-slate-200 dark:bg-white/10'
+                          }`}
+                      >
+                        <span
+                          className={`inline-block size-3.5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${Boolean((notificationSettings as any)[item.key]) ? 'translate-x-5' : 'translate-x-1'
+                            }`}
+                        />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <button
               onClick={handleClearCache}
               disabled={isClearing}
