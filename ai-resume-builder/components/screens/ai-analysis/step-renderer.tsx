@@ -182,6 +182,7 @@ export const renderAiAnalysisStep = (p: Params) => {
   if (p.currentStep === 'chat') {
     return (
       <ChatPage
+        isInterviewMode={!!p.isInterviewMode}
         ToastOverlay={p.ToastOverlay}
         WaveformVisualizer={p.WaveformVisualizer}
         handleStepBack={p.handleStepBack}

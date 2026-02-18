@@ -5,6 +5,7 @@ import type { Suggestion } from '../types';
 
 type AnalysisReportLike = {
   summary: string;
+  microInterviewFirstQuestion?: string;
   strengths: string[];
   weaknesses: string[];
   missingKeywords: string[];
@@ -76,6 +77,7 @@ export const useAnalysisPersistence = ({
     const snapshot = {
       score: scoreValue,
       summary: reportData.summary || '',
+      microInterviewFirstQuestion: String(reportData.microInterviewFirstQuestion || '').trim(),
       strengths: reportData.strengths || [],
       weaknesses: reportData.weaknesses || [],
       missingKeywords: reportData.missingKeywords || [],

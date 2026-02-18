@@ -177,6 +177,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setJdText,
   });
   const { isSending, handleSendMessage } = useInterviewChat({
+    isInterviewMode,
     currentStep,
     inputMessage,
     setInputMessage,
@@ -411,6 +412,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const hasJdInput = () => jdText.length > 0;
 
   useChatIntroMessages({
+    isInterviewMode,
+    microInterviewFirstQuestion: report?.microInterviewFirstQuestion,
     currentStep,
     chatInitialized,
     chatMessagesRef: chatMessagesRef as any,

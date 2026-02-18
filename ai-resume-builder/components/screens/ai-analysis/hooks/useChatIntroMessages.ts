@@ -3,6 +3,8 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
 
 type Params = {
+  isInterviewMode?: boolean;
+  microInterviewFirstQuestion?: string;
   currentStep: string;
   chatInitialized: boolean;
   chatMessagesRef: MutableRefObject<ChatMessage[]>;
@@ -14,6 +16,8 @@ type Params = {
 };
 
 export const useChatIntroMessages = ({
+  isInterviewMode = false,
+  microInterviewFirstQuestion,
   currentStep,
   chatInitialized,
   chatMessagesRef,
@@ -45,6 +49,18 @@ export const useChatIntroMessages = ({
       '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
     const hrWarmup =
       '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
+
+    if (!isInterviewMode) {
+      const immediateQuestion = String(
+        microInterviewFirstQuestion ||
+        resumeData?.analysisSnapshot?.microInterviewFirstQuestion ||
+        ''
+      ).trim();
+      return {
+        summary: `${greeting}我是您的 AI 微访谈助手。${hasJd ? '我会结合简历与职位描述，' : '我会结合你的简历，'}围绕诊断里信息不足的点做追问，帮助你补齐关键证据。`,
+        ask: immediateQuestion || '先从最关键的一条开始：请补充一个你最能体现岗位匹配度的项目/经历，尽量包含动作、数据和结果。'
+      };
+    }
 
     if (interviewType === 'technical') {
       return {
@@ -119,5 +135,5 @@ export const useChatIntroMessages = ({
       setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
       askTimerRef.current = null;
     }, 900);
-  }, [currentStep, chatInitialized, jdText, resumeData?.personalInfo?.name, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

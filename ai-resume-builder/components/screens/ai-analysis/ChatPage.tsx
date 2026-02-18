@@ -9,6 +9,7 @@ const AI_AVATAR_FALLBACK =
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
 
 export type ChatPageProps = {
+  isInterviewMode?: boolean;
   ToastOverlay: React.ComponentType;
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
 
@@ -84,6 +85,7 @@ const ThinkingIndicator: React.FC = () => {
 };
 
 const ChatPage: React.FC<ChatPageProps> = ({
+  isInterviewMode = false,
   ToastOverlay,
   WaveformVisualizer,
   handleStepBack,
@@ -156,14 +158,17 @@ const ChatPage: React.FC<ChatPageProps> = ({
             />
           </div>
           <div>
-            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">{interviewerTitle}</h3>
+            <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
+              {isInterviewMode ? interviewerTitle : 'AI 微访谈助手'}
+            </h3>
             <div className="flex items-center gap-1.5">
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">在线</span>
             </div>
           </div>
         </div>
 
-        <div className="relative">
+        {isInterviewMode && (
+          <div className="relative">
           <button
             type="button"
             disabled={isRecording || isSending}
@@ -208,10 +213,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
               onClick={() => setMenuOpen(false)}
             />
           )}
-        </div>
+          </div>
+        )}
       </div>
 
-      <div className="mx-4 my-2 p-3 bg-white/70 dark:bg-[#1c2936]/40 backdrop-blur-md rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-sm">
+      {isInterviewMode && (
+        <div className="mx-4 my-2 p-3 bg-white/70 dark:bg-[#1c2936]/40 backdrop-blur-md rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-sm">
         {interviewTotalCount > 0 ? (
           <>
             <button
@@ -321,7 +328,8 @@ const ChatPage: React.FC<ChatPageProps> = ({
             </div>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
       <div
         ref={messagesContainerRef}

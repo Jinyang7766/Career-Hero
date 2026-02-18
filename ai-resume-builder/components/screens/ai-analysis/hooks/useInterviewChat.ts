@@ -13,6 +13,7 @@ import { persistUserDossierToProfile } from '../dossier-persistence';
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
 
 type Params = {
+  isInterviewMode?: boolean;
   currentStep: string;
   inputMessage: string;
   setInputMessage: (v: string) => void;
@@ -40,6 +41,7 @@ type Params = {
 };
 
 export const useInterviewChat = ({
+  isInterviewMode = false,
   currentStep,
   inputMessage,
   setInputMessage,
@@ -307,7 +309,7 @@ export const useInterviewChat = ({
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
     const isEndCommand =
-      currentStep === 'chat' &&
+      !!isInterviewMode &&
       (String(textOverride || '').trim() === '结束面试' || !!opts?.forceEnd);
     if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
@@ -401,7 +403,7 @@ export const useInterviewChat = ({
       if (!token) throw new Error('请先登录以使用 AI 功能');
 
       const masker = createMasker();
-      const isInterviewChat = currentStep === 'chat';
+      const isInterviewChat = !!isInterviewMode;
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
       const detectFollowUpNeed = (raw: string) => {
         const text = String(raw || '').trim();

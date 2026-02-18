@@ -35,6 +35,7 @@ export const useAnalysisSnapshotApplier = ({
     setSuggestions(cleanedSuggestions);
     setReport({
       summary: snapshot.summary || '',
+      microInterviewFirstQuestion: String(snapshot.microInterviewFirstQuestion || '').trim(),
       strengths: snapshot.strengths || [],
       weaknesses: snapshot.weaknesses || [],
       missingKeywords: snapshot.missingKeywords || [],

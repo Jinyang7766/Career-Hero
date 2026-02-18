@@ -168,6 +168,7 @@ export const runRealAnalysis = async ({
 
     const analysisResult = {
       summary: unmaskedResult.summary || 'AI诊断完成',
+      microInterviewFirstQuestion: String(unmaskedResult.microInterviewFirstQuestion || '').trim(),
       targetCompany: unmaskedResult.targetCompany || '',
       targetCompanyConfidence: Number(unmaskedResult.targetCompanyConfidence || 0),
       strengths: unmaskedResult.strengths || [],

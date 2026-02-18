@@ -334,6 +334,22 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
     return augmented
 
 
+def _resolve_micro_interview_first_question(ai_result, job_description):
+    question = str((ai_result or {}).get('microInterviewFirstQuestion') or '').strip()
+    if question:
+        return question
+
+    weaknesses = [str(x).strip() for x in ((ai_result or {}).get('weaknesses') or []) if str(x).strip()]
+    missing_keywords = [str(x).strip() for x in ((ai_result or {}).get('missingKeywords') or []) if str(x).strip()]
+    jd_hint = '，并结合目标岗位要求' if str(job_description or '').strip() else ''
+
+    if weaknesses:
+        return f"你提到简历中“{weaknesses[0]}”较薄弱。请给我一个最能证明你能力的具体案例{jd_hint}，并补充你采取了什么行动、最终结果数据是多少？"
+    if missing_keywords:
+        return f"你的简历与岗位存在关键词缺口（如：{missing_keywords[0]}）。请补充一段真实经历{jd_hint}，说明你如何使用这项能力并带来可量化结果。"
+    return "请先补充一条与你目标岗位最相关的真实经历：你具体做了什么、用了什么方法、最终结果如何（尽量给出数据）？"
+
+
 def _build_analysis_prompt(
     *,
     resume_data,
@@ -357,6 +373,7 @@ def _build_analysis_prompt(
 4) 可给出缺失关键词（missingKeywords），数量最多 5 个，不要给可直接替换的改写文本。
 5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
 6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
+7) 必须生成 microInterviewFirstQuestion：基于当前短板生成“微访谈第一问”，用于用户点击进入微访谈后立即提问。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -373,6 +390,7 @@ def _build_analysis_prompt(
     "format": 66
   }},
   "summary": "微访谈前初步评估总结",
+  "microInterviewFirstQuestion": "请补充一条最能体现岗位匹配度的真实经历，重点说明你的行动方法与量化结果。",
   "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
@@ -392,6 +410,7 @@ def _build_analysis_prompt(
 4) missingKeywords 最多 5 个。
 5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
 6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
+7) 必须生成 microInterviewFirstQuestion：基于当前短板生成“微访谈第一问”，用于用户点击进入微访谈后立即提问。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -405,6 +424,7 @@ def _build_analysis_prompt(
     "format": 66
   }},
   "summary": "微访谈前初步评估总结",
+  "microInterviewFirstQuestion": "请补充一个你最能证明岗位匹配度的案例，说明你做了什么、结果提升了哪些指标。",
   "targetCompany": "",
   "targetCompanyConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
@@ -806,6 +826,7 @@ def analyze_resume_core(current_user_id, data, deps):
             else:
                 ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
                 ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
+            micro_interview_first_question = _resolve_micro_interview_first_question(ai_result, job_description)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -827,6 +848,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 'score': ai_result.get('score', 70),
                 'scoreBreakdown': ai_result.get('scoreBreakdown', {'experience': 0, 'skills': 0, 'format': 0}),
                 'summary': ensured_summary,
+                'microInterviewFirstQuestion': micro_interview_first_question,
                 'suggestions': ai_result.get('suggestions', []),
                 'strengths': ai_result.get('strengths', []),
                 'weaknesses': ai_result.get('weaknesses', []),
@@ -865,9 +887,14 @@ def analyze_resume_core(current_user_id, data, deps):
                 int(score or 0),
                 len(suggestions or []),
             )
+            fallback_first_question = _resolve_micro_interview_first_question({
+                'weaknesses': ['经历描述较为笼统', '缺少量化结果'],
+                'missingKeywords': [] if not job_description else ['岗位关键词覆盖不足'],
+            }, job_description)
             return {
                 'score': score,
                 'summary': '智能分析暂时不可用，已生成基础分析报告，建议稍后再试。',
+                'microInterviewFirstQuestion': fallback_first_question,
                 'suggestions': suggestions,
                 'strengths': ['结构清晰', '格式规范'],
                 'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
@@ -895,6 +922,10 @@ def analyze_resume_core(current_user_id, data, deps):
         ]
         suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
         suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+    rule_based_first_question = _resolve_micro_interview_first_question({
+        'weaknesses': ['简历叙述缺少关键细节'],
+        'missingKeywords': [] if not job_description else ['关键词覆盖不足'],
+    }, job_description)
     logger.info(
         "analyze.rule_based user=%s stage=%s score=%s suggestions=%s",
         str(current_user_id),
@@ -905,6 +936,7 @@ def analyze_resume_core(current_user_id, data, deps):
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
+        'microInterviewFirstQuestion': rule_based_first_question,
         'suggestions': suggestions,
         'strengths': ['结构清晰', '格式规范'],
         'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
