@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { toSkillList } from '../../src/skill-utils';
 import { buildApiUrl } from '../../src/api-config';
+import { DatabaseService } from '../../src/database-service';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPage from './ai-analysis/ChatPage';
 import { useAppContext } from '../../src/app-context';
@@ -57,6 +58,7 @@ type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'chat' | 'co
 
 const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
+  const currentUser = useAppContext((s) => s.currentUser);
   const loadUserResumes = useAppContext((s) => s.loadUserResumes);
   const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
@@ -443,6 +445,50 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     targetCompany,
     setSuggestions: setSuggestions as any,
   });
+
+  const consumeUsageQuota = React.useCallback(async (kind: 'analysis' | 'interview') => {
+    const userId = String(currentUser?.id || '').trim();
+    if (!userId) return true;
+
+    const readResult = await DatabaseService.getUser(userId);
+    if (!readResult.success || !readResult.data) {
+      showToast('读取次数失败，请稍后重试', 'error');
+      return false;
+    }
+
+    const field = kind === 'analysis' ? 'diagnoses_remaining' : 'interviews_remaining';
+    const remaining = Number((readResult.data as any)?.[field] ?? 0);
+
+    if (!Number.isFinite(remaining) || remaining <= 0) {
+      const confirmMessage = kind === 'analysis'
+        ? '诊断次数不足，是否前往会员中心升级？'
+        : '面试次数不足，是否前往会员中心升级？';
+      let shouldGoMemberCenter = false;
+      try {
+        const confirmAsync = (window as any).__careerHeroConfirm;
+        if (typeof confirmAsync === 'function') {
+          shouldGoMemberCenter = await confirmAsync(confirmMessage);
+        } else {
+          shouldGoMemberCenter = window.confirm(confirmMessage);
+        }
+      } catch {
+        shouldGoMemberCenter = false;
+      }
+      if (shouldGoMemberCenter) {
+        navigateToView(View.MEMBER_CENTER, { replace: true });
+      }
+      return false;
+    }
+
+    const updateResult = await DatabaseService.updateUser(userId, { [field]: Math.max(0, remaining - 1) });
+    if (!updateResult.success) {
+      showToast('扣减次数失败，请稍后重试', 'error');
+      return false;
+    }
+
+    return true;
+  }, [currentUser?.id, navigateToView, showToast]);
+
   // --- Handlers ---
   const { cancelInFlightAnalysis, startAnalysis, handleStartAnalysisClick } = useAnalysisExecution({
     resumeData,
@@ -480,6 +526,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setShowJdEmptyModal,
     isInterviewMode,
     openChat,
+    consumeUsageQuota,
   });
 
   const updateScore = (points: number) => {

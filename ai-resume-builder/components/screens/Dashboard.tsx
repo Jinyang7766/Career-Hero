@@ -20,8 +20,6 @@ const CAREER_TIPS = [
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
   const currentUser = useAppContext((s) => s.currentUser);
   const navigateToView = useAppContext((s) => s.navigateToView);
-  const isDarkMode = useAppContext((s) => s.isDarkMode);
-  const toggleTheme = useAppContext((s) => s.toggleTheme);
   const allResumes = useAppStore((state) => state.allResumes);
   const setResumeData = useAppStore((state) => state.setResumeData);
   const [greeting, setGreeting] = useState('');
@@ -161,15 +159,6 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
             })}
           </p>
         </div>
-
-        <button
-          onClick={toggleTheme}
-          className="flex size-10 items-center justify-center rounded-xl bg-slate-100 dark:bg-white/5 text-slate-900 dark:text-white hover:bg-slate-200 dark:hover:bg-white/10 transition-all active:scale-95 border border-slate-200 dark:border-white/10 shadow-sm"
-        >
-          <span className="material-symbols-outlined text-[20px]">
-            {isDarkMode ? 'light_mode' : 'dark_mode'}
-          </span>
-        </button>
       </div>
 
       <div className="px-4 space-y-6 pt-2">

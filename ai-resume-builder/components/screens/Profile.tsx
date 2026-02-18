@@ -31,7 +31,9 @@ const MenuItem: React.FC<{ onClick: () => void, icon: string, label: string, col
 const Profile: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const currentUser = useAppContext((s) => s.currentUser);
-  const isDarkMode = useAppContext((s) => s.isDarkMode);
+  const isLoggedIn = !!currentUser?.id;
+  const resolvedTheme = useAppContext((s) => s.resolvedTheme);
+  const isDarkMode = resolvedTheme === 'dark';
   const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
   const [avatar, setAvatar] = React.useState(DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -65,6 +67,10 @@ const Profile: React.FC<ScreenProps> = () => {
   }, [userProfile, currentUser]);
 
   const handleAvatarClick = () => {
+    if (!isLoggedIn) {
+      navigateToView(View.LOGIN, { replace: true });
+      return;
+    }
     fileInputRef.current?.click();
   };
 
@@ -114,7 +120,10 @@ const Profile: React.FC<ScreenProps> = () => {
 
       <main className="flex flex-col gap-4 p-4">
         {/* Profile Info Card */}
-        <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative group overflow-hidden">
+        <div
+          className={`bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative group overflow-hidden ${isLoggedIn ? '' : 'cursor-pointer active:scale-[0.995] transition-transform'}`}
+          onClick={!isLoggedIn ? () => navigateToView(View.LOGIN, { replace: true }) : undefined}
+        >
           <div className="p-4">
             <div className="flex items-center gap-4 relative z-10">
               <div className="relative shrink-0 cursor-pointer" onClick={handleAvatarClick}>
@@ -136,15 +145,19 @@ const Profile: React.FC<ScreenProps> = () => {
               <div className="flex flex-col flex-1 min-w-0 pr-2">
                 <div className="flex items-center gap-2 mb-1 min-w-0">
                   <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
-                    {displayName || ' '}
+                    {isLoggedIn ? (displayName || ' ') : '未登录'}
                   </h2>
                   <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-current opacity-90 uppercase tracking-tight">
-                    {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
+                    {isLoggedIn ? (userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier) : '访客'}
                   </span>
                 </div>
-                {displayEmail && (
+                {isLoggedIn ? displayEmail && (
                   <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate font-medium">
                     {displayEmail}
+                  </p>
+                ) : (
+                  <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate font-medium">
+                    点击登录以继续使用完整功能
                   </p>
                 )}
               </div>
@@ -154,11 +167,11 @@ const Profile: React.FC<ScreenProps> = () => {
             <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center divide-x divide-slate-100 dark:divide-white/5">
               <div className="flex-1 flex flex-col items-center">
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余诊断</span>
-                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.diagnosesRemaining}</span>
+                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{isLoggedIn ? userSub.diagnosesRemaining : '--'}</span>
               </div>
               <div className="flex-1 flex flex-col items-center">
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余面试</span>
-                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.interviewsRemaining}</span>
+                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{isLoggedIn ? userSub.interviewsRemaining : '--'}</span>
               </div>
             </div>
           </div>

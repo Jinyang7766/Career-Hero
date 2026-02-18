@@ -24,8 +24,9 @@ export type AppContextValue = {
 
   login: (userData?: any) => void;
   logout: (opts?: { skipConfirm?: boolean }) => void;
-  isDarkMode: boolean;
-  toggleTheme: () => void;
+  theme: 'light' | 'dark' | 'system';
+  resolvedTheme: 'light' | 'dark';
+  setTheme: (theme: 'light' | 'dark' | 'system') => void;
 };
 
 type AppContextStore = {

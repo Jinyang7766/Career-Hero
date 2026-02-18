@@ -35,10 +35,45 @@ function App() {
   const setAllResumes = useAppStore((state) => state.setAllResumes);
   const isNavHidden = useAppStore((state) => state.isNavHidden);
   const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    return saved ? saved === 'dark' : true; // Default to dark
+  const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(() => {
+    const saved = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
+    return saved || 'system';
   });
+
+  const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
+
+  // Sync theme with HTML class and handle system preference
+  useEffect(() => {
+    const updateTheme = () => {
+      let activeTheme: 'light' | 'dark' = 'dark';
+
+      if (theme === 'system') {
+        activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      } else {
+        activeTheme = theme;
+      }
+
+      setResolvedTheme(activeTheme);
+
+      if (activeTheme === 'dark') {
+        document.documentElement.classList.add('dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+      }
+      localStorage.setItem('theme', theme);
+    };
+
+    updateTheme();
+
+    if (theme === 'system') {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handler = () => updateTheme();
+      mediaQuery.addEventListener('change', handler);
+      return () => mediaQuery.removeEventListener('change', handler);
+    }
+  }, [theme]);
+
+  const setTheme = (newTheme: 'light' | 'dark' | 'system') => setThemeState(newTheme);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -182,7 +217,7 @@ function App() {
   // Show bottom nav on main tabs (allow unauth users to see Home/My entry on dashboard)
   const showBottomNav = (
     (isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.AI_INTERVIEW, View.PROFILE, View.ALL_RESUMES].includes(currentView))
-    || (!isAuthenticated && currentView === View.DASHBOARD)
+    || (!isAuthenticated && [View.DASHBOARD, View.AI_ANALYSIS, View.AI_INTERVIEW, View.PROFILE].includes(currentView))
   ) && !isNavHidden;
 
   // Basic route guards / root redirects.
@@ -199,8 +234,8 @@ function App() {
       return;
     }
 
-    // Unauthenticated users can stay on dashboard (visitor mode).
-    if (!isAuthenticated && p.startsWith('/dashboard')) {
+    // Unauthenticated users can stay on visitor-mode pages.
+    if (!isAuthenticated && (p.startsWith('/dashboard') || p.startsWith('/ai-analysis') || p.startsWith('/ai-interview') || p.startsWith('/profile'))) {
       return;
     }
 
@@ -255,18 +290,6 @@ function App() {
     checkAuth();
   }, [navigate]);
 
-  // Sync theme with HTML class and localStorage
-  useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  }, [isDarkMode]);
-
-  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   // Load user resumes from Supabase
   const loadUserResumes = async () => {
@@ -449,6 +472,16 @@ function App() {
 
   // Back button handler
   const handleGoBack = () => {
+    if (!isAuthenticated && currentView === View.LOGIN) {
+      setShowWizard(false);
+      navigate(viewToPath(View.DASHBOARD), { replace: true });
+      return;
+    }
+    if (!isAuthenticated && currentView === View.FORGOT_PASSWORD) {
+      setShowWizard(false);
+      navigate(viewToPath(View.LOGIN), { replace: true });
+      return;
+    }
     // Prefer browser history; if none, fall back to dashboard.
     try {
       if (window.history.length > 1) {
@@ -465,10 +498,6 @@ function App() {
   // Bottom Nav click handler (resets history and wizard mode)
   const handleBottomNavClick = (view: View) => {
     setShowWizard(false); // Reset wizard mode when navigating via BottomNav
-    if (!isAuthenticated && view === View.PROFILE) {
-      navigate(viewToPath(View.SIGNUP), { replace: true });
-      return;
-    }
     if (view === View.ALL_RESUMES) {
       setResumeData(createEmptyResumeData());
     }
@@ -562,7 +591,7 @@ function App() {
       case View.DASHBOARD:
         return <Dashboard createNewResume={() => {
           if (!isAuthenticated) {
-            navigate(viewToPath(View.SIGNUP), { replace: true });
+            navigate(viewToPath(View.LOGIN), { replace: true });
             return;
           }
           // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
@@ -697,8 +726,9 @@ function App() {
         goBack: handleGoBack,
         login: handleLogin,
         logout: handleLogout,
-        isDarkMode,
-        toggleTheme,
+        theme,
+        resolvedTheme,
+        setTheme,
       }}
     >
       <div ref={appContainerRef} className={`min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative`}>

@@ -7,6 +7,8 @@ import { useAppContext } from '../../src/app-context';
 const Settings: React.FC<ScreenProps> = () => {
   const logout = useAppContext((s) => s.logout);
   const goBack = useAppContext((s) => s.goBack);
+  const theme = useAppContext((s) => s.theme);
+  const setTheme = useAppContext((s) => s.setTheme);
   const [cacheSize, setCacheSize] = useState<string>('0 B');
   const [isClearing, setIsClearing] = useState(false);
 
@@ -83,6 +85,33 @@ const Settings: React.FC<ScreenProps> = () => {
       </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar pb-24">
+        <div className="mt-8 px-4">
+          <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">显示</h3>
+          <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+            <div className="py-2 px-4">
+              <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-xl">
+                {[
+                  { id: 'light', label: '浅色', icon: 'light_mode' },
+                  { id: 'dark', label: '深色', icon: 'dark_mode' },
+                  { id: 'system', label: '跟随系统', icon: 'settings_brightness' }
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setTheme(item.id as any)}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all ${theme === item.id
+                      ? 'bg-white dark:bg-primary shadow-sm text-primary dark:text-white scale-[1.02]'
+                      : 'text-slate-500 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                      }`}
+                  >
+                    <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         <div className="mt-8 px-4">
           <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">通用</h3>
           <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">

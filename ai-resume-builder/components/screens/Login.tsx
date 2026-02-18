@@ -7,8 +7,7 @@ const Login: React.FC<ScreenProps> = () => {
   const SHOW_SOCIAL_LOGIN = false;
   const login = useAppContext((s) => s.login);
   const navigateToView = useAppContext((s) => s.navigateToView);
-  const isDarkMode = useAppContext((s) => s.isDarkMode);
-  const toggleTheme = useAppContext((s) => s.toggleTheme);
+  const goBack = useAppContext((s) => s.goBack);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -74,7 +73,16 @@ const Login: React.FC<ScreenProps> = () => {
 
   return (
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
-      <div className="flex flex-1 flex-col justify-center px-4 py-8 lg:px-8 relative overflow-hidden">
+      <div className="flex items-center p-4">
+        <button
+          onClick={goBack}
+          className="flex size-10 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white"
+        >
+          <span className="material-symbols-outlined">arrow_back</span>
+        </button>
+      </div>
+
+      <div className="flex flex-1 flex-col justify-center px-4 pt-2 pb-8 lg:px-8 relative overflow-hidden">
         {/* Decorative Background */}
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {/* Main Blobs - Soft & Large */}
@@ -84,24 +92,10 @@ const Login: React.FC<ScreenProps> = () => {
 
           {/* Subtle Grid Interaction - Modern & Professional */}
           <div className="absolute inset-0 opacity-[0.2] dark:opacity-[0.05]" style={{ backgroundImage: 'radial-gradient(circle, #3b82f6 1px, transparent 1px)', backgroundSize: '32px 32px' }}></div>
-
-          {/* Floating Accents */}
-          <div className="absolute top-[15%] right-[20%] w-24 h-24 border border-primary/10 rounded-full"></div>
-          <div className="absolute bottom-[25%] left-[15%] w-16 h-16 border border-blue-400/10 rounded-lg rotate-12"></div>
-          <div className="absolute top-[40%] right-[10%] w-12 h-12 border-t border-r border-primary/10 rounded-tr-xl"></div>
         </div>
-
 
         <div className="sm:mx-auto sm:w-full sm:max-w-md z-10">
           <div className="relative bg-white/60 dark:bg-slate-900/40 backdrop-blur-2xl border border-white dark:border-white/10 rounded-2xl sm:rounded-3xl shadow-2xl shadow-blue-500/5 p-6 sm:p-10 animate-in zoom-in-95 duration-500">
-            <button
-              onClick={toggleTheme}
-              className="absolute top-4 right-4 flex size-10 items-center justify-center rounded-xl border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/5 text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[20px]">
-                {isDarkMode ? 'light_mode' : 'dark_mode'}
-              </span>
-            </button>
             <div className="sm:mx-auto sm:w-full sm:max-w-sm">
               <div className="mx-auto flex h-14 w-14 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gradient-to-tr from-primary to-blue-600 shadow-lg shadow-primary/30 ring-4 ring-primary/10">
                 <span className="material-symbols-outlined text-white text-[28px] sm:text-[32px]">description</span>

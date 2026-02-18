@@ -6,6 +6,7 @@ import { applySuggestionFeedback, consolidateSkillSuggestions, inferTargetSectio
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
 import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
+import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
@@ -54,6 +55,7 @@ type Params = {
   setShowJdEmptyModal: (value: boolean) => void;
   isInterviewMode?: boolean;
   openChat: (source: 'internal' | 'preview') => void;
+  consumeUsageQuota?: (kind: 'analysis' | 'interview') => Promise<boolean>;
 };
 
 export const useAnalysisExecution = ({
@@ -92,6 +94,7 @@ export const useAnalysisExecution = ({
   setShowJdEmptyModal,
   isInterviewMode,
   openChat,
+  consumeUsageQuota,
 }: Params) => {
   const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
     return runRealAnalysis({
@@ -145,6 +148,27 @@ export const useAnalysisExecution = ({
     if (analysisRunIdRef.current) {
       cancelInFlightAnalysis();
     }
+    const normalizedInterviewType = String(interviewType || localStorage.getItem('ai_interview_type') || 'general').trim().toLowerCase();
+    const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
+    const interviewSessions = (resumeData as any)?.interviewSessions || {};
+    const typedKey = makeInterviewSessionKey(effectiveJdText, normalizedInterviewType);
+    const legacyKey = makeJdKey(effectiveJdText);
+    const resumeSession = interviewSessions[typedKey] || interviewSessions[legacyKey];
+    const hasInterviewMessages = !!(resumeSession && Array.isArray(resumeSession.messages) && resumeSession.messages.length > 0);
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const analysisState = String(analysisSessionByJd[makeJdKey(effectiveJdText)]?.state || '').toLowerCase();
+    const isContinuingInterview = Boolean(
+      isInterviewMode &&
+      hasInterviewMessages &&
+      (analysisState === 'interview_in_progress' || analysisState === 'paused')
+    );
+
+    if (consumeUsageQuota && !(isInterviewMode && isContinuingInterview)) {
+      const kind: 'analysis' | 'interview' = isInterviewMode ? 'interview' : 'analysis';
+      const allowed = await consumeUsageQuota(kind);
+      if (!allowed) return;
+    }
+
     const runId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
     analysisRunIdRef.current = runId;
     if (interviewType) {
@@ -424,6 +448,7 @@ export const useAnalysisExecution = ({
     showToast,
     setTargetCompany,
     targetCompany,
+    consumeUsageQuota,
   ]);
 
   const handleStartAnalysisClick = useCallback((interviewType?: string) => {
