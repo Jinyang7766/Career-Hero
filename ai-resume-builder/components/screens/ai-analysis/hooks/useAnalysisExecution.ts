@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import { toSkillList } from '../../../../src/skill-utils';
 import { createMasker } from '../chat-payload';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
-import { applySuggestionFeedback, consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
+import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
 import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
@@ -126,7 +126,7 @@ export const useAnalysisExecution = ({
   const cancelInFlightAnalysis = useCallback((message?: string) => {
     analysisRunIdRef.current = null;
     if (analysisAbortRef.current) {
-      try { analysisAbortRef.current.abort(); } catch { /* ignore */ }
+      try { analysisAbortRef.current.abort('analysis_cancelled'); } catch { /* ignore */ }
     }
     analysisAbortRef.current = null;
     setAnalysisInProgress(false);
@@ -219,7 +219,9 @@ export const useAnalysisExecution = ({
       if (!aiAnalysisResult) return;
 
       const newSuggestions: Suggestion[] = [];
-      const backendSuggestions = aiAnalysisResult.suggestions || [];
+      const analysisStage = String((aiAnalysisResult as any)?.analysisStage || '').toLowerCase();
+      const preInterviewOnly = analysisStage === 'pre_interview';
+      const backendSuggestions = preInterviewOnly ? [] : (aiAnalysisResult.suggestions || []);
       const currentSkillsText = Array.isArray(resumeData?.skills) && resumeData.skills.length > 0
         ? resumeData.skills.filter(Boolean).join('、')
         : '';
@@ -282,7 +284,7 @@ export const useAnalysisExecution = ({
         });
       });
 
-      if (!hasProjectExperience) {
+      if (!preInterviewOnly && !hasProjectExperience) {
         const hasProjectAdvice = newSuggestions.some((s) => s.targetSection === 'projects');
         if (!hasProjectAdvice) {
           newSuggestions.push({
@@ -339,10 +341,7 @@ export const useAnalysisExecution = ({
       }
       setOriginalScore(totalScore);
       setScore(totalScore);
-      const appliedSuggestions = applySuggestionFeedback(
-        consolidateSkillSuggestions(newSuggestions),
-        resumeData?.aiSuggestionFeedback || {}
-      );
+      const appliedSuggestions = consolidateSkillSuggestions(newSuggestions);
       setSuggestions(appliedSuggestions);
       setReport(newReport);
       const originalResumeId = resolveOriginalResumeIdForOptimization();
@@ -440,7 +439,7 @@ export const useAnalysisExecution = ({
           return backendDecisionRaw;
         }
 
-        const pendingSuggestions = (appliedSuggestions || []).filter((s) => s?.status !== 'accepted').length;
+        const pendingSuggestions = (appliedSuggestions || []).length;
         const weaknessCount = (newReport.weaknesses || [])
           .filter((w) => String(w || '').trim() && !/需要进一步优化/.test(String(w))).length;
         const missingKeywordCount = (newReport.missingKeywords || [])
@@ -479,18 +478,27 @@ export const useAnalysisExecution = ({
     } catch (error) {
       if (analysisRunIdRef.current !== runId) return;
       console.error('AI analysis failed:', error);
+      const message = String((error as any)?.message || '').trim();
+      const isTimeout = message === 'analysis_timeout';
+      const isCancelled = message === 'analysis_cancelled';
       try {
         await persistAnalysisSessionState('paused', {
           jdText: jdText || resumeData?.lastJdText || '',
           targetCompany: targetCompany || resumeData?.targetCompany || '',
           step: 'jd_input',
-          error: (error as any)?.message || 'analysis_interrupted',
+          error: message || 'analysis_interrupted',
           force: true,
         });
       } catch (stateErr) {
         console.warn('Failed to persist paused session state:', stateErr);
       }
-      showToast(`AI 分析失败：${(error as any)?.message || '网络连接异常，请稍后重试'}`, 'error', 2600);
+      if (isTimeout) {
+        showToast('AI 分析超时，请检查后端服务是否可用后重试', 'error', 2800);
+      } else if (isCancelled) {
+        showToast('分析已取消，请重试', 'info', 1800);
+      } else {
+        showToast(`AI 分析失败：${message || '网络连接异常，请稍后重试'}`, 'error', 2600);
+      }
       navigateToStep('jd_input');
     } finally {
       if (analysisRunIdRef.current === runId) {

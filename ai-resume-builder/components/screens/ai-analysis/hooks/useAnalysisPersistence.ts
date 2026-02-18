@@ -1,9 +1,7 @@
-import type { Dispatch, SetStateAction } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { supabase } from '../../../../src/supabase-client';
 import type { ResumeData } from '../../../../types';
 import type { Suggestion } from '../types';
-import { createMasker } from '../chat-payload';
 
 type AnalysisReportLike = {
   summary: string;
@@ -18,7 +16,6 @@ type Params = {
   setResumeData?: (v: ResumeData) => void;
   jdText: string;
   targetCompany: string;
-  setSuggestions: Dispatch<SetStateAction<Suggestion[]>>;
 };
 
 export const useAnalysisPersistence = ({
@@ -26,7 +23,6 @@ export const useAnalysisPersistence = ({
   setResumeData,
   jdText,
   targetCompany,
-  setSuggestions,
 }: Params) => {
   const persistSuggestionsState = async (nextSuggestions: Suggestion[]) => {
     if (!resumeData) return;
@@ -90,9 +86,6 @@ export const useAnalysisPersistence = ({
       targetCompany: targetCompany || baseResumeData.targetCompany || ''
     };
     const nextSuggestions = Array.isArray(suggestionItems) ? suggestionItems : [];
-    const pendingCount = nextSuggestions.filter((s: any) => s?.status === 'pending').length;
-    const acceptedCount = nextSuggestions.filter((s: any) => s?.status === 'accepted').length;
-    const ignoredCount = nextSuggestions.filter((s: any) => s?.status === 'ignored').length;
     const dossier = {
       id: `dossier_${Date.now()}`,
       createdAt: snapshot.updatedAt,
@@ -103,9 +96,7 @@ export const useAnalysisPersistence = ({
       scoreBreakdown: snapshot.scoreBreakdown,
       suggestionsOverview: {
         total: nextSuggestions.length,
-        pending: pendingCount,
-        accepted: acceptedCount,
-        ignored: ignoredCount,
+        actionable: nextSuggestions.length,
       },
       strengths: reportData.strengths || [],
       weaknesses: reportData.weaknesses || [],
@@ -148,75 +139,8 @@ export const useAnalysisPersistence = ({
     return updatedResumeData;
   };
 
-  const maskSuggestionPayload = (suggestion: Suggestion) => {
-    const masker = createMasker();
-    const maskValue = (value: any) => {
-      if (value === null || value === undefined) return value;
-      if (typeof value === 'string') return masker.maskText(value);
-      return masker.maskObject(value);
-    };
-
-    return {
-      reasonMasked: suggestion.reason ? masker.maskText(suggestion.reason) : undefined,
-      originalValueMasked: maskValue(suggestion.originalValue),
-      suggestedValueMasked: maskValue(suggestion.suggestedValue)
-    };
-  };
-
-  const persistSuggestionFeedback = async (suggestion: Suggestion, rating: 'up' | 'down') => {
-    if (!resumeData) return;
-    if (suggestion.rating === rating) return;
-
-    const updatedFeedback = {
-      ...(resumeData.aiSuggestionFeedback || {}),
-      [suggestion.id]: {
-        rating,
-        ratedAt: new Date().toISOString(),
-        title: suggestion.title,
-        reason: suggestion.reason
-      }
-    };
-
-    const updatedResumeData: ResumeData = {
-      ...resumeData,
-      aiSuggestionFeedback: updatedFeedback
-    };
-
-    setSuggestions(prev => prev.map(s => s.id === suggestion.id ? { ...s, rating } : s));
-    if (setResumeData) {
-      setResumeData(updatedResumeData);
-    }
-
-    if (!resumeData.id) return;
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const masked = rating === 'down' ? maskSuggestionPayload(suggestion) : {};
-
-      await DatabaseService.createSuggestionFeedback({
-        userId: user.id,
-        resumeId: resumeData.id ?? null,
-        suggestionId: suggestion.id,
-        rating,
-        title: suggestion.title,
-        reasonMasked: (masked as any).reasonMasked,
-        originalValueMasked: (masked as any).originalValueMasked,
-        suggestedValueMasked: (masked as any).suggestedValueMasked
-      });
-
-      await DatabaseService.updateResume(String(resumeData.id), {
-        resume_data: updatedResumeData,
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Failed to persist suggestion feedback:', err);
-    }
-  };
-
   return {
     persistAnalysisSnapshot,
-    persistSuggestionFeedback,
     persistSuggestionsState,
   };
 };

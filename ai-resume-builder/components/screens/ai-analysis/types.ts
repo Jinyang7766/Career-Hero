@@ -8,7 +8,7 @@ export interface Suggestion {
   targetField?: string;
   suggestedValue: any;
   originalValue?: string;
-  status: 'pending' | 'accepted' | 'ignored';
+  status: 'pending';
   rating?: 'up' | 'down';
 }
 

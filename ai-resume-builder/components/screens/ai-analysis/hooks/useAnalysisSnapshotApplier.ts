@@ -1,11 +1,10 @@
 import { useCallback } from 'react';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
-import { applySuggestionFeedback, consolidateSkillSuggestions } from '../suggestion-helpers';
+import { consolidateSkillSuggestions } from '../suggestion-helpers';
 import { isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
-  resumeFeedback?: Record<string, any>;
   setOriginalScore: (value: number) => void;
   setScore: (value: number) => void;
   setSuggestions: (items: Suggestion[]) => void;
@@ -14,7 +13,6 @@ type Params = {
 };
 
 export const useAnalysisSnapshotApplier = ({
-  resumeFeedback,
   setOriginalScore,
   setScore,
   setSuggestions,
@@ -34,10 +32,7 @@ export const useAnalysisSnapshotApplier = ({
     const cleanedSuggestions = consolidateSkillSuggestions(snapshot.suggestions || []).filter((s: any) =>
       !isGenderRelatedSuggestion(s) && !isEducationRelatedSuggestion(s)
     );
-    setSuggestions(applySuggestionFeedback(
-      cleanedSuggestions,
-      resumeFeedback || {}
-    ));
+    setSuggestions(cleanedSuggestions);
     setReport({
       summary: snapshot.summary || '',
       strengths: snapshot.strengths || [],
@@ -47,7 +42,7 @@ export const useAnalysisSnapshotApplier = ({
     });
     setIsFromCache(true);
     return true;
-  }, [resumeFeedback, setIsFromCache, setOriginalScore, setReport, setScore, setSuggestions]);
+  }, [setIsFromCache, setOriginalScore, setReport, setScore, setSuggestions]);
 
   return { applyAnalysisSnapshot };
 };

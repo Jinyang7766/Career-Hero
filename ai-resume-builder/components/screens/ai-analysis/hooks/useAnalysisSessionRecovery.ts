@@ -11,7 +11,7 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string) => void;
   openChat: (source: 'internal' | 'preview') => void;
-  navigateToStep: (step: 'report' | 'micro_intro', replace?: boolean) => void;
+  navigateToStep: (step: 'report' | 'micro_intro' | 'comparison', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
 };
@@ -76,6 +76,15 @@ export const useAnalysisSessionRecovery = ({
       (resumeData.analysisSnapshot || loadLastAnalysis())
     ) {
       navigateToStep('report', true);
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+
+    if (
+      status === 'interview_done' &&
+      (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
+    ) {
+      navigateToStep('comparison', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }

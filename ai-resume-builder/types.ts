@@ -146,9 +146,10 @@ export interface ResumeData {
     };
     suggestionsOverview?: {
       total: number;
-      pending: number;
-      accepted: number;
-      ignored: number;
+      actionable?: number;
+      pending?: number;
+      accepted?: number;
+      ignored?: number;
     };
     strengths?: string[];
     weaknesses?: string[];
@@ -168,19 +169,14 @@ export interface ResumeData {
     };
     suggestionsOverview?: {
       total: number;
-      pending: number;
-      accepted: number;
-      ignored: number;
+      actionable?: number;
+      pending?: number;
+      accepted?: number;
+      ignored?: number;
     };
     strengths?: string[];
     weaknesses?: string[];
     missingKeywords?: string[];
-  }>;
-  aiSuggestionFeedback?: Record<string, {
-    rating: 'up' | 'down';
-    ratedAt: string;
-    title?: string;
-    reason?: string;
   }>;
   interviewSessions?: Record<string, {
     jdText: string;

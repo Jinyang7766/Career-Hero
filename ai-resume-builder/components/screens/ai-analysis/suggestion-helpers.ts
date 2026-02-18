@@ -189,17 +189,6 @@ export const getSuggestionModuleLabel = (suggestion: Suggestion, resumeData: Res
   return '简历';
 };
 
-export const applySuggestionFeedback = (
-  items: Suggestion[],
-  feedback?: Record<string, { rating?: 'up' | 'down' }>
-) => {
-  if (!feedback || Object.keys(feedback).length === 0) return items;
-  return items.map((item) => {
-    const entry = feedback[item.id];
-    return entry?.rating ? { ...item, rating: entry.rating } : item;
-  });
-};
-
 export const consolidateSkillSuggestions = (items: Suggestion[]) => {
   if (!Array.isArray(items) || items.length === 0) return [];
 
@@ -231,9 +220,6 @@ export const consolidateSkillSuggestions = (items: Suggestion[]) => {
     .filter(Boolean);
   const dedupedOriginal = Array.from(new Set(mergedOriginalSkills));
 
-  const mergedStatus = skillIndices.some(({ item }) => item.status === 'accepted')
-    ? 'accepted'
-    : (skillIndices.some(({ item }) => item.status === 'ignored') ? 'ignored' : 'pending');
   const mergedRating = skillIndices.find(({ item }) => !!item.rating)?.item.rating;
   const firstSkill = skillIndices[0].item;
 
@@ -244,7 +230,7 @@ export const consolidateSkillSuggestions = (items: Suggestion[]) => {
     targetField: 'skills',
     suggestedValue: dedupedSkills,
     originalValue: dedupedOriginal.join('、') || firstSkill.originalValue,
-    status: mergedStatus as any,
+    status: 'pending',
     rating: mergedRating
   };
 

@@ -92,17 +92,30 @@ export const useAiExternalEntries = ({
   }, []);
 
   useEffect(() => {
-    const shouldOpenReport = localStorage.getItem('ai_report_open') === '1';
-    const targetId = localStorage.getItem('ai_report_resume_id');
+    const shouldOpenReport =
+      localStorage.getItem('ai_result_open') === '1' ||
+      localStorage.getItem('ai_report_open') === '1';
+    const targetId =
+      localStorage.getItem('ai_result_resume_id') ||
+      localStorage.getItem('ai_report_resume_id');
+    const targetStepRaw =
+      localStorage.getItem('ai_result_step') ||
+      localStorage.getItem('ai_report_step') ||
+      'report';
+    const targetStep = targetStepRaw === 'comparison' ? 'comparison' : 'report';
     if (!shouldOpenReport || !targetId) return;
 
+    localStorage.removeItem('ai_result_open');
+    localStorage.removeItem('ai_result_resume_id');
+    localStorage.removeItem('ai_result_step');
     localStorage.removeItem('ai_report_resume_payload');
     localStorage.removeItem('ai_report_open');
     localStorage.removeItem('ai_report_resume_id');
-    localStorage.setItem('ai_analysis_step', 'report');
+    localStorage.removeItem('ai_report_step');
+    localStorage.setItem('ai_analysis_step', targetStep);
     setStepHistory([]);
     setForceReportEntry(true);
-    setCurrentStep('report');
+    setCurrentStep(targetStep);
     void handleResumeSelect(targetId, true);
   }, []);
 };

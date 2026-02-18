@@ -28,9 +28,10 @@ export interface UserProfile {
     };
     suggestionsOverview?: {
       total: number;
-      pending: number;
-      accepted: number;
-      ignored: number;
+      actionable?: number;
+      pending?: number;
+      accepted?: number;
+      ignored?: number;
     };
     strengths?: string[];
     weaknesses?: string[];
@@ -50,9 +51,10 @@ export interface UserProfile {
     };
     suggestionsOverview?: {
       total: number;
-      pending: number;
-      accepted: number;
-      ignored: number;
+      actionable?: number;
+      pending?: number;
+      accepted?: number;
+      ignored?: number;
     };
     strengths?: string[];
     weaknesses?: string[];

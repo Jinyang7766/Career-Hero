@@ -4,6 +4,7 @@ import ResumeSelectPage from './pages/ResumeSelectPage';
 import JdInputPage from './pages/JdInputPage';
 import ReportPage from './pages/ReportPage';
 import MicroInterviewIntroPage from './pages/MicroInterviewIntroPage';
+import PostInterviewReportPage from './pages/PostInterviewReportPage';
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
 
@@ -39,18 +40,10 @@ type Params = {
   score: number;
   originalScore: number;
   report: any;
-  suggestions: any[];
-  setSuggestions: React.Dispatch<React.SetStateAction<any[]>>;
   getScoreColor: (s: number) => string;
-  getSuggestionModuleLabelOf: (s: any) => string;
-  getDisplayOriginalValueOf: (s: any) => React.ReactNode;
-  persistSuggestionFeedback: (suggestion: any, rating: 'up' | 'down') => void;
-  handleIgnoreSuggestion: (suggestion: any) => void | Promise<void>;
-  handleAcceptSuggestionInChat: (suggestion: any) => void;
-  acceptingSuggestionIds: Set<string>;
   handleAnalyzeOtherResume: () => void;
-  handleExportPDF: () => void;
   handleStartMicroInterview: () => void;
+  handleRetryAnalysisFromIntro: () => void;
   ToastOverlay: React.ComponentType;
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
   endInterviewFromChat: () => void;
@@ -94,6 +87,11 @@ type Params = {
   interviewAnsweredCount: number;
   getInterviewerTitle: () => string;
   getInterviewerAvatarUrl: () => string;
+  postInterviewSummary: string;
+  postInterviewOriginalResume: any;
+  postInterviewGeneratedResume: any;
+  postInterviewAnnotations: Array<{ id: string; title: string; reason: string; section: string }>;
+  handlePostInterviewFeedback: (rating: 'up' | 'down') => Promise<boolean> | boolean;
 };
 
 export const renderAiAnalysisStep = (p: Params) => {
@@ -148,19 +146,9 @@ export const renderAiAnalysisStep = (p: Params) => {
         hasJdInput={p.hasJdInput}
         handleStepBack={p.handleStepBack}
         score={p.score}
-        originalScore={p.originalScore}
         report={p.report}
-        suggestions={p.suggestions}
-        setSuggestions={p.setSuggestions as any}
         getScoreColor={p.getScoreColor}
-        getSuggestionModuleLabel={p.getSuggestionModuleLabelOf}
-        getDisplayOriginalValue={p.getDisplayOriginalValueOf}
-        persistSuggestionFeedback={p.persistSuggestionFeedback as any}
-        handleIgnoreSuggestion={p.handleIgnoreSuggestion as any}
-        handleAcceptSuggestionInChat={p.handleAcceptSuggestionInChat as any}
-        acceptingSuggestionIds={p.acceptingSuggestionIds}
         handleAnalyzeOtherResume={p.handleAnalyzeOtherResume}
-        handleExportPDF={p.handleExportPDF}
         handleStartMicroInterview={p.handleStartMicroInterview}
       />
     );
@@ -175,6 +163,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         scoreBreakdown={p.report?.scoreBreakdown as any}
         getScoreColor={p.getScoreColor}
         onBack={p.handleStepBack}
+        onRetry={p.handleRetryAnalysisFromIntro}
         onStart={p.handleStartMicroInterview}
       />
     );
@@ -228,6 +217,19 @@ export const renderAiAnalysisStep = (p: Params) => {
         interviewTotalCount={p.interviewPlan.length}
         interviewerTitle={p.getInterviewerTitle()}
         aiAvatarUrl={p.getInterviewerAvatarUrl()}
+      />
+    );
+  }
+
+  if (p.currentStep === 'comparison') {
+    return (
+      <PostInterviewReportPage
+        summary={p.postInterviewSummary}
+        originalResume={p.postInterviewOriginalResume}
+        generatedResume={p.postInterviewGeneratedResume}
+        annotations={p.postInterviewAnnotations}
+        onFeedback={p.handlePostInterviewFeedback}
+        onBack={p.handleStepBack}
       />
     );
   }

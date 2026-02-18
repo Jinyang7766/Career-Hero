@@ -35,6 +35,7 @@ type Params = {
   stripMarkdownTableSeparators: (text: string) => string;
   formatInterviewQuestion: (q: string) => string;
   isSelfIntroQuestion: (q: string) => boolean;
+  onInterviewCompleted?: (summary: string, finalMessages: ChatMessage[]) => void;
 };
 
 export const useInterviewChat = ({
@@ -58,6 +59,7 @@ export const useInterviewChat = ({
   stripMarkdownTableSeparators,
   formatInterviewQuestion,
   isSelfIntroQuestion,
+  onInterviewCompleted,
 }: Params) => {
   const [isSending, setIsSending] = useState(false);
   const sendingCountRef = useRef(0);
@@ -364,12 +366,19 @@ export const useInterviewChat = ({
         try {
           await persistAnalysisSessionState('interview_done', {
             jdText,
-            step: 'report',
+            step: 'comparison',
             lastMessageAt: new Date().toISOString(),
             force: true,
           });
         } catch (stateErr) {
           console.warn('Failed to persist interview_done state:', stateErr);
+        }
+        if (onInterviewCompleted) {
+          try {
+            onInterviewCompleted(summary || '', finalMessages);
+          } catch (cbErr) {
+            console.warn('onInterviewCompleted callback failed:', cbErr);
+          }
         }
         interviewEndedRef.current = true;
         return;

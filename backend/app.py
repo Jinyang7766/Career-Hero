@@ -152,7 +152,7 @@ GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview
 # JD 截图识别模型：默认与 PDF OCR 一致，可单独下调到更快模型（如 gemini-2.5-flash-lite）
 GEMINI_JD_OCR_MODEL = os.getenv('GEMINI_JD_OCR_MODEL', GEMINI_PDF_OCR_MODEL)
 # 简历分析（优化建议）模型
-GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-pro-preview')
+GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
 # 简历分析模型路由：gemini | deepseek | ab
 ANALYSIS_LLM_MODE = (os.getenv('ANALYSIS_LLM_MODE', 'gemini') or 'gemini').strip().lower()
 try:
@@ -164,7 +164,11 @@ DEEPSEEK_API_KEY = (os.getenv('DEEPSEEK_API_KEY', '') or '').strip()
 DEEPSEEK_BASE_URL = (os.getenv('DEEPSEEK_BASE_URL', 'https://api.deepseek.com') or 'https://api.deepseek.com').rstrip('/')
 DEEPSEEK_ANALYSIS_MODEL = (os.getenv('DEEPSEEK_ANALYSIS_MODEL', 'deepseek-chat') or 'deepseek-chat').strip()
 # 面试对话模型
-GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-pro-preview')
+GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
+# 面试结束后的综合总结模型（质量优先）
+GEMINI_INTERVIEW_SUMMARY_MODEL = os.getenv('GEMINI_INTERVIEW_SUMMARY_MODEL', 'gemini-3-pro-preview')
+# 最终新简历生成模型（质量优先）
+GEMINI_RESUME_GENERATION_MODEL = os.getenv('GEMINI_RESUME_GENERATION_MODEL', 'gemini-3-pro-preview')
 # 语音转文字模型（成本优先）
 GEMINI_TRANSCRIBE_MODEL = os.getenv('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash-lite')
 GEMINI_VISION_MODELS = [
@@ -1019,9 +1023,10 @@ def ai_chat(current_user_id):
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
                 '_parse_json_object_from_text': _parse_json_object_from_text,
                 'GEMINI_INTERVIEW_MODEL': GEMINI_INTERVIEW_MODEL,
+                'GEMINI_INTERVIEW_SUMMARY_MODEL': GEMINI_INTERVIEW_SUMMARY_MODEL,
                 'format_resume_for_ai': format_resume_for_ai,
-            },
-        )
+              },
+          )
         return jsonify(body), status
     except Exception:
         return jsonify({'error': '服务器内部错误'}), 500
@@ -1046,9 +1051,10 @@ def ai_chat_stream(current_user_id):
                 '_gemini_generate_content_resilient': _gemini_generate_content_resilient,
                 '_parse_json_object_from_text': _parse_json_object_from_text,
                 'GEMINI_INTERVIEW_MODEL': GEMINI_INTERVIEW_MODEL,
+                'GEMINI_INTERVIEW_SUMMARY_MODEL': GEMINI_INTERVIEW_SUMMARY_MODEL,
                 'format_resume_for_ai': format_resume_for_ai,
-            },
-        )
+              },
+          )
 
         if immediate_body is not None:
             # Validation/early-return path keeps JSON semantics for easier fallback handling.
@@ -1138,7 +1144,7 @@ def generate_resume(current_user_id):
         generated_resume = generate_optimized_resume(
             gemini_client=gemini_client,
             check_gemini_quota=check_gemini_quota,
-            gemini_analysis_model=GEMINI_ANALYSIS_MODEL,
+            gemini_analysis_model=GEMINI_RESUME_GENERATION_MODEL,
             parse_ai_response=parse_ai_response,
             format_resume_for_ai=format_resume_for_ai,
             logger=logger,

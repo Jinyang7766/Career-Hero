@@ -27,7 +27,6 @@ export const createEmptyResumeData = (): ResumeData => ({
   lastJdText: '',
   targetCompany: '',
   analysisSnapshot: undefined,
-  aiSuggestionFeedback: undefined,
   interviewSessions: undefined,
   exportHistory: undefined,
 });
@@ -74,4 +73,3 @@ export const selectCompleteness = (state: AppStoreState): number => {
   if (data.projects.length > 0) score += 10;
   return Math.min(score, 100);
 };
-

@@ -27,6 +27,17 @@ export const useAiAnalysisLifecycle = ({
   resumeData,
   isInterviewMode,
 }: Params) => {
+  const resolveFallbackStep = () => {
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const states = Object.values(analysisSessionByJd)
+      .map((item: any) => String(item?.state || '').toLowerCase())
+      .filter(Boolean);
+    if (states.includes('interview_done')) return 'comparison';
+    if (states.includes('interview_in_progress') || states.includes('paused')) return 'micro_intro';
+    if (score > 0 || suggestionsLength > 0) return 'report';
+    return 'resume_select';
+  };
+
   useEffect(() => {
     if (isInterviewMode) return;
     if (currentStep !== 'chat') return;
@@ -38,7 +49,7 @@ export const useAiAnalysisLifecycle = ({
     localStorage.removeItem('ai_analysis_entry_source');
     if (localStorage.getItem('ai_interview_open') === '1') return;
 
-    const nextStep = score > 0 || suggestionsLength > 0 ? 'report' : 'resume_select';
+    const nextStep = resolveFallbackStep();
     setChatEntrySource('internal');
     setLastChatStep(nextStep);
     localStorage.setItem('ai_chat_entry_source', 'internal');
@@ -54,6 +65,7 @@ export const useAiAnalysisLifecycle = ({
     setLastChatStep,
     setStepHistory,
     setCurrentStep,
+    resumeData,
   ]);
 
   useEffect(() => {

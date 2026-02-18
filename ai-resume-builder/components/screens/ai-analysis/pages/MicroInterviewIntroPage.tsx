@@ -1,4 +1,5 @@
 import React from 'react';
+import AiDisclaimer from '../AiDisclaimer';
 
 type ScoreBreakdown = {
   experience: number;
@@ -13,6 +14,7 @@ type Props = {
   scoreBreakdown?: ScoreBreakdown;
   getScoreColor: (s: number) => string;
   onBack: () => void;
+  onRetry: () => void;
   onStart: () => void;
 };
 
@@ -23,6 +25,7 @@ const MicroInterviewIntroPage: React.FC<Props> = ({
   scoreBreakdown,
   getScoreColor,
   onBack,
+  onRetry,
   onStart,
 }) => {
   return (
@@ -32,8 +35,14 @@ const MicroInterviewIntroPage: React.FC<Props> = ({
           <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
-          <h1 className="text-base font-bold tracking-tight">进入微访谈前</h1>
-          <div className="w-8"></div>
+          <h1 className="text-base font-bold tracking-tight">初始评价</h1>
+          <button
+            onClick={onRetry}
+            className="text-xs font-bold text-primary hover:text-blue-600 transition-colors"
+            type="button"
+          >
+            重新诊断
+          </button>
         </div>
       </header>
 
@@ -79,6 +88,7 @@ const MicroInterviewIntroPage: React.FC<Props> = ({
         >
           进入微访谈
         </button>
+        <AiDisclaimer className="pt-3" />
       </main>
     </div>
   );

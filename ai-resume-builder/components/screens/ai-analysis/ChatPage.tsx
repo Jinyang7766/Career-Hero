@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ChatMessage } from './types';
 import { confirmDialog } from '../../../src/ui/dialogs';
+import AiDisclaimer from './AiDisclaimer';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
@@ -615,9 +616,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
 
           {!isKeyboardOpen && (
-            <div className="mt-2 text-center animate-in fade-in duration-300">
-              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-medium opacity-80">内容由AI生成，请注意核实</p>
-            </div>
+            <AiDisclaimer className="mt-2 animate-in fade-in duration-300" />
           )}
         </div>
       </div>

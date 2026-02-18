@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
-import { toSkillList } from '../../src/skill-utils';
 import { buildApiUrl } from '../../src/api-config';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../src/app-context';
@@ -12,7 +11,6 @@ import { useResumeSelection } from './ai-analysis/hooks/useResumeSelection';
 import { useAiAnalysisNavigation } from './ai-analysis/hooks/useAiAnalysisNavigation';
 import { useToastOverlay } from './ai-analysis/hooks/useToastOverlay';
 import { useInterviewChat } from './ai-analysis/hooks/useInterviewChat';
-import { useSuggestionAcceptance } from './ai-analysis/hooks/useSuggestionAcceptance';
 import { useAnalysisPersistence } from './ai-analysis/hooks/useAnalysisPersistence';
 import { useOptimizedResumeStore } from './ai-analysis/hooks/useOptimizedResumeStore';
 import { useJdScreenshotUpload } from './ai-analysis/hooks/useJdScreenshotUpload';
@@ -26,20 +24,15 @@ import { useReportSnapshotRestore } from './ai-analysis/hooks/useReportSnapshotR
 import { useAnalyzeOtherResumeReset } from './ai-analysis/hooks/useAnalyzeOtherResumeReset';
 import { useAnalysisExecution } from './ai-analysis/hooks/useAnalysisExecution';
 import { useUsageQuota } from './ai-analysis/hooks/useUsageQuota';
-import { useSuggestionIgnore } from './ai-analysis/hooks/useSuggestionIgnore';
 import { useAnalysisSessionRecovery } from './ai-analysis/hooks/useAnalysisSessionRecovery';
+import { useInterviewPlanLoader } from './ai-analysis/hooks/useInterviewPlanLoader';
+import { usePostInterviewReportData } from './ai-analysis/hooks/usePostInterviewReportData';
+import { usePostInterviewFeedback } from './ai-analysis/hooks/usePostInterviewFeedback';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
-  sanitizeSuggestedValue
 } from './ai-analysis/chat-formatters';
 import { getBackendAuthToken } from './ai-analysis/auth';
-import {
-  getDisplayOriginalValue,
-  getSuggestionModuleLabel,
-  inferTargetSection,
-  normalizeTargetSection
-} from './ai-analysis/suggestion-helpers';
 import { getRagEnabledFlag } from './ai-analysis/analysis-config';
 import WaveformVisualizer from './ai-analysis/WaveformVisualizer';
 import { isSameResumeId, normalizeResumeId } from './ai-analysis/id-utils';
@@ -52,14 +45,11 @@ import {
   isAffirmative
 } from './ai-analysis/chat-text';
 import {
-  composeInterviewPlan,
   getActiveInterviewType,
-  getFallbackPlanByType,
   getInterviewerAvatarUrl,
   getInterviewerTitle,
   getPlanStorageKey,
   getWarmupQuestion,
-  sanitizePlanQuestions,
 } from './ai-analysis/interview-plan-utils';
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
@@ -70,7 +60,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const currentUser = useAppContext((s) => s.currentUser);
   const { userProfile } = useUserProfile(currentUser?.id, currentUser);
-  const loadUserResumes = useAppContext((s) => s.loadUserResumes);
   const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
@@ -81,8 +70,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   // Skill normalization moved to `src/skill-utils.ts` so resume import and suggestion generation stay consistent.
 
-  const getDisplayOriginalValueOf = (suggestion: Suggestion) => getDisplayOriginalValue(suggestion, resumeData);
-  const getSuggestionModuleLabelOf = (suggestion: Suggestion) => getSuggestionModuleLabel(suggestion, resumeData);
   // Navigation State
   const [currentStep, setCurrentStep] = useState<Step>(() => deriveInitialStepFromPath());
   const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
@@ -116,6 +103,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const [score, setScore] = useState(0);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [report, setReport] = useState<AnalysisReport | null>(null);
+  const [postInterviewSummary, setPostInterviewSummary] = useState('');
   const isExporting = false;
 
   // Upload State
@@ -203,6 +191,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     stripMarkdownTableSeparators,
     formatInterviewQuestion,
     isSelfIntroQuestion,
+    onInterviewCompleted: (summaryText) => {
+      setPostInterviewSummary(String(summaryText || '').trim());
+      navigateToStep('comparison', true);
+    },
   });
 
   useEffect(() => {
@@ -295,7 +287,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   }, [currentStep]);
 
   const { applyAnalysisSnapshot } = useAnalysisSnapshotApplier({
-    resumeFeedback: resumeData?.aiSuggestionFeedback,
     setOriginalScore,
     setScore,
     setSuggestions: setSuggestions as any,
@@ -306,8 +297,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const {
     optimizedResumeIdRef,
     resolveOriginalResumeIdForOptimization,
-    ensureSingleOptimizedResume,
-    resolveAnalysisBinding,
     ensureAnalysisBinding,
     resetOptimizedCreationState,
   } = useOptimizedResumeStore({
@@ -341,12 +330,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isInterviewMode,
   });
 
-  const { persistAnalysisSnapshot, persistSuggestionFeedback, persistSuggestionsState } = useAnalysisPersistence({
+  const { persistAnalysisSnapshot } = useAnalysisPersistence({
     resumeData,
     setResumeData: setResumeData as any,
     jdText,
     targetCompany,
-    setSuggestions: setSuggestions as any,
   });
   const { consumeUsageQuota } = useUsageQuota({
     currentUserId: currentUser?.id,
@@ -394,54 +382,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     consumeUsageQuota,
   });
 
-  const updateScore = (points: number) => {
-    setScore(prev => Math.min(prev + points, 100));
-  };
-  const { handleAcceptSuggestionInChat, acceptingSuggestionIds } = useSuggestionAcceptance({
-    resumeData,
-    setResumeData: setResumeData as any,
-    suggestions: suggestions as any,
-    setSuggestions: setSuggestions as any,
-    setChatMessages: setChatMessages as any,
-    allResumes,
-    isSameResumeId,
-    resolveOriginalResumeIdForOptimization,
-    ensureSingleOptimizedResume: ensureSingleOptimizedResume as any,
-    resolveAnalysisBinding: resolveAnalysisBinding as any,
-    ensureAnalysisBinding: ensureAnalysisBinding as any,
-    normalizeTargetSection,
-    inferTargetSection,
-    sanitizeSuggestedValue,
-    toSkillList,
-    jdText,
-    targetCompany,
-    report,
-    score,
-    saveLastAnalysis,
-    setAnalysisResumeId,
-    optimizedResumeIdRef,
-    setOptimizedResumeId,
-    loadUserResumes,
-    showToast: showToast as any,
-    updateScore,
-  });
-  const { handleIgnoreSuggestion } = useSuggestionIgnore({
-    suggestions: suggestions as any[],
-    setSuggestions: setSuggestions as any,
-    setChatMessages: setChatMessages as any,
-    persistSuggestionsState: persistSuggestionsState as any,
-    resumeData,
-    report,
-    score,
-    jdText,
-    targetCompany,
-    saveLastAnalysis,
-    showToast,
-  });
-
-  const handleExportPDF = () => {
-    navigateToView(View.PREVIEW);
-  };
+  
 
   const { handleAnalyzeOtherResume } = useAnalyzeOtherResumeReset({
     setSelectedResumeId,
@@ -503,82 +444,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
   });
 
-  useEffect(() => {
-    if (!isInterviewMode) return;
-    if (!resumeData) return;
-    const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
-    if (!effectiveJdText) return;
-    const interviewType = getActiveInterviewType();
-    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText);
-
-    try {
-      const cached = localStorage.getItem(storageKey);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        const q = composeInterviewPlan(
-          interviewType,
-          sanitizePlanQuestions(Array.isArray(parsed?.questions) ? parsed.questions : [], interviewType)
-        );
-        if (q.length > 0) {
-          setInterviewPlan(q);
-          return;
-        }
-      }
-    } catch {
-      // ignore cache parse errors
-    }
-
-    const run = async () => {
-      try {
-        setInterviewPlan(prev => {
-          if (prev.length > 0) return prev;
-          return [getWarmupQuestion(interviewType)];
-        });
-
-        const token = await getBackendAuthToken();
-        if (!token) {
-          const fallback = sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType);
-          if (planLoaderMountedRef.current) setInterviewPlan(fallback);
-          return;
-        }
-        const resp = await fetch(buildApiUrl('/api/ai/chat'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token.trim()}`,
-          },
-          body: JSON.stringify({
-            mode: 'interview_plan',
-            message: '请生成本场面试题单',
-            resumeData,
-            jobDescription: effectiveJdText,
-            chatHistory: [],
-            interviewType,
-          }),
-        });
-        const data = await resp.json().catch(() => ({} as any));
-        const questions = sanitizePlanQuestions(Array.isArray(data?.questions) ? data.questions : [], interviewType);
-        const finalPlan = composeInterviewPlan(
-          interviewType,
-          questions.length > 0 ? questions : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
-        );
-        if (planLoaderMountedRef.current) {
-          setInterviewPlan(finalPlan);
-          try { localStorage.setItem(storageKey, JSON.stringify({ questions: finalPlan, interviewType, jdText: effectiveJdText })); } catch { }
-        }
-      } catch {
-        if (planLoaderMountedRef.current) {
-          const fallback = composeInterviewPlan(
-            interviewType,
-            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
-          );
-          setInterviewPlan(fallback);
-          try { localStorage.setItem(storageKey, JSON.stringify({ questions: fallback, interviewType, jdText: effectiveJdText })); } catch { }
-        }
-      }
-    };
-    run();
-  }, [buildApiUrl, isInterviewMode, jdText, makeJdKey, resumeData, planFetchTrigger]);
+  useInterviewPlanLoader({
+    isInterviewMode,
+    resumeData,
+    jdText,
+    buildApiUrl,
+    makeJdKey,
+    planFetchTrigger,
+    setInterviewPlan,
+    getBackendAuthToken,
+    planLoaderMountedRef,
+  });
 
   useReportSnapshotRestore({
     currentStep,
@@ -659,6 +535,29 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const handleStartMicroInterview = () => {
     openChat('internal');
   };
+  const handleRetryAnalysisFromIntro = () => {
+    navigateToStep('jd_input', true);
+  };
+  const {
+    postInterviewOriginalResume,
+    postInterviewGeneratedResume,
+    postInterviewAnnotations,
+    effectivePostInterviewSummary,
+  } = usePostInterviewReportData({
+    originalResumeData,
+    resumeData: resumeData as ResumeData,
+    suggestions,
+    postInterviewSummary,
+    reportSummary: report?.summary,
+  });
+  const { handlePostInterviewFeedback } = usePostInterviewFeedback({
+    currentUserId: currentUser?.id,
+    showToast,
+    effectivePostInterviewSummary,
+    postInterviewGeneratedResume,
+    postInterviewOriginalResume,
+    resumeId: resumeData?.id,
+  });
 
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
   const interviewAnsweredCount = chatMessages.filter((m) => {
@@ -711,18 +610,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     score,
     originalScore,
     report,
-    suggestions: suggestions as any[],
-    setSuggestions: setSuggestions as any,
     getScoreColor,
-    getSuggestionModuleLabelOf,
-    getDisplayOriginalValueOf,
-    persistSuggestionFeedback: persistSuggestionFeedback as any,
-    handleIgnoreSuggestion: handleIgnoreSuggestion as any,
-    handleAcceptSuggestionInChat: handleAcceptSuggestionInChat as any,
-    acceptingSuggestionIds,
     handleAnalyzeOtherResume,
-    handleExportPDF,
     handleStartMicroInterview,
+    handleRetryAnalysisFromIntro,
     ToastOverlay,
     WaveformVisualizer: (props: any) => <WaveformVisualizer {...props} visualizerData={visualizerData} />,
     endInterviewFromChat,
@@ -766,6 +657,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     interviewAnsweredCount,
     getInterviewerTitle,
     getInterviewerAvatarUrl,
+    postInterviewSummary: effectivePostInterviewSummary,
+    postInterviewOriginalResume,
+    postInterviewGeneratedResume,
+    postInterviewAnnotations,
+    handlePostInterviewFeedback,
   });
 };
 

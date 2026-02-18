@@ -332,7 +332,75 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
     return augmented
 
 
-def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai):
+def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_resume_for_ai, analysis_stage='pre_interview'):
+    stage = str(analysis_stage or '').strip().lower()
+    if stage == 'pre_interview':
+        if job_description:
+            return f"""
+你是一位严格的招聘顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+要求：
+1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
+2) `suggestions` 必须返回空数组 []。
+3) 总结控制在 80~150 字，语气客观。
+4) 可给出缺失关键词（missingKeywords），但不要给可直接替换的改写文本。
+5) 返回合法 JSON，字段值中文。
+
+简历：
+{format_resume_for_ai(resume_data)}
+
+职位描述：
+{job_description}
+
+仅返回 JSON：
+{{
+  "score": 60,
+  "scoreBreakdown": {{
+    "experience": 58,
+    "skills": 52,
+    "format": 66
+  }},
+  "summary": "微访谈前初步评估总结",
+  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompanyConfidence": 0.0,
+  "strengths": ["亮点1", "亮点2"],
+  "weaknesses": ["短板1", "短板2", "短板3"],
+  "suggestions": [],
+  "missingKeywords": ["关键词1", "关键词2"]
+}}
+
+{rag_context}
+"""
+        return f"""
+你是一位严格的招聘顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+要求：
+1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
+2) `suggestions` 必须返回空数组 []。
+3) 总结控制在 80~150 字，语气客观。
+4) 返回合法 JSON，字段值中文。
+
+简历：
+{format_resume_for_ai(resume_data)}
+
+仅返回 JSON：
+{{
+  "score": 60,
+  "scoreBreakdown": {{
+    "experience": 58,
+    "skills": 52,
+    "format": 66
+  }},
+  "summary": "微访谈前初步评估总结",
+  "targetCompany": "",
+  "targetCompanyConfidence": 0.0,
+  "strengths": ["亮点1", "亮点2"],
+  "weaknesses": ["短板1", "短板2", "短板3"],
+  "suggestions": [],
+  "missingKeywords": []
+}}
+
+{rag_context}
+"""
+
     format_requirements = f"""
 重要格式要求（必须严格遵守）：
 1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
@@ -487,6 +555,7 @@ def analyze_resume_core(current_user_id, data, deps):
     logger = deps['logger']
     resume_data = data.get('resumeData')
     job_description = data.get('jobDescription', '')
+    analysis_stage = str((data or {}).get('analysisStage') or 'pre_interview').strip().lower()
     rag_flag_present = 'ragEnabled' in (data or {})
     rag_requested = deps['parse_bool_flag'](data.get('ragEnabled'), deps['RAG_ENABLED'])
     rag_strategy = deps['resolve_rag_strategy'](resume_data, job_description, rag_flag_present=rag_flag_present)
@@ -572,6 +641,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 job_description=masked_job_description,
                 rag_context=rag_context,
                 format_resume_for_ai=deps['format_resume_for_ai'],
+                analysis_stage=analysis_stage,
             )
 
             analysis_models_tried = deps['get_analysis_model_candidates']()
@@ -609,8 +679,11 @@ def analyze_resume_core(current_user_id, data, deps):
                 logger.info("Dropped %d gender-related suggestions from AI analyze result", dropped_gender_suggestions)
             if dropped_education_suggestions > 0:
                 logger.info("Dropped %d education-related suggestions from AI analyze result", dropped_education_suggestions)
-            ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
-            ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
+            if analysis_stage == 'pre_interview':
+                ai_result['suggestions'] = []
+            else:
+                ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
+                ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -627,6 +700,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 'strengths': ai_result.get('strengths', []),
                 'weaknesses': ai_result.get('weaknesses', []),
                 'missingKeywords': ai_result.get('missingKeywords', []),
+                'analysisStage': analysis_stage,
                 'targetCompany': extracted_target_company,
                 'targetCompanyConfidence': _normalize_company_confidence(target_company_confidence),
                 'reference_cases': reference_cases,
@@ -642,12 +716,15 @@ def analyze_resume_core(current_user_id, data, deps):
             score = deps['calculate_resume_score'](resume_data)
             suggestions = deps['generate_enhanced_suggestions'](resume_data, score, job_description)
             fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
-            suggestions = [
-                suggestion for suggestion in (suggestions or [])
-                if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
-            ]
-            suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
-            suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+            if analysis_stage == 'pre_interview':
+                suggestions = []
+            else:
+                suggestions = [
+                    suggestion for suggestion in (suggestions or [])
+                    if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
+                ]
+                suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
+                suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
 
             return {
                 'score': score,
@@ -656,6 +733,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 'strengths': ['结构清晰', '格式规范'],
                 'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
                 'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
+                'analysisStage': analysis_stage,
                 'targetCompany': fallback_target_company,
                 'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
                 'reference_cases': reference_cases,
@@ -668,14 +746,15 @@ def analyze_resume_core(current_user_id, data, deps):
             }, 200
 
     score = deps['calculate_resume_score'](resume_data)
-    suggestions = deps['generate_suggestions'](resume_data, score)
+    suggestions = [] if analysis_stage == 'pre_interview' else deps['generate_suggestions'](resume_data, score)
     fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
-    suggestions = [
-        suggestion for suggestion in (suggestions or [])
-        if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
-    ]
-    suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
-    suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+    if analysis_stage != 'pre_interview':
+        suggestions = [
+            suggestion for suggestion in (suggestions or [])
+            if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
+        ]
+        suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
+        suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
@@ -683,6 +762,7 @@ def analyze_resume_core(current_user_id, data, deps):
         'strengths': ['结构清晰', '格式规范'],
         'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
         'missingKeywords': [] if not job_description else ['正在分析关键词...'],
+        'analysisStage': analysis_stage,
         'targetCompany': fallback_target_company,
         'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
         'reference_cases': reference_cases,
@@ -1035,6 +1115,10 @@ def ai_chat_core(data, deps):
                     self_intro_asked_before = True
                     break
 
+            interview_summary_model = deps.get('GEMINI_INTERVIEW_SUMMARY_MODEL', deps.get('GEMINI_INTERVIEW_MODEL'))
+            interview_chat_model = deps.get('GEMINI_INTERVIEW_MODEL')
+            active_chat_model = interview_summary_model if mode == 'interview_summary' else interview_chat_model
+
             if mode == 'interview_summary':
                 prompt = f"""
 【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
@@ -1114,7 +1198,7 @@ def ai_chat_core(data, deps):
                     deps['logger'].warning("Audio decode failed, continuing without audio: %s", dec_err)
                     contents = prompt
 
-            response, _used = deps['_gemini_generate_content_resilient'](deps['GEMINI_INTERVIEW_MODEL'], contents, want_json=False)
+            response, _used = deps['_gemini_generate_content_resilient'](active_chat_model, contents, want_json=False)
             raw_text = (response.text or "").strip()
             parsed = deps['_parse_json_object_from_text'](raw_text)
             if isinstance(parsed, dict):
@@ -1334,11 +1418,14 @@ def ai_chat_stream_core(data, deps):
             contents = prompt
 
     stream_api = getattr(deps['gemini_client'].models, 'generate_content_stream', None)
+    interview_summary_model = deps.get('GEMINI_INTERVIEW_SUMMARY_MODEL', deps.get('GEMINI_INTERVIEW_MODEL'))
+    interview_chat_model = deps.get('GEMINI_INTERVIEW_MODEL')
+    active_chat_model = interview_summary_model if mode == 'interview_summary' else interview_chat_model
 
     def _iter_events():
         if not callable(stream_api):
             try:
-                response, _used = deps['_gemini_generate_content_resilient'](deps['GEMINI_INTERVIEW_MODEL'], contents, want_json=False)
+                response, _used = deps['_gemini_generate_content_resilient'](active_chat_model, contents, want_json=False)
                 text = (response.text or "").replace('*', '').strip()
                 yield {'type': 'done', 'text': text or '感谢你的回答，我们继续下一题。'}
                 return
@@ -1349,7 +1436,7 @@ def ai_chat_stream_core(data, deps):
 
         full_text = ''
         try:
-            for chunk in stream_api(model=deps['GEMINI_INTERVIEW_MODEL'], contents=contents):
+            for chunk in stream_api(model=active_chat_model, contents=contents):
                 delta = (getattr(chunk, 'text', '') or '').replace('*', '')
                 if not delta:
                     continue
