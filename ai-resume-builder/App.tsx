@@ -227,7 +227,7 @@ function App() {
     if (!authChecked) return; // Wait for checkAuth to finish
 
     const p = (location.pathname || '').toLowerCase();
-    const publicPaths = ['/login', '/signup', '/forgot-password'];
+    const publicPaths = ['/login', '/signup', '/forgot-password', '/terms-of-service', '/privacy-policy'];
 
     if (p === '/' || p === '') {
       navigate(viewToPath(View.DASHBOARD), { replace: true });
