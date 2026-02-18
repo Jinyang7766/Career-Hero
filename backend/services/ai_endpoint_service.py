@@ -5,6 +5,8 @@ import copy
 
 from google.genai import types
 
+ANALYSIS_PROMPT_VERSION = "analysis-v2.1"
+
 
 class PIIMasker:
     """
@@ -337,13 +339,14 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     if stage == 'pre_interview':
         if job_description:
             return f"""
-你是一位严格的招聘顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+你是一位严格的资深简历诊断顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
 要求：
 1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
 2) `suggestions` 必须返回空数组 []。
 3) 总结控制在 80~150 字，语气客观。
-4) 可给出缺失关键词（missingKeywords），但不要给可直接替换的改写文本。
-5) 返回合法 JSON，字段值中文。
+4) 可给出缺失关键词（missingKeywords），数量最多 5 个，不要给可直接替换的改写文本。
+5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
+6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -371,12 +374,14 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 {rag_context}
 """
         return f"""
-你是一位严格的招聘顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+你是一位严格的资深简历诊断顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
 要求：
 1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
 2) `suggestions` 必须返回空数组 []。
 3) 总结控制在 80~150 字，语气客观。
-4) 返回合法 JSON，字段值中文。
+4) missingKeywords 最多 5 个。
+5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
+6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -414,8 +419,12 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 6.1 **逐句覆盖要求（强制）**：对简历中每条可见叙述句（尤其是工作经历/项目经历/个人简介中的句子）都要进行详细评测；每条句子至少对应 1 条可执行优化建议，禁止“挑重点略过”。
 6.2 **一次性完整优化（强制）**：本次输出必须覆盖整份简历，不允许只优化一部分后结束。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
-7.1 **目标公司提取（强制）**：若 JD 中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
-7.2 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
+7.1 所有顶层 key 必须返回，缺失值请用空字符串/空数组/0；不得省略字段。
+7.2 类型强约束：score 和 scoreBreakdown 各字段必须为整数；targetCompanyConfidence 为 0~1 数字；
+    suggestions 中每条都必须包含 id/type/title/reason/targetSection/suggestedValue。
+7.3 targetSection 仅允许：summary、workExps、projects、skills、education、certificates。
+7.4 **目标公司提取（强制）**：若 JD 中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
+7.5 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
 8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
    - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
    - 严禁尝试猜测或还原真实隐私信息。
@@ -448,7 +457,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 
     if job_description:
         return f"""
-请扮演**严格的招聘面试官**，以“通过初筛”为目标，**严格对照 JD 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 JD 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100）：
@@ -501,7 +510,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 """
 
     return f"""
-请扮演**严格的招聘面试官**，以“通过初筛”为目标，输出**更多、更具体**的优化建议（**至少 8 条**，必要时 12-15 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出**更多、更具体**的优化建议（**至少 8 条**，必要时 12-15 条）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100）：
@@ -556,15 +565,40 @@ def analyze_resume_core(current_user_id, data, deps):
     resume_data = data.get('resumeData')
     job_description = data.get('jobDescription', '')
     analysis_stage = str((data or {}).get('analysisStage') or 'pre_interview').strip().lower()
+    rag_enabled_stages = {
+        'final',
+        'final_report',
+        'final_optimization',
+        'post_interview',
+        'report',
+        'optimization',
+    }
+    rag_allowed_by_stage = analysis_stage in rag_enabled_stages
     rag_flag_present = 'ragEnabled' in (data or {})
     rag_requested = deps['parse_bool_flag'](data.get('ragEnabled'), deps['RAG_ENABLED'])
     rag_strategy = deps['resolve_rag_strategy'](resume_data, job_description, rag_flag_present=rag_flag_present)
     force_on = bool(rag_strategy.get('force_case_rag_on', False)) and (not (rag_flag_present and (rag_requested is False)))
-    rag_enabled = (not rag_strategy.get('disable_case_rag', False)) and (rag_requested or force_on)
+    rag_enabled = rag_allowed_by_stage and (not rag_strategy.get('disable_case_rag', False)) and (rag_requested or force_on)
     reference_cases = []
+
+    logger.info(
+        "analyze.entry user=%s stage=%s has_resume=%s jd_len=%s",
+        str(current_user_id),
+        analysis_stage,
+        bool(resume_data),
+        len(str(job_description or '')),
+    )
 
     if not resume_data:
         return {'error': '需要提供简历数据'}, 400
+
+    logger.info(
+        "analyze.start user=%s stage=%s jd_len=%s rag_requested=%s",
+        str(current_user_id),
+        analysis_stage,
+        len(str(job_description or '')),
+        rag_requested,
+    )
 
     pii_mode = str(deps['PII_GUARD_MODE'] or 'warn').strip().lower()
     pii_masker = None
@@ -632,8 +666,14 @@ def analyze_resume_core(current_user_id, data, deps):
 5. 若发现建议文本与参考案例在实体名或数字上重合，必须重写，直至完全去除案例事实痕迹。
 """
             else:
-                logger.info("RAG disabled for this request (requested=%s, strategy=%s)", rag_requested, rag_strategy.get('mode'))
-            if rag_strategy.get('extra_context'):
+                logger.info(
+                    "RAG disabled for this request (stage=%s, stage_allowed=%s, requested=%s, strategy=%s)",
+                    analysis_stage,
+                    rag_allowed_by_stage,
+                    rag_requested,
+                    rag_strategy.get('mode'),
+                )
+            if rag_enabled and rag_strategy.get('extra_context'):
                 rag_context = f"{rag_context}\n{rag_strategy.get('extra_context')}\n"
 
             prompt = _build_analysis_prompt(
@@ -692,6 +732,15 @@ def analyze_resume_core(current_user_id, data, deps):
                 bool(job_description)
             )
 
+            logger.info(
+                "analyze.success user=%s stage=%s model=%s score=%s suggestions=%s prompt=%s",
+                str(current_user_id),
+                analysis_stage,
+                str(used_model),
+                int(ai_result.get('score', 70) or 0),
+                len(ai_result.get('suggestions', []) or []),
+                ANALYSIS_PROMPT_VERSION,
+            )
             return {
                 'score': ai_result.get('score', 70),
                 'scoreBreakdown': ai_result.get('scoreBreakdown', {'experience': 0, 'skills': 0, 'format': 0}),
@@ -707,7 +756,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 'rag_enabled': rag_enabled,
                 'rag_requested': rag_requested,
                 'rag_strategy': rag_strategy.get('mode'),
-                'analysis_model': used_model
+                'analysis_model': used_model,
+                'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
             }, 200
 
         except Exception as ai_error:
@@ -726,6 +776,13 @@ def analyze_resume_core(current_user_id, data, deps):
                 suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
                 suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
 
+            logger.info(
+                "analyze.fallback user=%s stage=%s score=%s suggestions=%s",
+                str(current_user_id),
+                analysis_stage,
+                int(score or 0),
+                len(suggestions or []),
+            )
             return {
                 'score': score,
                 'summary': '智能分析暂时不可用，已生成基础分析报告，建议稍后再试。',
@@ -741,6 +798,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 'rag_requested': rag_requested,
                 'rag_strategy': rag_strategy.get('mode'),
                 'analysis_model': None,
+                'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
                 'analysis_models_tried': analysis_models_tried if 'analysis_models_tried' in locals() else [],
                 'analysis_error': str(ai_error)[:500]
             }, 200
@@ -755,6 +813,13 @@ def analyze_resume_core(current_user_id, data, deps):
         ]
         suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
         suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+    logger.info(
+        "analyze.rule_based user=%s stage=%s score=%s suggestions=%s",
+        str(current_user_id),
+        analysis_stage,
+        int(score or 0),
+        len(suggestions or []),
+    )
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
@@ -768,7 +833,8 @@ def analyze_resume_core(current_user_id, data, deps):
         'reference_cases': reference_cases,
         'rag_enabled': rag_enabled,
         'rag_requested': rag_requested,
-        'rag_strategy': rag_strategy.get('mode')
+        'rag_strategy': rag_strategy.get('mode'),
+        'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
     }, 200
 
 

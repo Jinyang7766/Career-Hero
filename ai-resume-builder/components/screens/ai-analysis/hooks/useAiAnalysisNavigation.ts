@@ -7,7 +7,8 @@ type Step =
   | 'report'
   | 'micro_intro'
   | 'chat'
-  | 'comparison';
+  | 'comparison'
+  | 'final_report';
 
 type Params = {
   currentStep: Step;
@@ -31,7 +32,7 @@ export const useAiAnalysisNavigation = ({
   });
   const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
     const stored = localStorage.getItem('ai_chat_prev_step');
-    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'comparison'];
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'comparison', 'final_report'];
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
@@ -89,6 +90,8 @@ export const useAiAnalysisNavigation = ({
       const lastStep = prev.pop()!;
       setStepHistory(prev);
       setCurrentStep(lastStep);
+    } else if (currentStep === 'final_report') {
+      setCurrentStep('comparison');
     } else if (currentStep === 'micro_intro') {
       setCurrentStep('report');
     } else if (currentStep === 'report') {

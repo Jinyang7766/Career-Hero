@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison' | 'final_report';
 
 export const deriveInitialStepFromPath = (): Step => {
   const path = (window.location.pathname || '').toLowerCase();
@@ -14,6 +14,7 @@ export const deriveInitialStepFromPath = (): Step => {
       if (sub === 'micro-interview') return 'micro_intro';
       if (sub === 'chat') return 'chat';
       if (sub === 'comparison') return 'comparison';
+      if (sub === 'final-report') return 'final_report';
     }
   return 'resume_select';
 };
@@ -49,6 +50,7 @@ export const useAiRouteSync = ({
         case 'micro_intro': return `${base}/micro-interview`;
         case 'chat': return `${base}/chat`;
         case 'comparison': return selectedResumeId ? `${base}/comparison/${selectedResumeId}` : `${base}/comparison`;
+        case 'final_report': return selectedResumeId ? `${base}/final-report/${selectedResumeId}` : `${base}/final-report`;
         default: return base;
       }
     })();
@@ -64,7 +66,7 @@ export const useAiRouteSync = ({
     const parts = rest ? rest.split('/').filter(Boolean) : [];
     const sub = parts[0] || '';
     const id = parts[1] || '';
-    if ((sub === 'report' || sub === 'comparison') && id) {
+    if ((sub === 'report' || sub === 'comparison' || sub === 'final-report') && id) {
       setSelectedResumeId(id);
       sourceResumeIdRef.current = id;
       setAnalysisResumeId(id);

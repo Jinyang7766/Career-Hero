@@ -5,8 +5,9 @@ import JdInputPage from './pages/JdInputPage';
 import ReportPage from './pages/ReportPage';
 import MicroInterviewIntroPage from './pages/MicroInterviewIntroPage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
+import FinalResumeReportPage from './pages/FinalResumeReportPage';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison' | 'final_report';
 
 type Params = {
   currentStep: Step;
@@ -92,6 +93,11 @@ type Params = {
   postInterviewGeneratedResume: any;
   postInterviewAnnotations: Array<{ id: string; title: string; reason: string; section: string }>;
   handlePostInterviewFeedback: (rating: 'up' | 'down') => Promise<boolean> | boolean;
+  handleCompleteAndSavePostInterview: () => Promise<void> | void;
+  finalReportScore: number;
+  finalReportSummary: string;
+  finalReportAdvice: string[];
+  handleStartInterviewFromFinalReport: () => void | Promise<void>;
 };
 
 export const renderAiAnalysisStep = (p: Params) => {
@@ -229,7 +235,21 @@ export const renderAiAnalysisStep = (p: Params) => {
         generatedResume={p.postInterviewGeneratedResume}
         annotations={p.postInterviewAnnotations}
         onFeedback={p.handlePostInterviewFeedback}
+        onCompleteAndSave={p.handleCompleteAndSavePostInterview}
         onBack={p.handleStepBack}
+      />
+    );
+  }
+
+  if (p.currentStep === 'final_report') {
+    return (
+      <FinalResumeReportPage
+        score={p.finalReportScore}
+        summary={p.finalReportSummary}
+        advice={p.finalReportAdvice}
+        getScoreColor={p.getScoreColor}
+        onBack={p.handleStepBack}
+        onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
       />
     );
   }

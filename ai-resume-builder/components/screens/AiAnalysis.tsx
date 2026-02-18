@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ScreenProps, ResumeData, View } from '../../types';
+import { ScreenProps, ResumeData } from '../../types';
 import { buildApiUrl } from '../../src/api-config';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../src/app-context';
@@ -28,6 +28,9 @@ import { useAnalysisSessionRecovery } from './ai-analysis/hooks/useAnalysisSessi
 import { useInterviewPlanLoader } from './ai-analysis/hooks/useInterviewPlanLoader';
 import { usePostInterviewReportData } from './ai-analysis/hooks/usePostInterviewReportData';
 import { usePostInterviewFeedback } from './ai-analysis/hooks/usePostInterviewFeedback';
+import { usePostInterviewFinalize } from './ai-analysis/hooks/usePostInterviewFinalize';
+import { useInterviewEntryActions } from './ai-analysis/hooks/useInterviewEntryActions';
+import { useAiAnalysisActions } from './ai-analysis/hooks/useAiAnalysisActions';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -48,13 +51,12 @@ import {
   getActiveInterviewType,
   getInterviewerAvatarUrl,
   getInterviewerTitle,
-  getPlanStorageKey,
   getWarmupQuestion,
 } from './ai-analysis/interview-plan-utils';
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison' | 'final_report';
 
 const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
@@ -170,7 +172,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     buildApiUrl,
     setJdText,
   });
-  const { isSending, blobToBase64, handleSendMessage } = useInterviewChat({
+  const { isSending, handleSendMessage } = useInterviewChat({
     currentStep,
     inputMessage,
     setInputMessage,
@@ -524,31 +526,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getBackendAuthToken,
   });
 
-  const getScoreColor = (s: number) => {
-    if (s >= 90) return 'text-green-500';
-    if (s >= 70) return 'text-primary';
-    return 'text-orange-500';
-  };
-  const handleResumeSelectBack = () => {
-    navigateToView(View.DASHBOARD, { root: true, replace: true });
-  };
-  const handleStartMicroInterview = () => {
-    openChat('internal');
-  };
-  const handleRetryAnalysisFromIntro = () => {
-    navigateToStep('jd_input', true);
-  };
+  const {
+    getScoreColor,
+    handleResumeSelectBack,
+    handleStartMicroInterview,
+    handleRetryAnalysisFromIntro,
+  } = useAiAnalysisActions({
+    navigateToView,
+    navigateToStep: navigateToStep as any,
+    openChat,
+  });
   const {
     postInterviewOriginalResume,
     postInterviewGeneratedResume,
     postInterviewAnnotations,
     effectivePostInterviewSummary,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
   } = usePostInterviewReportData({
     originalResumeData,
     resumeData: resumeData as ResumeData,
     suggestions,
     postInterviewSummary,
     reportSummary: report?.summary,
+    baseScore: score,
+    weaknesses: report?.weaknesses || [],
   });
   const { handlePostInterviewFeedback } = usePostInterviewFeedback({
     currentUserId: currentUser?.id,
@@ -559,6 +562,24 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     resumeId: resumeData?.id,
   });
 
+  const { handleCompleteAndSavePostInterview } = usePostInterviewFinalize({
+    currentUserId: currentUser?.id,
+    generatedResume: postInterviewGeneratedResume as any,
+    sourceResumeIdRef: sourceResumeIdRef as any,
+    resumeData: resumeData as any,
+    jdText,
+    targetCompany,
+    allResumes: allResumes as any,
+    makeJdKey,
+    isSameResumeId,
+    setResumeData: setResumeData as any,
+    setSelectedResumeId,
+    setAnalysisResumeId,
+    setOptimizedResumeId,
+    showToast,
+    navigateToStep: navigateToStep as any,
+  });
+
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
   const interviewAnsweredCount = chatMessages.filter((m) => {
     if (m.role !== 'user') return false;
@@ -567,16 +588,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
     return hasTextAnswer || hasVoiceAnswer;
   }).length;
-  const handleRestartInterview = async () => {
-    chatIntroScheduledRef.current = false;
-    await clearInterviewSession();
-    const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
-    if (effectiveJdText) {
-      try { localStorage.removeItem(getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText)); } catch { }
-    }
-    setInterviewPlan([]);
-    setPlanFetchTrigger(v => v + 1);
-  };
+  const { handleRestartInterview, handleStartInterviewFromFinalReport } = useInterviewEntryActions({
+    chatIntroScheduledRef,
+    clearInterviewSession: clearInterviewSession as any,
+    jdText,
+    resumeData,
+    makeJdKey,
+    setInterviewPlan,
+    setPlanFetchTrigger,
+    openChat,
+  });
 
   return renderAiAnalysisStep({
     currentStep,
@@ -662,6 +683,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     postInterviewGeneratedResume,
     postInterviewAnnotations,
     handlePostInterviewFeedback,
+    handleCompleteAndSavePostInterview,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
+    handleStartInterviewFromFinalReport,
   });
 };
 

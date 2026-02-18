@@ -93,7 +93,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         <div className="flex items-center justify-between h-14 px-4 relative">
           <div className="w-10" />
           <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">
-            {isInterviewMode ? 'AI面试' : 'AI 诊断'}
+            {isInterviewMode ? 'AI 面试' : 'AI 诊断'}
           </h1>
           <div className="w-10" />
         </div>

@@ -12,6 +12,8 @@ type Params = {
   suggestions: Suggestion[];
   postInterviewSummary: string;
   reportSummary?: string;
+  baseScore?: number;
+  weaknesses?: string[];
 };
 
 export const usePostInterviewReportData = ({
@@ -20,12 +22,23 @@ export const usePostInterviewReportData = ({
   suggestions,
   postInterviewSummary,
   reportSummary,
+  baseScore,
+  weaknesses,
 }: Params) => {
   const postInterviewOriginalResume = (originalResumeData || resumeData || null) as ResumeData | null;
 
+  const cloneResumeData = (input: ResumeData) => {
+    try {
+      return JSON.parse(JSON.stringify(input)) as ResumeData;
+    } catch {
+      return { ...(input as any) } as ResumeData;
+    }
+  };
+
   const postInterviewGeneratedResume = useMemo(() => {
     if (!postInterviewOriginalResume) return null;
-    return (suggestions || []).reduce((acc: ResumeData, s: Suggestion) => {
+    const base = cloneResumeData(postInterviewOriginalResume);
+    const generated = (suggestions || []).reduce((acc: ResumeData, s: Suggestion) => {
       try {
         return applySuggestionToResume({
           base: acc,
@@ -38,7 +51,17 @@ export const usePostInterviewReportData = ({
       } catch {
         return acc;
       }
-    }, { ...(postInterviewOriginalResume as any) });
+    }, base);
+
+    // Keep original resume intact: generated resume should be treated as a new optimized copy.
+    const sourceId = String((postInterviewOriginalResume as any)?.id || '').trim();
+    const normalized: any = { ...(generated as any) };
+    if (sourceId) {
+      normalized.optimizationStatus = 'optimized';
+      normalized.optimizedFromId = sourceId;
+    }
+    delete normalized.id;
+    return normalized as ResumeData;
   }, [postInterviewOriginalResume, suggestions]);
 
   const postInterviewAnnotations = useMemo(() => (
@@ -53,11 +76,38 @@ export const usePostInterviewReportData = ({
   ), [suggestions]);
 
   const effectivePostInterviewSummary = String(postInterviewSummary || reportSummary || '').trim();
+  const parseScoreFromSummary = (text: string) => {
+    const raw = String(text || '');
+    const m = raw.match(/总分[:：]?\s*(\d{1,3})\s*\/\s*100/i) || raw.match(/(\d{1,3})\s*\/\s*100/);
+    if (!m) return null;
+    const n = Number(m[1]);
+    if (!Number.isFinite(n)) return null;
+    return Math.max(0, Math.min(100, Math.round(n)));
+  };
+  const finalReportScore = useMemo(() => {
+    const parsed = parseScoreFromSummary(effectivePostInterviewSummary);
+    const fallback = Number(baseScore || 0);
+    return parsed ?? Math.max(0, Math.min(100, Math.round(fallback)));
+  }, [effectivePostInterviewSummary, baseScore]);
+  const finalReportSummary = useMemo(
+    () => String(effectivePostInterviewSummary || '').trim() || '优化已完成。',
+    [effectivePostInterviewSummary]
+  );
+  const finalReportAdvice = useMemo(
+    () => (Array.isArray(weaknesses) ? weaknesses : [])
+      .map((x) => String(x || '').trim())
+      .filter(Boolean)
+      .slice(0, 6),
+    [weaknesses]
+  );
 
   return {
     postInterviewOriginalResume,
     postInterviewGeneratedResume,
     postInterviewAnnotations,
     effectivePostInterviewSummary,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
   };
 };

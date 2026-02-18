@@ -8,6 +8,7 @@ type Props = {
   generatedResume: ResumeData | null;
   annotations: Array<{ id: string; title: string; reason: string; section: string; targetId?: string }>;
   onFeedback?: (rating: 'up' | 'down') => Promise<boolean> | boolean;
+  onCompleteAndSave?: () => Promise<void> | void;
   onBack: () => void;
 };
 
@@ -24,10 +25,12 @@ const PostInterviewReportPage: React.FC<Props> = ({
   generatedResume,
   annotations,
   onFeedback,
+  onCompleteAndSave,
   onBack,
 }) => {
   const [feedback, setFeedback] = React.useState<'up' | 'down' | null>(null);
   const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
   const annBySection = annotations.reduce<Record<string, Array<{ id: string; title: string; reason: string; targetId?: string }>>>((acc, item) => {
     const key = item.section || 'other';
     if (!acc[key]) acc[key] = [];
@@ -124,6 +127,16 @@ const PostInterviewReportPage: React.FC<Props> = ({
     }
   };
 
+  const handleCompleteAndSaveClick = async () => {
+    if (!onCompleteAndSave || isSaving) return;
+    setIsSaving(true);
+    try {
+      await onCompleteAndSave();
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
       <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
@@ -180,6 +193,18 @@ const PostInterviewReportPage: React.FC<Props> = ({
               <span className="material-symbols-outlined text-[18px]">thumb_down</span>
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => { void handleCompleteAndSaveClick(); }}
+            disabled={!generatedResume || isSaving}
+            className={`mt-4 h-11 w-full rounded-xl text-sm font-bold ${
+              generatedResume && !isSaving
+                ? 'bg-primary hover:bg-blue-600 text-white shadow-blue-500/20 shadow-sm'
+                : 'bg-slate-200 dark:bg-white/10 text-slate-500 dark:text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {isSaving ? '正在保存...' : '完成并保存'}
+          </button>
         </section>
         <AiDisclaimer className="pt-1" />
       </main>

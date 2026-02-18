@@ -149,6 +149,12 @@ export const runRealAnalysis = async ({
 
     let response: Response;
     try {
+      console.info('[AI_ANALYZE] sending POST /api/ai/analyze', {
+        runId,
+        hasResumeData: Boolean(maskedResumeData),
+        jdLength: String(maskedJdText || '').length,
+        ragEnabled,
+      });
       response = await fetch(buildApiUrl('/api/ai/analyze'), {
         method: 'POST',
         headers: {
@@ -163,6 +169,11 @@ export const runRealAnalysis = async ({
         ragEnabled,
         interviewType
       })
+      });
+      console.info('[AI_ANALYZE] response received', {
+        runId,
+        status: response.status,
+        ok: response.ok,
       });
     } finally {
       clearTimeout(timeoutId);
@@ -207,6 +218,7 @@ export const runRealAnalysis = async ({
     const isAbort = String(error?.name || '') === 'AbortError';
     if (isAbort) {
       const reason = (controller as any)?.signal?.reason;
+      console.warn('[AI_ANALYZE] aborted', { runId, reason: String(reason || '') });
       const normalizedReason = String(reason || '').toLowerCase();
       if (!normalizedReason || normalizedReason === 'analysis_timeout') {
         throw new Error('analysis_timeout');

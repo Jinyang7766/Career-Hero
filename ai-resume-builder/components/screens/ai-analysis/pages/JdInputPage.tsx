@@ -267,10 +267,10 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           </button>
           <button
             onClick={() => onStart(interviewType)}
-            className="flex-[2] py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
+            className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >
-            {isInterviewMode ? (shouldShowContinueInterview ? '继续模拟面试' : '开始模拟面试') : '开始分析'}
+            {isInterviewMode ? (shouldShowContinueInterview ? '继续面试' : '开始面试') : '开始分析'}
           </button>
         </div>
 
