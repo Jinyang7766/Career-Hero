@@ -179,7 +179,7 @@ const Profile: React.FC<ScreenProps> = () => {
         </div>
 
         {/* Dynamic Upgrade Card */}
-        {(() => {
+        {isLoggedIn && (() => {
           // Mock user subscription - in real app this comes from context/props
           const userSub = {
             tier: MembershipTier.FREE,
