@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { REFERRAL_BONUS_POINTS } from '../src/points-config';
 
 interface ReferralModalProps {
     isOpen: boolean;
@@ -12,7 +13,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
     if (!isOpen) return null;
 
     const handleCopy = () => {
-        navigator.clipboard.writeText(`使用我的邀请码 ${referralCode} 加入 Career Hero，免费获得AI简历诊断次数！https://career-hero.app/signup?ref=${referralCode}`);
+        navigator.clipboard.writeText(`使用我的邀请码 ${referralCode} 加入 Career Hero，双方各得 ${REFERRAL_BONUS_POINTS.inviter} 积分！https://career-hero.app/signup?ref=${referralCode}`);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
@@ -47,7 +48,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
                             每成功邀请1位好友注册
                         </p>
                         <div className="mt-1.5 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-slate-50 dark:bg-slate-700/50 border border-slate-100 dark:border-slate-700">
-                            <span className="text-sm font-bold text-slate-900 dark:text-white">送 3次诊断 + 1场面试</span>
+                            <span className="text-sm font-bold text-slate-900 dark:text-white">双方各得 {REFERRAL_BONUS_POINTS.inviter} 积分</span>
                         </div>
                     </div>
 
@@ -77,7 +78,7 @@ export const ReferralModal: React.FC<ReferralModalProps> = ({ isOpen, onClose, r
                                 if (navigator.share) {
                                     navigator.share({
                                         title: 'Career Hero 邀请',
-                                        text: `使用我的邀请码 ${referralCode} 加入 Career Hero，免费获得AI简历诊断次数！`,
+                                        text: `使用我的邀请码 ${referralCode} 加入 Career Hero，双方各得 ${REFERRAL_BONUS_POINTS.inviter} 积分！`,
                                         url: `https://career-hero.app/signup?ref=${referralCode}`
                                     }).catch(() => { });
                                 } else {

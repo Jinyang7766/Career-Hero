@@ -101,8 +101,7 @@ const Profile: React.FC<ScreenProps> = () => {
   const userSub = {
     tier: MembershipTier.FREE,
     expireDate: '2024-12-31',
-    diagnosesRemaining: Number(userProfile?.diagnoses_remaining ?? 0),
-    interviewsRemaining: Number(userProfile?.interviews_remaining ?? 0),
+    pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
   };
 
   const handleProtectedAction = async (action: () => void, message: string = '该功能需要登录后使用，是否立即去登录？') => {
@@ -167,7 +166,7 @@ const Profile: React.FC<ScreenProps> = () => {
                   onChange={handleFileChange}
                 />
               </div>
-              <div className="flex flex-col flex-1 min-w-0 pr-2">
+              <div className="flex flex-col flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 min-w-0">
                   <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                     {isLoggedIn ? (displayName || ' ') : '未登录'}
@@ -186,17 +185,11 @@ const Profile: React.FC<ScreenProps> = () => {
                   </p>
                 )}
               </div>
-            </div>
 
-            {/* Integrated Usage Stats (Synced style) */}
-            <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center divide-x divide-slate-100 dark:divide-white/5">
-              <div className="flex-1 flex flex-col items-center">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余诊断</span>
-                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{isLoggedIn ? userSub.diagnosesRemaining : '--'}</span>
-              </div>
-              <div className="flex-1 flex flex-col items-center">
-                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余面试</span>
-                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{isLoggedIn ? userSub.interviewsRemaining : '--'}</span>
+              {/* Remaining Points Box */}
+              <div className="shrink-0 flex flex-col items-center justify-center min-w-[64px] h-16 px-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner">
+                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight mb-1 whitespace-nowrap">剩余积分</span>
+                <span className="text-xl font-black text-primary dark:text-blue-400 leading-none">{isLoggedIn ? userSub.pointsRemaining : '--'}</span>
               </div>
             </div>
           </div>
@@ -230,7 +223,7 @@ const Profile: React.FC<ScreenProps> = () => {
                   icon: 'verified',
                   iconColor: 'text-white',
                   title: 'Plus 会员权益已生效',
-                  subtitle: '尊享更多AI诊断次数与极速生成',
+                  subtitle: '尊享更高积分额度与优先能力',
                   titleColor: 'text-white',
                   subColor: 'text-blue-100',
                   btnStyle: 'bg-white text-blue-700 shadow-sm',
@@ -268,7 +261,7 @@ const Profile: React.FC<ScreenProps> = () => {
                   icon: 'rocket_launch',
                   iconColor: 'text-primary',
                   title: '当前版本：免费版',
-                  subtitle: '升级以解锁更多AI简历优化次数及模拟面试',
+                  subtitle: '升级以解锁更多积分，支持诊断与面试',
                   titleColor: 'text-slate-900 dark:text-white',
                   subColor: 'text-slate-500 dark:text-slate-400',
                   btnStyle: 'bg-primary text-white shadow-primary/20 shadow-lg',
@@ -325,6 +318,12 @@ const Profile: React.FC<ScreenProps> = () => {
             label="导出历史"
             color="primary"
           />
+          <MenuItem
+            onClick={() => handleProtectedAction(() => navigateToView(View.POINTS_HISTORY))}
+            icon="receipt_long"
+            label="积分明细"
+            color="primary"
+          />
 
           <MenuItem
             onClick={() => handleProtectedAction(() => navigateToView(View.ACCOUNT_SECURITY))}
@@ -339,11 +338,11 @@ const Profile: React.FC<ScreenProps> = () => {
             color="primary"
           />
           <MenuItem
-            onClick={() => handleProtectedAction(() => setShowReferralModal(true), '该功能需要登录后使用，登录即可通过分发邀请码换取免费次数。是否立即去登录？')}
+            onClick={() => handleProtectedAction(() => setShowReferralModal(true), '该功能需要登录后使用，登录即可通过分发邀请码换取积分。是否立即去登录？')}
             icon="share"
             label="邀请好友"
             color="primary"
-            badge="得次数"
+            badge="得积分"
           />
           <MenuItem
             onClick={() => handleProtectedAction(() => navigateToView(View.HELP))}

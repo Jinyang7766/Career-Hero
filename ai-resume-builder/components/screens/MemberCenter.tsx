@@ -3,6 +3,7 @@ import { View, MembershipTier } from '../../types';
 import { useAppContext } from '../../src/app-context';
 import { ReferralModal } from '../ReferralModal';
 import { useUserProfile } from '../../src/useUserProfile';
+import { ADDON_POINT_PACKAGES, PLAN_MONTHLY_POINTS, REFERRAL_BONUS_POINTS } from '../../src/points-config';
 
 const MemberCenter: React.FC = () => {
     const { goBack, navigateToView, currentUser } = useAppContext();
@@ -37,8 +38,7 @@ const MemberCenter: React.FC = () => {
         tier: MembershipTier.FREE,
         expireDate: '2024-12-31',
         autoRenew: false,
-        diagnosesRemaining: Number(userProfile?.diagnoses_remaining ?? 0),
-        interviewsRemaining: Number(userProfile?.interviews_remaining ?? 0),
+        pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
     };
 
     const tiers = [
@@ -49,8 +49,8 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '入门首选，极速体验',
             features: [
-                'AI 简历诊断: 10次/月',
-                'AI 模拟面试: 3场/月',
+                `每月赠送 ${PLAN_MONTHLY_POINTS.STARTER} 积分`,
+                '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-slate-500 to-slate-600',
             shadow: 'shadow-slate-500/30',
@@ -65,8 +65,8 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '人气之选，高性价比',
             features: [
-                'AI 简历诊断: 30次/月',
-                'AI 模拟面试: 10场/月',
+                `每月赠送 ${PLAN_MONTHLY_POINTS.PLUS} 积分`,
+                '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-blue-600 to-blue-700',
             shadow: 'shadow-blue-500/30',
@@ -81,8 +81,8 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '职业冲刺，专业必备',
             features: [
-                'AI 简历诊断: 100次/月',
-                'AI 模拟面试: 35场/月',
+                `每月赠送 ${PLAN_MONTHLY_POINTS.PRO} 积分`,
+                '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-indigo-600 to-indigo-700',
             shadow: 'shadow-indigo-500/30',
@@ -97,8 +97,8 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '至尊体验，全能旗舰',
             features: [
-                'AI 简历诊断: 300次/月',
-                'AI 模拟面试: 120场/月',
+                `每月赠送 ${PLAN_MONTHLY_POINTS.ULTRA} 积分`,
+                '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-slate-800 to-slate-900',
             shadow: 'shadow-slate-900/30',
@@ -108,11 +108,11 @@ const MemberCenter: React.FC = () => {
         },
     ];
 
-    const addons = [
-        { name: '单次诊断包', price: '¥2.9', desc: '急需修改一次简历？' },
-        { name: '单次面试包', price: '¥6.9', desc: '临阵磨枪，不快也光' },
-        { name: '全能冲刺包', price: '¥19.9', desc: '10次诊断 + 3场面试' },
-    ];
+    const addons = ADDON_POINT_PACKAGES.map((item) => ({
+        name: `${item.points} 积分`,
+        price: item.priceLabel,
+        desc: '当月有效',
+    }));
 
     const getTierStyle = (tier: MembershipTier) => {
         switch (tier) {
@@ -195,7 +195,7 @@ const MemberCenter: React.FC = () => {
                             </div>
 
                             {/* User Identity & Badge */}
-                            <div className="flex flex-col flex-1 min-w-0 pr-2">
+                            <div className="flex flex-col flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1 min-w-0">
                                     <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                                         {displayName}
@@ -216,17 +216,11 @@ const MemberCenter: React.FC = () => {
                                     )}
                                 </div>
                             </div>
-                        </div>
 
-                        {/* Integrated Usage Stats - Horizontal/Divided style */}
-                        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-white/5 flex items-center divide-x divide-slate-100 dark:divide-white/5">
-                            <div className="flex-1 flex flex-col items-center">
-                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余诊断</span>
-                                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.diagnosesRemaining}</span>
-                            </div>
-                            <div className="flex-1 flex flex-col items-center">
-                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-0.5">剩余面试</span>
-                                <span className="text-lg font-black text-slate-800 dark:text-slate-200 leading-none">{userSub.interviewsRemaining}</span>
+                            {/* Remaining Points Box */}
+                            <div className="shrink-0 flex flex-col items-center justify-center min-w-[64px] h-16 px-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner">
+                                <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight mb-1 whitespace-nowrap">剩余积分</span>
+                                <span className="text-xl font-black text-primary dark:text-blue-400 leading-none">{userSub.pointsRemaining}</span>
                             </div>
                         </div>
                     </div>
@@ -339,7 +333,7 @@ const MemberCenter: React.FC = () => {
                         <div>
                             <h3 className="font-bold text-lg text-white">邀请好友得奖励</h3>
                             <p className="text-xs text-slate-300 mt-1">
-                                每邀1人，送 <span className="font-bold text-amber-400">3次诊断 + 1场面试</span>
+                                每邀1人，送 <span className="font-bold text-amber-400">{REFERRAL_BONUS_POINTS.inviter} 积分</span>
                             </p>
                         </div>
                         <button

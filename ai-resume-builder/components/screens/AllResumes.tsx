@@ -25,6 +25,56 @@ const AllResumes: React.FC<ScreenProps> = () => {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [isSelectionMode, setIsSelectionMode] = useState(false);
 
+  const clearLocalAnalysisSnapshotForResume = (resumeId: number) => {
+    try {
+      const raw = localStorage.getItem('ai_last_analysis_snapshot');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (String(parsed?.resumeId || '') === String(resumeId)) {
+          localStorage.removeItem('ai_last_analysis_snapshot');
+        }
+      }
+    } catch {
+      // ignore malformed local snapshot
+    }
+    const localResumeId = String(localStorage.getItem('ai_analysis_resume_id') || '');
+    if (localResumeId && localResumeId === String(resumeId)) {
+      localStorage.removeItem('ai_analysis_resume_id');
+      localStorage.removeItem('ai_analysis_step');
+      localStorage.removeItem('ai_analysis_in_progress');
+      localStorage.removeItem('ai_analysis_has_activity');
+      localStorage.removeItem('ai_chat_prev_step');
+      localStorage.removeItem('ai_chat_entry_source');
+    }
+
+    const interviewResumeId = String(localStorage.getItem('ai_interview_resume_id') || '');
+    if (interviewResumeId && interviewResumeId === String(resumeId)) {
+      localStorage.removeItem('ai_interview_open');
+      localStorage.removeItem('ai_interview_resume_id');
+      localStorage.removeItem('ai_interview_entry_mode');
+    }
+
+    const resultResumeId = String(localStorage.getItem('ai_result_resume_id') || '');
+    if (resultResumeId && resultResumeId === String(resumeId)) {
+      localStorage.removeItem('ai_result_open');
+      localStorage.removeItem('ai_result_resume_id');
+      localStorage.removeItem('ai_result_step');
+      localStorage.removeItem('ai_report_open');
+      localStorage.removeItem('ai_report_resume_id');
+      localStorage.removeItem('ai_report_step');
+      localStorage.removeItem('ai_report_resume_payload');
+    }
+
+    const planPrefix = `ai_interview_plan_${String(resumeId)}_`;
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (key.startsWith(planPrefix)) {
+        localStorage.removeItem(key);
+      }
+    }
+  };
+
   const filteredResumes = (allResumes || []).filter(resume =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -55,6 +105,10 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
       if (result.success) {
         console.log('Resume deleted successfully');
+        clearLocalAnalysisSnapshotForResume(id);
+        setResumeData((prev: any) => (
+          String(prev?.id || '') === String(id) ? createEmptyResumeData() : prev
+        ));
         // 从本地状态中删除
         if (setAllResumes) {
           setAllResumes((prev: any) => prev.filter(r => r.id !== id));
@@ -86,6 +140,12 @@ const AllResumes: React.FC<ScreenProps> = () => {
       // Sequential deletion to report individual failures if needed, or Parallel.
       // Parallel is better for UX.
       await Promise.all(selectedItems.map(id => DatabaseService.deleteResume(String(id))));
+      selectedItems.forEach((id) => clearLocalAnalysisSnapshotForResume(id));
+      setResumeData((prev: any) => (
+        selectedItems.some((id) => String(id) === String(prev?.id || ''))
+          ? createEmptyResumeData()
+          : prev
+      ));
 
       // Optimistic update or refresh
       const { data: { user } } = await supabase.auth.getUser();

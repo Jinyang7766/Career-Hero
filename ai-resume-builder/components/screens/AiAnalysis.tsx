@@ -343,7 +343,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     jdText,
     targetCompany,
   });
-  const { consumeUsageQuota } = useUsageQuota({
+  const { consumeUsageQuota, refundUsageQuota } = useUsageQuota({
     currentUserId: currentUser?.id,
     navigateToView,
     showToast,
@@ -387,6 +387,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isInterviewMode,
     openChat,
     consumeUsageQuota,
+    refundUsageQuota,
   });
 
   
@@ -656,8 +657,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     selectedResumeId,
     resumeReadState,
     isInterviewMode,
-    diagnosesRemaining: Number((userProfile as any)?.diagnoses_remaining ?? NaN),
-    interviewsRemaining: Number((userProfile as any)?.interviews_remaining ?? NaN),
+    pointsRemaining: Number((userProfile as any)?.points_balance ?? NaN),
     isSameResumeId,
     resumeData,
     targetCompany,
@@ -677,7 +677,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     originalScore,
     report,
     getScoreColor,
-    handleAnalyzeOtherResume,
+    handleAnalyzeOtherResume: () => {
+      void startAnalysis(undefined, { preserveReportOnError: true, bypassCache: true });
+    },
     handleStartMicroInterview,
     handleRetryAnalysisFromIntro,
     ToastOverlay,

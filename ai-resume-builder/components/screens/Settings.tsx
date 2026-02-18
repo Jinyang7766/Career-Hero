@@ -101,17 +101,23 @@ const Settings: React.FC<ScreenProps> = () => {
       // 1. Clear IndexedDB Cache (AI Analysis results)
       await AICacheService.clearAll();
 
-      // 2. Clear relevant localStorage items (not including auth tokens)
-      const keysToKeep = [
-        'supabase.auth.token',
-        'sb-qpxisqizyzqfsczfzfzv-auth-token', // Example Supabase project ref
-        'theme',
-        'settings_notifications',
-      ];
+      // 2. Clear app cache while preserving auth/session keys.
+      const shouldKeepKey = (key: string) => {
+        const k = String(key || '');
+        if (!k) return false;
+        if (k.includes('supabase.auth.token')) return true;
+        if (/^sb-[a-z0-9-]+-auth-token$/i.test(k)) return true; // Supabase session key by project ref
+        if (k === 'supabase_session') return true;
+        if (k === 'token') return true; // legacy token fallback
+        if (k === 'user') return true; // legacy cached user
+        if (k === 'theme') return true;
+        if (k === 'settings_notifications') return true;
+        return false;
+      };
 
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const key = localStorage.key(i);
-        if (key && !keysToKeep.some(k => key.includes(k))) {
+        if (key && !shouldKeepKey(key)) {
           localStorage.removeItem(key);
         }
       }
@@ -310,4 +316,3 @@ const Settings: React.FC<ScreenProps> = () => {
 };
 
 export default Settings;
-

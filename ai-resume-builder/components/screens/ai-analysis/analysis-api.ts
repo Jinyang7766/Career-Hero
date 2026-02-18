@@ -18,6 +18,7 @@ type Params = {
   runId: string;
   setIsFromCache: (v: boolean) => void;
   interviewType?: string;
+  bypassCache?: boolean;
 };
 
 const clampScore = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
@@ -83,6 +84,7 @@ export const runRealAnalysis = async ({
   runId,
   setIsFromCache,
   interviewType,
+  bypassCache = false,
 }: Params) => {
   if (!resumeData) return null;
   let controller: AbortController | null = null;
@@ -90,17 +92,21 @@ export const runRealAnalysis = async ({
   try {
     console.log('Generating real AI analysis via backend API...');
 
-    const cachedResult = await AICacheService.get(resumeData, jdText);
-    if (cachedResult) {
-      const cachedSummary = String(cachedResult.summary || '').trim();
-      if (cachedSummary.length < 80) {
-        console.log('Cached summary too short, bypassing cache and requesting fresh analysis');
-      } else {
-        console.log('🎯 Using cached AI analysis result');
-        console.log(`📊 Cache stats: ${AICacheService.getHitRate()}% hit rate`);
-        setIsFromCache(true);
-        return cachedResult;
+    if (!bypassCache) {
+      const cachedResult = await AICacheService.get(resumeData, jdText);
+      if (cachedResult) {
+        const cachedSummary = String(cachedResult.summary || '').trim();
+        if (cachedSummary.length < 80) {
+          console.log('Cached summary too short, bypassing cache and requesting fresh analysis');
+        } else {
+          console.log('🎯 Using cached AI analysis result');
+          console.log(`📊 Cache stats: ${AICacheService.getHitRate()}% hit rate`);
+          setIsFromCache(true);
+          return cachedResult;
+        }
       }
+    } else {
+      console.log('🚀 Bypass cache for forced re-analysis');
     }
     setIsFromCache(false);
 

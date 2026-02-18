@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 type Step =
   | 'resume_select'
@@ -26,6 +26,7 @@ export const useAiAnalysisNavigation = ({
   goBack,
 }: Params) => {
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
+  const currentStepRef = useRef<Step>(currentStep);
   const [chatEntrySource, setChatEntrySource] = useState<'internal' | 'preview' | null>(() => {
     const stored = localStorage.getItem('ai_chat_entry_source');
     return stored === 'internal' || stored === 'preview' ? stored : null;
@@ -36,12 +37,18 @@ export const useAiAnalysisNavigation = ({
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
+
   const navigateToStep = (nextStep: Step, replace: boolean = false) => {
-    if (nextStep !== currentStep) {
+    const nowStep = currentStepRef.current;
+    if (nextStep !== nowStep) {
       if (!replace) {
-        setStepHistory(prev => [...prev, currentStep]);
+        setStepHistory(prev => [...prev, nowStep]);
       }
       setCurrentStep(nextStep);
+      currentStepRef.current = nextStep;
     }
   };
 

@@ -33,6 +33,7 @@ export const useAnalysisSessionRecovery = ({
 }: Params) => {
   useEffect(() => {
     if (!resumeData) return;
+    if (currentStep === 'analyzing') return;
     if (forcedResumeSelect && currentStep === 'resume_select') return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;

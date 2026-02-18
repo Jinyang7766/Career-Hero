@@ -1,5 +1,7 @@
 import React from 'react';
 import AiDisclaimer from '../AiDisclaimer';
+import { confirmDialog } from '../../../../src/ui/dialogs';
+import { USAGE_POINT_COST } from '../../../../src/points-config';
 
 export type ReportPageProps = {
   mode: 'analyzing' | 'report';
@@ -91,11 +93,15 @@ const ReportPage: React.FC<ReportPageProps> = ({
 
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button
-            onClick={handleAnalyzeOtherResume}
+            onClick={async () => {
+              const ok = await confirmDialog(`重新诊断会重新生成结果，并耗费 ${USAGE_POINT_COST.analysis} 点积分，确定继续吗？`);
+              if (!ok) return;
+              handleAnalyzeOtherResume();
+            }}
             className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
             type="button"
           >
-            返回简历选择
+            重新诊断
           </button>
           <button
             onClick={handleStartMicroInterview}

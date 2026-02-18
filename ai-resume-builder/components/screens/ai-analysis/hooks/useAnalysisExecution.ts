@@ -40,7 +40,7 @@ type Params = {
   setSuggestions: (value: Suggestion[]) => void;
   setReport: (value: AnalysisReport | null) => void;
   persistAnalysisSessionState: (
-    state: 'jd_ready' | 'analyzing' | 'report_ready' | 'paused' | 'error',
+    state: 'jd_ready' | 'analyzing' | 'report_ready' | 'paused' | 'error' | 'interview_in_progress',
     patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; force: boolean }>
   ) => Promise<void>;
   persistAnalysisSnapshot: (resumeData: any, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => Promise<any>;
@@ -56,6 +56,7 @@ type Params = {
   isInterviewMode?: boolean;
   openChat: (source: 'internal' | 'preview') => void;
   consumeUsageQuota?: (kind: 'analysis' | 'interview') => Promise<boolean>;
+  refundUsageQuota?: (kind: 'analysis' | 'interview', note?: string) => Promise<boolean>;
 };
 
 export const useAnalysisExecution = ({
@@ -95,6 +96,7 @@ export const useAnalysisExecution = ({
   isInterviewMode,
   openChat,
   consumeUsageQuota,
+  refundUsageQuota,
 }: Params) => {
   const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
     return runRealAnalysis({
@@ -123,7 +125,42 @@ export const useAnalysisExecution = ({
     showToast,
   ]);
 
-  const cancelInFlightAnalysis = useCallback((message?: string) => {
+  const generateRealAnalysisWithOptions = useCallback(async (
+    runId: string,
+    interviewType?: string,
+    opts?: { bypassCache?: boolean }
+  ) => {
+    return runRealAnalysis({
+      interviewType,
+      resumeData,
+      jdText,
+      getBackendAuthToken,
+      showToast,
+      buildApiUrl,
+      createMasker,
+      getRagEnabledFlag,
+      analysisAbortRef: analysisAbortRef as any,
+      analysisRunIdRef: analysisRunIdRef as any,
+      runId,
+      setIsFromCache,
+      bypassCache: !!opts?.bypassCache,
+    });
+  }, [
+    analysisAbortRef,
+    analysisRunIdRef,
+    buildApiUrl,
+    getBackendAuthToken,
+    getRagEnabledFlag,
+    jdText,
+    resumeData,
+    setIsFromCache,
+    showToast,
+  ]);
+
+  const cancelInFlightAnalysis = useCallback((
+    message?: string,
+    opts?: { preserveStep?: boolean }
+  ) => {
     analysisRunIdRef.current = null;
     if (analysisAbortRef.current) {
       try { analysisAbortRef.current.abort('analysis_cancelled'); } catch { /* ignore */ }
@@ -133,10 +170,15 @@ export const useAnalysisExecution = ({
     if (message) {
       showToast(message, 'error', 2600);
     }
-    setCurrentStep('jd_input');
+    if (!opts?.preserveStep) {
+      setCurrentStep('jd_input');
+    }
   }, [analysisAbortRef, analysisRunIdRef, setAnalysisInProgress, setCurrentStep, showToast]);
 
-  const startAnalysis = useCallback(async (interviewType?: string) => {
+  const startAnalysis = useCallback(async (
+    interviewType?: string,
+    opts?: { preserveReportOnError?: boolean; bypassCache?: boolean }
+  ) => {
     if (!resumeData) {
       console.error('startAnalysis - resumeData is null or undefined');
       alert('无法进行 AI 诊断：没有找到简历数据');
@@ -146,7 +188,7 @@ export const useAnalysisExecution = ({
     console.log('startAnalysis - Resume data:', resumeData);
 
     if (analysisRunIdRef.current) {
-      cancelInFlightAnalysis();
+      cancelInFlightAnalysis(undefined, { preserveStep: true });
     }
     const normalizedInterviewType = String(interviewType || localStorage.getItem('ai_interview_type') || 'general').trim().toLowerCase();
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
@@ -233,7 +275,9 @@ export const useAnalysisExecution = ({
     navigateToStep('analyzing');
 
     try {
-      const aiAnalysisResult = await generateRealAnalysis(runId, interviewType);
+      const aiAnalysisResult = await generateRealAnalysisWithOptions(runId, interviewType, {
+        bypassCache: !!opts?.bypassCache,
+      });
       if (analysisRunIdRef.current !== runId) return;
       if (!aiAnalysisResult) return;
 
@@ -510,7 +554,7 @@ export const useAnalysisExecution = ({
         await persistAnalysisSessionState('paused', {
           jdText: jdText || resumeData?.lastJdText || '',
           targetCompany: targetCompany || resumeData?.targetCompany || '',
-          step: 'jd_input',
+          step: opts?.preserveReportOnError ? 'report' : 'jd_input',
           error: message || 'analysis_interrupted',
           force: true,
         });
@@ -518,13 +562,23 @@ export const useAnalysisExecution = ({
         console.warn('Failed to persist paused session state:', stateErr);
       }
       if (isTimeout) {
+        if (!isInterviewMode && refundUsageQuota) {
+          await refundUsageQuota('analysis', 'AI 诊断超时返还积分');
+        }
         showToast('AI 诊断超时，请检查后端服务是否可用后重试', 'error', 2800);
       } else if (isCancelled) {
         showToast('诊断已取消，请重试', 'info', 1800);
       } else {
+        if (!isInterviewMode && refundUsageQuota) {
+          await refundUsageQuota('analysis', 'AI 诊断失败返还积分');
+        }
         showToast(`AI 诊断失败：${message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       }
-      navigateToStep('jd_input');
+      if (opts?.preserveReportOnError) {
+        navigateToStep('report');
+      } else {
+        navigateToStep('jd_input');
+      }
     } finally {
       if (analysisRunIdRef.current === runId) {
         analysisRunIdRef.current = null;
@@ -535,6 +589,7 @@ export const useAnalysisExecution = ({
     analysisRunIdRef,
     cancelInFlightAnalysis,
     generateRealAnalysis,
+    generateRealAnalysisWithOptions,
     jdText,
     markAnalysisCompleted,
     navigateToStep,
@@ -562,6 +617,7 @@ export const useAnalysisExecution = ({
     targetCompany,
     isInterviewMode,
     consumeUsageQuota,
+    refundUsageQuota,
   ]);
 
   const handleStartAnalysisClick = useCallback((interviewType?: string) => {

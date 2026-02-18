@@ -1075,6 +1075,14 @@ def ai_chat_core(data, deps):
     diagnosis_dossier = data.get('diagnosisDossier') or {}
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
+    if not isinstance(chat_history, list):
+        chat_history = []
+    try:
+        history_window = int(data.get('historyWindow') or deps.get('INTERVIEW_HISTORY_WINDOW') or 14)
+    except Exception:
+        history_window = 14
+    history_window = max(6, min(30, history_window))
+    chat_history_for_prompt = chat_history[-history_window:]
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
     interview_mode = str(data.get('interviewMode') or 'comprehensive').strip().lower()
     interview_focus = str(data.get('interviewFocus') or '').strip()
@@ -1293,7 +1301,7 @@ def ai_chat_core(data, deps):
     if deps['gemini_client'] and deps['check_gemini_quota']():
         try:
             formatted_chat = ""
-            for message_obj in chat_history:
+            for message_obj in chat_history_for_prompt:
                 role = "候选人" if message_obj.get('role') == 'user' else "面试官"
                 msg_text = message_obj.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
                 if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):
@@ -1431,6 +1439,14 @@ def ai_chat_stream_core(data, deps):
     diagnosis_dossier = data.get('diagnosisDossier') or {}
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
+    if not isinstance(chat_history, list):
+        chat_history = []
+    try:
+        history_window = int(data.get('historyWindow') or deps.get('INTERVIEW_HISTORY_WINDOW') or 14)
+    except Exception:
+        history_window = 14
+    history_window = max(6, min(30, history_window))
+    chat_history_for_prompt = chat_history[-history_window:]
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
     diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
@@ -1513,7 +1529,7 @@ def ai_chat_stream_core(data, deps):
         return None, {'response': '面试官暂时开小差了。'}, 200
 
     formatted_chat = ""
-    for message_obj in chat_history:
+    for message_obj in chat_history_for_prompt:
         role = "候选人" if message_obj.get('role') == 'user' else "面试官"
         msg_text = message_obj.get('text', '').replace('[INTERVIEW_MODE]', '').strip()
         if msg_text and not msg_text.startswith('SYSTEM_') and (not _is_voice_placeholder_text(msg_text)):

@@ -22,8 +22,7 @@ type Params = {
   selectedResumeId: string | number | null;
   resumeReadState: any;
   isInterviewMode?: boolean;
-  diagnosesRemaining?: number | null;
-  interviewsRemaining?: number | null;
+  pointsRemaining?: number | null;
   isSameResumeId: (a: any, b: any) => boolean;
   resumeData: any;
   targetCompany: string;
@@ -117,8 +116,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         selectedResumeId={p.selectedResumeId}
         isReading={p.resumeReadState.status === 'loading'}
         isInterviewMode={p.isInterviewMode}
-        diagnosesRemaining={p.diagnosesRemaining}
-        interviewsRemaining={p.interviewsRemaining}
+        pointsRemaining={p.pointsRemaining}
       />
     );
   }

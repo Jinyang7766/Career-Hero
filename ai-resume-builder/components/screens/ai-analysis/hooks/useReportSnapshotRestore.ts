@@ -36,30 +36,47 @@ export const useReportSnapshotRestore = ({
 
     const last = loadLastAnalysis();
     if (!last || !last.resumeId) return;
+    const lastResumeId = String(last.resumeId);
+    const currentResumeId = String(resumeData?.id || '');
 
-    const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
-    if (!snapshotApplied) return;
+    const applyFromSnapshot = () => {
+      const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
+      if (!snapshotApplied) return;
+      setJdText(last.jdText || '');
+      if (last.targetCompany) {
+        setTargetCompany(last.targetCompany);
+      }
+      setAnalysisResumeId(last.resumeId);
+    };
 
-    setJdText(last.jdText || '');
-    if (last.targetCompany) {
-      setTargetCompany(last.targetCompany);
+    if (currentResumeId && currentResumeId === lastResumeId) {
+      applyFromSnapshot();
+      return;
     }
-    setAnalysisResumeId(last.resumeId);
 
-    if (!resumeData || String(resumeData.id) !== String(last.resumeId)) {
-      DatabaseService.getResume(last.resumeId).then((result) => {
-        if (!result.success || !result.data) return;
+    DatabaseService.getResume(last.resumeId).then((result) => {
+      // Resume was deleted: discard stale local snapshot to avoid ghost report restore.
+      if (!result.success || !result.data) {
+        try {
+          localStorage.removeItem('ai_last_analysis_snapshot');
+          localStorage.removeItem('ai_analysis_resume_id');
+        } catch {
+          // ignore
+        }
+        return;
+      }
 
-        const finalResumeData = {
-          id: result.data.id,
-          ...result.data.resume_data,
-          resumeTitle: result.data.title
-        };
-        if (!setResumeData) return;
+      const finalResumeData = {
+        id: result.data.id,
+        ...result.data.resume_data,
+        resumeTitle: result.data.title
+      };
+      if (setResumeData) {
         sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
         setResumeData(finalResumeData);
-      });
-    }
+      }
+      applyFromSnapshot();
+    });
   }, [
     applyAnalysisSnapshot,
     currentStep,

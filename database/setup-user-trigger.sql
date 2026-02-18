@@ -12,6 +12,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referral_code TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referred_by UUID;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS diagnoses_remaining INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interviews_remaining INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS points_balance INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS membership_tier TEXT NOT NULL DEFAULT 'FREE';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_latest JSONB;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_history JSONB NOT NULL DEFAULT '[]'::jsonb;
@@ -43,8 +44,28 @@ CREATE TABLE IF NOT EXISTS public.referral_reward_events (
   inviter_interview_bonus INTEGER NOT NULL DEFAULT 0,
   invited_diagnosis_bonus INTEGER NOT NULL DEFAULT 0,
   invited_interview_bonus INTEGER NOT NULL DEFAULT 0,
+  inviter_points_bonus INTEGER NOT NULL DEFAULT 0,
+  invited_points_bonus INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+ALTER TABLE public.referral_reward_events ADD COLUMN IF NOT EXISTS inviter_points_bonus INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.referral_reward_events ADD COLUMN IF NOT EXISTS invited_points_bonus INTEGER NOT NULL DEFAULT 0;
+
+-- Points ledger for billing/usage transparency
+CREATE TABLE IF NOT EXISTS public.points_ledger (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+  delta INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  source_type TEXT,
+  source_id TEXT,
+  note TEXT,
+  balance_after INTEGER,
+  metadata JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS points_ledger_user_created_idx
+  ON public.points_ledger(user_id, created_at DESC);
 
 -- Generate deterministic invite code from UUID (uppercase 8 chars)
 CREATE OR REPLACE FUNCTION public.generate_referral_code(p_user_id UUID)
@@ -68,6 +89,8 @@ DECLARE
   v_inviter_interview_bonus INTEGER := 1;
   v_invited_diagnosis_bonus INTEGER := 1;
   v_invited_interview_bonus INTEGER := 0;
+  v_inviter_points_bonus INTEGER := 100;
+  v_invited_points_bonus INTEGER := 100;
 BEGIN
   v_name := COALESCE(NULLIF(NEW.raw_user_meta_data->>'name', ''), 'User');
   v_referral_code_input := UPPER(TRIM(COALESCE(NEW.raw_user_meta_data->>'referral_code', '')));
@@ -122,7 +145,9 @@ BEGIN
     inviter_diagnosis_bonus,
     inviter_interview_bonus,
     invited_diagnosis_bonus,
-    invited_interview_bonus
+    invited_interview_bonus,
+    inviter_points_bonus,
+    invited_points_bonus
   )
   VALUES (
     NEW.id,
@@ -131,7 +156,9 @@ BEGIN
     v_inviter_diagnosis_bonus,
     v_inviter_interview_bonus,
     v_invited_diagnosis_bonus,
-    v_invited_interview_bonus
+    v_invited_interview_bonus,
+    v_inviter_points_bonus,
+    v_invited_points_bonus
   )
   ON CONFLICT (invited_user_id) DO NOTHING
   RETURNING invited_user_id INTO v_reward_inserted;
@@ -141,14 +168,44 @@ BEGIN
     SET
       diagnoses_remaining = COALESCE(diagnoses_remaining, 0) + v_inviter_diagnosis_bonus,
       interviews_remaining = COALESCE(interviews_remaining, 0) + v_inviter_interview_bonus,
+      points_balance = COALESCE(points_balance, 0) + v_inviter_points_bonus,
       updated_at = NOW()
+    WHERE id = v_inviter_id;
+
+    INSERT INTO public.points_ledger (user_id, delta, action, source_type, source_id, note, balance_after, metadata, created_at)
+    SELECT
+      v_inviter_id,
+      v_inviter_points_bonus,
+      'referral_inviter_bonus',
+      'referral',
+      NEW.id::TEXT,
+      '邀请好友奖励积分',
+      points_balance,
+      jsonb_build_object('invited_user_id', NEW.id, 'referral_code', v_referral_code_input),
+      NOW()
+    FROM public.users
     WHERE id = v_inviter_id;
 
     UPDATE public.users
     SET
       diagnoses_remaining = COALESCE(diagnoses_remaining, 0) + v_invited_diagnosis_bonus,
       interviews_remaining = COALESCE(interviews_remaining, 0) + v_invited_interview_bonus,
+      points_balance = COALESCE(points_balance, 0) + v_invited_points_bonus,
       updated_at = NOW()
+    WHERE id = NEW.id;
+
+    INSERT INTO public.points_ledger (user_id, delta, action, source_type, source_id, note, balance_after, metadata, created_at)
+    SELECT
+      NEW.id,
+      v_invited_points_bonus,
+      'referral_invited_bonus',
+      'referral',
+      v_inviter_id::TEXT,
+      '被邀请注册奖励积分',
+      points_balance,
+      jsonb_build_object('inviter_user_id', v_inviter_id, 'referral_code', v_referral_code_input),
+      NOW()
+    FROM public.users
     WHERE id = NEW.id;
   END IF;
 
@@ -191,6 +248,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- 设置RLS策略（如果需要的话）
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referral_reward_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.points_ledger ENABLE ROW LEVEL SECURITY;
 
 DO $$
 BEGIN
@@ -239,5 +297,35 @@ BEGIN
       ON public.referral_reward_events
       FOR SELECT
       USING (auth.uid() = invited_user_id OR auth.uid() = inviter_user_id);
+  END IF;
+END $$;
+
+-- points_ledger: user can read own ledger and insert own usage rows
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'points_ledger'
+      AND policyname = 'Users can view own points ledger'
+  ) THEN
+    CREATE POLICY "Users can view own points ledger"
+      ON public.points_ledger
+      FOR SELECT
+      USING (auth.uid() = user_id);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND tablename = 'points_ledger'
+      AND policyname = 'Users can insert own points ledger'
+  ) THEN
+    CREATE POLICY "Users can insert own points ledger"
+      ON public.points_ledger
+      FOR INSERT
+      WITH CHECK (auth.uid() = user_id);
   END IF;
 END $$;

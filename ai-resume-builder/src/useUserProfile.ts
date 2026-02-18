@@ -13,6 +13,7 @@ export interface UserProfile {
   referral_code?: string;
   diagnoses_remaining?: number;
   interviews_remaining?: number;
+  points_balance?: number;
   membership_tier?: string;
   analysis_dossier_latest?: {
     id: string;

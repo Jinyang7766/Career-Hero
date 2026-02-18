@@ -28,7 +28,8 @@ export const useAnalysisHungGuard = ({
     const check = () => {
       const inProgress = isAnalysisStillInProgress();
       if (!inProgress) {
-        setCurrentStep('jd_input');
+        // Do not force-step away immediately; this can be a transient mismatch
+        // while local/session flags are being refreshed.
         return;
       }
 

@@ -14,6 +14,7 @@ import Settings from './components/screens/Settings';
 import AccountSecurity from './components/screens/AccountSecurity';
 import Help from './components/screens/Help';
 import History from './components/screens/History';
+import PointsHistory from './components/screens/PointsHistory';
 import AllResumes from './components/screens/AllResumes';
 import AiAnalysis from './components/screens/AiAnalysis';
 import Login from './components/screens/Login';
@@ -102,6 +103,7 @@ function App() {
       case View.ACCOUNT_SECURITY: return '/account-security';
       case View.HELP: return '/help';
       case View.HISTORY: return '/history';
+      case View.POINTS_HISTORY: return '/points-history';
       case View.DELETION_PENDING: return '/deletion-pending';
       case View.MEMBER_CENTER: return '/member-center';
       case View.AI_INTERVIEW: return '/ai-interview';
@@ -125,6 +127,7 @@ function App() {
     if (p.startsWith('/account-security')) return View.ACCOUNT_SECURITY;
     if (p.startsWith('/help')) return View.HELP;
     if (p.startsWith('/history')) return View.HISTORY;
+    if (p.startsWith('/points-history')) return View.POINTS_HISTORY;
     if (p.startsWith('/member-center')) return View.MEMBER_CENTER;
     if (p.startsWith('/deletion-pending')) return View.DELETION_PENDING;
     if (p.startsWith('/signup')) return View.SIGNUP;
@@ -700,6 +703,8 @@ function App() {
         return <Help />;
       case View.HISTORY:
         return <History />;
+      case View.POINTS_HISTORY:
+        return <PointsHistory />;
       case View.ALL_RESUMES:
         return <AllResumes />;
       case View.MEMBER_CENTER:

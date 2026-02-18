@@ -14,8 +14,7 @@ export type ResumeSelectPageProps = {
   selectedResumeId?: string | number | null;
   isReading?: boolean;
   isInterviewMode?: boolean;
-  diagnosesRemaining?: number | null;
-  interviewsRemaining?: number | null;
+  pointsRemaining?: number | null;
 };
 
 import { DiagnosisProgressBar } from '../../../shared/DiagnosisProgressBar';
@@ -46,8 +45,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   selectedResumeId,
   isReading,
   isInterviewMode,
-  diagnosesRemaining,
-  interviewsRemaining,
+  pointsRemaining,
 }) => {
   const filtered = (allResumes || []).filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -104,7 +102,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
       {/* Mode Indicator Banner */}
       <div className="px-4 pt-4 pb-2 shrink-0">
-        <div className={`group relative overflow-hidden rounded-2xl p-6 text-white shadow-xl transition-all ${isInterviewMode
+        <div className={`group relative overflow-hidden rounded-2xl py-4 px-5 text-white shadow-xl transition-all ${isInterviewMode
           ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-indigo-500/30'
           : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 shadow-xl shadow-primary/30'
           }`}>
@@ -112,49 +110,31 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
           {/* Decorative shapes - Synced with Membership/Dashboard style for Interview mode */}
           {isInterviewMode ? (
             <>
-              <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse pointer-events-none" />
-              <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse pointer-events-none" />
+              <div className="absolute -left-16 -bottom-16 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
             </>
           ) : (
             <>
-              <div className="absolute -right-8 -top-8 size-32 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-              <div className="absolute -left-8 -bottom-8 size-24 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+              <div className="absolute -right-8 -top-8 size-24 rounded-full bg-white/10 blur-3xl pointer-events-none" />
+              <div className="absolute -left-8 -bottom-8 size-20 rounded-full bg-white/10 blur-2xl pointer-events-none" />
             </>
           )}
 
-          <div className="flex items-center justify-between gap-4 relative z-10">
-            <div className="flex items-start gap-4">
-              <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
-                <span className="material-symbols-outlined text-[24px]">
-                  {isInterviewMode ? 'forum' : 'assessment'}
-                </span>
-              </div>
-              <div className="flex flex-col pt-0.5">
-                <h2 className="text-lg font-black mb-1 text-white tracking-wide">
-                  {isInterviewMode ? '模拟面试' : '简历诊断'}
-                </h2>
-                <p className="text-xs text-white/90 leading-relaxed font-medium line-clamp-2 max-w-[180px]">
-                  {isInterviewMode
-                    ? 'AI 面试官将基于简历提问，模拟真实面试场景。'
-                    : 'AI 将全方位诊断亮点并提供专业优化建议。'}
-                </p>
-              </div>
-            </div>
-
-            {/* Right-aligned Quota Box */}
-            <div className="shrink-0 flex flex-col items-center justify-center w-[72px] h-[72px] rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner">
-              <span className="text-[10px] font-bold text-white/80 tracking-tight mb-0.5">
-                {isInterviewMode ? '剩余面试' : '剩余诊断'}
+          <div className="flex items-center gap-4 relative z-10">
+            <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
+              <span className="material-symbols-outlined text-[24px]">
+                {isInterviewMode ? 'forum' : 'assessment'}
               </span>
-              <div className="flex items-baseline gap-0.5">
-                <span className="text-2xl font-black text-white leading-none">
-                  {isInterviewMode
-                    ? (Number.isFinite(Number(interviewsRemaining)) ? Number(interviewsRemaining) : '--')
-                    : (Number.isFinite(Number(diagnosesRemaining)) ? Number(diagnosesRemaining) : '--')
-                  }
-                </span>
-              </div>
-              <span className="text-[10px] font-bold text-white/60 mt-0.5">次</span>
+            </div>
+            <div className="flex flex-col min-w-0 pr-2">
+              <h2 className="text-base font-black mb-0.5 text-white tracking-wide">
+                {isInterviewMode ? '模拟面试' : '简历诊断'}
+              </h2>
+              <p className="text-[11px] text-white/90 leading-tight font-medium whitespace-nowrap overflow-hidden text-ellipsis">
+                {isInterviewMode
+                  ? 'AI 面试官将基于简历提问，模拟真实面试场景。'
+                  : 'AI 将全方位诊断亮点并提供专业优化建议。'}
+              </p>
             </div>
           </div>
         </div>

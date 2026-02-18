@@ -9,6 +9,7 @@ export enum View {
   ACCOUNT_SECURITY = 'ACCOUNT_SECURITY',
   HELP = 'HELP',
   HISTORY = 'HISTORY',
+  POINTS_HISTORY = 'POINTS_HISTORY',
   ALL_RESUMES = 'ALL_RESUMES',
   LOGIN = 'LOGIN',
   SIGNUP = 'SIGNUP',
@@ -32,8 +33,7 @@ export interface UserSubscription {
   tier: MembershipTier;
   expireDate: string;
   autoRenew: boolean;
-  diagnosesRemaining: number;
-  interviewsRemaining: number;
+  pointsRemaining: number;
 }
 
 export interface NavProps {

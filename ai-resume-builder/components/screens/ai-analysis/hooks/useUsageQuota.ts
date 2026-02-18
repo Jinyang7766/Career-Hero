@@ -1,6 +1,8 @@
 import React from 'react';
 import { View } from '../../../../types';
 import { DatabaseService } from '../../../../src/database-service';
+import { MembershipTier } from '../../../../types';
+import { PLAN_MONTHLY_POINTS, USAGE_POINT_COST } from '../../../../src/points-config';
 
 type Params = {
   currentUserId?: string;
@@ -15,21 +17,24 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
 
     const readResult = await DatabaseService.getUser(userId);
     if (!readResult.success || !readResult.data) {
-      showToast('读取次数失败，请稍后重试', 'error');
+      showToast('读取积分失败，请稍后重试', 'error');
       return false;
     }
 
-    const tier = String((readResult.data as any)?.membership_tier || 'FREE').toUpperCase();
-    const isFirstTime = tier === 'FREE';
-    const field = kind === 'analysis' ? 'diagnoses_remaining' : 'interviews_remaining';
-    const remaining = Number((readResult.data as any)?.[field] ?? 0);
+    const row = (readResult.data as any) || {};
+    const tier = String(row?.membership_tier || 'FREE').toUpperCase();
+    const isFirstTime = tier === MembershipTier.FREE;
+    const neededPoints = kind === 'analysis' ? USAGE_POINT_COST.analysis : USAGE_POINT_COST.interview;
+    const migratedFromLegacy = Number(row?.diagnoses_remaining ?? 0) * USAGE_POINT_COST.analysis
+      + Number(row?.interviews_remaining ?? 0) * USAGE_POINT_COST.interview;
+    const currentPoints = Number(row?.points_balance ?? migratedFromLegacy ?? 0);
 
-    if (!Number.isFinite(remaining) || remaining <= 0) {
+    if (!Number.isFinite(currentPoints) || currentPoints < neededPoints) {
       const confirmMessage = isFirstTime
-        ? '您的免费次数已用完。既然体验不错，不如开启『Starter 免费试用礼包』？内含 10 次诊断和 3 场面试，首月 0 元，立即领取并继续？'
+        ? `您的积分不足。是否立即开通 Starter（月赠 ${PLAN_MONTHLY_POINTS.STARTER} 积分）并继续？`
         : (kind === 'analysis'
-          ? '您的简历诊断次数已用尽。升级会员即可解锁更多深度分析、针对性优化建议及高通过率模板，助您斩获心仪 Offer！'
-          : '您的模拟面试次数已用尽。升级会员即可重新开启沉浸式 AI 对话练习，更有全方位面试报告助您查漏补缺！');
+          ? `您的积分不足，当前诊断需 ${neededPoints} 积分。升级会员或购买积分包后可继续。`
+          : `您的积分不足，当前面试需 ${neededPoints} 积分。升级会员或购买积分包后可继续。`);
 
       let confirmed = false;
       try {
@@ -45,15 +50,22 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
 
       if (confirmed) {
         if (isFirstTime) {
-          const newDiagnoses = kind === 'analysis' ? 9 : 10;
-          const newInterviews = kind === 'interview' ? 2 : 3;
+          const starterPoints = PLAN_MONTHLY_POINTS.STARTER;
+          const afterConsume = Math.max(0, starterPoints - neededPoints);
           const giftResult = await DatabaseService.updateUser(userId, {
-            membership_tier: 'STARTER',
-            diagnoses_remaining: newDiagnoses,
-            interviews_remaining: newInterviews
+            membership_tier: MembershipTier.STARTER,
+            points_balance: afterConsume
           });
           if (giftResult.success) {
-            showToast('Starter 免费试用礼包已激活，立即为您继续！', 'success');
+            await DatabaseService.createPointsLedger({
+              userId,
+              delta: -neededPoints,
+              action: kind === 'analysis' ? 'analysis_consume' : 'interview_consume',
+              sourceType: kind,
+              note: `Starter 激活后扣减${kind === 'analysis' ? '诊断' : '面试'}积分`,
+              balanceAfter: afterConsume,
+            });
+            showToast(`Starter 已激活，已扣除 ${neededPoints} 积分`, 'success');
             return true;
           }
         }
@@ -62,15 +74,61 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
       return false;
     }
 
-    const updateResult = await DatabaseService.updateUser(userId, { [field]: Math.max(0, remaining - 1) });
+    const nextPoints = Math.max(0, currentPoints - neededPoints);
+    const updateResult = await DatabaseService.updateUser(userId, {
+      points_balance: nextPoints
+    });
     if (!updateResult.success) {
-      showToast('扣减次数失败，请稍后重试', 'error');
+      showToast('扣减积分失败，请稍后重试', 'error');
       return false;
     }
+    await DatabaseService.createPointsLedger({
+      userId,
+      delta: -neededPoints,
+      action: kind === 'analysis' ? 'analysis_consume' : 'interview_consume',
+      sourceType: kind,
+      note: kind === 'analysis' ? 'AI 诊断扣减' : 'AI 面试扣减',
+      balanceAfter: nextPoints,
+    });
 
     return true;
   }, [currentUserId, navigateToView, showToast]);
 
-  return { consumeUsageQuota };
-};
+  const refundUsageQuota = React.useCallback(async (
+    kind: 'analysis' | 'interview',
+    note?: string
+  ) => {
+    const userId = String(currentUserId || '').trim();
+    if (!userId) return false;
 
+    const readResult = await DatabaseService.getUser(userId);
+    if (!readResult.success || !readResult.data) {
+      return false;
+    }
+
+    const row = (readResult.data as any) || {};
+    const refundPoints = kind === 'analysis' ? USAGE_POINT_COST.analysis : USAGE_POINT_COST.interview;
+    const currentPoints = Number(row?.points_balance ?? 0);
+    const nextPoints = Math.max(0, currentPoints + refundPoints);
+
+    const updateResult = await DatabaseService.updateUser(userId, {
+      points_balance: nextPoints
+    });
+    if (!updateResult.success) {
+      return false;
+    }
+
+    await DatabaseService.createPointsLedger({
+      userId,
+      delta: refundPoints,
+      action: kind === 'analysis' ? 'analysis_refund' : 'interview_refund',
+      sourceType: kind,
+      note: note || (kind === 'analysis' ? 'AI 诊断失败返还积分' : 'AI 面试失败返还积分'),
+      balanceAfter: nextPoints,
+    });
+
+    return true;
+  }, [currentUserId]);
+
+  return { consumeUsageQuota, refundUsageQuota };
+};
