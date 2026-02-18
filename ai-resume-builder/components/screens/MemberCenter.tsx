@@ -1,11 +1,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { View, ScreenProps, MembershipTier } from '../../types';
+import { View, MembershipTier } from '../../types';
 import { useAppContext } from '../../src/app-context';
 import { ReferralModal } from '../ReferralModal';
 import { useUserProfile } from '../../src/useUserProfile';
 
-const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
-    const { goBack, navigateToView } = useAppContext();
+const MemberCenter: React.FC = () => {
+    const { goBack, navigateToView, currentUser } = useAppContext();
     const [selectedTier, setSelectedTier] = useState<MembershipTier>(MembershipTier.PLUS);
     const [showReferralModal, setShowReferralModal] = useState(false);
 
@@ -49,8 +49,8 @@ const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
             period: '/月',
             description: '入门首选，极速体验',
             features: [
-                'AI 简历诊断: 3次/月',
-                'AI 模拟面试: 1场/月',
+                'AI 简历诊断: 10次/月',
+                'AI 模拟面试: 3场/月',
             ],
             color: 'from-slate-500 to-slate-600',
             shadow: 'shadow-slate-500/30',
@@ -65,8 +65,8 @@ const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
             period: '/月',
             description: '人气之选，高性价比',
             features: [
-                'AI 简历诊断: 15次/月',
-                'AI 模拟面试: 5场/月',
+                'AI 简历诊断: 30次/月',
+                'AI 模拟面试: 10场/月',
             ],
             color: 'from-blue-600 to-blue-700',
             shadow: 'shadow-blue-500/30',
@@ -81,8 +81,8 @@ const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
             period: '/月',
             description: '职业冲刺，专业必备',
             features: [
-                'AI 简历诊断: 30次/月',
-                'AI 模拟面试: 12场/月',
+                'AI 简历诊断: 100次/月',
+                'AI 模拟面试: 35场/月',
             ],
             color: 'from-indigo-600 to-indigo-700',
             shadow: 'shadow-indigo-500/30',
@@ -97,8 +97,8 @@ const MemberCenter: React.FC<ScreenProps> = ({ currentUser }) => {
             period: '/月',
             description: '至尊体验，全能旗舰',
             features: [
-                'AI 简历诊断: 80次/月',
-                'AI 模拟面试: 30场/月',
+                'AI 简历诊断: 300次/月',
+                'AI 模拟面试: 120场/月',
             ],
             color: 'from-slate-800 to-slate-900',
             shadow: 'shadow-slate-900/30',

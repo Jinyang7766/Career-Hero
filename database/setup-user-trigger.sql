@@ -10,8 +10,9 @@ CREATE TABLE IF NOT EXISTS public.users (
 -- Referral & quota columns (idempotent)
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referral_code TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS referred_by UUID;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS diagnoses_remaining INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interviews_remaining INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS diagnoses_remaining INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interviews_remaining INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS membership_tier TEXT NOT NULL DEFAULT 'FREE';
 
 DO $$
 BEGIN

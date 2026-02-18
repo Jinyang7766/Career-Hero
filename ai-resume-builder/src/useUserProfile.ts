@@ -13,6 +13,7 @@ export interface UserProfile {
   referral_code?: string;
   diagnoses_remaining?: number;
   interviews_remaining?: number;
+  membership_tier?: string;
 }
 
 // 缓存项接口
@@ -144,13 +145,12 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
 
         console.log('Loading user profile for:', targetUserId);
 
-        // 3. 检查内存缓存
+        // 3. 检查内存缓存（先用缓存快速展示，再后台刷新最新值）
         const cachedProfile = cacheWithExpiry.get(targetUserId);
         if (cachedProfile) {
           console.log('User profile loaded from cache:', cachedProfile);
           setUserProfile(cachedProfile);
           setLoading(false);
-          return;
         }
 
         // 4. 快速回退：如果有authUser，先使用它来显示基本信息

@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { toSkillList } from '../../src/skill-utils';
 import { buildApiUrl } from '../../src/api-config';
-import { DatabaseService } from '../../src/database-service';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ChatPage from './ai-analysis/ChatPage';
 import { useAppContext } from '../../src/app-context';
@@ -30,6 +29,7 @@ import { useAnalysisSnapshotApplier } from './ai-analysis/hooks/useAnalysisSnaps
 import { useReportSnapshotRestore } from './ai-analysis/hooks/useReportSnapshotRestore';
 import { useAnalyzeOtherResumeReset } from './ai-analysis/hooks/useAnalyzeOtherResumeReset';
 import { useAnalysisExecution } from './ai-analysis/hooks/useAnalysisExecution';
+import { useUsageQuota } from './ai-analysis/hooks/useUsageQuota';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -445,49 +445,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     targetCompany,
     setSuggestions: setSuggestions as any,
   });
-
-  const consumeUsageQuota = React.useCallback(async (kind: 'analysis' | 'interview') => {
-    const userId = String(currentUser?.id || '').trim();
-    if (!userId) return true;
-
-    const readResult = await DatabaseService.getUser(userId);
-    if (!readResult.success || !readResult.data) {
-      showToast('读取次数失败，请稍后重试', 'error');
-      return false;
-    }
-
-    const field = kind === 'analysis' ? 'diagnoses_remaining' : 'interviews_remaining';
-    const remaining = Number((readResult.data as any)?.[field] ?? 0);
-
-    if (!Number.isFinite(remaining) || remaining <= 0) {
-      const confirmMessage = kind === 'analysis'
-        ? '诊断次数不足，是否前往会员中心升级？'
-        : '面试次数不足，是否前往会员中心升级？';
-      let shouldGoMemberCenter = false;
-      try {
-        const confirmAsync = (window as any).__careerHeroConfirm;
-        if (typeof confirmAsync === 'function') {
-          shouldGoMemberCenter = await confirmAsync(confirmMessage);
-        } else {
-          shouldGoMemberCenter = window.confirm(confirmMessage);
-        }
-      } catch {
-        shouldGoMemberCenter = false;
-      }
-      if (shouldGoMemberCenter) {
-        navigateToView(View.MEMBER_CENTER, { replace: true });
-      }
-      return false;
-    }
-
-    const updateResult = await DatabaseService.updateUser(userId, { [field]: Math.max(0, remaining - 1) });
-    if (!updateResult.success) {
-      showToast('扣减次数失败，请稍后重试', 'error');
-      return false;
-    }
-
-    return true;
-  }, [currentUser?.id, navigateToView, showToast]);
+  const { consumeUsageQuota } = useUsageQuota({
+    currentUserId: currentUser?.id,
+    navigateToView,
+    showToast,
+  });
 
   // --- Handlers ---
   const { cancelInFlightAnalysis, startAnalysis, handleStartAnalysisClick } = useAnalysisExecution({

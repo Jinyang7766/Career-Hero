@@ -2,6 +2,7 @@ import React, { useRef, useState, Fragment } from 'react';
 import { View, ScreenProps, MembershipTier } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { useAppContext } from '../../src/app-context';
+import { APP_VERSION_CN } from '../../src/app-version';
 import { ReferralModal } from '../ReferralModal';
 
 
@@ -344,7 +345,7 @@ const Profile: React.FC<ScreenProps> = () => {
               隐私政策
             </button>
           </div>
-          <p className="text-xs text-slate-300 dark:text-slate-700">版本 1.2.0 (Build 303)</p>
+          <p className="text-xs text-slate-300 dark:text-slate-700">{APP_VERSION_CN}</p>
         </div>
       </main>
     </div>

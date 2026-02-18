@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScreenProps } from '../../types';
 import { AICacheService } from '../../src/ai-cache-service';
+import { APP_BRAND_VERSION, APP_VERSION_SHORT } from '../../src/app-version';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 
@@ -152,7 +153,7 @@ const Settings: React.FC<ScreenProps> = () => {
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1.5 mr-1">
                   <span className="size-2 rounded-full bg-rose-500 animate-pulse"></span>
-                  <span className="text-[13px] text-slate-400 dark:text-slate-500 font-medium">v1.2.0</span>
+                  <span className="text-[13px] text-slate-400 dark:text-slate-500 font-medium">{APP_VERSION_SHORT}</span>
                 </div>
                 <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[20px] group-hover:translate-x-0.5 transition-transform group-hover:text-primary">chevron_right</span>
               </div>
@@ -171,8 +172,7 @@ const Settings: React.FC<ScreenProps> = () => {
         </div>
 
         <div className="mt-8 text-center pb-8">
-          <p className="text-[12px] text-slate-400 dark:text-slate-600">AI Resume Builder v1.2.0 (Build 302)</p>
-          <p className="text-[12px] text-slate-400 dark:text-slate-600 mt-1">© 2024 Design Copilot Inc.</p>
+          <p className="text-[12px] text-slate-400 dark:text-slate-600">{APP_BRAND_VERSION}</p>
         </div>
       </div>
     </div>
