@@ -31,6 +31,8 @@ import { usePostInterviewFeedback } from './ai-analysis/hooks/usePostInterviewFe
 import { usePostInterviewFinalize } from './ai-analysis/hooks/usePostInterviewFinalize';
 import { useInterviewEntryActions } from './ai-analysis/hooks/useInterviewEntryActions';
 import { useAiAnalysisActions } from './ai-analysis/hooks/useAiAnalysisActions';
+import { useOptimizedResumeListSync } from './ai-analysis/hooks/useOptimizedResumeListSync';
+import { useAnalysisStepCheckpoint } from './ai-analysis/hooks/useAnalysisStepCheckpoint';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -66,6 +68,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
   const allResumes = useAppStore((state) => state.allResumes);
+  const setAllResumes = useAppStore((state) => state.setAllResumes);
   const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
   const navigate = useNavigate();
   const location = useLocation();
@@ -92,7 +95,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const [targetCompany, setTargetCompany] = useState('');
   const prevStepRef = useRef<Step | null>(null);
 
-  // UX: when re-entering the JD input step, do not carry over target company from previous sessions.
+  // UX: when re-entering the 职位描述 input step, do not carry over target company from previous sessions.
   useEffect(() => {
     if (currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
       setTargetCompany('');
@@ -446,6 +449,22 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
   });
 
+  useOptimizedResumeListSync({
+    optimizedResumeId,
+    resumeData,
+    currentStep,
+    setAllResumes,
+  });
+
+  useAnalysisStepCheckpoint({
+    currentStep,
+    jdText,
+    resumeData,
+    targetCompany,
+    score,
+    persistAnalysisSessionState: persistAnalysisSessionState as any,
+  });
+
   useInterviewPlanLoader({
     isInterviewMode,
     resumeData,
@@ -613,6 +632,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     selectedResumeId,
     resumeReadState,
     isInterviewMode,
+    diagnosesRemaining: Number((userProfile as any)?.diagnoses_remaining ?? NaN),
+    interviewsRemaining: Number((userProfile as any)?.interviews_remaining ?? NaN),
     isSameResumeId,
     resumeData,
     targetCompany,
@@ -692,3 +713,4 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 };
 
 export default AiAnalysis;
+

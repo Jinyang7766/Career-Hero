@@ -48,14 +48,14 @@ export const useChatIntroMessages = ({
 
     if (interviewType === 'technical') {
       return {
-        summary: `${greeting}我是您的 AI 复试深挖面试官。${hasJd ? '我已结合您的简历和目标岗位 JD，' : '我已阅读您的简历，'}接下来将重点围绕与你岗位相关的专业能力、项目方法与问题解决过程进行深挖。`,
+        summary: `${greeting}我是您的 AI 复试深挖面试官。${hasJd ? '我已结合您的简历和目标岗位职位描述，' : '我已阅读您的简历，'}接下来将重点围绕与你岗位相关的专业能力、项目方法与问题解决过程进行深挖。`,
         ask: technicalWarmup
       };
     }
 
     if (interviewType === 'hr') {
       return {
-        summary: `${greeting}我是您的 AI HR 面试官。${hasJd ? '我已结合您的简历和目标岗位 JD，' : '我已阅读您的简历，'}接下来将重点考察你的动机匹配度、沟通协作和职业稳定性。`,
+        summary: `${greeting}我是您的 AI HR 面试官。${hasJd ? '我已结合您的简历和目标岗位职位描述，' : '我已阅读您的简历，'}接下来将重点考察你的动机匹配度、沟通协作和职业稳定性。`,
         ask: hrWarmup
       };
     }

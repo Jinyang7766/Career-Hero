@@ -231,7 +231,7 @@ def _format_diagnosis_dossier(dossier):
         if target_company:
             lines.append(f"- 目标公司：{target_company}")
         if jd_text:
-            lines.append(f"- 目标岗位JD（摘要）：{jd_text[:500]}")
+            lines.append(f"- 目标岗位职位描述（摘要）：{jd_text[:500]}")
         if isinstance(score_breakdown, dict) and score_breakdown:
             lines.append(
                 f"- 评分拆解：经验{score_breakdown.get('experience', 0)} / 技能{score_breakdown.get('skills', 0)} / 格式{score_breakdown.get('format', 0)}"
@@ -363,7 +363,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     "format": 66
   }},
   "summary": "微访谈前初步评估总结",
-  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
   "weaknesses": ["短板1", "短板2", "短板3"],
@@ -414,8 +414,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 4. **核心要求**：所有优化建议的 suggestedValue 必须是**直接可用的简历原文**，禁止包含“建议修改为”、“比如”、“示例”、“描述示例”等指导性词语。用户会直接复制此内容。
    - 错误："建议描述：负责后端开发..."
    - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
-5. **严格匹配要求**：必须逐条对照 JD 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
-6. **数量要求**：suggestions 至少 8 条；若 JD 较复杂，建议 12-15 条。
+5. **严格匹配要求**：必须逐条对照 职位描述 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
+6. **数量要求**：suggestions 至少 8 条；若 职位描述 较复杂，建议 12-15 条。
 6.1 **逐句覆盖要求（强制）**：对简历中每条可见叙述句（尤其是工作经历/项目经历/个人简介中的句子）都要进行详细评测；每条句子至少对应 1 条可执行优化建议，禁止“挑重点略过”。
 6.2 **一次性完整优化（强制）**：本次输出必须覆盖整份简历，不允许只优化一部分后结束。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
@@ -423,9 +423,9 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 7.2 类型强约束：score 和 scoreBreakdown 各字段必须为整数；targetCompanyConfidence 为 0~1 数字；
     suggestions 中每条都必须包含 id/type/title/reason/targetSection/suggestedValue。
 7.3 targetSection 仅允许：summary、workExps、projects、skills、education、certificates。
-7.4 **目标公司提取（强制）**：若 JD 中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
+7.4 **目标公司提取（强制）**：若 职位描述中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
 7.5 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
-8. **隐私脱敏占位符说明（强制）**：如果你在简历/JD/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
+8. **隐私脱敏占位符说明（强制）**：如果你在简历/职位描述/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
    - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
    - 严禁尝试猜测或还原真实隐私信息。
 9. **性别字段使用约束（强制）**：
@@ -434,8 +434,8 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
    - 严禁因为性别信息影响评分结果或给出偏向性结论。
 10. **教育信息不可“专业优化”（强制）**：
    - 教育背景中的“学校/学院名称、专业名称、学历/学位、入学/毕业时间”属于事实字段，必须严格来自简历原文。
-   - 严禁为了贴合 JD 而擅自“优化专业名称/主修方向”（例如把“电子商务”改成“电子商务（主修方向：数据挖掘与商务智能）”）。
-   - 若 JD 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
+   - 严禁为了贴合 职位描述 而擅自“优化专业名称/主修方向”（例如把“电子商务”改成“电子商务（主修方向：数据挖掘与商务智能）”）。
+   - 若 职位描述 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
 11. **技能词条白名单/黑名单规则（强制）**：
    - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
    - 专业证书可以作为技能词条输出（例如：PMP认证、CFA、FRM、CPA、ACCA、CISP、软考证书、教师资格证），优先使用证书标准名称，禁止冗长描述。
@@ -457,11 +457,11 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
 
     if job_description:
         return f"""
-请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 JD 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100）：
-- 经历匹配（40分）：工作经历与JD职责的重合度、项目经验的含金量。
+- 经历匹配（40分）：工作经历与职位描述职责的重合度、项目经验的含金量。
 - 技能匹配（30分）：硬技能（编程语言、工具）和软技能的覆盖率。
 - 格式规范（30分）：简历排版整洁度、关键信息的易读性、是否有错别字。
 
@@ -480,7 +480,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     "format": 25
   }},
   "summary": "简历整体评估简述（控制在100字以内）。",
-  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
@@ -498,7 +498,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
       "id": "suggestion-skills",
       "type": "missing",
       "title": "核心技能补全",
-      "reason": "JD对AI工程能力有很高要求，建议补齐相关技能。",
+      "reason": "职位描述对AI工程能力有很高要求，建议补齐相关技能。",
       "targetSection": "skills",
       "suggestedValue": ["Prompt Engineering", "RAG", "Agent 设计", "Vector DB"]
     }}
@@ -530,7 +530,7 @@ def _build_analysis_prompt(*, resume_data, job_description, rag_context, format_
     "format": 25
   }},
   "summary": "简历整体评估简述（控制在100字以内）。",
-  "targetCompany": "从JD识别出的目标公司名称，无法确定时返回空字符串",
+  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
@@ -846,8 +846,8 @@ def parse_screenshot_core(data, deps):
     if deps['gemini_client'] and deps['check_gemini_quota']():
         try:
             prompt = (
-                "你是JD文本OCR助手。"
-                "任务：从图片中提取完整职位描述（JD）文本。"
+                "你是职位描述文本OCR助手。"
+                "任务：从图片中提取完整职位描述文本。"
                 "要求：保留原有分段和项目符号；去掉无关UI文字；只输出纯文本，不要解释，不要Markdown，不要JSON。"
             )
             from base64 import b64decode
@@ -888,15 +888,15 @@ def parse_screenshot_core(data, deps):
                         return {'success': True, 'text': text, 'model': model_name}, 200
                 except Exception as model_err:
                     last_error = model_err
-                    deps['logger'].warning("JD screenshot OCR failed on model %s: %s", model_name, model_err)
+                    deps['logger'].warning("职位描述 screenshot OCR failed on model %s: %s", model_name, model_err)
 
-            deps['logger'].error("JD screenshot OCR all models failed: %s", last_error)
-            return {'success': False, 'text': '', 'error': 'JD截图识别失败，请尝试更清晰截图或直接粘贴JD文本。'}, 200
+            deps['logger'].error("职位描述 screenshot OCR all models failed: %s", last_error)
+            return {'success': False, 'text': '', 'error': '职位描述截图识别失败，请尝试更清晰截图或直接粘贴职位描述文本。'}, 200
         except Exception as ai_error:
             deps['logger'].error("AI 截图解析失败: %s", ai_error)
-            return {'success': False, 'text': '', 'error': 'JD截图识别失败，请稍后重试或手动粘贴。'}, 200
+            return {'success': False, 'text': '', 'error': '职位描述截图识别失败，请稍后重试或手动粘贴。'}, 200
 
-    return {'success': False, 'text': '', 'error': 'AI服务不可用，请手动粘贴JD文本。'}, 200
+    return {'success': False, 'text': '', 'error': 'AI服务不可用，请手动粘贴职位描述文本。'}, 200
 
 
 def _decode_audio_payload(audio):
@@ -962,6 +962,15 @@ def ai_chat_core(data, deps):
     job_description = data.get('jobDescription', '')
     chat_history = data.get('chatHistory', [])
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
+    interview_mode = str(data.get('interviewMode') or 'comprehensive').strip().lower()
+    interview_focus = str(data.get('interviewFocus') or '').strip()
+    try:
+        question_limit = int(data.get('questionLimit') or 0)
+    except Exception:
+        question_limit = 0
+    if question_limit <= 0:
+        question_limit = 3 if interview_mode == 'simple' else 12
+    question_limit = max(3, min(12, question_limit))
     diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
@@ -1020,7 +1029,9 @@ def ai_chat_core(data, deps):
             '你为什么想加入这个岗位/公司？你的3个月目标是什么？',
             '请补充一个能体现你岗位匹配度的经历或成果。',
         ]
-        def _sanitize_plan_questions(items, *, min_count=4, max_count=12):
+        min_count = 3 if question_limit <= 3 else 4
+
+        def _sanitize_plan_questions(items, *, min_count=min_count, max_count=question_limit):
             sanitized = []
             for item in (items or []):
                 q = str(item or '').strip()
@@ -1049,7 +1060,7 @@ def ai_chat_core(data, deps):
         if not (deps['gemini_client'] and deps['check_gemini_quota']()):
             return {
                 'success': True,
-                'questions': _sanitize_plan_questions(default_questions),
+                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
             }, 200
         try:
@@ -1062,12 +1073,15 @@ def ai_chat_core(data, deps):
 你是一位资深面试官，请为候选人生成一套“完整且不重复”的模拟面试题单。
 要求：
 - 面试类型：{role_hint}
-- 结合岗位JD与候选人简历定制，问题要具体。
+- 面试模式：{'简单模式（仅3题）' if interview_mode == 'simple' else '全面模式（完整题单）'}
+- 题量上限：{question_limit}题（必须遵守）
+- 结合岗位职位描述与候选人简历定制，问题要具体。
 - 一次性给出全部题目，题量由你根据岗位复杂度与候选人背景自行决定。
 - 题量建议区间：5~9题；若岗位很复杂可适度增加，但不超过12题。
 - 题目顺序要从浅入深，覆盖面完整，避免语义重复。
 - 严禁出现“自我介绍”相关题目（例如“请做自我介绍/介绍一下你自己”）。
 - 严禁生成与本场热身题重合或近似的题目。本场热身题为：{warmup_question}
+- 如果提供了“训练重点”，请优先围绕该重点出题：{interview_focus if interview_focus else '未提供'}
 - 仅输出 JSON，不要任何解释文字。
 - JSON 格式：
 {{
@@ -1091,13 +1105,13 @@ def ai_chat_core(data, deps):
                     questions = [str(x).strip() for x in q if str(x).strip()]
                 if isinstance(c, list):
                     coverage = [str(x).strip() for x in c if str(x).strip()]
-            questions = _sanitize_plan_questions(questions or default_questions)
+            questions = _sanitize_plan_questions(questions or default_questions, min_count=min_count, max_count=question_limit)
             return {'success': True, 'questions': questions, 'coverage': coverage}, 200
         except Exception as e:
             deps['logger'].warning("Interview plan generation failed: %s", e)
             return {
                 'success': True,
-                'questions': _sanitize_plan_questions(default_questions),
+                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
             }, 200
 
@@ -1190,14 +1204,14 @@ def ai_chat_core(data, deps):
 【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
 要求：
 - 用中文输出；不要提出下一题。
-- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
 - 必须给出总分（0-100 的整数）。
 - 输出结构：
 1) 总分：XX/100（必须是整数）
 2) 综合评价（3-5句）
 3) 表现亮点（3-6条）
 4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-5) JD 匹配度与缺口（分点说明）
+5) 职位描述匹配度与缺口（分点说明）
 6) 简历可改进点（3-6条，针对表达与证据补强）
 7) 1-2 周训练计划（按天/按主题）
 
@@ -1408,14 +1422,14 @@ def ai_chat_stream_core(data, deps):
 【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
 要求：
 - 用中文输出；不要提出下一题。
-- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与 JD 匹配度、岗位核心能力缺口。
+- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
 - 必须给出总分（0-100 的整数）。
 - 输出结构：
 1) 总分：XX/100（必须是整数）
 2) 综合评价（3-5句）
 3) 表现亮点（3-6条）
 4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-5) JD 匹配度与缺口（分点说明）
+5) 职位描述匹配度与缺口（分点说明）
 6) 简历可改进点（3-6条，针对表达与证据补强）
 7) 1-2 周训练计划（按天/按主题）
 
@@ -1548,3 +1562,4 @@ def transcribe_core(data, deps):
     if text:
         return {'success': True, 'text': text, 'provider': provider}, 200
     return {'success': False, 'text': '', 'error': error or '转写失败'}, 200
+

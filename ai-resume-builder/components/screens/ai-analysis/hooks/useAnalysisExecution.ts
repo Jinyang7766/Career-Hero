@@ -139,7 +139,7 @@ export const useAnalysisExecution = ({
   const startAnalysis = useCallback(async (interviewType?: string) => {
     if (!resumeData) {
       console.error('startAnalysis - resumeData is null or undefined');
-      alert('无法进行 AI 分析：没有找到简历数据');
+      alert('无法进行 AI 诊断：没有找到简历数据');
       return;
     }
 
@@ -174,6 +174,25 @@ export const useAnalysisExecution = ({
     if (interviewType) {
       localStorage.setItem('ai_interview_type', interviewType);
     }
+
+    // Interview mode should enter interview flow directly instead of running
+    // the diagnosis pipeline UI.
+    if (isInterviewMode) {
+      const effectiveJd = (jdText || resumeData?.lastJdText || '').trim();
+      try {
+        await persistAnalysisSessionState('interview_in_progress', {
+          jdText: effectiveJd,
+          targetCompany: targetCompany || resumeData?.targetCompany || '',
+          step: 'chat',
+          force: true,
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist interview_in_progress state:', stateErr);
+      }
+      openChat('internal');
+      return;
+    }
+
     const hasReusableInterviewContext = Boolean(
       isInterviewMode &&
       resumeData?.optimizationStatus === 'optimized' &&
@@ -272,7 +291,7 @@ export const useAnalysisExecution = ({
           id: suggestion.id || `ai-suggestion-${index}`,
           type: suggestion.type || 'optimization',
           title: suggestion.title || '优化建议',
-          reason: sanitizeReasonText(suggestion.reason || '根据AI分析结果'),
+          reason: sanitizeReasonText(suggestion.reason || '根据AI诊断结果'),
           targetSection: inferredSection,
           targetId: suggestion.targetId,
           targetField: suggestion.targetField,
@@ -311,7 +330,7 @@ export const useAnalysisExecution = ({
       );
 
       const newReport: AnalysisReport = {
-        summary: aiAnalysisResult.summary || 'AI分析完成，请查看详细报告。',
+        summary: aiAnalysisResult.summary || 'AI诊断完成，请查看详细报告。',
         strengths: aiAnalysisResult.strengths || ['结构清晰'],
         weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
         missingKeywords: aiAnalysisResult.missingKeywords,
@@ -470,7 +489,11 @@ export const useAnalysisExecution = ({
         } catch (stateErr) {
           console.warn('Failed to persist interview_in_progress session state:', stateErr);
         }
-        navigateToStep('micro_intro', true);
+        if (isInterviewMode) {
+          openChat('internal');
+        } else {
+          navigateToStep('micro_intro', true);
+        }
       } else {
         showToast('本次诊断结果较完善，已跳过微访谈。', 'success', 2200);
         navigateToStep('report', true);
@@ -493,11 +516,11 @@ export const useAnalysisExecution = ({
         console.warn('Failed to persist paused session state:', stateErr);
       }
       if (isTimeout) {
-        showToast('AI 分析超时，请检查后端服务是否可用后重试', 'error', 2800);
+        showToast('AI 诊断超时，请检查后端服务是否可用后重试', 'error', 2800);
       } else if (isCancelled) {
-        showToast('分析已取消，请重试', 'info', 1800);
+        showToast('诊断已取消，请重试', 'info', 1800);
       } else {
-        showToast(`AI 分析失败：${message || '网络连接异常，请稍后重试'}`, 'error', 2600);
+        showToast(`AI 诊断失败：${message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       }
       navigateToStep('jd_input');
     } finally {
@@ -553,3 +576,4 @@ export const useAnalysisExecution = ({
     handleStartAnalysisClick,
   };
 };
+

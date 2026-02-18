@@ -226,7 +226,7 @@ def ensure_analysis_summary(summary, strengths=None, weaknesses=None, missing_ke
     if clean_weaknesses:
         parts.append(f"短板主要在：{'、'.join(clean_weaknesses[:3])}。")
     if has_jd and clean_keywords:
-        parts.append(f"与JD相比仍缺关键词：{'、'.join(clean_keywords[:5])}。")
+        parts.append(f"与职位描述相比仍缺关键词：{'、'.join(clean_keywords[:5])}。")
 
     parts.append('建议优先补充可量化成果、职责场景和业务结果，按STAR结构重写核心经历，以提升筛选通过率和岗位说服力。')
 

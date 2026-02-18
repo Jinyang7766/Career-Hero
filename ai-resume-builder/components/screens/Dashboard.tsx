@@ -8,7 +8,7 @@ import { useAppStore } from '../../src/app-store';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力，量化成果是金标准。",
-  "针对不同 JD 调整简历关键词，提高 Boss 直聘等平台的匹配度。",
+  "针对不同职位描述调整简历关键词，提高 Boss 直聘等平台的匹配度。",
   "保持简历简洁，重点突出最近三年的核心项目经历。",
   "使用强有力的动词开头，直接描述你解决的问题和达成的结果。",
   "检查拼写和排版错误是发布前的底线，细节决定第一印象。",
@@ -215,7 +215,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
             <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.total}</p>
           </div>
           <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已分析</p>
+            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已诊断</p>
             <p className="text-3xl font-black text-primary dark:text-primary mt-1">{stats.optimized}</p>
           </div>
         </div>
@@ -289,22 +289,6 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                       上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
                     </p>
                   </div>
-                  {typeof (resume.analysisScore ?? resume.score) === 'number' && (resume.analysisScore ?? resume.score) > 0 && (() => {
-                    const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
-                    let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20";
-                    if (scoreValue >= 85) {
-                      colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20";
-                    } else if (scoreValue >= 70) {
-                      colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20";
-                    }
-
-                    return (
-                      <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
-                        <span className="text-[14px] font-black leading-none">{scoreValue}</span>
-                        <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
-                      </div>
-                    );
-                  })()}
                 </div>
               ))}
             </div>
@@ -325,3 +309,4 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 };
 
 export default Dashboard;
+

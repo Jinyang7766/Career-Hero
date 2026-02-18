@@ -4,9 +4,30 @@ export const getActiveInterviewType = () => {
   return 'general';
 };
 
-export const getPlanStorageKey = (resumeId: string | number | null | undefined, makeJdKey: (text: string) => string, effectiveJdText: string) => {
+export const getActiveInterviewMode = () => {
+  const mode = String(localStorage.getItem('ai_interview_mode') || '').trim().toLowerCase();
+  if (mode === 'simple' || mode === 'comprehensive') return mode;
+  return 'comprehensive';
+};
+
+export const getActiveInterviewFocus = () =>
+  String(localStorage.getItem('ai_interview_focus') || '').trim().slice(0, 300);
+
+export const getInterviewQuestionLimit = () => {
+  const mode = getActiveInterviewMode();
+  return mode === 'simple' ? 3 : 12;
+};
+
+export const getPlanStorageKey = (
+  resumeId: string | number | null | undefined,
+  makeJdKey: (text: string) => string,
+  effectiveJdText: string,
+  interviewFocus?: string
+) => {
   const interviewType = getActiveInterviewType();
-  return `ai_interview_plan_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}`;
+  const interviewMode = getActiveInterviewMode();
+  const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
+  return `ai_interview_plan_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}`;
 };
 
 export const getInterviewerTitle = () => {

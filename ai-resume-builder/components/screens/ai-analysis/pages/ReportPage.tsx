@@ -36,7 +36,7 @@ const ReportPage: React.FC<ReportPageProps> = ({
           {hasJdInput() ? '正在进行人岗匹配...' : '正在深度诊断简历...'}
         </h3>
         <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs leading-relaxed">
-          AI 正在聚合简历、JD 与能力证据，生成诊断结论。
+          AI 正在聚合简历、职位描述与能力证据，生成诊断结论。
         </p>
       </div>
     );

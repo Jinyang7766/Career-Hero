@@ -36,7 +36,7 @@ export const useAnalysisHungGuard = ({
       if (!at) return;
       const elapsed = Date.now() - at;
       if (elapsed > HUNG_MS) {
-        cancelInFlightAnalysis('切换到后台后分析超时，请返回重试。');
+        cancelInFlightAnalysis('切换到后台后诊断超时，请返回重试。');
       }
     };
 
@@ -57,4 +57,5 @@ export const useAnalysisHungGuard = ({
     };
   }, [currentStep, setCurrentStep, isAnalysisStillInProgress, inprogressAtKey, cancelInFlightAnalysis]);
 };
+
 

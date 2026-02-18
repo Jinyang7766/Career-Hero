@@ -54,6 +54,8 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 }) => {
   const JD_MAX_CHARS = 1500;
   const INTERVIEW_TYPE_STORAGE_KEY = 'ai_interview_type';
+  const INTERVIEW_MODE_STORAGE_KEY = 'ai_interview_mode';
+  const INTERVIEW_FOCUS_STORAGE_KEY = 'ai_interview_focus';
   const [interviewType, setInterviewType] = React.useState(() => {
     try {
       const saved = String(localStorage.getItem(INTERVIEW_TYPE_STORAGE_KEY) || '').trim().toLowerCase();
@@ -62,6 +64,22 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       // ignore localStorage access errors
     }
     return 'general';
+  });
+  const [interviewMode, setInterviewMode] = React.useState<'simple' | 'comprehensive'>(() => {
+    try {
+      const saved = String(localStorage.getItem(INTERVIEW_MODE_STORAGE_KEY) || '').trim().toLowerCase();
+      if (saved === 'simple' || saved === 'comprehensive') return saved as 'simple' | 'comprehensive';
+    } catch {
+      // ignore localStorage access errors
+    }
+    return 'comprehensive';
+  });
+  const [interviewFocus, setInterviewFocus] = React.useState(() => {
+    try {
+      return String(localStorage.getItem(INTERVIEW_FOCUS_STORAGE_KEY) || '').trim();
+    } catch {
+      return '';
+    }
   });
 
   React.useEffect(() => {
@@ -72,6 +90,24 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       // ignore localStorage access errors
     }
   }, [interviewType, isInterviewMode]);
+
+  React.useEffect(() => {
+    if (!isInterviewMode) return;
+    try {
+      localStorage.setItem(INTERVIEW_MODE_STORAGE_KEY, interviewMode);
+    } catch {
+      // ignore localStorage access errors
+    }
+  }, [interviewMode, isInterviewMode]);
+
+  React.useEffect(() => {
+    if (!isInterviewMode) return;
+    try {
+      localStorage.setItem(INTERVIEW_FOCUS_STORAGE_KEY, String(interviewFocus || '').trim());
+    } catch {
+      // ignore localStorage access errors
+    }
+  }, [interviewFocus, isInterviewMode]);
 
   const shouldShowContinueInterview = React.useMemo(() => {
     if (!isInterviewMode) return false;
@@ -161,7 +197,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                 <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
               </div>
               <div className="flex flex-col">
-                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isInterviewMode ? '面试简历' : '当前分析简历'}</h4>
+                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isInterviewMode ? '面试简历' : '当前诊断简历'}</h4>
                 <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
               </div>
             </div>
@@ -180,7 +216,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-md border border-slate-200 dark:border-white/5">
           <div className="flex items-center gap-2 mb-3">
             <span className="material-symbols-outlined text-primary">{isInterviewMode ? 'forum' : 'description'}</span>
-            <h3 className="font-bold text-slate-900 dark:text-white">{isInterviewMode ? '面试场景设置' : '职位描述 (JD)'}</h3>
+            <h3 className="font-bold text-slate-900 dark:text-white">{isInterviewMode ? '面试场景设置' : '职位描述'}</h3>
           </div>
 
           {isInterviewMode && (
@@ -206,6 +242,43 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   </button>
                 ))}
               </div>
+
+              <div className="mt-4">
+                <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">面试模式</label>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  {[
+                    { id: 'simple', label: '简单', desc: '3个问题，快速练习' },
+                    { id: 'comprehensive', label: '全面', desc: '完整题单，深度模拟' },
+                  ].map((mode) => (
+                    <button
+                      key={mode.id}
+                      onClick={() => setInterviewMode(mode.id as 'simple' | 'comprehensive')}
+                      className={`flex flex-col items-start justify-center p-3 rounded-xl border transition-all ${interviewMode === mode.id
+                          ? 'bg-primary/10 border-primary text-primary'
+                          : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                        }`}
+                      type="button"
+                    >
+                      <span className="text-xs font-bold">{mode.label}</span>
+                      <span className="text-[11px] opacity-80 mt-0.5">{mode.desc}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">自定义训练重点（可选）</label>
+                <textarea
+                  value={interviewFocus}
+                  onChange={(e) => setInterviewFocus((e.target.value || '').slice(0, 200))}
+                  placeholder="例如：重点追问项目量化结果、系统设计深挖、反问环节训练..."
+                  className="mt-2 w-full h-20 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none text-sm shadow-sm"
+                  maxLength={200}
+                />
+                <div className="mt-1 text-right text-[11px] text-slate-500 dark:text-slate-400">
+                  {interviewFocus.length}/200
+                </div>
+              </div>
             </div>
           )}
 
@@ -220,11 +293,11 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             />
           </div>
           <div className="mb-3">
-            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">JD内容</label>
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">职位描述内容</label>
             <textarea
               value={jdText}
               onChange={(e) => setJdText((e.target.value || '').slice(0, JD_MAX_CHARS))}
-              placeholder={isInterviewMode ? "请输入目标岗位的 JD 内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的 JD 内容，AI 将为您进行针对性的人岗匹配分析..."}
+              placeholder={isInterviewMode ? "请输入目标岗位的职位描述内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的职位描述内容，AI 将为您进行针对性的人岗匹配分析..."}
               className="mt-2 w-full h-56 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
               maxLength={JD_MAX_CHARS}
             />
@@ -245,7 +318,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               ) : (
                 <span className="material-symbols-outlined text-[20px]">image</span>
               )}
-              <span className="text-sm">{isUploading ? '正在解析...' : '上传JD截图'}</span>
+              <span className="text-sm">{isUploading ? '正在解析...' : '上传职位描述截图'}</span>
             </button>
             <input
               type="file"
@@ -270,7 +343,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >
-            {isInterviewMode ? (shouldShowContinueInterview ? '继续面试' : '开始面试') : '开始分析'}
+            {isInterviewMode ? (shouldShowContinueInterview ? '继续面试' : '开始面试') : '开始诊断'}
           </button>
         </div>
 
@@ -282,7 +355,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   <span className="material-symbols-outlined text-white text-[32px]">warning</span>
                 </div>
                 <p className="text-base text-white/95 leading-relaxed font-bold px-2">
-                  {isInterviewMode ? '您未填写 JD，无法生成针对性的模拟面试题。是否坚持继续通用面试？' : '您未填写 JD，无法进行岗位定向匹配。是否坚持继续通用分析？'}
+                  {isInterviewMode ? '您未填写职位描述，无法生成针对性的模拟面试题。是否坚持继续通用面试？' : '您未填写职位描述，无法进行岗位定向匹配。是否坚持继续通用诊断？'}
                 </p>
               </div>
               <div className="mt-8 flex flex-col gap-3">
@@ -294,14 +367,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
                   type="button"
                 >
-                  {isInterviewMode ? '坚持进入面试' : '坚持继续分析'}
+                  {isInterviewMode ? '坚持进入面试' : '坚持继续诊断'}
                 </button>
                 <button
                   onClick={() => setShowJdEmptyModal(false)}
                   className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
                   type="button"
                 >
-                  返回填写 JD
+                  返回填写职位描述
                 </button>
               </div>
             </div>
@@ -313,3 +386,4 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 };
 
 export default JdInputPage;
+

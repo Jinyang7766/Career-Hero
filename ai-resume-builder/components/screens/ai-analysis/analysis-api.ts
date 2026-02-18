@@ -22,9 +22,6 @@ type Params = {
 
 const clampScore = (n: number) => Math.min(100, Math.max(0, Math.round(n)));
 
-const weightedTotal = (b: { experience: number; skills: number; format: number }) =>
-  b.experience * 0.4 + b.skills * 0.4 + b.format * 0.2;
-
 const buildIndependentBreakdown = (
   resumeData: any,
   totalScore: number,
@@ -38,13 +35,13 @@ const buildIndependentBreakdown = (
     skills: Number(rawBreakdown?.skills || 0),
     format: Number(rawBreakdown?.format || 0),
   };
-  const rawRange = Math.max(normalizedRaw.experience, normalizedRaw.skills, normalizedRaw.format) -
-    Math.min(normalizedRaw.experience, normalizedRaw.skills, normalizedRaw.format);
   const hasUsableRaw =
+    Number.isFinite(normalizedRaw.experience) &&
+    Number.isFinite(normalizedRaw.skills) &&
+    Number.isFinite(normalizedRaw.format) &&
     normalizedRaw.experience > 0 &&
     normalizedRaw.skills > 0 &&
-    normalizedRaw.format > 0 &&
-    rawRange >= 6;
+    normalizedRaw.format > 0;
   if (hasUsableRaw) {
     return {
       experience: clampScore(normalizedRaw.experience),
@@ -69,29 +66,6 @@ const buildIndependentBreakdown = (
   experience = clampScore(experience);
   skills = clampScore(skills);
   format = clampScore(format);
-
-  // Ensure dimensions are not too close.
-  let range = Math.max(experience, skills, format) - Math.min(experience, skills, format);
-  if (range < 6) {
-    const ranked = [
-      { key: 'experience' as const, value: experience },
-      { key: 'skills' as const, value: skills },
-      { key: 'format' as const, value: format },
-    ].sort((a, b) => a.value - b.value);
-    const low = ranked[0].key;
-    const high = ranked[2].key;
-    const applyDelta = (k: 'experience' | 'skills' | 'format', delta: number) => {
-      if (k === 'experience') experience = clampScore(experience + delta);
-      if (k === 'skills') skills = clampScore(skills + delta);
-      if (k === 'format') format = clampScore(format + delta);
-    };
-    applyDelta(low, -4);
-    applyDelta(high, +4);
-  }
-
-  // Keep weighted total close to original score.
-  const delta = score - weightedTotal({ experience, skills, format });
-  experience = clampScore(experience + delta);
 
   return { experience, skills, format };
 };
@@ -185,7 +159,7 @@ export const runRealAnalysis = async ({
 
     if (!response.ok) {
       const errorData = await response.json();
-      throw new Error(errorData.error || 'AI分析请求失败');
+      throw new Error(errorData.error || 'AI诊断请求失败');
     }
 
     const result = await response.json();
@@ -193,7 +167,7 @@ export const runRealAnalysis = async ({
     const backendScore = unmaskedResult.score || 0;
 
     const analysisResult = {
-      summary: unmaskedResult.summary || 'AI分析完成',
+      summary: unmaskedResult.summary || 'AI诊断完成',
       targetCompany: unmaskedResult.targetCompany || '',
       targetCompanyConfidence: Number(unmaskedResult.targetCompanyConfidence || 0),
       strengths: unmaskedResult.strengths || [],
@@ -233,3 +207,4 @@ export const runRealAnalysis = async ({
     }
   }
 };
+

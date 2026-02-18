@@ -14,6 +14,24 @@ export type ResumeSelectPageProps = {
   selectedResumeId?: string | number | null;
   isReading?: boolean;
   isInterviewMode?: boolean;
+  diagnosesRemaining?: number | null;
+  interviewsRemaining?: number | null;
+};
+
+const DIAGNOSIS_STAGES = ['初步诊断', '微访谈', '最终报告'] as const;
+const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
+
+const formatResumeModifiedAt = (rawDate: string) => {
+  const source = String(rawDate || '').trim();
+  if (!source) return '时间未知';
+
+  let normalized = source;
+  if (/^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}$/.test(source)) {
+    normalized = source.replace(' ', 'T');
+  }
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return '时间未知';
+  return date.toLocaleString('zh-CN', { hour12: false });
 };
 
 const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
@@ -29,10 +47,99 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   selectedResumeId,
   isReading,
   isInterviewMode,
+  diagnosesRemaining,
+  interviewsRemaining,
 }) => {
   const filtered = (allResumes || []).filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  const renderDiagnosisStageProgress = (resume: ResumeSummary) => {
+    const progress = Math.max(0, Math.min(100, Math.round(Number(resume.diagnosisProgress))));
+
+    // Both modes use a 3-stage visual approach
+    const stageLabels = isInterviewMode ? INTERVIEW_STAGES : DIAGNOSIS_STAGES;
+
+    // Determine status for each stage
+    const stageStatuses: Array<'todo' | 'current' | 'done'> = stageLabels.map((_, idx) => {
+      if (isInterviewMode) {
+        // For Interview Mode: Independent lighting
+        return resume.interviewStageStatus?.[idx] || 'todo';
+      } else {
+        // For Diagnosis Mode: Sequential lighting
+        let currentStageIndex = -1;
+        if (progress >= 95) currentStageIndex = 2;
+        else if (progress >= 80) currentStageIndex = 1;
+        else if (progress >= 15) currentStageIndex = 0;
+
+        if (idx < currentStageIndex) return 'done';
+        if (idx === currentStageIndex) return 'current';
+        return 'todo';
+      }
+    });
+
+    if (!resume.analyzed) return null;
+
+    return (
+      <div className="mt-3">
+        <div className="flex items-center justify-between mb-1.5 px-0.5">
+          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            {isInterviewMode ? '面试进程' : '诊断阶段'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 h-1">
+          {stageLabels.map((_, idx) => {
+            const status = stageStatuses[idx];
+            const isDone = status === 'done';
+            const isCurrent = status === 'current';
+
+            return (
+              <div
+                key={idx}
+                className={`flex-1 h-full rounded-full transition-all duration-500 ${isDone
+                  ? 'bg-emerald-500 dark:bg-emerald-500/80'
+                  : isCurrent
+                    ? 'bg-primary/80 dark:bg-blue-400/70'
+                    : 'bg-slate-100 dark:bg-white/5'
+                  }`}
+              />
+            );
+          })}
+        </div>
+
+        <div className="flex items-center mt-2">
+          {stageLabels.map((label, idx) => {
+            const status = stageStatuses[idx];
+            const isDone = status === 'done';
+            const isCurrent = status === 'current';
+
+            return (
+              <div key={idx} className="flex-1 flex flex-col items-center">
+                <div className="flex items-center gap-1 min-h-[12px]">
+                  {isDone ? (
+                    <span className="material-symbols-outlined text-[10px] text-emerald-500 font-bold" style={{ fontSize: '10px' }}>check_circle</span>
+                  ) : isCurrent ? (
+                    <div className="size-1.5 rounded-full bg-primary animate-pulse" />
+                  ) : (
+                    <div className="size-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                  )}
+                  <span className={`text-[9px] font-bold tracking-tight whitespace-nowrap ${isCurrent
+                    ? 'text-slate-900 dark:text-white'
+                    : isDone
+                      ? 'text-slate-600 dark:text-slate-400'
+                      : 'text-slate-400 dark:text-slate-500'
+                    }`}>
+                    {label}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   const renderSelectionList = (resumes: ResumeSummary[]) => (
     <div className="px-4 mt-1">
@@ -56,27 +163,11 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
             <div className="flex flex-col flex-1 justify-center min-w-0">
               <p className="text-slate-900 dark:text-white text-sm font-bold truncate leading-tight mb-1">{resume.title}</p>
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
-                上次修改: {new Date(resume.date).toLocaleString('zh-CN', { hour12: false })}
+                上次修改: {formatResumeModifiedAt(resume.date)}
               </p>
+              {resume.analyzed && renderDiagnosisStageProgress(resume)}
             </div>
-            <div className="shrink-0 flex items-center gap-1.5">
-              {resume.analyzed && typeof (resume.analysisScore ?? resume.score) === 'number' && (() => {
-                const scoreValue = Math.round(Number(resume.analysisScore ?? resume.score));
-                // Define colors based on score
-                let colorClass = "bg-amber-50 text-amber-600 border-amber-100 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"; // Default/Normal
-                if (scoreValue >= 85) {
-                  colorClass = "bg-emerald-50 text-emerald-600 border-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20"; // Excellent
-                } else if (scoreValue >= 70) {
-                  colorClass = "bg-blue-50 text-blue-600 border-blue-100 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20"; // Good
-                }
-
-                return (
-                  <div className={`flex flex-col items-center px-2 py-0.5 rounded-lg border ${colorClass} transition-all`}>
-                    <span className="text-[14px] font-black leading-none">{scoreValue}</span>
-                    <span className="text-[8px] font-bold opacity-70 uppercase tracking-tighter">Score</span>
-                  </div>
-                );
-              })()}
+            <div className="shrink-0 flex items-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '18px' }}>
                 chevron_right
               </span>
@@ -100,7 +191,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
       </header>
 
       {/* Mode Indicator Banner */}
-      <div className="px-4 pt-4 pb-1 shrink-0">
+      <div className="px-4 pt-4 pb-2 shrink-0">
         <div className={`group relative overflow-hidden rounded-2xl p-6 text-white shadow-xl transition-all ${isInterviewMode
           ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-indigo-500/30'
           : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 shadow-xl shadow-primary/30'
@@ -119,21 +210,39 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
             </>
           )}
 
-          <div className="flex items-start gap-4 relative z-10">
-            <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
-              <span className="material-symbols-outlined text-[24px]">
-                {isInterviewMode ? 'forum' : 'assessment'}
-              </span>
+          <div className="flex items-center justify-between gap-4 relative z-10">
+            <div className="flex items-start gap-4">
+              <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
+                <span className="material-symbols-outlined text-[24px]">
+                  {isInterviewMode ? 'forum' : 'assessment'}
+                </span>
+              </div>
+              <div className="flex flex-col pt-0.5">
+                <h2 className="text-lg font-black mb-1 text-white tracking-wide">
+                  {isInterviewMode ? '模拟面试' : '简历诊断'}
+                </h2>
+                <p className="text-xs text-white/90 leading-relaxed font-medium line-clamp-2 max-w-[180px]">
+                  {isInterviewMode
+                    ? 'AI 面试官将基于简历提问，模拟真实面试场景。'
+                    : 'AI 将全方位诊断亮点并提供专业优化建议。'}
+                </p>
+              </div>
             </div>
-            <div className="flex flex-col pt-0.5">
-              <h2 className="text-lg font-black mb-1 text-white tracking-wide">
-                {isInterviewMode ? '模拟面试' : '简历诊断'}
-              </h2>
-              <p className="text-xs text-white/90 leading-relaxed font-medium">
-                {isInterviewMode
-                  ? '选择一份简历，AI 面试官将基于此向你提问，模拟真实面试场景。'
-                  : '选择一份简历，AI 将全方位分析亮点与不足，并提供专业优化建议。'}
-              </p>
+
+            {/* Right-aligned Quota Box */}
+            <div className="shrink-0 flex flex-col items-center justify-center w-[72px] h-[72px] rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner">
+              <span className="text-[10px] font-bold text-white/80 tracking-tight mb-0.5">
+                {isInterviewMode ? '剩余面试' : '剩余诊断'}
+              </span>
+              <div className="flex items-baseline gap-0.5">
+                <span className="text-2xl font-black text-white leading-none">
+                  {isInterviewMode
+                    ? (Number.isFinite(Number(interviewsRemaining)) ? Number(interviewsRemaining) : '--')
+                    : (Number.isFinite(Number(diagnosesRemaining)) ? Number(diagnosesRemaining) : '--')
+                  }
+                </span>
+              </div>
+              <span className="text-[10px] font-bold text-white/60 mt-0.5">次</span>
             </div>
           </div>
         </div>
@@ -187,7 +296,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                 >
                   <div className="flex items-center gap-2 ml-4">
                     <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>task_alt</span>
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已分析</h3>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已诊断</h3>
                     <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filtered.filter((r) => !!r.analyzed).length}
                     </span>
@@ -205,7 +314,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                     renderSelectionList(analyzed)
                   ) : (
                     <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                      暂无已分析简历
+                      暂无已诊断简历
                     </div>
                   );
                 })()}
@@ -219,7 +328,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                 >
                   <div className="flex items-center gap-2 ml-4">
                     <span className="material-symbols-outlined text-slate-400" style={{ fontSize: '18px' }}>fiber_manual_record</span>
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未分析</h3>
+                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未诊断</h3>
                     <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
                       {filtered.filter((r) => !r.analyzed).length}
                     </span>
@@ -237,7 +346,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
                     renderSelectionList(unanalyzed)
                   ) : (
                     <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                      暂无未分析简历
+                      暂无未诊断简历
                     </div>
                   );
                 })()}

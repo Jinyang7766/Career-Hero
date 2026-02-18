@@ -149,7 +149,7 @@ GEMINI_RESUME_PARSE_MODEL = os.getenv(
 )
 # PDF OCR 文本提取模型：优先速度/成本
 GEMINI_PDF_OCR_MODEL = os.getenv('GEMINI_PDF_OCR_MODEL', 'gemini-3-flash-preview')
-# JD 截图识别模型：默认与 PDF OCR 一致，可单独下调到更快模型（如 gemini-2.5-flash-lite）
+# 职位描述截图识别模型：默认与 PDF OCR 一致，可单独下调到更快模型（如 gemini-2.5-flash-lite）
 GEMINI_JD_OCR_MODEL = os.getenv('GEMINI_JD_OCR_MODEL', GEMINI_PDF_OCR_MODEL)
 # 简历分析（优化建议）模型
 GEMINI_ANALYSIS_MODEL = os.getenv('GEMINI_ANALYSIS_MODEL', 'gemini-3-flash-preview')
@@ -1162,3 +1162,4 @@ def generate_resume(current_user_id):
 if __name__ == '__main__':
     # 使用配置的端口
     app.run(host='0.0.0.0', port=PORT)
+

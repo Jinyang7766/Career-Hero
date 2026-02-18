@@ -40,7 +40,7 @@ const Settings: React.FC<ScreenProps> = () => {
   }, []);
 
   const handleClearCache = async () => {
-    if (!(await confirmDialog('确定要清除缓存吗？这会清理本地分析记录。'))) return;
+    if (!(await confirmDialog('确定要清除缓存吗？这会清理本地诊断记录。'))) return;
 
     setIsClearing(true);
     try {
@@ -180,3 +180,4 @@ const Settings: React.FC<ScreenProps> = () => {
 };
 
 export default Settings;
+

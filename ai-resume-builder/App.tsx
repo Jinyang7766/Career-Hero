@@ -23,6 +23,7 @@ import DeletionPending from './components/screens/DeletionPending';
 import MemberCenter from './components/screens/MemberCenter';
 import TermsOfService from './components/screens/TermsOfService';
 import PrivacyPolicy from './components/screens/PrivacyPolicy';
+import { deriveDiagnosisProgress } from './src/diagnosis-progress';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -353,12 +354,49 @@ function App() {
           const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
           const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
           const analysisScore = hasSnapshotScore ? Number(analysisSnapshot.score) : undefined;
+          const diagnosisProgress = deriveDiagnosisProgress(rowData);
           const analyzed = Boolean(hasSnapshotScore || hasBinding || reportReadyInSession);
           const interviewInterrupted = Object.entries(analysisSessionByJd || {}).some(([jdKey, session]: [string, any]) => {
             const state = String(session?.state || '');
             if (state !== 'paused' && state !== 'interview_in_progress') return false;
             const messages = interviewSessions?.[jdKey]?.messages;
             return Array.isArray(messages) && messages.length > 0;
+          });
+          const interviewHistory = Object.entries(analysisSessionByJd || {})
+            .filter(([_, session]: [string, any]) => {
+              const state = String(session?.state || '');
+              const isDone = state === 'interview_done';
+              const isInProgress = state === 'paused' || state === 'interview_in_progress';
+              return isDone || isInProgress;
+            })
+            .map(([jdKey, session]: [string, any]) => {
+              const state = String(session?.state || '');
+              const isDone = state === 'interview_done';
+              const company = session.targetCompany || '未知面试';
+              return {
+                jdKey,
+                company,
+                status: (isDone ? 'completed' : 'interrupted') as 'completed' | 'interrupted',
+                updatedAt: session.updatedAt || new Date().toISOString()
+              };
+            })
+            .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+
+          // Determine specific interview stage status
+          const interviewStageStatus: Array<'todo' | 'current' | 'done'> = ['todo', 'todo', 'todo'];
+          Object.entries(analysisSessionByJd || {}).forEach(([key, session]: [string, any]) => {
+            const state = String(session?.state || '');
+            let idx = -1;
+            if (key.endsWith('__general')) idx = 0;
+            else if (key.endsWith('__technical')) idx = 1;
+            else if (key.endsWith('__hr')) idx = 2;
+
+            if (idx !== -1) {
+              if (state === 'interview_done') interviewStageStatus[idx] = 'done';
+              else if ((state === 'paused' || state === 'interview_in_progress') && interviewStageStatus[idx] !== 'done') {
+                interviewStageStatus[idx] = 'current';
+              }
+            }
           });
 
           return {
@@ -367,8 +405,11 @@ function App() {
             date: cleanedDate,
             score: resume.score,
             analysisScore,
+            diagnosisProgress,
             analyzed,
             interviewInterrupted,
+            interviewHistory,
+            interviewStageStatus,
             hasDot: resume.has_dot,
             optimizationStatus: rowData.optimizationStatus || 'unoptimized',
             thumbnail: (

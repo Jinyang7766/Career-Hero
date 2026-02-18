@@ -204,7 +204,7 @@ export const useOptimizedResumeStore = ({
       };
     }
 
-    // New path: derive from optimized resume record keyed by original + JD.
+    // New path: derive from optimized resume record keyed by original + 职位描述.
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) return null;
 
@@ -229,12 +229,12 @@ export const useOptimizedResumeStore = ({
     const canonicalOriginalId = await resolveCanonicalOriginalResumeId(originalResumeId);
     const { data: { user }, error: userError } = await supabase.auth.getUser();
     if (userError || !user) {
-      throw new Error('登录已过期，请重新登录后再分析');
+      throw new Error('登录已过期，请重新登录后再诊断');
     }
 
     const originalRow = await DatabaseService.getResume(canonicalOriginalId);
     if (!originalRow.success || !originalRow.data?.resume_data) {
-      throw new Error('未找到原始简历，无法建立分析绑定');
+      throw new Error('未找到原始简历，无法建立诊断绑定');
     }
 
     const originalData = originalRow.data.resume_data || {};
@@ -256,7 +256,7 @@ export const useOptimizedResumeStore = ({
       optimizedResumeId = await ensureSingleOptimizedResume(user.id, canonicalOriginalId, baseResumeData, jdKey);
     }
     if (normalizeResumeId(optimizedResumeId) === normalizeResumeId(canonicalOriginalId)) {
-      throw new Error('分析绑定异常：目标已分析简历不可与原简历相同');
+      throw new Error('诊断绑定异常：目标已诊断简历不可与原简历相同');
     }
 
     const nextBinding = {
@@ -269,7 +269,7 @@ export const useOptimizedResumeStore = ({
 
     const optimizedRow = await DatabaseService.getResume(optimizedResumeId);
     if (!optimizedRow.success || !optimizedRow.data?.resume_data) {
-      throw new Error('未找到已分析简历，无法建立分析绑定');
+      throw new Error('未找到已诊断简历，无法建立诊断绑定');
     }
     const optimizedData = optimizedRow.data.resume_data || {};
     const needsPatch =
@@ -313,3 +313,4 @@ export const useOptimizedResumeStore = ({
     resetOptimizedCreationState,
   };
 };
+

@@ -197,8 +197,16 @@ export interface ResumeSummary {
   date: string;
   score?: number;
   analysisScore?: number;
+  diagnosisProgress?: number;
   analyzed?: boolean;
   interviewInterrupted?: boolean;
+  interviewHistory?: Array<{
+    jdKey: string;
+    company: string;
+    status: 'completed' | 'interrupted';
+    updatedAt: string;
+  }>;
+  interviewStageStatus?: Array<'todo' | 'current' | 'done'>;
   hasDot?: boolean;
   optimizationStatus?: 'optimized' | 'unoptimized';
   thumbnail: any;

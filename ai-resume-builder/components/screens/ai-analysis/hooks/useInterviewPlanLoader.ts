@@ -2,8 +2,11 @@ import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   composeInterviewPlan,
+  getActiveInterviewFocus,
+  getActiveInterviewMode,
   getActiveInterviewType,
   getFallbackPlanByType,
+  getInterviewQuestionLimit,
   getPlanStorageKey,
   getWarmupQuestion,
   sanitizePlanQuestions,
@@ -38,7 +41,10 @@ export const useInterviewPlanLoader = ({
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
     const interviewType = getActiveInterviewType();
-    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText);
+    const interviewMode = getActiveInterviewMode();
+    const interviewFocus = getActiveInterviewFocus();
+    const questionLimit = getInterviewQuestionLimit();
+    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText, interviewFocus);
 
     try {
       const cached = localStorage.getItem(storageKey);
@@ -49,7 +55,7 @@ export const useInterviewPlanLoader = ({
           sanitizePlanQuestions(Array.isArray(parsed?.questions) ? parsed.questions : [], interviewType)
         );
         if (q.length > 0) {
-          setInterviewPlan(q);
+          setInterviewPlan(q.slice(0, questionLimit));
           return;
         }
       }
@@ -66,7 +72,10 @@ export const useInterviewPlanLoader = ({
 
         const token = await getBackendAuthToken();
         if (!token) {
-          const fallback = sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType);
+          const fallback = composeInterviewPlan(
+            interviewType,
+            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+          ).slice(0, questionLimit);
           if (planLoaderMountedRef.current) setInterviewPlan(fallback);
           return;
         }
@@ -83,6 +92,9 @@ export const useInterviewPlanLoader = ({
             jobDescription: effectiveJdText,
             chatHistory: [],
             interviewType,
+            interviewMode,
+            questionLimit,
+            interviewFocus,
           }),
         });
         const data = await resp.json().catch(() => ({} as any));
@@ -90,19 +102,19 @@ export const useInterviewPlanLoader = ({
         const finalPlan = composeInterviewPlan(
           interviewType,
           questions.length > 0 ? questions : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
-        );
+        ).slice(0, questionLimit);
         if (planLoaderMountedRef.current) {
           setInterviewPlan(finalPlan);
-          try { localStorage.setItem(storageKey, JSON.stringify({ questions: finalPlan, interviewType, jdText: effectiveJdText })); } catch { }
+          try { localStorage.setItem(storageKey, JSON.stringify({ questions: finalPlan, interviewType, interviewMode, interviewFocus, jdText: effectiveJdText })); } catch { }
         }
       } catch {
         if (planLoaderMountedRef.current) {
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
-          );
+          ).slice(0, questionLimit);
           setInterviewPlan(fallback);
-          try { localStorage.setItem(storageKey, JSON.stringify({ questions: fallback, interviewType, jdText: effectiveJdText })); } catch { }
+          try { localStorage.setItem(storageKey, JSON.stringify({ questions: fallback, interviewType, interviewMode, interviewFocus, jdText: effectiveJdText })); } catch { }
         }
       }
     };

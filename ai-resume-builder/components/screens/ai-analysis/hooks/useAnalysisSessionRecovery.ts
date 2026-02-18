@@ -11,7 +11,7 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string) => void;
   openChat: (source: 'internal' | 'preview') => void;
-  navigateToStep: (step: 'report' | 'micro_intro' | 'comparison', replace?: boolean) => void;
+  navigateToStep: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
 };
@@ -46,6 +46,7 @@ export const useAnalysisSessionRecovery = ({
     if (!session) return;
 
     const status = String(session.state || '');
+    const sessionStep = String(session.step || '').trim();
     const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType);
 
     if (
@@ -56,6 +57,25 @@ export const useAnalysisSessionRecovery = ({
       if (!jdText) setJdText(effectiveJdText);
       restoreInterviewSession(effectiveJdText, activeInterviewType);
       openChat('internal');
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+
+    if (sessionStep === 'chat' && currentStep !== 'chat') {
+      if (!jdText) setJdText(effectiveJdText);
+      if (hasInterviewMessages) {
+        restoreInterviewSession(effectiveJdText, activeInterviewType);
+      }
+      openChat('internal');
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
+
+    if (
+      (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'micro_intro' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
+      currentStep !== sessionStep
+    ) {
+      navigateToStep(sessionStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }

@@ -33,7 +33,7 @@ def generate_enhanced_suggestions(resume_data, score, job_description=""):
     basic_suggestions = generate_suggestions(resume_data, score)
     suggestions.extend(basic_suggestions)
 
-    # JD 关键词建议
+    # 职位描述关键词建议
     if job_description:
         jd_keywords = []
         common_tech_keywords = ['python', 'javascript', 'react', 'node.js', 'sql', 'aws', 'docker', 'git', 'agile', 'scrum']
@@ -102,4 +102,5 @@ def generate_suggestions(resume_data, score):
         suggestions.append("请补充更多简历信息。")
 
     return suggestions
+
 
