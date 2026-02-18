@@ -2,13 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ScreenProps, ResumeData, View } from '../../types';
 import { toSkillList } from '../../src/skill-utils';
 import { buildApiUrl } from '../../src/api-config';
-import { confirmDialog } from '../../src/ui/dialogs';
 import { useLocation, useNavigate } from 'react-router-dom';
-import ChatPage from './ai-analysis/ChatPage';
 import { useAppContext } from '../../src/app-context';
-import ResumeSelectPage from './ai-analysis/pages/ResumeSelectPage';
-import JdInputPage from './ai-analysis/pages/JdInputPage';
-import ReportPage from './ai-analysis/pages/ReportPage';
 import { useChatViewport } from './ai-analysis/hooks/useChatViewport';
 import { useInterviewVoice } from './ai-analysis/hooks/useInterviewVoice';
 import { useInterviewSessionStore } from './ai-analysis/hooks/useInterviewSessionStore';
@@ -31,6 +26,8 @@ import { useReportSnapshotRestore } from './ai-analysis/hooks/useReportSnapshotR
 import { useAnalyzeOtherResumeReset } from './ai-analysis/hooks/useAnalyzeOtherResumeReset';
 import { useAnalysisExecution } from './ai-analysis/hooks/useAnalysisExecution';
 import { useUsageQuota } from './ai-analysis/hooks/useUsageQuota';
+import { useSuggestionIgnore } from './ai-analysis/hooks/useSuggestionIgnore';
+import { useAnalysisSessionRecovery } from './ai-analysis/hooks/useAnalysisSessionRecovery';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -54,6 +51,17 @@ import {
   stripMarkdownTableSeparators,
   isAffirmative
 } from './ai-analysis/chat-text';
+import {
+  composeInterviewPlan,
+  getActiveInterviewType,
+  getFallbackPlanByType,
+  getInterviewerAvatarUrl,
+  getInterviewerTitle,
+  getPlanStorageKey,
+  getWarmupQuestion,
+  sanitizePlanQuestions,
+} from './ai-analysis/interview-plan-utils';
+import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
 
 type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison';
@@ -197,41 +205,12 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isSelfIntroQuestion,
   });
 
-  const getActiveInterviewType = () => {
-    const t = String(localStorage.getItem('ai_interview_type') || '').trim().toLowerCase();
-    if (t === 'technical' || t === 'hr' || t === 'general') return t;
-    return 'general';
-  };
-
-  const getPlanStorageKey = (effectiveJdText: string) => {
-    const interviewType = getActiveInterviewType();
-    return `ai_interview_plan_${String(resumeData?.id || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}`;
-  };
-  const getInterviewerTitle = () => {
-    const type = getActiveInterviewType();
-    if (type === 'technical') return 'AI 复试深挖面试官';
-    if (type === 'hr') return 'AI HR 面试官';
-    return 'AI 初试面试官';
-  };
-  const getInterviewerAvatarUrl = () => {
-    const type = getActiveInterviewType();
-    if (type === 'technical') return '/ai-avatar-technical-opt.png';
-    if (type === 'hr') return '/ai-avatar-hr-opt.png';
-    return '/ai-avatar.png';
-  };
-
   useEffect(() => {
     planLoaderMountedRef.current = true;
     return () => {
       planLoaderMountedRef.current = false;
     };
   }, []);
-
-  const getWarmupQuestion = (interviewType: string) => {
-    if (interviewType === 'technical') return '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
-    if (interviewType === 'hr') return '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
-    return '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
-  };
 
   useEffect(() => {
     // Ensure warmup is present if plan is empty (e.g. initial load or restart)
@@ -242,86 +221,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     }
   }, [currentStep, interviewPlan.length]);
 
-  const getFallbackPlanByType = (interviewType: string): string[] => {
-    if (interviewType === 'technical') {
-      return [
-        '请介绍一个你最有代表性的项目，并说明你负责的技术模块。',
-        '该项目的核心技术方案是如何设计的？为什么这样选型？',
-        '上线后遇到过哪些性能或稳定性问题？你如何定位与优化？',
-        '请描述一次你处理复杂故障或线上事故的过程。',
-        '如果业务量翻倍，你会如何改造当前架构？',
-        '你如何保障代码质量与可维护性？',
-        '回到这个项目，你认为最大的技术遗憾和改进方向是什么？',
-      ];
-    }
-    if (interviewType === 'hr') {
-      return [
-        '请分享一次你与同事意见冲突并最终达成一致的案例。',
-        '你如何在高压和紧急任务下保持交付质量？',
-        '请讲一个你主动推动改进并产生结果的经历。',
-        '你过去离职/转岗的主要考虑是什么？',
-        '你为什么想加入这个岗位/公司？',
-        '如果入职，你前3个月的工作目标是什么？',
-      ];
-    }
-    return [
-      '请介绍一个最有代表性的项目，并说明你的职责与结果。',
-      '这个项目中最困难的问题是什么？你如何解决？',
-      '请举例说明一次跨团队协作并推动结果落地的经历。',
-      '你最匹配这个岗位的能力是什么？请给出证据。',
-      '如果你入职该岗位，前3个月会如何规划与交付？',
-      '请补充一个能体现你岗位匹配度的关键成果。'
-    ];
-  };
-  const getWarmupQuestionByType = (interviewType: string): string => {
-    if (interviewType === 'technical') {
-      return '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
-    }
-    if (interviewType === 'hr') {
-      return '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
-    }
-    return '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
-  };
-  const normalizeQuestionText = (value: any): string =>
-    String(value || '')
-      .trim()
-      .toLowerCase()
-      .replace(/[\s\.,;:!?，。！？；：、（）()\[\]{}<>《》“”"'`~\-—_]+/g, '');
-  const isSameOrSimilarQuestion = (a: any, b: any): boolean => {
-    const na = normalizeQuestionText(a);
-    const nb = normalizeQuestionText(b);
-    if (!na || !nb) return false;
-    return na === nb || na.includes(nb) || nb.includes(na);
-  };
-  const composeInterviewPlan = (interviewType: string, baseQuestions: string[]): string[] => {
-    const warmup = String(getWarmupQuestionByType(interviewType) || '').trim();
-    const dedupedBase = (baseQuestions || []).map((q) => String(q || '').trim()).filter(Boolean);
-    if (!warmup) return dedupedBase;
-    const rest = dedupedBase.filter((q) => !isSameOrSimilarQuestion(q, warmup));
-    return [warmup, ...rest];
-  };
-  const sanitizePlanQuestions = (items: any[], interviewType: string): string[] => {
-    const selfIntroRe = /(自我介绍|介绍一下你自己|简单介绍一下自己)/;
-    const minCount = 4;
-    const maxCount = 12;
-    const unique: string[] = [];
-    for (const it of (items || [])) {
-      const q = String(it || '').trim();
-      if (!q) continue;
-      if (selfIntroRe.test(q)) continue;
-      if (unique.includes(q)) continue;
-      unique.push(q);
-      if (unique.length >= maxCount) break;
-    }
-    if (unique.length < minCount) {
-      for (const fallback of getFallbackPlanByType(interviewType)) {
-        if (!fallback || selfIntroRe.test(fallback) || unique.includes(fallback)) continue;
-        unique.push(fallback);
-        if (unique.length >= minCount) break;
-      }
-    }
-    return unique.slice(0, maxCount);
-  };
   const {
     messagesEndRef,
     messagesContainerRef,
@@ -526,47 +425,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     showToast: showToast as any,
     updateScore,
   });
-
-  const handleIgnoreSuggestion = async (suggestion: any) => {
-    const suggestionId = String(suggestion?.id || '').trim();
-    if (!suggestionId) return;
-    const confirmed = await confirmDialog('确认忽略这条优化建议吗？忽略后将不再显示。');
-    if (!confirmed) return;
-
-    const nextSuggestions = (suggestions || []).filter((s: any) => String(s?.id || '') !== suggestionId);
-    setSuggestions(nextSuggestions as any);
-    setChatMessages(prev => prev.map(msg =>
-      msg.suggestion?.id === suggestionId
-        ? { ...msg, suggestion: { ...msg.suggestion!, status: 'ignored' as const } }
-        : msg
-    ));
-    await persistSuggestionsState(nextSuggestions as any);
-
-    if (resumeData?.id && report) {
-      const updatedAt = new Date().toISOString();
-      const snapshotForPersist = {
-        score,
-        summary: report.summary || '',
-        strengths: report.strengths || [],
-        weaknesses: report.weaknesses || [],
-        missingKeywords: report.missingKeywords || [],
-        scoreBreakdown: report.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
-        suggestions: nextSuggestions,
-        updatedAt,
-        jdText: jdText || resumeData.lastJdText || '',
-        targetCompany: targetCompany || resumeData.targetCompany || '',
-      };
-      saveLastAnalysis({
-        resumeId: resumeData.id,
-        jdText: snapshotForPersist.jdText,
-        targetCompany: snapshotForPersist.targetCompany,
-        snapshot: snapshotForPersist,
-        updatedAt,
-      });
-    }
-
-    showToast('已忽略该建议', 'info');
-  };
+  const { handleIgnoreSuggestion } = useSuggestionIgnore({
+    suggestions: suggestions as any[],
+    setSuggestions: setSuggestions as any,
+    setChatMessages: setChatMessages as any,
+    persistSuggestionsState: persistSuggestionsState as any,
+    resumeData,
+    report,
+    score,
+    jdText,
+    targetCompany,
+    saveLastAnalysis,
+    showToast,
+  });
 
   const handleExportPDF = () => {
     navigateToView(View.PREVIEW);
@@ -616,71 +487,21 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     resumeData,
     isInterviewMode,
   });
-
-  useEffect(() => {
-    if (!resumeData) return;
-    if (forcedResumeSelectRef.current && currentStep === 'resume_select') return;
-    const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
-    if (!effectiveJdText) return;
-    const activeInterviewType = String(localStorage.getItem('ai_interview_type') || 'general').toLowerCase();
-
-    const jdKey = makeJdKey(effectiveJdText);
-    const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${currentStep}`;
-    if (recoveredSessionKeyRef.current === marker) return;
-
-    const session = getAnalysisSession(effectiveJdText) as any;
-    if (!session) return;
-
-    const status = String(session.state || '');
-    const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType);
-
-    // Refresh/re-entry recovery: interrupted interview should resume in chat with existing history.
-    if (
-      hasInterviewMessages &&
-      (status === 'interview_in_progress' || status === 'paused') &&
-      currentStep !== 'chat'
-    ) {
-      if (!jdText) setJdText(effectiveJdText);
-      restoreInterviewSession(effectiveJdText, activeInterviewType);
-      openChat('internal');
-      recoveredSessionKeyRef.current = marker;
-      return;
-    }
-
-    // If interview state is prepared but no chat history yet, route to micro-intro instead of JD input.
-    if (
-      !hasInterviewMessages &&
-      status === 'interview_in_progress' &&
-      (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
-    ) {
-      navigateToStep('micro_intro', true);
-      recoveredSessionKeyRef.current = marker;
-      return;
-    }
-
-    // If analysis finished previously and user lands on JD input accidentally, take them back to report.
-    if (
-      status === 'report_ready' &&
-      (currentStep === 'jd_input' || currentStep === 'resume_select') &&
-      (resumeData.analysisSnapshot || loadLastAnalysis())
-    ) {
-      navigateToStep('report', true);
-      recoveredSessionKeyRef.current = marker;
-      return;
-    }
-  }, [
-    currentStep,
-    getAnalysisSession,
-    jdText,
-    loadLastAnalysis,
-    makeJdKey,
-    navigateToStep,
-    openChat,
+  useAnalysisSessionRecovery({
     resumeData,
-    hasInterviewSessionMessages,
-    restoreInterviewSession,
+    forcedResumeSelect: forcedResumeSelectRef.current,
+    currentStep,
+    jdText,
     setJdText,
-  ]);
+    getAnalysisSession: getAnalysisSession as any,
+    makeJdKey,
+    hasInterviewSessionMessages: hasInterviewSessionMessages as any,
+    restoreInterviewSession: restoreInterviewSession as any,
+    openChat,
+    navigateToStep: navigateToStep as any,
+    loadLastAnalysis,
+    recoveredSessionKeyRef: recoveredSessionKeyRef as any,
+  });
 
   useEffect(() => {
     if (!isInterviewMode) return;
@@ -688,7 +509,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
     const interviewType = getActiveInterviewType();
-    const storageKey = getPlanStorageKey(effectiveJdText);
+    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText);
 
     try {
       const cached = localStorage.getItem(storageKey);
@@ -839,159 +660,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     openChat('internal');
   };
 
-  // ================= RENDER STEPS =================
-  if (currentStep === 'resume_select') {
-    return (
-      <ResumeSelectPage
-        allResumes={allResumes}
-        searchQuery={searchQuery}
-        setSearchQuery={setSearchQuery}
-        isOptimizedOpen={isOptimizedOpen}
-        setIsOptimizedOpen={setIsOptimizedOpen}
-        isUnoptimizedOpen={isUnoptimizedOpen}
-        setIsUnoptimizedOpen={setIsUnoptimizedOpen}
-        onBack={handleResumeSelectBack}
-        onSelectResume={(resumeId, preferReport) => handleResumeSelect(resumeId, !!preferReport)}
-        selectedResumeId={selectedResumeId}
-        isReading={resumeReadState.status === 'loading'}
-        isInterviewMode={isInterviewMode}
-      />
-    );
-  }
-  // 2. JD Input
-  if (currentStep === 'jd_input') {
-    return (
-      <JdInputPage
-        allResumes={allResumes}
-        selectedResumeId={selectedResumeId}
-        isSameResumeId={isSameResumeId}
-        resumeData={resumeData}
-        resumeReadState={resumeReadState}
-        targetCompany={targetCompany}
-        setTargetCompany={setTargetCompany}
-        jdText={jdText}
-        setJdText={setJdText}
-        isUploading={isUploading}
-        onScreenshotUpload={handleScreenshotUpload}
-        onBack={handleStepBack}
-        onPrev={() => setCurrentStep('resume_select')}
-        onStart={handleStartAnalysisClick}
-        showJdEmptyModal={showJdEmptyModal}
-        setShowJdEmptyModal={setShowJdEmptyModal}
-        startAnalysis={startAnalysis}
-        isInterviewMode={isInterviewMode}
-      />
-    );
-  }
-  // 3. Analyzing
-  if (currentStep === 'analyzing') {
-    return (
-      <ReportPage
-        mode="analyzing"
-        hasJdInput={hasJdInput}
-        handleStepBack={handleStepBack}
-        score={score}
-        originalScore={originalScore}
-        report={report}
-        suggestions={suggestions as any[]}
-        setSuggestions={setSuggestions as any}
-        getScoreColor={getScoreColor}
-        getSuggestionModuleLabel={getSuggestionModuleLabelOf}
-        getDisplayOriginalValue={getDisplayOriginalValueOf}
-        persistSuggestionFeedback={persistSuggestionFeedback as any}
-        handleIgnoreSuggestion={handleIgnoreSuggestion as any}
-        handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
-        acceptingSuggestionIds={acceptingSuggestionIds}
-        handleAnalyzeOtherResume={handleAnalyzeOtherResume}
-        handleExportPDF={handleExportPDF}
-        handleStartMicroInterview={handleStartMicroInterview}
-      />
-    );
-  }
-  // 4. Report View (Simplified, focus on Chat Entry)
-  if (currentStep === 'report') {
-    return (
-      <ReportPage
-        mode="report"
-        hasJdInput={hasJdInput}
-        handleStepBack={handleStepBack}
-        score={score}
-        originalScore={originalScore}
-        report={report}
-        suggestions={suggestions as any[]}
-        setSuggestions={setSuggestions as any}
-        getScoreColor={getScoreColor}
-        getSuggestionModuleLabel={getSuggestionModuleLabelOf}
-        getDisplayOriginalValue={getDisplayOriginalValueOf}
-        persistSuggestionFeedback={persistSuggestionFeedback as any}
-        handleIgnoreSuggestion={handleIgnoreSuggestion as any}
-        handleAcceptSuggestionInChat={handleAcceptSuggestionInChat as any}
-        acceptingSuggestionIds={acceptingSuggestionIds}
-        handleAnalyzeOtherResume={handleAnalyzeOtherResume}
-        handleExportPDF={handleExportPDF}
-        handleStartMicroInterview={handleStartMicroInterview}
-      />
-    );
-  }
-  if (currentStep === 'micro_intro') {
-    return (
-      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-        <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
-          <div className="flex items-center justify-between h-14 px-4 relative">
-            <button onClick={handleStepBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
-              <span className="material-symbols-outlined">arrow_back</span>
-            </button>
-            <h1 className="text-base font-bold tracking-tight">进入微访谈前</h1>
-            <div className="w-8"></div>
-          </div>
-        </header>
-
-        <main className="flex-1 overflow-y-auto p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))]">
-          <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5 mb-4">
-            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">初始评分</p>
-            <div className={`text-6xl font-black tracking-tight ${getScoreColor(originalScore || score)}`}>
-              {Math.round(originalScore || score)}
-              <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
-            </div>
-            {report?.scoreBreakdown && (
-              <div className="grid grid-cols-3 gap-2 mt-4 text-center">
-                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">经验</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.experience}</p>
-                </div>
-                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">技能</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.skills}</p>
-                </div>
-                <div className="rounded-lg bg-slate-50 dark:bg-white/5 p-2">
-                  <p className="text-[11px] text-slate-500 dark:text-slate-400">格式</p>
-                  <p className="text-sm font-bold text-slate-900 dark:text-white">{report.scoreBreakdown.format}</p>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20 mb-6">
-            <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
-              <span className="material-symbols-outlined text-[20px]">summarize</span>
-              诊断总结
-            </h3>
-            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-              {report?.summary || 'AI 已完成诊断，建议通过微访谈补齐关键细节后再进入最终版本。'}
-            </p>
-          </div>
-
-          <button
-            onClick={handleStartMicroInterview}
-            className="w-full h-12 rounded-xl shadow-lg bg-primary hover:bg-blue-600 text-white transition-all active:scale-[0.98] shadow-blue-500/20 text-sm font-bold"
-            type="button"
-          >
-            进入微访谈
-          </button>
-        </main>
-      </div>
-    );
-  }
   const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
   const interviewAnsweredCount = chatMessages.filter((m) => {
     if (m.role !== 'user') return false;
@@ -1005,66 +673,100 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     await clearInterviewSession();
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     if (effectiveJdText) {
-      try { localStorage.removeItem(getPlanStorageKey(effectiveJdText)); } catch { }
+      try { localStorage.removeItem(getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText)); } catch { }
     }
     setInterviewPlan([]);
     setPlanFetchTrigger(v => v + 1);
   };
 
-  // 5. Chat Page (Full Screen with Interactive Cards)
-  if (currentStep === 'chat') {
-    return (
-      <ChatPage
-        ToastOverlay={ToastOverlay}
-        WaveformVisualizer={(props: any) => <WaveformVisualizer {...props} visualizerData={visualizerData} />}
-        handleStepBack={handleStepBack}
-        onEndInterview={endInterviewFromChat}
-        onRestartInterview={handleRestartInterview}
-        userAvatar={userAvatar}
-        chatMessages={chatMessages}
-        isSending={isSending}
-        messagesEndRef={messagesEndRef}
-        messagesContainerRef={messagesContainerRef}
-        onMessagesScroll={handleMessagesScroll}
-        expandedReferences={expandedReferences}
-        setExpandedReferences={setExpandedReferences}
-        parseReferenceReply={parseReferenceReply}
-        audioPlayerRef={audioPlayerRef}
-        playingAudioId={playingAudioId}
-        setPlayingAudioId={setPlayingAudioId}
-        hasVoiceBlob={hasVoiceBlobForMsg}
-        transcribingByMsgId={transcribingByMsgId}
-        transcribeExistingVoiceMessage={transcribeExistingVoiceMessage}
-        keyboardOffset={keyboardOffset}
-        inputBarHeight={inputBarHeight}
-        inputBarRef={inputBarRef}
-        isKeyboardOpen={isKeyboardOpen}
-        audioError={audioError}
-        setAudioError={setAudioError}
-        inputMode={inputMode}
-        isRecording={isRecording}
-        audioSupported={audioSupported}
-        holdCancel={holdCancel}
-        toggleMode={toggleChatInputMode}
-        textareaRef={textareaRef}
-        inputMessage={inputMessage}
-        setInputMessage={setInputMessage}
-        handleSendMessage={() => { void handleSendMessage(); }}
-        holdTalkBtnRef={holdTalkBtnRef}
-        onHoldPointerDown={onHoldPointerDown}
-        onHoldPointerMove={onHoldPointerMove}
-        onHoldPointerUp={onHoldPointerUp}
-        onHoldPointerCancel={onHoldPointerCancel}
-        interviewPlan={interviewPlan}
-        interviewAnsweredCount={interviewAnsweredCount}
-        interviewTotalCount={interviewPlan.length}
-        interviewerTitle={getInterviewerTitle()}
-        aiAvatarUrl={getInterviewerAvatarUrl()}
-      />
-    );
-  }
-
-  return null;
+  return renderAiAnalysisStep({
+    currentStep,
+    allResumes: allResumes as any[],
+    searchQuery,
+    setSearchQuery,
+    isOptimizedOpen,
+    setIsOptimizedOpen,
+    isUnoptimizedOpen,
+    setIsUnoptimizedOpen,
+    handleResumeSelectBack,
+    handleResumeSelect: (resumeId, preferReport) => { void handleResumeSelect(resumeId, preferReport); },
+    selectedResumeId,
+    resumeReadState,
+    isInterviewMode,
+    isSameResumeId,
+    resumeData,
+    targetCompany,
+    setTargetCompany,
+    jdText,
+    setJdText,
+    isUploading,
+    handleScreenshotUpload,
+    handleStepBack,
+    setCurrentStep: setCurrentStep as any,
+    handleStartAnalysisClick,
+    showJdEmptyModal,
+    setShowJdEmptyModal,
+    startAnalysis,
+    hasJdInput,
+    score,
+    originalScore,
+    report,
+    suggestions: suggestions as any[],
+    setSuggestions: setSuggestions as any,
+    getScoreColor,
+    getSuggestionModuleLabelOf,
+    getDisplayOriginalValueOf,
+    persistSuggestionFeedback: persistSuggestionFeedback as any,
+    handleIgnoreSuggestion: handleIgnoreSuggestion as any,
+    handleAcceptSuggestionInChat: handleAcceptSuggestionInChat as any,
+    acceptingSuggestionIds,
+    handleAnalyzeOtherResume,
+    handleExportPDF,
+    handleStartMicroInterview,
+    ToastOverlay,
+    WaveformVisualizer: (props: any) => <WaveformVisualizer {...props} visualizerData={visualizerData} />,
+    endInterviewFromChat,
+    handleRestartInterview,
+    userAvatar,
+    chatMessages,
+    isSending,
+    messagesEndRef: messagesEndRef as any,
+    messagesContainerRef: messagesContainerRef as any,
+    handleMessagesScroll,
+    expandedReferences,
+    setExpandedReferences,
+    parseReferenceReply,
+    audioPlayerRef: audioPlayerRef as any,
+    playingAudioId,
+    setPlayingAudioId,
+    hasVoiceBlobForMsg,
+    transcribingByMsgId,
+    transcribeExistingVoiceMessage,
+    keyboardOffset,
+    inputBarHeight,
+    inputBarRef: inputBarRef as any,
+    isKeyboardOpen,
+    audioError,
+    setAudioError,
+    inputMode,
+    isRecording,
+    audioSupported,
+    holdCancel,
+    toggleChatInputMode,
+    textareaRef: textareaRef as any,
+    inputMessage,
+    setInputMessage,
+    handleSendMessage: () => { void handleSendMessage(); },
+    holdTalkBtnRef: holdTalkBtnRef as any,
+    onHoldPointerDown,
+    onHoldPointerMove,
+    onHoldPointerUp,
+    onHoldPointerCancel,
+    interviewPlan,
+    interviewAnsweredCount,
+    getInterviewerTitle,
+    getInterviewerAvatarUrl,
+  });
 };
 
 export default AiAnalysis;
