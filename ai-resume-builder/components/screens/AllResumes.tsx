@@ -4,7 +4,7 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
-import { useAppStore } from '../../src/app-store';
+import { createEmptyResumeData, useAppStore } from '../../src/app-store';
 
 const AllResumes: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
@@ -559,7 +559,10 @@ const AllResumes: React.FC<ScreenProps> = () => {
               </>
             ) : (
               <button
-                onClick={() => navigateToView(View.TEMPLATES)}
+                onClick={() => {
+                  setResumeData(createEmptyResumeData());
+                  navigateToView(View.TEMPLATES);
+                }}
                 className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
               >
                 <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>

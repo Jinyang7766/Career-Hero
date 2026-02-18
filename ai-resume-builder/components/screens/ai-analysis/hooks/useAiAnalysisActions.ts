@@ -25,12 +25,8 @@ export const useAiAnalysisActions = ({
   }, [navigateToView]);
 
   const handleStartMicroInterview = useCallback(() => {
-    if (currentStep === 'micro_intro') {
-      openChat('internal');
-      return;
-    }
-    navigateToStep('micro_intro');
-  }, [currentStep, navigateToStep, openChat]);
+    openChat('internal');
+  }, [openChat]);
 
   const handleRetryAnalysisFromIntro = useCallback(() => {
     navigateToStep('jd_input', true);

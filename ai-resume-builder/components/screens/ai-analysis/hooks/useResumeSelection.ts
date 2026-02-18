@@ -164,7 +164,7 @@ export const useResumeSelection = ({
         }
 
         if (preferReport && !isInterviewMode) {
-          navigateToStep('report', true);
+          navigateToStep('report');
         }
       }
     } catch (error) {

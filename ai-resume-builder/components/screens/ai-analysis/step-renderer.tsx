@@ -3,7 +3,6 @@ import ChatPage from './ChatPage';
 import ResumeSelectPage from './pages/ResumeSelectPage';
 import JdInputPage from './pages/JdInputPage';
 import ReportPage from './pages/ReportPage';
-import MicroInterviewIntroPage from './pages/MicroInterviewIntroPage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
 
@@ -166,15 +165,15 @@ export const renderAiAnalysisStep = (p: Params) => {
 
   if (p.currentStep === 'micro_intro') {
     return (
-      <MicroInterviewIntroPage
+      <ReportPage
+        mode="report"
+        hasJdInput={p.hasJdInput}
+        handleStepBack={p.handleStepBack}
         score={p.score}
-        originalScore={p.originalScore}
-        summary={p.report?.summary}
-        scoreBreakdown={p.report?.scoreBreakdown as any}
+        report={p.report}
         getScoreColor={p.getScoreColor}
-        onBack={p.handleStepBack}
-        onRetry={p.handleRetryAnalysisFromIntro}
-        onStart={p.handleStartMicroInterview}
+        handleAnalyzeOtherResume={p.handleAnalyzeOtherResume}
+        handleStartMicroInterview={p.handleStartMicroInterview}
       />
     );
   }

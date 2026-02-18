@@ -646,6 +646,16 @@ function App() {
     }
   };
 
+  const handleCreateNewResume = () => {
+    if (!isAuthenticated) {
+      navigate(viewToPath(View.LOGIN), { replace: true });
+      return;
+    }
+    setResumeData(createEmptyResumeData());
+    setShowWizard(true);
+    handleNavigate(View.EDITOR);
+  };
+
   const renderView = () => {
     // Show loading state while auth is being checked to prevent flash of login page
     if (!authChecked) {
@@ -667,17 +677,7 @@ function App() {
       case View.FORGOT_PASSWORD:
         return <ForgotPassword />;
       case View.DASHBOARD:
-        return <Dashboard createNewResume={() => {
-          if (!isAuthenticated) {
-            navigate(viewToPath(View.LOGIN), { replace: true });
-            return;
-          }
-          // Always start with a fully-empty resume. This prevents stale fields from a previously opened resume
-          // (especially when the user viewed an existing resume but didn't edit).
-          setResumeData(createEmptyResumeData());
-          setShowWizard(true);
-          handleNavigate(View.EDITOR);
-        }} />;
+        return <Dashboard createNewResume={handleCreateNewResume} />;
       case View.EDITOR:
         return <Editor wizardMode={showWizard} />;
       case View.TEMPLATES:
@@ -713,7 +713,7 @@ function App() {
       default:
         // Fallback based on auth status
         return isAuthenticated
-          ? <Dashboard createNewResume={() => setShowWizard(true)} />
+          ? <Dashboard createNewResume={handleCreateNewResume} />
           : <Login />;
     }
   };

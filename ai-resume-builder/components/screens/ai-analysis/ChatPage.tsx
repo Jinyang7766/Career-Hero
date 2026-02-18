@@ -7,6 +7,7 @@ type ParsedReference = { before?: string; reference: string; after?: string };
 
 const AI_AVATAR_FALLBACK =
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
+const MICRO_INTERVIEW_AVATAR = '/1.png';
 
 export type ChatPageProps = {
   isInterviewMode?: boolean;
@@ -150,7 +151,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </button>
           <div className="size-10 rounded-full overflow-hidden">
             <img
-              src={aiAvatarUrl}
+              src={isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR}
               onError={(e) => {
                 (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
               }}
@@ -346,7 +347,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}
               >
                 <img
-                  src={msg.role === 'user' ? userAvatar : aiAvatarUrl}
+                  src={msg.role === 'user' ? userAvatar : (isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR)}
                   onError={(e) => {
                     if (msg.role !== 'user') (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
                   }}

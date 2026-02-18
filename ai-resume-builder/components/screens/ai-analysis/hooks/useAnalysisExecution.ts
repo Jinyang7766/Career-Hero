@@ -494,11 +494,11 @@ export const useAnalysisExecution = ({
         if (isInterviewMode) {
           openChat('internal');
         } else {
-          navigateToStep('micro_intro', true);
+          navigateToStep('report');
         }
       } else {
         showToast('本次诊断结果较完善，已跳过微访谈。', 'success', 2200);
-        navigateToStep('report', true);
+        navigateToStep('report');
       }
     } catch (error) {
       if (analysisRunIdRef.current !== runId) return;

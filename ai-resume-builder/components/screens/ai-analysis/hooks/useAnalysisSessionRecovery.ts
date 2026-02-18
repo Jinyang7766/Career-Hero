@@ -75,7 +75,8 @@ export const useAnalysisSessionRecovery = ({
       (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'micro_intro' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
       currentStep !== sessionStep
     ) {
-      navigateToStep(sessionStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', true);
+      const normalizedStep = sessionStep === 'micro_intro' ? 'report' : sessionStep;
+      navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }
@@ -85,7 +86,7 @@ export const useAnalysisSessionRecovery = ({
       status === 'interview_in_progress' &&
       (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
     ) {
-      navigateToStep('micro_intro', true);
+      navigateToStep('report', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }

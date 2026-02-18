@@ -38,6 +38,9 @@ const ReportPage: React.FC<ReportPageProps> = ({
         <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs leading-relaxed">
           AI 正在聚合简历、职位描述与能力证据，生成诊断结论。
         </p>
+        <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-2 animate-pulse">
+          这会需要一点时间，请耐心等待...
+        </p>
       </div>
     );
   }

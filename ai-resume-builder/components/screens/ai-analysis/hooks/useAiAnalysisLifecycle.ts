@@ -33,7 +33,7 @@ export const useAiAnalysisLifecycle = ({
       .map((item: any) => String(item?.state || '').toLowerCase())
       .filter(Boolean);
     if (states.includes('interview_done')) return 'comparison';
-    if (states.includes('interview_in_progress') || states.includes('paused')) return 'micro_intro';
+    if (states.includes('interview_in_progress') || states.includes('paused')) return 'report';
     if (score > 0 || suggestionsLength > 0) return 'report';
     return 'resume_select';
   };
