@@ -14,6 +14,7 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS diagnoses_remaining INTEGER NO
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interviews_remaining INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS points_balance INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS membership_tier TEXT NOT NULL DEFAULT 'FREE';
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_latest JSONB;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 

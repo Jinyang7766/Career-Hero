@@ -2,6 +2,7 @@ import re
 import traceback
 import json
 import copy
+import time
 
 from google.genai import types
 
@@ -1631,15 +1632,36 @@ def ai_chat_stream_core(data, deps):
     interview_summary_model = deps.get('GEMINI_INTERVIEW_SUMMARY_MODEL', deps.get('GEMINI_INTERVIEW_MODEL'))
     interview_chat_model = deps.get('GEMINI_INTERVIEW_MODEL')
     active_chat_model = interview_summary_model if mode == 'interview_summary' else interview_chat_model
+    request_trace_id = str(deps.get('request_trace_id') or '').strip()
 
     def _iter_events():
+        req_started = time.perf_counter()
+        first_chunk_elapsed_ms = None
+        chunk_count = 0
         if not callable(stream_api):
             try:
+                model_started = time.perf_counter()
                 response, _used = deps['_gemini_generate_content_resilient'](active_chat_model, contents, want_json=False)
+                model_elapsed_ms = (time.perf_counter() - model_started) * 1000.0
                 text = (response.text or "").replace('*', '').strip()
+                deps['logger'].info(
+                    "interview_stream_latency mode=fallback trace_id=%s model=%s model_ms=%.1f total_ms=%.1f text_len=%s",
+                    request_trace_id or '-',
+                    active_chat_model,
+                    model_elapsed_ms,
+                    (time.perf_counter() - req_started) * 1000.0,
+                    len(text or ''),
+                )
                 yield {'type': 'done', 'text': text or '感谢你的回答，我们继续下一题。'}
                 return
             except Exception as fallback_err:
+                deps['logger'].error(
+                    "interview_stream_latency mode=fallback_error trace_id=%s model=%s total_ms=%.1f error=%s",
+                    request_trace_id or '-',
+                    active_chat_model,
+                    (time.perf_counter() - req_started) * 1000.0,
+                    fallback_err,
+                )
                 deps['logger'].error("AI 面试流式降级失败: %s", fallback_err)
                 yield {'type': 'error', 'message': '面试官暂时开小差了，请稍后再试。'}
                 return
@@ -1650,6 +1672,9 @@ def ai_chat_stream_core(data, deps):
                 delta = (getattr(chunk, 'text', '') or '').replace('*', '')
                 if not delta:
                     continue
+                if first_chunk_elapsed_ms is None:
+                    first_chunk_elapsed_ms = (time.perf_counter() - req_started) * 1000.0
+                chunk_count += 1
                 full_text += delta
                 yield {'type': 'chunk', 'delta': delta}
 
@@ -1670,8 +1695,26 @@ def ai_chat_stream_core(data, deps):
             except Exception:
                 pass
 
+            deps['logger'].info(
+                "interview_stream_latency mode=sse trace_id=%s model=%s first_chunk_ms=%s total_ms=%.1f chunks=%s text_len=%s",
+                request_trace_id or '-',
+                active_chat_model,
+                f"{first_chunk_elapsed_ms:.1f}" if first_chunk_elapsed_ms is not None else '-',
+                (time.perf_counter() - req_started) * 1000.0,
+                chunk_count,
+                len(final_text or ''),
+            )
             yield {'type': 'done', 'text': final_text or '感谢你的回答，我们继续下一题。'}
         except Exception as stream_err:
+            deps['logger'].error(
+                "interview_stream_latency mode=sse_error trace_id=%s model=%s first_chunk_ms=%s total_ms=%.1f chunks=%s error=%s",
+                request_trace_id or '-',
+                active_chat_model,
+                f"{first_chunk_elapsed_ms:.1f}" if first_chunk_elapsed_ms is not None else '-',
+                (time.perf_counter() - req_started) * 1000.0,
+                chunk_count,
+                stream_err,
+            )
             deps['logger'].error("AI 面试流式输出失败: %s", stream_err)
             deps['logger'].error("Full traceback: %s", traceback.format_exc())
             if full_text.strip():

@@ -235,9 +235,19 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR);
 
   useEffect(() => {
-    const saved = localStorage.getItem('user_avatar');
+    const uid = String(currentUser?.id || '').trim();
+    const remoteAvatar = String((userProfile as any)?.avatar_url || '').trim();
+    if (remoteAvatar) {
+      setUserAvatar(remoteAvatar);
+      if (uid) localStorage.setItem(`user_avatar:${uid}`, remoteAvatar);
+      localStorage.setItem('user_avatar', remoteAvatar);
+      return;
+    }
+    const saved = uid
+      ? localStorage.getItem(`user_avatar:${uid}`)
+      : localStorage.getItem('user_avatar');
     if (saved) setUserAvatar(saved);
-  }, []);
+  }, [currentUser?.id, userProfile?.avatar_url]);
 
   // Intentionally keep input usable while AI is replying.
 

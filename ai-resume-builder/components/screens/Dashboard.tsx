@@ -133,6 +133,15 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
   const [isLoadingResume, setIsLoadingResume] = React.useState<number | null>(null);
 
+  const hasAnyProgressForResume = (resume: any) => {
+    const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
+    const hasDiagnosisProgress = diagnosisProgress >= 15;
+    const hasInterviewProgress = Array.isArray((resume as any)?.interviewStageStatus)
+      ? (resume as any).interviewStageStatus.some((s: any) => s === 'current' || s === 'done')
+      : false;
+    return hasDiagnosisProgress || hasInterviewProgress;
+  };
+
   const handleResumeClick = async (resumeId: number) => {
     if (isLoadingResume) return;
 
@@ -191,6 +200,17 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   const handleContinueDiagnosis = (resume: any) => {
     const resumeId = String(resume?.id || '').trim();
     if (!resumeId) return;
+    if (!hasAnyProgressForResume(resume)) {
+      localStorage.setItem('ai_analysis_force_resume_select', '1');
+      localStorage.removeItem('ai_result_open');
+      localStorage.removeItem('ai_result_resume_id');
+      localStorage.removeItem('ai_result_step');
+      localStorage.removeItem('ai_interview_open');
+      localStorage.removeItem('ai_interview_resume_id');
+      localStorage.removeItem('ai_interview_entry_mode');
+      navigateToView(View.AI_ANALYSIS, { replace: true });
+      return;
+    }
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const isFinalDone = diagnosisProgress >= 100;
     localStorage.setItem('ai_result_open', '1');
@@ -202,6 +222,17 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   const handleContinueInterview = (resume: any) => {
     const resumeId = String(resume?.id || '').trim();
     if (!resumeId) return;
+    if (!hasAnyProgressForResume(resume)) {
+      localStorage.setItem('ai_analysis_force_resume_select', '1');
+      localStorage.removeItem('ai_result_open');
+      localStorage.removeItem('ai_result_resume_id');
+      localStorage.removeItem('ai_result_step');
+      localStorage.removeItem('ai_interview_open');
+      localStorage.removeItem('ai_interview_resume_id');
+      localStorage.removeItem('ai_interview_entry_mode');
+      navigateToView(View.AI_INTERVIEW, { replace: true });
+      return;
+    }
     localStorage.removeItem('ai_analysis_force_resume_select');
     localStorage.setItem('ai_interview_open', '1');
     localStorage.setItem('ai_interview_resume_id', resumeId);

@@ -103,6 +103,12 @@ export const useInterviewChat = ({
     streamingMessageId: string;
   }) => {
     const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
+    const perf = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
+      ? performance
+      : null;
+    const traceId = `iv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const startedAt = perf ? perf.now() : Date.now();
+    let firstEventAt: number | null = null;
     let streamedText = '';
     let doneText = '';
     let incomingBuffer = '';
@@ -176,7 +182,8 @@ export const useInterviewChat = ({
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.trim()}`
+        'Authorization': `Bearer ${token.trim()}`,
+        'X-Client-Trace-Id': traceId,
       },
       body: JSON.stringify(requestBody)
     });
@@ -191,6 +198,14 @@ export const useInterviewChat = ({
     if (!contentType.includes('text/event-stream')) {
       const result = await response.json().catch(() => ({} as any));
       const fallbackText = String(result?.response || '').trim();
+      const finishedAt = perf ? perf.now() : Date.now();
+      const totalMs = Math.max(0, finishedAt - startedAt);
+      console.info('[InterviewLatency]', {
+        traceId,
+        mode: 'json_fallback',
+        totalMs: Number(totalMs.toFixed(1)),
+        hasText: !!fallbackText,
+      });
       return fallbackText || '感谢你的回答，我们继续下一题。';
     }
 
@@ -199,6 +214,7 @@ export const useInterviewChat = ({
     }
 
     startTypingLoop();
+    let chunkCount = 0;
 
     try {
       const reader = response.body.getReader();
@@ -208,6 +224,9 @@ export const useInterviewChat = ({
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+        if (firstEventAt === null) {
+          firstEventAt = perf ? perf.now() : Date.now();
+        }
         buffer += decoder.decode(value, { stream: true });
 
         let boundary = buffer.indexOf('\n\n');
@@ -229,6 +248,7 @@ export const useInterviewChat = ({
               const delta = String(payload?.delta || '');
               if (!delta) continue;
               hasRealChunk = true;
+              chunkCount += 1;
               streamedText += delta;
               incomingBuffer += delta;
             } else if (type === 'done') {
@@ -258,6 +278,19 @@ export const useInterviewChat = ({
       pumpTyping();
 
       const finalText = (doneText || displayedText || streamedText || '').trim();
+      const finishedAt = perf ? perf.now() : Date.now();
+      const totalMs = Math.max(0, finishedAt - startedAt);
+      const firstEventMs = firstEventAt === null ? -1 : Math.max(0, firstEventAt - startedAt);
+      console.info('[InterviewLatency]', {
+        traceId,
+        mode: 'sse',
+        firstEventMs: Number(firstEventMs.toFixed(1)),
+        totalMs: Number(totalMs.toFixed(1)),
+        chunkCount,
+        hasDoneText: !!doneText,
+        hasRealChunk,
+        finalLen: finalText.length,
+      });
       if (finalText) return finalText;
       return '感谢你的回答，我们继续下一题。';
     } finally {

@@ -6,96 +6,107 @@ const TermsOfService: React.FC<ScreenProps> = () => {
     const goBack = useAppContext((s) => s.goBack);
 
     return (
-        <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 animate-in slide-in-from-right duration-300">
-            <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col h-full bg-white dark:bg-slate-950 animate-in slide-in-from-right duration-300">
+            <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-100 dark:border-white/5">
                 <button
                     onClick={goBack}
-                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
                 >
-                    <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">arrow_back_ios_new</span>
+                    <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back_ios_new</span>
                 </button>
-                <h1 className="text-lg font-bold text-slate-900 dark:text-white">服务条款</h1>
+                <h1 className="text-base font-bold text-slate-900 dark:text-white">服务协议</h1>
                 <div className="w-10" />
             </header>
 
-            <main className="flex-1 overflow-y-auto p-5 space-y-6">
-                <section className="bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-slate-100 dark:border-slate-700">
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white mb-4">服务协议</h3>
-                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed font-medium">
-                        欢迎使用 Career Hero！本协议是您与 Career Hero 平台之间就服务使用所订立的契约。请您在注册前认真阅读并理解以下条款。
-                    </p>
-                </section>
-
-                <section className="space-y-4">
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-black text-sm">01</span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white">账号注册与安全</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pl-11">
-                            您需要注册一个账号以使用完整功能。您需确保提供的注册信息真实有效。您应对账号的操作行为及密码安全负责。禁止将账号租借、转让或分享给他人使用。
-                        </p>
+            <main className="flex-1 overflow-y-auto px-6 py-8">
+                <div className="max-w-2xl mx-auto">
+                    <div className="mb-10 text-center">
+                        <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Career Hero 服务协议</h2>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">最近更新日期：2026年2月18日</p>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 font-black text-sm">02</span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white">服务使用规则</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pl-11">
-                            在使用我们的 AI 诊断和面试功能时，您同意不提交包含违法内容的信息。系统生成的优化建议基于 AI 模型，虽然我们致力于准确性，但不对结果的 100% 准确性、具体职场的绝对适用性做法律担保。
-                        </p>
+                    <div className="space-y-8 text-slate-700 dark:text-slate-300">
+                        <section>
+                            <p className="text-sm leading-relaxed mb-4">
+                                欢迎您选择使用 Career Hero。本协议为您与 Career Hero 平台之间就服务使用所订立的契约。在注册并开始使用本软件前，请务必仔细阅读并理解以下条款。
+                            </p>
+                            <p className="text-sm leading-relaxed font-bold text-slate-900 dark:text-white">
+                                当您勾选“同意协议”或实际开始使用本服务时，即视为您已阅读并完全同意本协议的所有内容。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">一、账号注册与安全管理</h3>
+                            <p className="text-sm leading-relaxed">
+                                1.1 您需要注册一个账号以获得本平台的完整服务。您应当确保所提供的个人信息（如姓名、邮箱等）真实、准确且处于最新状态。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                1.2 您的账号仅限本人使用。禁止以租借、转让、出售或任何形式的分享方式将账号交由他人。应对账号下的所有操作行为负全部法律责任。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                1.3 发现账号异常登录或存在不安全因素时，应立即联系客服或尝试通过系统功能进行排查与修改。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">二、服务使用规则</h3>
+                            <p className="text-sm leading-relaxed">
+                                2.1 平台提供 AI 简历诊断、优化建议及模拟面试等核心功能。系统生成的建议是由大型语言模型处理并生成的，尽管我们不断努力提升精度，但不代表绝对的专业法律、财务或职业担保。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                2.2 用户承诺在使用本服务过程中不提交包含任何违反国家法律法规、公序良俗或侵害第三方权益的信息。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                2.3 严禁通过自动化手段（如爬虫、插件或非官方 API）批量下载平台内容或干扰服务器正常运行。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">三、知识产权声明</h3>
+                            <p className="text-sm leading-relaxed">
+                                3.1 您对自己上传的所有简历原始数据保留完整的所有权。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                3.2 Career Hero 的整体 UI 设计、专有的 AI 提示词（Prompts）逻辑、诊断算法及生成的结构化报告排版属于本平台的知识产权，受著作权法保护。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">四、资费与退款政策</h3>
+                            <p className="text-sm leading-relaxed">
+                                4.1 平台部分高级功能采取订阅或单次计费模式。所有价格信息将通过显著方式在支付页面展示。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                4.2 平台内通过购买、订阅赠送、活动赠送等方式获得的积分均为永久有效，不设到期失效规则。
+                            </p>
+                            <p className="text-sm leading-relaxed mt-2">
+                                4.3 基于数字产品的特殊性，除法律强制规定或因极端技术故障导致服务完全不可用的情况外，已购买的服务通常不支持中途退换。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">五、免责及限制声明</h3>
+                            <p className="text-sm leading-relaxed">
+                                Career Hero 旨在辅助求职过程，不承诺使用后的特定结果（如必然获得录取、必然涨薪等）。简历的最终呈现效果及面试表现终归取决于用户本人的实际情况及招聘市场的实时变动。
+                            </p>
+                        </section>
+
+                        <section>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white mb-3">六、法律管辖</h3>
+                            <p className="text-sm leading-relaxed">
+                                本协议的解释、效力及纠纷的解决，均适用中华人民共和国法律。若发生争议，双方应友好协商；协商不成的，均可提交协议签订地法院通过诉讼解决。
+                            </p>
+                        </section>
                     </div>
 
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 font-black text-sm">03</span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white">知识产权</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pl-11">
-                            您对在平台创建的简历内容拥有完整所有权。Career Hero 系统架构、UI 设计、AI 提示词逻辑及生成的诊断报告属于本平台的知识产权。未经授权，禁止克隆或商业化抓取本平台数据。
-                        </p>
+                    <div className="mt-16 pb-12 border-t border-slate-100 dark:border-white/5 pt-8 text-center text-xs text-slate-400">
+                        <p>© 2026 Career Hero AI Studio. All rights reserved.</p>
                     </div>
-
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 font-black text-sm">04</span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white">收费与退款</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pl-11">
-                            平台会员功能为付费项。付费内容一经购买，因虚拟内容的特殊性，除非发生重大技术故障，否则通常不予退费。我们会根据运营需要调整价格，并通过显著方式通知。
-                        </p>
-                    </div>
-
-                    <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-700">
-                        <div className="flex items-center gap-3 mb-3">
-                            <span className="flex size-8 items-center justify-center rounded-lg bg-rose-100 dark:bg-rose-900/30 text-rose-600 dark:text-rose-400 font-black text-sm">05</span>
-                            <h4 className="text-base font-bold text-slate-900 dark:text-white">服务变更或终止</h4>
-                        </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed pl-11">
-                            因不可抗力或系统维护，我们可能暂停部分服务。若您违反本协议（如恶意攻击服务器），我们有权立即封禁账号并追究法律责任。
-                        </p>
-                    </div>
-                </section>
-
-                <section className="bg-slate-100 dark:bg-white/5 rounded-2xl p-5 border border-slate-200 dark:border-white/5">
-                    <h4 className="text-sm font-black text-slate-900 dark:text-white mb-2">免责声明</h4>
-                    <p className="text-xs text-slate-500 dark:text-slate-500 leading-relaxed italic">
-                        Career Hero 提供的简历优化及面试建议仅供参考。由于职场招聘环境的复杂性，最终求职结果受多种因素影响，平台不保证您通过使用本服务必定获得面试机会或录取通知。
-                    </p>
-                </section>
-
-                <section className="pb-10 pt-4 text-center">
-                    <p className="text-xs text-slate-400 dark:text-slate-500">
-                        版本日期：2026.02.18
-                    </p>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 font-bold">
-                        Career Hero 运营团队
-                    </p>
-                </section>
+                </div>
             </main>
         </div>
     );
 };
+
 
 export default TermsOfService;

@@ -1046,6 +1046,7 @@ def ai_chat_stream(current_user_id):
             data,
             {
                 'logger': logger,
+                'request_trace_id': (request.headers.get('X-Client-Trace-Id') or '').strip(),
                 'gemini_client': gemini_client,
                 'check_gemini_quota': check_gemini_quota,
                 'get_transcribe_model_candidates': get_transcribe_model_candidates,

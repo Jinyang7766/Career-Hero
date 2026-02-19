@@ -16,9 +16,19 @@ const MemberCenter: React.FC = () => {
     const [avatar, setAvatar] = useState(DEFAULT_AVATAR);
 
     useEffect(() => {
-        const savedAvatar = localStorage.getItem('user_avatar');
+        const uid = String(currentUser?.id || '').trim();
+        const remoteAvatar = String((userProfile as any)?.avatar_url || '').trim();
+        if (remoteAvatar) {
+            setAvatar(remoteAvatar);
+            if (uid) localStorage.setItem(`user_avatar:${uid}`, remoteAvatar);
+            localStorage.setItem('user_avatar', remoteAvatar);
+            return;
+        }
+        const savedAvatar = uid
+            ? localStorage.getItem(`user_avatar:${uid}`)
+            : localStorage.getItem('user_avatar');
         if (savedAvatar) setAvatar(savedAvatar);
-    }, []);
+    }, [currentUser?.id, userProfile?.avatar_url]);
 
     const displayName = useMemo(() =>
         userProfile?.name || currentUser?.user_metadata?.name || currentUser?.email?.split('@')[0] || '未登录用户'
@@ -36,7 +46,6 @@ const MemberCenter: React.FC = () => {
     // Mock user subscription data - Sync with Profile state if available
     const userSub = {
         tier: MembershipTier.FREE,
-        expireDate: '2024-12-31',
         autoRenew: false,
         pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
     };
@@ -49,7 +58,7 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '入门首选，极速体验',
             features: [
-                `每月赠送 ${PLAN_MONTHLY_POINTS.STARTER} 积分`,
+                `每月赠送 ${PLAN_MONTHLY_POINTS.STARTER} 积分（永久有效）`,
                 '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-slate-500 to-slate-600',
@@ -65,7 +74,7 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '人气之选，高性价比',
             features: [
-                `每月赠送 ${PLAN_MONTHLY_POINTS.PLUS} 积分`,
+                `每月赠送 ${PLAN_MONTHLY_POINTS.PLUS} 积分（永久有效）`,
                 '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-blue-600 to-blue-700',
@@ -81,7 +90,7 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '职业冲刺，专业必备',
             features: [
-                `每月赠送 ${PLAN_MONTHLY_POINTS.PRO} 积分`,
+                `每月赠送 ${PLAN_MONTHLY_POINTS.PRO} 积分（永久有效）`,
                 '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-indigo-600 to-indigo-700',
@@ -97,7 +106,7 @@ const MemberCenter: React.FC = () => {
             period: '/月',
             description: '至尊体验，全能旗舰',
             features: [
-                `每月赠送 ${PLAN_MONTHLY_POINTS.ULTRA} 积分`,
+                `每月赠送 ${PLAN_MONTHLY_POINTS.ULTRA} 积分（永久有效）`,
                 '支持 AI 诊断 / AI 面试按积分消耗',
             ],
             color: 'from-slate-800 to-slate-900',
@@ -111,7 +120,7 @@ const MemberCenter: React.FC = () => {
     const addons = ADDON_POINT_PACKAGES.map((item) => ({
         name: `${item.points} 积分`,
         price: item.priceLabel,
-        desc: '当月有效',
+        desc: '永久有效',
     }));
 
     const getTierStyle = (tier: MembershipTier) => {
@@ -177,7 +186,7 @@ const MemberCenter: React.FC = () => {
                 >
                     <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">arrow_back_ios_new</span>
                 </button>
-                <h1 className="text-lg font-bold text-slate-900 dark:text-white">会员中心</h1>
+                <h1 className="text-lg font-bold text-slate-900 dark:text-white">权益中心</h1>
                 <div className="w-10" /> {/* Spacer */}
             </header>
 
@@ -207,7 +216,7 @@ const MemberCenter: React.FC = () => {
                                 <div className="flex items-center gap-2">
                                     {userSub.tier !== MembershipTier.FREE ? (
                                         <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                            有效期至 {userSub.expireDate}
+                                            积分永久有效
                                         </span>
                                     ) : (
                                         <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate font-medium">
@@ -228,7 +237,7 @@ const MemberCenter: React.FC = () => {
 
                 {/* Tiers Section */}
                 <section>
-                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 px-1">会员方案</h3>
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4 px-1">权益方案</h3>
                     <div className="space-y-4">
                         {tiers.map((tier) => (
                             <div
@@ -354,7 +363,7 @@ const MemberCenter: React.FC = () => {
                         onClick={() => navigateToView(View.TERMS_OF_SERVICE)}
                         className="text-[10px] text-primary hover:underline"
                     >
-                        会员服务协议
+                        服务协议
                     </button>
                     <span className="text-[10px] text-slate-300 mx-2">|</span>
                     <button

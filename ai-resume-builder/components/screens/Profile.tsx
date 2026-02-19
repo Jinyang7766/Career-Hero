@@ -4,6 +4,7 @@ import { useUserProfile } from '../../src/useUserProfile';
 import { useAppContext } from '../../src/app-context';
 import { APP_VERSION_CN } from '../../src/app-version';
 import { ReferralModal } from '../ReferralModal';
+import { DatabaseService } from '../../src/database-service';
 
 
 
@@ -38,17 +39,44 @@ const Profile: React.FC<ScreenProps> = () => {
   const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
   const [avatar, setAvatar] = React.useState(DEFAULT_AVATAR);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cropBoxSize = 280;
+  const outputSize = 512;
+  const [isCropOpen, setIsCropOpen] = useState(false);
+  const [cropSrc, setCropSrc] = useState('');
+  const [cropNatural, setCropNatural] = useState({ w: 0, h: 0 });
+  const [cropScale, setCropScale] = useState(1);
+  const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
+  const dragRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 });
 
-  // Load avatar from localStorage
-  React.useEffect(() => {
-    const savedAvatar = localStorage.getItem('user_avatar');
-    if (savedAvatar) {
-      setAvatar(savedAvatar);
-    }
-  }, []);
-
+  const getAvatarStorageKey = (uid?: string) => `user_avatar:${String(uid || 'guest')}`;
+  const clampOffset = React.useCallback((offsetX: number, offsetY: number, scale: number) => {
+    const w = cropNatural.w * scale;
+    const h = cropNatural.h * scale;
+    const maxX = Math.max(0, (w - cropBoxSize) / 2);
+    const maxY = Math.max(0, (h - cropBoxSize) / 2);
+    return {
+      x: Math.max(-maxX, Math.min(maxX, offsetX)),
+      y: Math.max(-maxY, Math.min(maxY, offsetY)),
+    };
+  }, [cropNatural.h, cropNatural.w]);
   // Get user profile with real name
   const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
+
+  // Load avatar from user profile / localStorage
+  React.useEffect(() => {
+    const uid = String(currentUser?.id || '').trim();
+    const remoteAvatar = String((userProfile as any)?.avatar_url || '').trim();
+    if (remoteAvatar) {
+      setAvatar(remoteAvatar);
+      if (uid) localStorage.setItem(getAvatarStorageKey(uid), remoteAvatar);
+      localStorage.setItem('user_avatar', remoteAvatar);
+      return;
+    }
+    const savedAvatar = uid
+      ? localStorage.getItem(getAvatarStorageKey(uid))
+      : localStorage.getItem('user_avatar');
+    if (savedAvatar) setAvatar(savedAvatar);
+  }, [currentUser?.id, userProfile?.avatar_url]);
   const displayName =
     userProfile?.name ||
     currentUser?.user_metadata?.name ||
@@ -81,16 +109,103 @@ const Profile: React.FC<ScreenProps> = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         if (e.target?.result) {
-          const newAvatar = e.target.result as string;
-          setAvatar(newAvatar);
-          localStorage.setItem('user_avatar', newAvatar);
+          setCropSrc(String(e.target.result));
+          setCropNatural({ w: 0, h: 0 });
+          setCropScale(1);
+          setCropOffset({ x: 0, y: 0 });
+          setIsCropOpen(true);
         }
       };
       reader.readAsDataURL(file);
     }
+    event.target.value = '';
   };
 
+  React.useEffect(() => {
+    if (!cropSrc) return;
+    const img = new Image();
+    img.onload = () => {
+      const w = Number(img.naturalWidth || 0);
+      const h = Number(img.naturalHeight || 0);
+      if (!w || !h) return;
+      const minScale = Math.max(cropBoxSize / w, cropBoxSize / h);
+      setCropNatural({ w, h });
+      setCropScale(minScale);
+      setCropOffset({ x: 0, y: 0 });
+    };
+    img.src = cropSrc;
+  }, [cropSrc]);
+
+  const saveAvatar = React.useCallback(async () => {
+    if (!cropSrc || !currentUser?.id || !cropNatural.w || !cropNatural.h) return;
+    const img = new Image();
+    const completed = new Promise<string>((resolve, reject) => {
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = outputSize;
+          canvas.height = outputSize;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) return reject(new Error('canvas context unavailable'));
+
+          const scale = cropScale;
+          const displayW = cropNatural.w * scale;
+          const displayH = cropNatural.h * scale;
+          const center = cropBoxSize / 2;
+          const topLeftX = center + cropOffset.x - (displayW / 2);
+          const topLeftY = center + cropOffset.y - (displayH / 2);
+          const sx = (0 - topLeftX) / scale;
+          const sy = (0 - topLeftY) / scale;
+          const sw = cropBoxSize / scale;
+          const sh = cropBoxSize / scale;
+          ctx.drawImage(img, sx, sy, sw, sh, 0, 0, outputSize, outputSize);
+          resolve(canvas.toDataURL('image/jpeg', 0.9));
+        } catch (err) {
+          reject(err as any);
+        }
+      };
+      img.onerror = () => reject(new Error('image load failed'));
+    });
+    img.src = cropSrc;
+
+    try {
+      const croppedDataUrl = await completed;
+      setAvatar(croppedDataUrl);
+      const uid = String(currentUser.id || '').trim();
+      if (uid) localStorage.setItem(getAvatarStorageKey(uid), croppedDataUrl);
+      localStorage.setItem('user_avatar', croppedDataUrl);
+
+      const updateResult = await DatabaseService.updateUser(String(currentUser.id), {
+        avatar_url: croppedDataUrl,
+      });
+      if (!updateResult.success) {
+        console.warn('Failed to persist avatar to users.avatar_url:', updateResult.error);
+      }
+    } finally {
+      setIsCropOpen(false);
+      setCropSrc('');
+    }
+  }, [cropNatural.h, cropNatural.w, cropOffset.x, cropOffset.y, cropScale, cropSrc, currentUser?.id]);
+
   const [showReferralModal, setShowReferralModal] = useState(false);
+  const minCropScale = cropNatural.w && cropNatural.h
+    ? Math.max(cropBoxSize / cropNatural.w, cropBoxSize / cropNatural.h)
+    : 1;
+  const maxCropScale = Math.max(minCropScale, minCropScale * 4);
+
+  const beginDrag = (clientX: number, clientY: number) => {
+    dragRef.current = { active: true, x: clientX, y: clientY };
+  };
+  const moveDrag = (clientX: number, clientY: number) => {
+    if (!dragRef.current.active) return;
+    const dx = clientX - dragRef.current.x;
+    const dy = clientY - dragRef.current.y;
+    dragRef.current = { active: true, x: clientX, y: clientY };
+    setCropOffset((prev) => clampOffset(prev.x + dx, prev.y + dy, cropScale));
+  };
+  const endDrag = () => {
+    dragRef.current.active = false;
+  };
 
   // Mock referral code - in real app, derive from user ID or backend
   const referralCode = React.useMemo(() => {
@@ -100,7 +215,6 @@ const Profile: React.FC<ScreenProps> = () => {
   // Mock user subscription data - keeps consistent with Member Center
   const userSub = {
     tier: MembershipTier.FREE,
-    expireDate: '2024-12-31',
     pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
   };
 
@@ -135,6 +249,84 @@ const Profile: React.FC<ScreenProps> = () => {
         onClose={() => setShowReferralModal(false)}
         referralCode={referralCode}
       />
+      {isCropOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4">
+            <div className="mb-3">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">裁剪头像</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">拖动调整位置，滑动缩放后保存</p>
+            </div>
+            <div className="flex justify-center">
+              <div
+                className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 touch-none"
+                style={{ width: cropBoxSize, height: cropBoxSize }}
+                onMouseDown={(e) => beginDrag(e.clientX, e.clientY)}
+                onMouseMove={(e) => moveDrag(e.clientX, e.clientY)}
+                onMouseUp={endDrag}
+                onMouseLeave={endDrag}
+                onTouchStart={(e) => {
+                  const t = e.touches[0];
+                  if (!t) return;
+                  beginDrag(t.clientX, t.clientY);
+                }}
+                onTouchMove={(e) => {
+                  const t = e.touches[0];
+                  if (!t) return;
+                  moveDrag(t.clientX, t.clientY);
+                }}
+                onTouchEnd={endDrag}
+                onTouchCancel={endDrag}
+              >
+                {cropSrc && (
+                  <img
+                    src={cropSrc}
+                    alt="avatar-crop"
+                    className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                    style={{
+                      transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropScale})`,
+                      transformOrigin: 'center center',
+                    }}
+                    draggable={false}
+                  />
+                )}
+              </div>
+            </div>
+            <div className="mt-4 px-1">
+              <input
+                type="range"
+                min={minCropScale}
+                max={maxCropScale}
+                step={0.01}
+                value={cropScale}
+                onChange={(e) => {
+                  const next = Number(e.target.value || minCropScale);
+                  setCropScale(next);
+                  setCropOffset((prev) => clampOffset(prev.x, prev.y, next));
+                }}
+                className="w-full accent-primary"
+              />
+            </div>
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setIsCropOpen(false);
+                  setCropSrc('');
+                  endDrag();
+                }}
+                className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => { void saveAvatar(); }}
+                className="px-3 py-2 rounded-lg text-sm font-semibold bg-primary text-white hover:opacity-90"
+              >
+                保存头像
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
         <div className="flex items-center justify-center h-14 px-4 relative">
@@ -200,7 +392,6 @@ const Profile: React.FC<ScreenProps> = () => {
           // Mock user subscription - in real app this comes from context/props
           const userSub = {
             tier: MembershipTier.FREE,
-            expireDate: '2024-12-31'
           };
 
           const getTierStyle = (tier: MembershipTier) => {
@@ -222,7 +413,7 @@ const Profile: React.FC<ScreenProps> = () => {
                   bg: 'bg-gradient-to-br from-blue-600 to-blue-700',
                   icon: 'verified',
                   iconColor: 'text-white',
-                  title: 'Plus 会员权益已生效',
+                  title: 'Plus 权益已生效',
                   subtitle: '尊享更高积分额度与优先能力',
                   titleColor: 'text-white',
                   subColor: 'text-blue-100',
@@ -234,7 +425,7 @@ const Profile: React.FC<ScreenProps> = () => {
                   bg: 'bg-gradient-to-br from-indigo-600 to-indigo-700',
                   icon: 'workspace_premium',
                   iconColor: 'text-white',
-                  title: 'Pro 会员权益已生效',
+                  title: 'Pro 权益已生效',
                   subtitle: '解锁PDF导出与海量AI模拟面试',
                   titleColor: 'text-white',
                   subColor: 'text-indigo-100',

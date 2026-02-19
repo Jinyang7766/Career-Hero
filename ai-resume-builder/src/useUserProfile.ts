@@ -15,6 +15,7 @@ export interface UserProfile {
   interviews_remaining?: number;
   points_balance?: number;
   membership_tier?: string;
+  avatar_url?: string;
   analysis_dossier_latest?: {
     id: string;
     createdAt: string;
