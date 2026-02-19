@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import { ScreenProps, ResumeData } from '../../types';
 import { buildApiUrl } from '../../src/api-config';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../src/app-context';
 import { useChatViewport } from './ai-analysis/hooks/useChatViewport';
-import { useInterviewVoice } from './ai-analysis/hooks/useInterviewVoice';
 import { useInterviewSessionStore } from './ai-analysis/hooks/useInterviewSessionStore';
-import { useAiAnalysisLifecycle } from './ai-analysis/hooks/useAiAnalysisLifecycle';
 import { useResumeSelection } from './ai-analysis/hooks/useResumeSelection';
 import { useAiAnalysisNavigation } from './ai-analysis/hooks/useAiAnalysisNavigation';
 import { useToastOverlay } from './ai-analysis/hooks/useToastOverlay';
@@ -14,33 +12,23 @@ import { useInterviewChat } from './ai-analysis/hooks/useInterviewChat';
 import { useAnalysisPersistence } from './ai-analysis/hooks/useAnalysisPersistence';
 import { useOptimizedResumeStore } from './ai-analysis/hooks/useOptimizedResumeStore';
 import { useJdScreenshotUpload } from './ai-analysis/hooks/useJdScreenshotUpload';
-import { useChatIntroMessages } from './ai-analysis/hooks/useChatIntroMessages';
-import { useAnalysisHungGuard } from './ai-analysis/hooks/useAnalysisHungGuard';
-import { useAiExternalEntries } from './ai-analysis/hooks/useAiExternalEntries';
-import { deriveInitialStepFromPath, useAiRouteSync } from './ai-analysis/hooks/useAiRouteSync';
+import { useAiRouteSync } from './ai-analysis/hooks/useAiRouteSync';
 import { useAnalysisRuntime } from './ai-analysis/hooks/useAnalysisRuntime';
 import { useAnalysisSnapshotApplier } from './ai-analysis/hooks/useAnalysisSnapshotApplier';
-import { useReportSnapshotRestore } from './ai-analysis/hooks/useReportSnapshotRestore';
 import { useAnalyzeOtherResumeReset } from './ai-analysis/hooks/useAnalyzeOtherResumeReset';
 import { useAnalysisExecution } from './ai-analysis/hooks/useAnalysisExecution';
 import { useUsageQuota } from './ai-analysis/hooks/useUsageQuota';
-import { useAnalysisSessionRecovery } from './ai-analysis/hooks/useAnalysisSessionRecovery';
-import { useInterviewPlanLoader } from './ai-analysis/hooks/useInterviewPlanLoader';
-import { usePostInterviewReportData } from './ai-analysis/hooks/usePostInterviewReportData';
-import { usePostInterviewFeedback } from './ai-analysis/hooks/usePostInterviewFeedback';
-import { usePostInterviewFinalize } from './ai-analysis/hooks/usePostInterviewFinalize';
-import { useInterviewEntryActions } from './ai-analysis/hooks/useInterviewEntryActions';
-import { useAiAnalysisActions } from './ai-analysis/hooks/useAiAnalysisActions';
-import { useOptimizedResumeListSync } from './ai-analysis/hooks/useOptimizedResumeListSync';
-import { useAnalysisStepCheckpoint } from './ai-analysis/hooks/useAnalysisStepCheckpoint';
-import { useFinalDiagnosisReportGenerator } from './ai-analysis/hooks/useFinalDiagnosisReportGenerator';
+import { useAiAnalysisPageState } from './ai-analysis/hooks/useAiAnalysisPageState';
+import { useAiAnalysisPageEffects } from './ai-analysis/hooks/useAiAnalysisPageEffects';
+import { useAiAnalysisPassiveFlows } from './ai-analysis/hooks/useAiAnalysisPassiveFlows';
+import { useAiAnalysisPostInterviewFlow } from './ai-analysis/hooks/useAiAnalysisPostInterviewFlow';
+import { useAiAnalysisInteractionBundle } from './ai-analysis/hooks/useAiAnalysisInteractionBundle';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
 } from './ai-analysis/chat-formatters';
 import { getBackendAuthToken } from './ai-analysis/auth';
 import { getRagEnabledFlag } from './ai-analysis/analysis-config';
-import WaveformVisualizer from './ai-analysis/WaveformVisualizer';
 import { isSameResumeId, normalizeResumeId } from './ai-analysis/id-utils';
 import { useAppStore } from '../../src/app-store';
 import { useUserProfile } from '../../src/useUserProfile';
@@ -56,12 +44,10 @@ import {
   getActiveInterviewType,
   getInterviewerAvatarUrl,
   getInterviewerTitle,
-  getWarmupQuestion,
 } from './ai-analysis/interview-plan-utils';
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
-import type { AnalysisReport, ChatMessage, Suggestion } from './ai-analysis/types';
-
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison' | 'final_report';
+import type { AiAnalysisStep } from './ai-analysis/step-types';
+import { buildAiAnalysisRenderProps } from './ai-analysis/build-ai-analysis-render-props';
 
 const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
@@ -77,65 +63,70 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const location = useLocation();
 
   // Skill normalization moved to `src/skill-utils.ts` so resume import and suggestion generation stay consistent.
-
-  // Navigation State
-  const [currentStep, setCurrentStep] = useState<Step>(() => deriveInitialStepFromPath());
-  const [selectedResumeId, setSelectedResumeId] = useState<string | number | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const sourceResumeIdRef = useRef<string | number | null>(null);
-  const forcedResumeSelectRef = useRef(false);
-
-  useEffect(() => {
-    if (setIsNavHidden) {
-      setIsNavHidden(currentStep === 'chat');
-    }
-    return () => {
-      if (setIsNavHidden) setIsNavHidden(false);
-    };
-  }, [currentStep, setIsNavHidden]);
-  const [originalResumeData, setOriginalResumeData] = useState<ResumeData | null>(null);
-  const [jdText, setJdText] = useState('');
-  const [targetCompany, setTargetCompany] = useState('');
-  const prevStepRef = useRef<Step | null>(null);
-
-  // UX: when re-entering the 职位描述 input step, do not carry over target company from previous sessions.
-  useEffect(() => {
-    if (currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
-      setTargetCompany('');
-    }
-    prevStepRef.current = currentStep;
-  }, [currentStep]);
-
-  // Analysis Result State
-  const [originalScore, setOriginalScore] = useState(0);
-  const [score, setScore] = useState(0);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
-  const [report, setReport] = useState<AnalysisReport | null>(null);
-  const [postInterviewSummary, setPostInterviewSummary] = useState('');
-  const isExporting = false;
-
-  // Upload State
-  const [showJdEmptyModal, setShowJdEmptyModal] = useState(false);
-
-  // Chat State
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const {
+    currentStep,
+    setCurrentStep,
+    selectedResumeId,
+    setSelectedResumeId,
+    searchQuery,
+    setSearchQuery,
+    sourceResumeIdRef,
+    forcedResumeSelectRef,
+    prevStepRef,
+    originalResumeData,
+    setOriginalResumeData,
+    jdText,
+    setJdText,
+    targetCompany,
+    setTargetCompany,
+    originalScore,
+    setOriginalScore,
+    score,
+    setScore,
+    suggestions,
+    setSuggestions,
+    report,
+    setReport,
+    postInterviewSummary,
+    setPostInterviewSummary,
+    showJdEmptyModal,
+    setShowJdEmptyModal,
+    chatMessages,
+    setChatMessages,
+    chatMessagesRef,
+    inputMessage,
+    setInputMessage,
+    interviewPlan,
+    setInterviewPlan,
+    planFetchTrigger,
+    setPlanFetchTrigger,
+    planLoaderMountedRef,
+    planAutoHealRef,
+    isInterviewEntry,
+    setIsInterviewEntry,
+    forceReportEntry,
+    setForceReportEntry,
+    expandedReferences,
+    setExpandedReferences,
+    chatInitialized,
+    setChatInitialized,
+    recoveredSessionKeyRef,
+    chatIntroScheduledRef,
+    playingAudioId,
+    setPlayingAudioId,
+    audioPlayerRef,
+    userAvatar,
+    setUserAvatar,
+    isFromCache,
+    setIsFromCache,
+    optimizedResumeId,
+    setOptimizedResumeId,
+    isOptimizedOpen,
+    setIsOptimizedOpen,
+    isUnoptimizedOpen,
+    setIsUnoptimizedOpen,
+  } = useAiAnalysisPageState();
   const interviewPlanConfigKey = `${getActiveInterviewType()}|${getActiveInterviewMode()}|${getActiveInterviewFocus()}`;
-  const chatMessagesRef = useRef<ChatMessage[]>([]);
-  useEffect(() => {
-    chatMessagesRef.current = chatMessages;
-  }, [chatMessages]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [interviewPlan, setInterviewPlan] = useState<string[]>([]);
-  const [planFetchTrigger, setPlanFetchTrigger] = useState(0);
-  const planLoaderMountedRef = useRef(true);
-  const planAutoHealRef = useRef<string>('');
-
-  const [isInterviewEntry, setIsInterviewEntry] = useState(false);
-  const [forceReportEntry, setForceReportEntry] = useState(false);
-  const [expandedReferences, setExpandedReferences] = useState<Record<string, boolean>>({});
-  const [chatInitialized, setChatInitialized] = useState(false);
-  const recoveredSessionKeyRef = useRef<string>('');
-  const chatIntroScheduledRef = useRef(false);
   const {
     saveLastAnalysis,
     loadLastAnalysis,
@@ -203,53 +194,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     stripMarkdownTableSeparators,
     formatInterviewQuestion,
     isSelfIntroQuestion,
-    onInterviewCompleted: (summaryText) => {
+    onInterviewCompleted: (summaryText, _finalMessages, options) => {
+      if (options?.skipSummary && !isInterviewMode) {
+        setPostInterviewSummary('');
+        navigateToStep('final_report', true);
+        return;
+      }
       setPostInterviewSummary(String(summaryText || '').trim());
       navigateToStep('comparison', true);
     },
   });
-
-  useEffect(() => {
-    planLoaderMountedRef.current = true;
-    return () => {
-      planLoaderMountedRef.current = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    // Ensure warmup is present if plan is empty (e.g. initial load or restart)
-    if (currentStep === 'chat' && interviewPlan.length === 0) {
-      const interviewType = getActiveInterviewType();
-      const warmup = getWarmupQuestion(interviewType);
-      setInterviewPlan([warmup]);
-    }
-  }, [currentStep, interviewPlan.length]);
-
-  useEffect(() => {
-    if (!isInterviewMode) return;
-    if (currentStep !== 'chat') return;
-    const mode = getActiveInterviewMode();
-    const minExpected = mode === 'simple' ? 3 : 4;
-    const maxAllowed = mode === 'simple' ? 3 : 12;
-    const signature = `${String(resumeData?.id || '')}|${makeJdKey(String(jdText || resumeData?.lastJdText || '').trim() || '__no_jd__')}|${getActiveInterviewType()}|${mode}|${getActiveInterviewFocus()}`;
-
-    if (mode === 'simple' && interviewPlan.length > maxAllowed) {
-      setInterviewPlan((prev) => prev.slice(0, maxAllowed));
-      return;
-    }
-
-    if (mode === 'comprehensive' && interviewPlan.length > 0 && interviewPlan.length < minExpected) {
-      if (planAutoHealRef.current === signature) return;
-      planAutoHealRef.current = signature;
-      setInterviewPlan([]);
-      setPlanFetchTrigger((v) => v + 1);
-      return;
-    }
-
-    if (interviewPlan.length >= minExpected) {
-      planAutoHealRef.current = '';
-    }
-  }, [currentStep, interviewPlan.length, isInterviewMode, jdText, makeJdKey, resumeData?.id, resumeData?.lastJdText]);
 
   const {
     messagesEndRef,
@@ -260,35 +214,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     inputBarHeight,
     onMessagesScroll: handleMessagesScroll
   } = useChatViewport({ currentStep, chatMessages, isSending });
-  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
-  const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
-  const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
-  const [userAvatar, setUserAvatar] = useState(DEFAULT_AVATAR);
-
-  useEffect(() => {
-    const uid = String(currentUser?.id || '').trim();
-    const remoteAvatar = String((userProfile as any)?.avatar_url || '').trim();
-    if (remoteAvatar) {
-      setUserAvatar(remoteAvatar);
-      if (uid) localStorage.setItem(`user_avatar:${uid}`, remoteAvatar);
-      localStorage.setItem('user_avatar', remoteAvatar);
-      return;
-    }
-    const saved = uid
-      ? localStorage.getItem(`user_avatar:${uid}`)
-      : localStorage.getItem('user_avatar');
-    if (saved) setUserAvatar(saved);
-  }, [currentUser?.id, userProfile?.avatar_url]);
-
-  // Intentionally keep input usable while AI is replying.
-
-  // Cache State
-  const [isFromCache, setIsFromCache] = useState(false);
-
-  // Optimized Resume Tracking
-  const [optimizedResumeId, setOptimizedResumeId] = useState<string | number | null>(null);
-  const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
-  const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
   const {
     analysisRunIdRef,
     analysisAbortRef,
@@ -313,26 +238,33 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigate,
   });
 
-  useEffect(() => {
-    const path = (location.pathname || '').toLowerCase();
-    if (path !== '/ai-analysis' && path !== '/ai-interview') return;
-    if (localStorage.getItem('ai_analysis_force_resume_select') !== '1') return;
-
-    localStorage.removeItem('ai_analysis_force_resume_select');
-    forcedResumeSelectRef.current = true;
-    setStepHistory([]);
-    setSelectedResumeId(null);
-    sourceResumeIdRef.current = null;
-    setOptimizedResumeId(null);
-    setAnalysisResumeId(null);
-    setCurrentStep('resume_select');
-  }, [location.pathname, setAnalysisResumeId, setStepHistory]);
-
-  useEffect(() => {
-    if (currentStep !== 'resume_select') {
-      forcedResumeSelectRef.current = false;
-    }
-  }, [currentStep]);
+  useAiAnalysisPageEffects({
+    currentStep,
+    setCurrentStep: setCurrentStep as (step: AiAnalysisStep) => void,
+    setIsNavHidden,
+    prevStepRef,
+    setTargetCompany,
+    setInterviewPlan,
+    interviewPlanLength: interviewPlan.length,
+    isInterviewMode,
+    resumeId: resumeData?.id,
+    jdText,
+    resumeLastJdText: resumeData?.lastJdText,
+    makeJdKey,
+    planAutoHealRef,
+    setPlanFetchTrigger,
+    planLoaderMountedRef,
+    currentUserId: currentUser?.id,
+    userAvatarUrl: (userProfile as any)?.avatar_url,
+    setUserAvatar,
+    pathname: location.pathname,
+    forcedResumeSelectRef,
+    setStepHistory: setStepHistory as any,
+    setSelectedResumeId,
+    sourceResumeIdRef,
+    setOptimizedResumeId,
+    setAnalysisResumeId,
+  });
 
   const { applyAnalysisSnapshot } = useAnalysisSnapshotApplier({
     setOriginalScore,
@@ -453,9 +385,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   const hasJdInput = () => jdText.length > 0;
 
-  useChatIntroMessages({
+  useAiAnalysisPassiveFlows({
     isInterviewMode,
-    microInterviewFirstQuestion: report?.microInterviewFirstQuestion,
+    reportMicroInterviewFirstQuestion: report?.microInterviewFirstQuestion,
     currentStep,
     chatInitialized,
     chatMessagesRef: chatMessagesRef as any,
@@ -464,26 +396,15 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setChatMessages: setChatMessages as any,
     resumeData,
     jdText,
-  });
-
-  useAiAnalysisLifecycle({
-    currentStep,
     chatEntrySource,
     score,
     suggestionsLength: suggestions.length,
     setChatEntrySource,
     setLastChatStep,
-    setStepHistory,
+    setStepHistory: setStepHistory as any,
     setCurrentStep,
     selectedResumeId,
-    resumeData,
-    isInterviewMode,
-  });
-  useAnalysisSessionRecovery({
-    resumeData,
     forcedResumeSelect: forcedResumeSelectRef.current,
-    currentStep,
-    jdText,
     setJdText,
     getAnalysisSession: getAnalysisSession as any,
     makeJdKey,
@@ -493,76 +414,28 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigateToStep: navigateToStep as any,
     loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
-  });
-
-  useOptimizedResumeListSync({
     optimizedResumeId,
-    resumeData,
-    currentStep,
     setAllResumes,
-  });
-
-  useAnalysisStepCheckpoint({
-    currentStep,
-    jdText,
-    resumeData,
     targetCompany,
-    score,
     persistAnalysisSessionState: persistAnalysisSessionState as any,
-  });
-
-  useInterviewPlanLoader({
-    isInterviewMode,
-    resumeData,
-    jdText,
     interviewPlanConfigKey,
     buildApiUrl,
-    makeJdKey,
     currentUserId: currentUser?.id,
     planFetchTrigger,
     setInterviewPlan,
     getBackendAuthToken,
     planLoaderMountedRef,
-  });
-
-  useReportSnapshotRestore({
-    currentStep,
-    score,
-    suggestionsLength: suggestions.length,
     report,
-    resumeData,
-    loadLastAnalysis,
     applyAnalysisSnapshot,
-    setJdText,
     setTargetCompany,
     setAnalysisResumeId,
     setResumeData: setResumeData as any,
     sourceResumeIdRef: sourceResumeIdRef as any,
-  });
-
-  useAnalysisHungGuard({
-    currentStep,
-    setCurrentStep: setCurrentStep as any,
     isAnalysisStillInProgress,
     inprogressAtKey: INPROGRESS_AT_KEY,
     cancelInFlightAnalysis,
-  });
-
-  useAiExternalEntries({
-    currentUserId: currentUser?.id,
-    setResumeData: setResumeData as any,
-    sourceResumeIdRef: sourceResumeIdRef as any,
     setSelectedResumeId,
-    setAnalysisResumeId,
     setOptimizedResumeId,
-    setTargetCompany,
-    setJdText,
-    makeJdKey,
-    setChatMessages: setChatMessages as any,
-    setChatInitialized,
-    openChat,
-    setStepHistory: setStepHistory as any,
-    setCurrentStep: setCurrentStep as any,
     setForceReportEntry,
     handleResumeSelect: handleResumeSelect as any,
   });
@@ -585,25 +458,34 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     onHoldPointerCancel,
     hasVoiceBlobForMsg,
     transcribeExistingVoiceMessage,
-  } = useInterviewVoice({
+    getScoreColor,
+    handleResumeSelectBack,
+    handleStartMicroInterview,
+    handleRetryAnalysisFromIntro,
+    handleRestartInterview,
+    handleStartInterviewFromFinalReport,
+    endInterviewFromChat,
+    interviewAnsweredCount,
+  } = useAiAnalysisInteractionBundle({
     currentStep,
     chatMessagesRef: chatMessagesRef as any,
     setChatMessages: setChatMessages as any,
     handleSendMessage: handleSendMessage as any,
     showToast,
     getBackendAuthToken,
-  });
-
-  const {
-    getScoreColor,
-    handleResumeSelectBack,
-    handleStartMicroInterview,
-    handleRetryAnalysisFromIntro,
-  } = useAiAnalysisActions({
     navigateToView,
     navigateToStep: navigateToStep as any,
     openChat,
-    currentStep,
+    jdText,
+    resumeData,
+    makeJdKey,
+    currentUserId: currentUser?.id,
+    setInterviewPlan,
+    setPlanFetchTrigger,
+    clearInterviewSession: clearInterviewSession as any,
+    isInterviewMode,
+    chatMessages,
+    chatIntroScheduledRef,
   });
   const {
     postInterviewOriginalResume,
@@ -613,84 +495,41 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportScore,
     finalReportSummary,
     finalReportAdvice,
-  } = usePostInterviewReportData({
+    finalReportOverride,
+    handlePostInterviewFeedback,
+    handleCompleteAndSavePostInterview,
+  } = useAiAnalysisPostInterviewFlow({
+    currentStep,
     originalResumeData,
     resumeData: resumeData as ResumeData,
     suggestions,
     postInterviewSummary,
     reportSummary: report?.summary,
-    baseScore: score,
+    score,
     weaknesses: report?.weaknesses || [],
-  });
-  const finalReportOverride = useFinalDiagnosisReportGenerator({
-    currentStep,
-    resumeData,
-    postInterviewGeneratedResume,
     jdText,
-    effectivePostInterviewSummary,
-    finalReportSummary,
-    finalReportScore,
-    finalReportAdvice,
     makeJdKey,
     userProfile,
     getRagEnabledFlag,
     getBackendAuthToken,
     buildApiUrl,
     chatMessagesRef: chatMessagesRef as any,
-  });
-  const { handlePostInterviewFeedback } = usePostInterviewFeedback({
     currentUserId: currentUser?.id,
     showToast,
-    effectivePostInterviewSummary,
-    postInterviewGeneratedResume,
-    postInterviewOriginalResume,
-    resumeId: resumeData?.id,
-  });
-
-  const { handleCompleteAndSavePostInterview } = usePostInterviewFinalize({
-    currentUserId: currentUser?.id,
-    generatedResume: postInterviewGeneratedResume as any,
     sourceResumeIdRef: sourceResumeIdRef as any,
-    resumeData: resumeData as any,
-    jdText,
     targetCompany,
     allResumes: allResumes as any,
-    makeJdKey,
     isSameResumeId,
     setResumeData: setResumeData as any,
     setSelectedResumeId,
     setAnalysisResumeId,
     setOptimizedResumeId,
-    showToast,
     navigateToStep: navigateToStep as any,
-    finalReportScore,
-    finalReportSummary,
-    finalReportAdvice,
   });
 
-  const endInterviewFromChat = () => { void handleSendMessage('结束面试', null); };
-  const interviewAnsweredCount = chatMessages.filter((m) => {
-    if (m.role !== 'user') return false;
-    const txt = String(m.text || '').trim();
-    const hasTextAnswer = !!txt && txt !== '结束面试';
-    const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
-    return hasTextAnswer || hasVoiceAnswer;
-  }).length;
-  const { handleRestartInterview, handleStartInterviewFromFinalReport } = useInterviewEntryActions({
-    chatIntroScheduledRef,
-    clearInterviewSession: clearInterviewSession as any,
-    jdText,
-    resumeData,
-    makeJdKey,
-    currentUserId: currentUser?.id,
-    setInterviewPlan,
-    setPlanFetchTrigger,
-    openChat,
-  });
-
-  return renderAiAnalysisStep({
+  return renderAiAnalysisStep(buildAiAnalysisRenderProps({
     currentStep,
-    allResumes: allResumes as any[],
+    allResumes,
     searchQuery,
     setSearchQuery,
     isOptimizedOpen,
@@ -698,7 +537,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isUnoptimizedOpen,
     setIsUnoptimizedOpen,
     handleResumeSelectBack,
-    handleResumeSelect: (resumeId, preferReport) => { void handleResumeSelect(resumeId, preferReport); },
+    handleResumeSelect,
     selectedResumeId,
     resumeReadState,
     isInterviewMode,
@@ -722,13 +561,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     originalScore,
     report,
     getScoreColor,
-    handleAnalyzeOtherResume: () => {
-      void startAnalysis(undefined, { preserveReportOnError: true, bypassCache: true });
-    },
     handleStartMicroInterview,
     handleRetryAnalysisFromIntro,
     ToastOverlay,
-    WaveformVisualizer: (props: any) => <WaveformVisualizer {...props} visualizerData={visualizerData} />,
+    visualizerData,
     endInterviewFromChat,
     handleRestartInterview,
     userAvatar,
@@ -760,7 +596,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     textareaRef: textareaRef as any,
     inputMessage,
     setInputMessage,
-    handleSendMessage: () => { void handleSendMessage(); },
+    handleSendMessage,
     holdTalkBtnRef: holdTalkBtnRef as any,
     onHoldPointerDown,
     onHoldPointerMove,
@@ -770,17 +606,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     interviewAnsweredCount,
     getInterviewerTitle,
     getInterviewerAvatarUrl,
-    postInterviewSummary: effectivePostInterviewSummary,
+    effectivePostInterviewSummary,
     postInterviewOriginalResume,
     postInterviewGeneratedResume,
     postInterviewAnnotations,
     handlePostInterviewFeedback,
     handleCompleteAndSavePostInterview,
-    finalReportSummary: finalReportOverride?.summary || finalReportSummary,
-    finalReportAdvice: finalReportOverride?.advice || finalReportAdvice,
-    finalReportScore: finalReportOverride?.score ?? finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
+    finalReportScore,
+    finalReportOverride,
     handleStartInterviewFromFinalReport,
-  });
+  }));
 };
 
 export default AiAnalysis;

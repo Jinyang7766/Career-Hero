@@ -38,7 +38,11 @@ type Params = {
   stripMarkdownTableSeparators: (text: string) => string;
   formatInterviewQuestion: (q: string) => string;
   isSelfIntroQuestion: (q: string) => boolean;
-  onInterviewCompleted?: (summary: string, finalMessages: ChatMessage[]) => void;
+  onInterviewCompleted?: (
+    summary: string,
+    finalMessages: ChatMessage[],
+    options?: { skipSummary?: boolean }
+  ) => void;
 };
 
 export const useInterviewChat = ({
@@ -184,7 +188,6 @@ export const useInterviewChat = ({
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token.trim()}`,
-        'X-Client-Trace-Id': traceId,
       },
       body: JSON.stringify(requestBody)
     });
@@ -342,9 +345,10 @@ export const useInterviewChat = ({
   ) => {
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
+    const normalizedTextOverride = String(textOverride || '').trim();
+    const isManualEndCommand = normalizedTextOverride === '结束面试' || normalizedTextOverride === '结束微访谈';
     const isEndCommand =
-      !!isInterviewMode &&
-      (String(textOverride || '').trim() === '结束面试' || !!opts?.forceEnd);
+      isManualEndCommand || !!opts?.forceEnd;
     if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
@@ -389,6 +393,31 @@ export const useInterviewChat = ({
     try {
       if (isEndCommand) {
         endingInterviewRef.current = true;
+        if (!isInterviewMode) {
+          const finalMessages = [...baseMessages];
+          chatMessagesRef.current = finalMessages;
+          setChatMessages(finalMessages);
+          await persistInterviewSession(finalMessages, jdText);
+          try {
+            await persistAnalysisSessionState('interview_done', {
+              jdText,
+              step: 'final_report',
+              lastMessageAt: new Date().toISOString(),
+              force: true,
+            });
+          } catch (stateErr) {
+            console.warn('Failed to persist interview_done state for micro interview:', stateErr);
+          }
+          if (onInterviewCompleted) {
+            try {
+              onInterviewCompleted('', finalMessages, { skipSummary: true });
+            } catch (cbErr) {
+              console.warn('onInterviewCompleted callback failed:', cbErr);
+            }
+          }
+          interviewEndedRef.current = true;
+          return;
+        }
         const summaryRaw = await generateInterviewSummary(baseMessages);
         const summary = stripMarkdownTableSeparators(summaryRaw);
         const aiMessage: ChatMessage = {
@@ -438,6 +467,7 @@ export const useInterviewChat = ({
 
       const masker = createMasker();
       const isInterviewChat = !!isInterviewMode;
+      const isMicroInterview = !isInterviewChat && currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
       const detectFollowUpNeed = (raw: string) => {
         const text = String(raw || '').trim();
@@ -465,7 +495,7 @@ export const useInterviewChat = ({
       const answeredCountAtThisTurn = baseMessages.filter((m) => {
         if (m.role !== 'user') return false;
         const txt = String(m.text || '').trim();
-        const hasTextAnswer = !!txt && txt !== '结束面试';
+        const hasTextAnswer = !!txt && txt !== '结束面试' && txt !== '结束微访谈';
         const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
         return hasTextAnswer || hasVoiceAnswer;
       }).length;
@@ -496,6 +526,7 @@ export const useInterviewChat = ({
 
       const interviewWrapped = buildInterviewWrappedMessage({
         isInterviewChat,
+        isMicroInterview,
         isStartPhase,
         cleanTextForWrap,
         isAffirmative,
@@ -553,8 +584,9 @@ export const useInterviewChat = ({
       }));
 
       const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
-      if (safeText === '结束面试') {
-        await handleSendMessage('结束面试', null, { skipAddUserMessage: true, forceEnd: true });
+      if (safeText === '结束面试' || safeText === '结束微访谈') {
+        const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
+        await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
         return;
       }
       const { cleaned, next } = splitNextQuestion(safeText);

@@ -188,7 +188,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-11 w-32 bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="absolute right-0 top-11 w-max min-w-[140px] bg-white dark:bg-[#1c2936] rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-[60] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
               <button
                 onClick={async () => {
                   setMenuOpen(false);
@@ -196,7 +196,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                     onRestartInterview();
                   }
                 }}
-                className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
+                className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap"
               >
                 <span className="material-symbols-outlined text-[18px]">restart_alt</span>
                 重新开始
@@ -205,11 +205,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
               <button
                 onClick={async () => {
                   setMenuOpen(false);
-                  if (await confirmDialog(isInterviewMode ? '确认结束面试并生成总结吗？' : '确认结束微访谈并生成总结吗？')) {
+                  if (await confirmDialog(isInterviewMode ? '确认结束面试并生成总结吗？' : '确认结束微访谈并生成最终诊断报告吗？')) {
                     onEndInterview();
                   }
                 }}
-                className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+                className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 whitespace-nowrap"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
                 {isInterviewMode ? '结束面试' : '结束微访谈'}
@@ -227,115 +227,115 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
       {isInterviewMode && (
         <div className="mx-4 my-2 p-3 bg-white/70 dark:bg-[#1c2936]/40 backdrop-blur-md rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-sm">
-        {interviewTotalCount > 0 ? (
-          <>
-            <button
-              type="button"
-              onClick={() => setPlanExpanded((v) => !v)}
-              className="w-full text-left group"
-            >
-              <div className="flex items-center justify-between mb-2 px-1">
-                <div className="flex items-center gap-2">
-                  <div className="size-5 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-[14px] text-primary">assessment</span>
-                  </div>
-                  {interviewTotalCount <= 1 ? (
-                    <div className="flex items-center gap-2">
-                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                        正在加载面试题库
-                      </p>
-                      <div className="size-2.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+          {interviewTotalCount > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setPlanExpanded((v) => !v)}
+                className="w-full text-left group"
+              >
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <div className="flex items-center gap-2">
+                    <div className="size-5 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[14px] text-primary">assessment</span>
                     </div>
-                  ) : (
-                    <>
-                      <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
-                        面试进度
-                      </p>
-                      <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
-                        {Math.min(interviewAnsweredCount + 1, interviewTotalCount)} / {interviewTotalCount}
-                      </span>
-                    </>
-                  )}
-                </div>
-                <span className={`material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-500 transition-transform duration-300 ${planExpanded ? 'rotate-180' : ''}`}>
-                  keyboard_arrow_down
-                </span>
-              </div>
-              <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden p-0.5 border border-slate-200/50 dark:border-white/5">
-                <div
-                  className="h-full rounded-full bg-gradient-to-r from-primary to-blue-400 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(37,99,235,0.4)]"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
-            </button>
-            {planExpanded && (
-              <div className="mt-3 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-                <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 customize-scrollbar">
-                  {interviewPlan.map((q, idx) => {
-                    const done = idx < interviewAnsweredCount;
-                    const isCurrent = idx === interviewAnsweredCount;
-                    return (
-                      <div
-                        key={`${idx}-${q.slice(0, 20)}`}
-                        className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${isCurrent ? 'bg-primary/5 dark:bg-primary/10 border border-primary/10' : ''
-                          }`}
-                      >
-                        <div className="shrink-0 mt-0.5">
-                          {done ? (
-                            <div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center">
-                              <span className="material-symbols-outlined text-[12px] text-white font-bold">check</span>
-                            </div>
-                          ) : (
-                            <div className={`size-5 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${isCurrent
-                              ? 'border-primary text-primary animate-pulse'
-                              : 'border-slate-300 dark:border-slate-700 text-slate-400'
-                              }`}>
-                              {idx + 1}
-                            </div>
-                          )}
-                        </div>
-                        <p className={`text-[12px] leading-relaxed font-medium ${done
-                          ? 'text-slate-400 dark:text-slate-500 line-through decoration-slate-300/50 dark:decoration-white/10'
-                          : isCurrent
-                            ? 'text-slate-900 dark:text-white font-bold'
-                            : 'text-slate-600 dark:text-slate-400'
-                          }`}>
-                          {q}
+                    {interviewTotalCount <= 1 ? (
+                      <div className="flex items-center gap-2">
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                          正在加载面试题库
                         </p>
+                        <div className="size-2.5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
                       </div>
-                    );
-                  })}
-                  {interviewPlan.length === 1 && (
-                    <div className="flex items-center gap-3 p-2 opacity-50">
-                      <div className="size-5 flex items-center justify-center">
-                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]"></div>
-                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s] mx-0.5"></div>
-                        <div className="size-1.5 rounded-full bg-slate-400 animate-bounce"></div>
+                    ) : (
+                      <>
+                        <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
+                          面试进度
+                        </p>
+                        <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                          {Math.min(interviewAnsweredCount + 1, interviewTotalCount)} / {interviewTotalCount}
+                        </span>
+                      </>
+                    )}
+                  </div>
+                  <span className={`material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-500 transition-transform duration-300 ${planExpanded ? 'rotate-180' : ''}`}>
+                    keyboard_arrow_down
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden p-0.5 border border-slate-200/50 dark:border-white/5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-primary to-blue-400 transition-all duration-500 ease-out shadow-[0_0_8px_rgba(37,99,235,0.4)]"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+              </button>
+              {planExpanded && (
+                <div className="mt-3 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 customize-scrollbar">
+                    {interviewPlan.map((q, idx) => {
+                      const done = idx < interviewAnsweredCount;
+                      const isCurrent = idx === interviewAnsweredCount;
+                      return (
+                        <div
+                          key={`${idx}-${q.slice(0, 20)}`}
+                          className={`flex items-start gap-3 p-2 rounded-lg transition-colors ${isCurrent ? 'bg-primary/5 dark:bg-primary/10 border border-primary/10' : ''
+                            }`}
+                        >
+                          <div className="shrink-0 mt-0.5">
+                            {done ? (
+                              <div className="size-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                                <span className="material-symbols-outlined text-[12px] text-white font-bold">check</span>
+                              </div>
+                            ) : (
+                              <div className={`size-5 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${isCurrent
+                                ? 'border-primary text-primary animate-pulse'
+                                : 'border-slate-300 dark:border-slate-700 text-slate-400'
+                                }`}>
+                                {idx + 1}
+                              </div>
+                            )}
+                          </div>
+                          <p className={`text-[12px] leading-relaxed font-medium ${done
+                            ? 'text-slate-400 dark:text-slate-500 line-through decoration-slate-300/50 dark:decoration-white/10'
+                            : isCurrent
+                              ? 'text-slate-900 dark:text-white font-bold'
+                              : 'text-slate-600 dark:text-slate-400'
+                            }`}>
+                            {q}
+                          </p>
+                        </div>
+                      );
+                    })}
+                    {interviewPlan.length === 1 && (
+                      <div className="flex items-center gap-3 p-2 opacity-50">
+                        <div className="size-5 flex items-center justify-center">
+                          <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.3s]"></div>
+                          <div className="size-1.5 rounded-full bg-slate-400 animate-bounce [animation-delay:-0.15s] mx-0.5"></div>
+                          <div className="size-1.5 rounded-full bg-slate-400 animate-bounce"></div>
+                        </div>
+                        <p className="text-[11px] font-medium text-slate-400">正在生成后续题单...</p>
                       </div>
-                      <p className="text-[11px] font-medium text-slate-400">正在生成后续题单...</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="flex flex-col gap-2.5 px-1 py-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="size-5 rounded-md bg-slate-100 dark:bg-white/5 flex items-center justify-center animate-pulse">
+                    <span className="material-symbols-outlined text-[14px] text-slate-400">query_builder</span>
+                  </div>
+                  <p className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider animate-pulse">
+                    正在加载本场面试的题库...
+                  </p>
                 </div>
               </div>
-            )}
-          </>
-        ) : (
-          <div className="flex flex-col gap-2.5 px-1 py-1">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="size-5 rounded-md bg-slate-100 dark:bg-white/5 flex items-center justify-center animate-pulse">
-                  <span className="material-symbols-outlined text-[14px] text-slate-400">query_builder</span>
-                </div>
-                <p className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider animate-pulse">
-                  正在加载本场面试的题库...
-                </p>
+              <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200/50 dark:border-white/5">
+                <div className="h-full w-1/2 bg-slate-200 dark:bg-white/10 rounded-full animate-[shimmer_1.5s_infinite] shadow-[0_0_10px_rgba(255,255,255,0.1)]"></div>
               </div>
             </div>
-            <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden border border-slate-200/50 dark:border-white/5">
-              <div className="h-full w-1/2 bg-slate-200 dark:bg-white/10 rounded-full animate-[shimmer_1.5s_infinite] shadow-[0_0_10px_rgba(255,255,255,0.1)]"></div>
-            </div>
-          </div>
-        )}
+          )}
         </div>
       )}
 

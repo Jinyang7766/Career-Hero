@@ -5,11 +5,10 @@ import JdInputPage from './pages/JdInputPage';
 import ReportPage from './pages/ReportPage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
-
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'comparison' | 'final_report';
+import type { AiAnalysisStep } from './step-types';
 
 type Params = {
-  currentStep: Step;
+  currentStep: AiAnalysisStep;
   allResumes: any[];
   searchQuery: string;
   setSearchQuery: (v: string) => void;
@@ -32,7 +31,7 @@ type Params = {
   isUploading: boolean;
   handleScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   handleStepBack: () => void;
-  setCurrentStep: (v: Step) => void;
+  setCurrentStep: (v: AiAnalysisStep) => void;
   handleStartAnalysisClick: (interviewType?: string) => void;
   showJdEmptyModal: boolean;
   setShowJdEmptyModal: (v: boolean) => void;
