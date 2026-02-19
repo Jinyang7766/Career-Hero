@@ -174,20 +174,24 @@ def _normalize_suggestion_metric_text(text: str, resume_numeric_tokens: set) -> 
     if not value:
         return value
 
-    # Normalize common placeholder variants to a single style.
-    value = re.sub(r'[\{\[\(（【]?\s*数字\s*[\}\]\)）】]?\s*%', 'XX%', value)
-    value = re.sub(r'(?<![\u4e00-\u9fffA-Za-z0-9])数字(?![\u4e00-\u9fffA-Za-z0-9])', 'XX', value)
-    value = re.sub(r'\b[XYZNMK]{1,3}\s*%\b', 'XX%', value)
-    value = re.sub(r'\b[XYZNMK]{1,3}\b', 'XX', value)
+    # Normalize placeholder variants to neutral, non-placeholder wording.
+    value = re.sub(r'[\{\[\(（【]?\s*数字\s*[\}\]\)）】]?\s*%', '某可验证比例', value)
+    value = re.sub(r'(?<![\u4e00-\u9fffA-Za-z0-9])数字(?![\u4e00-\u9fffA-Za-z0-9])', '某可验证数值', value)
+    value = re.sub(r'\b[XYZNMK]{1,3}\s*%\b', '某可验证比例', value)
+    value = re.sub(r'\b[XYZNMK]{1,3}\b', '某可验证数值', value)
+    value = re.sub(r'\bXX\s*%\b', '某可验证比例', value, flags=re.IGNORECASE)
+    value = re.sub(r'\bXX\b', '某可验证数值', value, flags=re.IGNORECASE)
 
-    # Replace concrete numbers not present in the original resume with placeholders.
+    # Replace concrete numbers not present in the original resume with neutral wording.
     def _replace_unknown_number(match):
         token = match.group(0)
         if token in resume_numeric_tokens:
             return token
-        return 'XX%' if token.endswith('%') else 'XX'
+        return '某可验证比例' if token.endswith('%') else '某可验证数值'
 
     value = re.sub(r'\d+(?:\.\d+)?%?', _replace_unknown_number, value)
+    value = re.sub(r'(某可验证比例[、，/\s]*){2,}', '某可验证比例', value)
+    value = re.sub(r'(某可验证数值[、，/\s]*){2,}', '某可验证数值', value)
     return value
 
 
@@ -319,7 +323,7 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
         section = str(frag.get('section') or 'workExps')
         label = str(frag.get('label') or '简历内容')
         suggested = (
-            f"在{label}中，我主导/参与了【具体任务】，通过【关键行动与方法】实现了【可量化结果，如效率提升XX%、成本下降XX%、转化提升XX%】。"
+            f"在{label}中，我主导/参与了核心任务，通过关键行动与方法推动了业务结果，并持续跟踪关键指标变化。"
         )
         augmented.append({
             'id': f'suggestion-coverage-{used + 1}',
@@ -459,7 +463,7 @@ def _build_analysis_prompt(
    - 严禁空泛水话：如“优秀的团队合作能力”“逻辑性强”“沟通能力好”“有责任心”等。
    - 必须优先使用“动作动词 + 方法/工具 + 可验证结果”的写法。
    - 技术岗位默认脱水词典：禁止高频使用“负责了/参与了”；优先改为“重构了/压测了/支撑了/设计并落地了/优化了”。
-   - 若原文无量化数据，不得编造；使用“XX/某核心指标”占位并在 reason 明确需用户补数。
+   - 若原文无量化数据，不得编造；请改为“关键指标口径描述”（例如“提升核心转化指标”），严禁使用 XX/XXX/占位符。
 """ if is_final_stage else ""
 
     format_requirements = f"""
@@ -562,7 +566,7 @@ def _build_analysis_prompt(
       "reason": "建议补充更多可量化的业绩指标。",
       "targetSection": "workExps",
       "originalValue": "原内容",
-      "suggestedValue": "在XX项目中通过优化算法，将系统响应速度提升了30%。"
+      "suggestedValue": "在核心项目中通过优化算法重构关键链路，系统响应速度明显提升。"
     }},
     {{
       "id": "suggestion-skills",
@@ -661,6 +665,38 @@ def analyze_resume_core(current_user_id, data, deps):
         'report',
         'optimization',
     }
+    is_final_report_stage = analysis_stage in {
+        'final',
+        'final_report',
+        'final_optimization',
+        'post_interview',
+        'report',
+        'optimization',
+    }
+
+    def _try_generate_final_resume_for_report(_score, _suggestions):
+        if not is_final_report_stage:
+            return None
+        generator = deps.get('generate_optimized_resume')
+        if not callable(generator):
+            return None
+        try:
+            generated = generator(
+                gemini_client=deps.get('gemini_client'),
+                check_gemini_quota=deps.get('check_gemini_quota'),
+                gemini_analysis_model=deps.get('GEMINI_RESUME_GENERATION_MODEL'),
+                parse_ai_response=deps.get('parse_ai_response'),
+                format_resume_for_ai=deps.get('format_resume_for_ai'),
+                logger=logger,
+                resume_data=resume_data,
+                chat_history=raw_chat_history if isinstance(raw_chat_history, list) else [],
+                score=_score,
+                suggestions=_suggestions or [],
+            )
+            return generated if isinstance(generated, dict) else None
+        except Exception as gen_err:
+            logger.warning("final_report resume generation failed: %s", gen_err)
+            return None
     rag_allowed_by_stage = analysis_stage in rag_enabled_stages
     rag_flag_present = 'ragEnabled' in (data or {})
     rag_requested = deps['parse_bool_flag'](data.get('ragEnabled'), deps['RAG_ENABLED'])
@@ -750,7 +786,7 @@ def analyze_resume_core(current_user_id, data, deps):
 1. 参考案例只允许用于“叙事结构、动词表达、量化逻辑”，不得作为事实来源。
 2. 严禁复用或改写参考案例中的任何具体事实，包括但不限于：公司名、项目名、产品名、客户名、品牌名、平台名、组织名、人物名。
 3. 严禁复用或映射参考案例中的任何具体数字与时间信息，包括百分比、金额、人数、时长、日期、排名、增长率（例如 14.2%）。
-4. 输出中所有事实必须来自用户简历原文；若简历未提供具体事实，使用中性占位表达或仅给出结构化改写，不得臆造细节。
+4. 输出中所有事实必须来自用户简历原文；若简历未提供具体事实，使用中性口径表达（严禁 XX/XXX 占位符）或仅给出结构化改写，不得臆造细节。
 5. 若发现建议文本与参考案例在实体名或数字上重合，必须重写，直至完全去除案例事实痕迹。
 """
             else:
@@ -832,6 +868,10 @@ def analyze_resume_core(current_user_id, data, deps):
             else:
                 ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
                 ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
+            final_resume_data = _try_generate_final_resume_for_report(
+                ai_result.get('score', 70),
+                ai_result.get('suggestions', []),
+            )
             micro_interview_first_question = _resolve_micro_interview_first_question(ai_result, job_description)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
@@ -868,6 +908,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 'rag_strategy': rag_strategy.get('mode'),
                 'analysis_model': used_model,
                 'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
+                'resumeData': final_resume_data,
             }, 200
 
         except Exception as ai_error:
@@ -885,6 +926,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 ]
                 suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
                 suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+            final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
 
             logger.info(
                 "analyze.fallback user=%s stage=%s score=%s suggestions=%s",
@@ -915,7 +957,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 'analysis_model': None,
                 'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
                 'analysis_models_tried': analysis_models_tried if 'analysis_models_tried' in locals() else [],
-                'analysis_error': str(ai_error)[:500]
+                'analysis_error': str(ai_error)[:500],
+                'resumeData': final_resume_data,
             }, 200
 
     score = deps['calculate_resume_score'](resume_data)
@@ -928,6 +971,7 @@ def analyze_resume_core(current_user_id, data, deps):
         ]
         suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
         suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+    final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
     rule_based_first_question = _resolve_micro_interview_first_question({
         'weaknesses': ['简历叙述缺少关键细节'],
         'missingKeywords': [] if not job_description else ['关键词覆盖不足'],
@@ -955,6 +999,7 @@ def analyze_resume_core(current_user_id, data, deps):
         'rag_requested': rag_requested,
         'rag_strategy': rag_strategy.get('mode'),
         'analysisPromptVersion': ANALYSIS_PROMPT_VERSION,
+        'resumeData': final_resume_data,
     }, 200
 
 
@@ -1099,6 +1144,9 @@ def ai_chat_core(data, deps):
     if question_limit <= 0:
         question_limit = 3 if interview_mode == 'simple' else 12
     question_limit = max(3, min(12, question_limit))
+    # In simple mode we still keep high-value questions, but only generate 2 custom questions
+    # because warmup question is added by frontend as question #1.
+    plan_generation_limit = 2 if interview_mode == 'simple' else question_limit
     diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
@@ -1178,9 +1226,9 @@ def ai_chat_core(data, deps):
             ],
         }
         default_questions = default_questions_by_type.get(interview_type, default_questions_by_type['general'])
-        min_count = 3 if question_limit <= 3 else 4
+        min_count = 2 if interview_mode == 'simple' else (3 if question_limit <= 3 else 4)
 
-        def _sanitize_plan_questions(items, *, min_count=min_count, max_count=question_limit):
+        def _sanitize_plan_questions(items, *, min_count=min_count, max_count=plan_generation_limit):
             sanitized = []
             for item in (items or []):
                 q = str(item or '').strip()
@@ -1209,7 +1257,7 @@ def ai_chat_core(data, deps):
         if not (deps['gemini_client'] and deps['check_gemini_quota']()):
             return {
                 'success': True,
-                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
+                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=plan_generation_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
                 'planSource': 'fallback_quota_or_config',
                 'modelAvailable': bool(deps['gemini_client']),
@@ -1224,11 +1272,11 @@ def ai_chat_core(data, deps):
 你是一位资深面试官，请为候选人生成一套“完整且不重复”的模拟面试题单。
 要求：
 - 面试类型：{role_hint}
-- 面试模式：{'简单模式（仅3题）' if interview_mode == 'simple' else '全面模式（完整题单）'}
-- 题量上限：{question_limit}题（必须遵守）
+- 面试模式：{'精简模式（总计3题：热身题1 + 深挖题2，难度不降低）' if interview_mode == 'simple' else '全面模式（完整题单）'}
+- 本次仅需生成：{plan_generation_limit}道“核心深挖题”（热身题由系统固定添加，不需要你生成）
 - 结合岗位职位描述与候选人简历定制，问题要具体。
-- 一次性给出全部题目，题量由你根据岗位复杂度与候选人背景自行决定。
-- 题量建议区间：5~9题；若岗位很复杂可适度增加，但不超过12题。
+- 一次性给出全部题目，必须严格等于要求题量，不得多也不得少。
+- 问题必须是高价值筛选题，不得因为“精简模式”而降低难度或泛化提问。
 - 题目顺序要从浅入深，覆盖面完整，避免语义重复。
 - 严禁出现“自我介绍”相关题目（例如“请做自我介绍/介绍一下你自己”）。
 - 严禁生成与本场热身题重合或近似的题目。本场热身题为：{warmup_question}
@@ -1256,7 +1304,7 @@ def ai_chat_core(data, deps):
                     questions = [str(x).strip() for x in q if str(x).strip()]
                 if isinstance(c, list):
                     coverage = [str(x).strip() for x in c if str(x).strip()]
-            questions = _sanitize_plan_questions(questions or default_questions, min_count=min_count, max_count=question_limit)
+            questions = _sanitize_plan_questions(questions or default_questions, min_count=min_count, max_count=plan_generation_limit)
             return {
                 'success': True,
                 'questions': questions,
@@ -1268,7 +1316,7 @@ def ai_chat_core(data, deps):
             deps['logger'].warning("Interview plan generation failed: %s", e)
             return {
                 'success': True,
-                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
+                'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=plan_generation_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
                 'planSource': 'fallback_error',
                 'modelAvailable': True,
@@ -1366,7 +1414,7 @@ def ai_chat_core(data, deps):
 - 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
 - 必须给出总分（0-100 的整数）。
 - 输出结构：
-1) 总分：XX/100（必须是整数）
+1) 总分：<整数>/100（必须是整数）
 2) 综合评价（3-5句）
 3) 表现亮点（3-6条）
 4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
@@ -1411,8 +1459,7 @@ def ai_chat_core(data, deps):
  - 仅当回答几乎为空或完全跑题时，才要求整题重答并重复当前问题。
  - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
  - 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
- - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
- - 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
+ - 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟
  职位描述：{job_description if job_description else '未提供'}
  简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
  诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
@@ -1443,18 +1490,6 @@ def ai_chat_core(data, deps):
             if isinstance(parsed, dict):
                 raw_text = parsed.get('response') or parsed.get('text') or parsed.get('message') or parsed.get('reply') or raw_text
             raw_text = (raw_text or '').replace('*', '').strip()
-
-            try:
-                too_long = False
-                if is_self_intro_q:
-                    if audio_duration_sec is not None and audio_duration_sec > 60:
-                        too_long = True
-                    elif audio_duration_sec is None and len(str(clean_message or '')) > 360:
-                        too_long = True
-                if too_long and ('1分钟' not in raw_text):
-                    raw_text = f"提醒：你的自我介绍偏长，后续请控制在1分钟内。\n{raw_text}".strip()
-            except Exception:
-                pass
 
             text = raw_text if isinstance(raw_text, str) and raw_text.strip() else '感谢你的回答，我们继续下一题。'
             return {'response': text}, 200
@@ -1592,7 +1627,7 @@ def ai_chat_stream_core(data, deps):
 - 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
 - 必须给出总分（0-100 的整数）。
 - 输出结构：
-1) 总分：XX/100（必须是整数）
+1) 总分：<整数>/100（必须是整数）
 2) 综合评价（3-5句）
 3) 表现亮点（3-6条）
 4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
@@ -1637,8 +1672,7 @@ def ai_chat_stream_core(data, deps):
 - 仅当回答几乎为空或完全跑题时，才要求整题重答并重复当前问题。
 - 输出为纯文本，不要使用任何 Markdown 标记，不要出现任何 * 号。
 - 如需提出下一题，必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。
-- 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟（不要再追加“请将回答控制在3分钟内”）
-- 其它所有下一道具体问题，问题末尾必须追加：请将回答控制在3分钟内
+- 如果下一道问题是自我介绍（如“请做一下自我介绍”），请在问题中提醒：自我介绍时间为1分钟
 职位描述：{job_description if job_description else '未提供'}
 简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
 诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
@@ -1719,18 +1753,6 @@ def ai_chat_stream_core(data, deps):
                 full_text = parsed.get('response') or parsed.get('text') or parsed.get('message') or parsed.get('reply') or full_text
 
             final_text = (full_text or '').replace('*', '').strip()
-            try:
-                too_long = False
-                if is_self_intro_q:
-                    if audio_duration_sec is not None and audio_duration_sec > 60:
-                        too_long = True
-                    elif audio_duration_sec is None and len(str(clean_message or '')) > 360:
-                        too_long = True
-                if too_long and ('1分钟' not in final_text):
-                    final_text = f"提醒：你的自我介绍偏长，后续请控制在1分钟内。\n{final_text}".strip()
-            except Exception:
-                pass
-
             deps['logger'].info(
                 "interview_stream_latency mode=sse trace_id=%s model=%s first_chunk_ms=%s total_ms=%.1f chunks=%s text_len=%s",
                 request_trace_id or '-',

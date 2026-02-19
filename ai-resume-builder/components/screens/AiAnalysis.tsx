@@ -140,6 +140,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     clearInterviewSession,
   } = useInterviewSessionStore({
     currentUserId: currentUser?.id,
+    isInterviewMode,
     resumeData,
     setResumeData: setResumeData as any,
     jdText,
@@ -172,7 +173,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     buildApiUrl,
     setJdText,
   });
-  const { isSending, handleSendMessage } = useInterviewChat({
+  const { isSending, hasPendingReply, currentQuestionElapsedSec, interruptCurrentThinking, handleSendMessage } = useInterviewChat({
+    currentUserId: currentUser?.id,
     isInterviewMode,
     currentStep,
     inputMessage,
@@ -201,7 +203,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
         return;
       }
       setPostInterviewSummary(String(summaryText || '').trim());
-      navigateToStep('comparison', true);
+      navigateToStep(isInterviewMode ? 'interview_report' : 'final_report', true);
     },
   });
 
@@ -465,6 +467,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     handleRestartInterview,
     handleStartInterviewFromFinalReport,
     endInterviewFromChat,
+    skipInterviewQuestionFromChat,
     interviewAnsweredCount,
   } = useAiAnalysisInteractionBundle({
     currentStep,
@@ -496,6 +499,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportSummary,
     finalReportAdvice,
     finalReportOverride,
+    isFinalReportGenerating,
     handlePostInterviewFeedback,
     handleCompleteAndSavePostInterview,
   } = useAiAnalysisPostInterviewFlow({
@@ -565,11 +569,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     handleRetryAnalysisFromIntro,
     ToastOverlay,
     visualizerData,
+    interruptCurrentThinking,
     endInterviewFromChat,
+    skipInterviewQuestionFromChat,
     handleRestartInterview,
     userAvatar,
     chatMessages,
     isSending,
+    hasPendingReply,
     messagesEndRef: messagesEndRef as any,
     messagesContainerRef: messagesContainerRef as any,
     handleMessagesScroll,
@@ -604,9 +611,13 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     onHoldPointerCancel,
     interviewPlan,
     interviewAnsweredCount,
+    currentQuestionElapsedSec,
     getInterviewerTitle,
     getInterviewerAvatarUrl,
     effectivePostInterviewSummary,
+    interviewReportSummary: String(postInterviewSummary || '').trim(),
+    interviewReportScore: Number(score || 0),
+    interviewReportAdvice: Array.isArray(report?.weaknesses) ? report.weaknesses : [],
     postInterviewOriginalResume,
     postInterviewGeneratedResume,
     postInterviewAnnotations,
@@ -616,7 +627,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportAdvice,
     finalReportScore,
     finalReportOverride,
+    isFinalReportGenerating,
     handleStartInterviewFromFinalReport,
+    handleGoToComparisonFromFinalReport: () => navigateToStep('comparison', true),
   }));
 };
 

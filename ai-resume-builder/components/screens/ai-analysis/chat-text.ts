@@ -11,15 +11,26 @@ export const stripMarkdownTableSeparators = (text: string) => {
 };
 
 export const parseReferenceReply = (text: string): ParsedReference | null => {
-  const refLabel = '参考回复：';
-  const nextLabel = '下一题：';
-  const refIndex = text.indexOf(refLabel);
-  if (refIndex === -1) return null;
-  const afterRef = refIndex + refLabel.length;
-  const nextIndex = text.indexOf(nextLabel, afterRef);
-  const before = text.slice(0, refIndex).trim();
-  const reference = (nextIndex === -1 ? text.slice(afterRef) : text.slice(afterRef, nextIndex)).trim();
-  const after = nextIndex === -1 ? '' : text.slice(nextIndex).trim();
+  const source = String(text || '');
+  // Compatible forms:
+  // - 参考回复：
+  // - 参考回复如下：
+  // - 参考回答：
+  // - 参考答案：
+  const refMatch = source.match(/(参考(?:回复|回答|答案)(?:如下)?\s*[：:])/);
+  if (!refMatch || refMatch.index === undefined) return null;
+  const refIndex = refMatch.index;
+  const afterRef = refIndex + refMatch[0].length;
+
+  const nextMatch = source.slice(afterRef).match(/(下一题|下一道问题|下一道具体问题|下一个问题)\s*[：:]/);
+  const nextIndex = nextMatch && nextMatch.index !== undefined
+    ? (afterRef + nextMatch.index)
+    : -1;
+
+  const before = source.slice(0, refIndex).trim();
+  const reference = (nextIndex === -1 ? source.slice(afterRef) : source.slice(afterRef, nextIndex)).trim();
+  const after = nextIndex === -1 ? '' : source.slice(nextIndex).trim();
+  if (!reference) return null;
   return { before, reference, after };
 };
 
@@ -45,4 +56,3 @@ export const isEndInterviewCommand = (text: string) => {
   const hits = ['结束面试', '面试结束', '结束', '结束了', '结束吧', 'stop', 'end', 'finish'];
   return hits.some((k) => t === k || t.includes(k));
 };
-

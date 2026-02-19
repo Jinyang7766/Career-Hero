@@ -7,6 +7,7 @@ const getStepProgress = (step: string) => {
     report: 60,
     micro_intro: 72,
     chat: 82,
+    interview_report: 95,
     comparison: 95,
     final_report: 100,
   };
@@ -60,4 +61,3 @@ export const deriveDiagnosisProgress = (resumeData: any): number | undefined => 
 
   return clampProgress(progress);
 };
-

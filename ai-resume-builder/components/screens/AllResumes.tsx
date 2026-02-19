@@ -756,33 +756,42 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
       {/* Rename Modal */}
       {isRenamingId !== null && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setIsRenamingId(null)}>
-          <div className="w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-            <div className="p-6">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-4">重命名简历</h3>
-              <input
-                autoFocus
-                type="text"
-                value={renameInputValue}
-                onChange={(e) => setRenameInputValue(e.target.value)}
-                className="w-full bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary mb-6 border border-transparent focus:border-primary/50"
-                placeholder="输入新的简历名称"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleRenameConfirm();
-                  if (e.key === 'Escape') setIsRenamingId(null);
-                }}
-              />
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setIsRenamingId(null)}>
+          <div className="w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-[28px] shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
+            <div className="p-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary text-[20px]">drive_file_rename_outline</span>
+                </div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">重命名简历</h3>
+              </div>
+
+              <div className="relative mb-8">
+                <input
+                  autoFocus
+                  type="text"
+                  value={renameInputValue}
+                  onChange={(e) => setRenameInputValue(e.target.value)}
+                  className="w-full bg-slate-50 dark:bg-slate-800/50 text-[15px] font-bold text-slate-900 dark:text-white rounded-2xl px-5 py-4 outline-none border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-slate-400"
+                  placeholder="输入新的简历名称"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleRenameConfirm();
+                    if (e.key === 'Escape') setIsRenamingId(null);
+                  }}
+                />
+              </div>
+
               <div className="flex gap-3">
                 <button
                   onClick={() => setIsRenamingId(null)}
-                  className="flex-1 py-2.5 rounded-xl text-slate-600 dark:text-slate-300 font-medium hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  className="flex-1 h-12 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleRenameConfirm}
                   disabled={isUpdating || !renameInputValue.trim()}
-                  className="flex-1 py-2.5 rounded-xl bg-primary text-white font-bold hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/30"
+                  className="flex-1 h-12 rounded-2xl bg-primary text-white text-sm font-bold hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-95"
                 >
                   {isUpdating ? (
                     <>

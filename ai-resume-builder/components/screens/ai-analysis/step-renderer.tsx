@@ -5,6 +5,8 @@ import JdInputPage from './pages/JdInputPage';
 import ReportPage from './pages/ReportPage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
+import InterviewReportPage from './pages/InterviewReportPage';
+import FinalAnalysisLoadingPage from './pages/FinalAnalysisLoadingPage';
 import type { AiAnalysisStep } from './step-types';
 
 type Params = {
@@ -46,11 +48,14 @@ type Params = {
   handleRetryAnalysisFromIntro: () => void;
   ToastOverlay: React.ComponentType;
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
+  interruptCurrentThinking: () => void;
   endInterviewFromChat: () => void;
+  skipInterviewQuestionFromChat: () => void;
   handleRestartInterview: () => void;
   userAvatar: string;
   chatMessages: any[];
   isSending: boolean;
+  hasPendingReply: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   messagesContainerRef: React.RefObject<HTMLDivElement | null>;
   handleMessagesScroll: () => void;
@@ -85,18 +90,24 @@ type Params = {
   onHoldPointerCancel: (e: React.PointerEvent<HTMLButtonElement>) => void;
   interviewPlan: string[];
   interviewAnsweredCount: number;
+  currentQuestionElapsedSec: number;
   getInterviewerTitle: () => string;
   getInterviewerAvatarUrl: () => string;
   postInterviewSummary: string;
+  interviewReportSummary: string;
+  interviewReportScore: number;
+  interviewReportAdvice: string[];
   postInterviewOriginalResume: any;
   postInterviewGeneratedResume: any;
-  postInterviewAnnotations: Array<{ id: string; title: string; reason: string; section: string }>;
+  postInterviewAnnotations: Array<{ id: string; title: string; reason: string; section: string; targetId?: string; targetField?: string }>;
   handlePostInterviewFeedback: (rating: 'up' | 'down') => Promise<boolean> | boolean;
-  handleCompleteAndSavePostInterview: () => Promise<void> | void;
+  handleCompleteAndSavePostInterview: (editedResume?: any) => Promise<void> | void;
   finalReportScore: number;
   finalReportSummary: string;
   finalReportAdvice: string[];
   handleStartInterviewFromFinalReport: () => void | Promise<void>;
+  handleGoToComparisonFromFinalReport: () => void | Promise<void>;
+  isFinalReportGenerating?: boolean;
 };
 
 export const renderAiAnalysisStep = (p: Params) => {
@@ -182,11 +193,14 @@ export const renderAiAnalysisStep = (p: Params) => {
         ToastOverlay={p.ToastOverlay}
         WaveformVisualizer={p.WaveformVisualizer}
         handleStepBack={p.handleStepBack}
+        onInterruptThinking={p.interruptCurrentThinking}
         onEndInterview={p.endInterviewFromChat}
+        onSkipQuestion={p.skipInterviewQuestionFromChat}
         onRestartInterview={p.handleRestartInterview}
         userAvatar={p.userAvatar}
         chatMessages={p.chatMessages}
         isSending={p.isSending}
+        hasPendingReply={p.hasPendingReply}
         messagesEndRef={p.messagesEndRef}
         messagesContainerRef={p.messagesContainerRef}
         onMessagesScroll={p.handleMessagesScroll}
@@ -222,6 +236,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         interviewPlan={p.interviewPlan}
         interviewAnsweredCount={p.interviewAnsweredCount}
         interviewTotalCount={p.interviewPlan.length}
+        currentQuestionElapsedSec={p.currentQuestionElapsedSec}
         interviewerTitle={p.getInterviewerTitle()}
         aiAvatarUrl={p.getInterviewerAvatarUrl()}
       />
@@ -229,9 +244,11 @@ export const renderAiAnalysisStep = (p: Params) => {
   }
 
   if (p.currentStep === 'comparison') {
+    if (p.isFinalReportGenerating) {
+      return <FinalAnalysisLoadingPage />;
+    }
     return (
       <PostInterviewReportPage
-        summary={p.postInterviewSummary}
         originalResume={p.postInterviewOriginalResume}
         generatedResume={p.postInterviewGeneratedResume}
         annotations={p.postInterviewAnnotations}
@@ -242,7 +259,21 @@ export const renderAiAnalysisStep = (p: Params) => {
     );
   }
 
+  if (p.currentStep === 'interview_report') {
+    return (
+      <InterviewReportPage
+        summary={p.interviewReportSummary}
+        score={p.interviewReportScore}
+        advice={p.interviewReportAdvice}
+        onBack={p.handleStepBack}
+      />
+    );
+  }
+
   if (p.currentStep === 'final_report') {
+    if (p.isFinalReportGenerating) {
+      return <FinalAnalysisLoadingPage />;
+    }
     return (
       <FinalResumeReportPage
         score={p.finalReportScore}
@@ -251,6 +282,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         getScoreColor={p.getScoreColor}
         onBack={p.handleStepBack}
         onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
+        onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
       />
     );
   }

@@ -9,7 +9,6 @@ import {
   getInterviewQuestionLimit,
   getLegacyPlanStorageKey,
   getPlanStorageKey,
-  getWarmupQuestion,
   sanitizePlanQuestions,
 } from '../interview-plan-utils';
 
@@ -50,6 +49,7 @@ export const useInterviewPlanLoader = ({
     const interviewMode = getActiveInterviewMode();
     const interviewFocus = getActiveInterviewFocus();
     const questionLimit = getInterviewQuestionLimit();
+    const planGenerationLimit = interviewMode === 'simple' ? 2 : questionLimit;
     const minExpectedCount = interviewMode === 'simple' ? 3 : 4;
     const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, storageJdText, interviewFocus, currentUserId);
     const legacyStorageKey = getLegacyPlanStorageKey(resumeData?.id, makeJdKey, storageJdText, interviewFocus);
@@ -76,10 +76,17 @@ export const useInterviewPlanLoader = ({
           try { localStorage.removeItem(storageKey); } catch { }
           try { localStorage.removeItem(legacyStorageKey); } catch { }
         }
-        const q = composeInterviewPlan(
-          interviewType,
-          sanitizePlanQuestions(Array.isArray(parsed?.questions) ? parsed.questions : [], interviewType)
-        );
+          const q = composeInterviewPlan(
+            interviewType,
+            sanitizePlanQuestions(
+              Array.isArray(parsed?.questions) ? parsed.questions : [],
+              interviewType,
+              {
+                minCount: interviewMode === 'simple' ? 2 : 4,
+                maxCount: planGenerationLimit,
+              }
+            )
+          );
         if (q.length >= minExpectedCount && cachedSource === 'model') {
           lastLoadIdentityRef.current = loadIdentity;
           setInterviewPlan(q.slice(0, questionLimit));
@@ -104,16 +111,14 @@ export const useInterviewPlanLoader = ({
     const run = async () => {
       lastLoadIdentityRef.current = loadIdentity;
       try {
-        setInterviewPlan(prev => {
-          if (prev.length > 0) return prev;
-          return [getWarmupQuestion(interviewType)];
-        });
-
         const token = await getBackendAuthToken();
         if (!token) {
           const fallback = composeInterviewPlan(
             interviewType,
-            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
+              minCount: interviewMode === 'simple' ? 2 : 4,
+              maxCount: planGenerationLimit,
+            })
           ).slice(0, questionLimit);
           if (planLoaderMountedRef.current) setInterviewPlan(fallback);
           return;
@@ -132,17 +137,29 @@ export const useInterviewPlanLoader = ({
             chatHistory: [],
             interviewType,
             interviewMode,
-            questionLimit,
+            questionLimit: planGenerationLimit,
             interviewFocus,
           }),
         });
         const data = await resp.json().catch(() => ({} as any));
-        const questions = sanitizePlanQuestions(Array.isArray(data?.questions) ? data.questions : [], interviewType);
+        const questions = sanitizePlanQuestions(
+          Array.isArray(data?.questions) ? data.questions : [],
+          interviewType,
+          {
+            minCount: interviewMode === 'simple' ? 2 : 4,
+            maxCount: planGenerationLimit,
+          }
+        );
         const planSource = String(data?.planSource || '').trim().toLowerCase();
         const isModelPlan = planSource === 'model';
         const finalPlan = composeInterviewPlan(
           interviewType,
-          questions.length > 0 ? questions : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+          questions.length > 0
+            ? questions
+            : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
+              minCount: interviewMode === 'simple' ? 2 : 4,
+              maxCount: planGenerationLimit,
+            })
         ).slice(0, questionLimit);
         if (planLoaderMountedRef.current) {
           setInterviewPlan(finalPlan);
@@ -160,7 +177,10 @@ export const useInterviewPlanLoader = ({
         if (planLoaderMountedRef.current) {
           const fallback = composeInterviewPlan(
             interviewType,
-            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+            sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
+              minCount: interviewMode === 'simple' ? 2 : 4,
+              maxCount: planGenerationLimit,
+            })
           ).slice(0, questionLimit);
           setInterviewPlan(fallback);
         }

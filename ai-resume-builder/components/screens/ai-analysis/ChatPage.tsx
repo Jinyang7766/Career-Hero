@@ -16,12 +16,15 @@ export type ChatPageProps = {
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
 
   handleStepBack: () => void;
+  onInterruptThinking: () => void;
   onEndInterview: () => void;
+  onSkipQuestion: () => void;
   onRestartInterview: () => void;
 
   userAvatar: string;
   chatMessages: ChatMessage[];
   isSending: boolean;
+  hasPendingReply: boolean;
   messagesEndRef: React.RefObject<HTMLDivElement | null>;
   messagesContainerRef: React.RefObject<HTMLDivElement | null>;
   onMessagesScroll: () => void;
@@ -65,6 +68,7 @@ export type ChatPageProps = {
   interviewPlan: string[];
   interviewAnsweredCount: number;
   interviewTotalCount: number;
+  currentQuestionElapsedSec: number;
   interviewerTitle: string;
   aiAvatarUrl: string;
 };
@@ -101,11 +105,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
   ToastOverlay,
   WaveformVisualizer,
   handleStepBack,
+  onInterruptThinking,
   onEndInterview,
+  onSkipQuestion,
   onRestartInterview,
   userAvatar,
   chatMessages,
   isSending,
+  hasPendingReply,
   messagesEndRef,
   messagesContainerRef,
   onMessagesScroll,
@@ -141,6 +148,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   interviewPlan,
   interviewAnsweredCount,
   interviewTotalCount,
+  currentQuestionElapsedSec,
   interviewerTitle,
   aiAvatarUrl,
 }) => {
@@ -150,6 +158,12 @@ const ChatPage: React.FC<ChatPageProps> = ({
   const progressPercent = interviewTotalCount > 0
     ? Math.min(100, Math.round((interviewAnsweredCount / interviewTotalCount) * 100))
     : 0;
+  const formatElapsed = (sec: number) => {
+    const safe = Math.max(0, Number(sec) || 0);
+    const mm = Math.floor(safe / 60).toString().padStart(2, '0');
+    const ss = Math.floor(safe % 60).toString().padStart(2, '0');
+    return `${mm}:${ss}`;
+  };
 
   return (
     <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
@@ -180,7 +194,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         <div className="relative">
           <button
             type="button"
-            disabled={isRecording || isSending}
+            disabled={isRecording}
             onClick={() => setMenuOpen(!menuOpen)}
             className="size-9 flex items-center justify-center rounded-lg border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/10 disabled:opacity-50 transition-colors"
           >
@@ -193,6 +207,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 onClick={async () => {
                   setMenuOpen(false);
                   if (await confirmDialog('确定要重新开始吗？当前面试记录将被清空。')) {
+                    onInterruptThinking();
                     onRestartInterview();
                   }
                 }}
@@ -206,6 +221,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 onClick={async () => {
                   setMenuOpen(false);
                   if (await confirmDialog(isInterviewMode ? '确认结束面试并生成总结吗？' : '确认结束微访谈并生成最终诊断报告吗？')) {
+                    onInterruptThinking();
                     onEndInterview();
                   }
                 }}
@@ -229,11 +245,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         <div className="mx-4 my-2 p-3 bg-white/70 dark:bg-[#1c2936]/40 backdrop-blur-md rounded-2xl border border-slate-200/50 dark:border-white/5 shadow-sm">
           {interviewTotalCount > 0 ? (
             <>
-              <button
-                type="button"
-                onClick={() => setPlanExpanded((v) => !v)}
-                className="w-full text-left group"
-              >
+              <div className="w-full text-left group">
                 <div className="flex items-center justify-between mb-2 px-1">
                   <div className="flex items-center gap-2">
                     <div className="size-5 rounded-md bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
@@ -251,15 +263,40 @@ const ChatPage: React.FC<ChatPageProps> = ({
                         <p className="text-[11px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-wider">
                           面试进度
                         </p>
-                        <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
-                          {Math.min(interviewAnsweredCount + 1, interviewTotalCount)} / {interviewTotalCount}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500">
+                            {Math.min(interviewAnsweredCount + 1, interviewTotalCount)} / {interviewTotalCount}
+                          </span>
+                          <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                            本题用时 {formatElapsed(currentQuestionElapsedSec)}
+                          </span>
+                          <button
+                            type="button"
+                            disabled={isSending || isRecording}
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (await confirmDialog('确认跳过当前题目吗？将结束本题计时，并让 AI 给出参考回复后进入下一题。')) {
+                                onSkipQuestion();
+                              }
+                            }}
+                            className="px-2 py-0.5 rounded-md border border-primary/20 dark:border-primary/30 bg-primary/10 dark:bg-primary/20 text-[10px] font-bold text-primary dark:text-blue-400 hover:bg-primary/20 dark:hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          >
+                            跳过本题
+                          </button>
+                        </div>
                       </>
                     )}
                   </div>
-                  <span className={`material-symbols-outlined text-[20px] text-slate-400 dark:text-slate-500 transition-transform duration-300 ${planExpanded ? 'rotate-180' : ''}`}>
-                    keyboard_arrow_down
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setPlanExpanded((v) => !v)}
+                    className="size-6 flex items-center justify-center rounded-md text-slate-400 dark:text-slate-500 hover:bg-slate-100/70 dark:hover:bg-white/5 transition-colors"
+                    aria-label={planExpanded ? '收起题库' : '展开题库'}
+                  >
+                    <span className={`material-symbols-outlined text-[20px] transition-transform duration-300 ${planExpanded ? 'rotate-180' : ''}`}>
+                      keyboard_arrow_down
+                    </span>
+                  </button>
                 </div>
                 <div className="h-2 rounded-full bg-slate-100 dark:bg-white/5 overflow-hidden p-0.5 border border-slate-200/50 dark:border-white/5">
                   <div
@@ -267,7 +304,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                     style={{ width: `${progressPercent}%` }}
                   />
                 </div>
-              </button>
+              </div>
               {planExpanded && (
                 <div className="mt-3 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-black/20 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
                   <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1 customize-scrollbar">
@@ -510,7 +547,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
         ))}
 
-        {isSending && !chatMessages.some((m) => m.id.startsWith('ai-stream')) && (
+        {(isSending || hasPendingReply) && !chatMessages.some((m) => m.id.startsWith('ai-stream')) && (
           <ThinkingIndicator avatarUrl={isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR} />
         )}
 
@@ -613,7 +650,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                       handleSendMessage();
                     }
                   }}
-                  placeholder="输入您的问题..."
+                  placeholder="输入您的回答..."
                   disabled={isRecording}
                   className="flex-1 bg-slate-100 dark:bg-white/5 border-0 rounded-2xl px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 outline-none transition-all resize-none text-slate-900 dark:text-white disabled:opacity-60"
                   rows={1}

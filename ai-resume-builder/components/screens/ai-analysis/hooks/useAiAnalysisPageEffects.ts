@@ -4,7 +4,6 @@ import {
   getActiveInterviewFocus,
   getActiveInterviewMode,
   getActiveInterviewType,
-  getWarmupQuestion,
 } from '../interview-plan-utils';
 import type { AiAnalysisStep } from '../step-types';
 
@@ -85,13 +84,6 @@ export const useAiAnalysisPageEffects = ({
       planLoaderMountedRef.current = false;
     };
   }, [planLoaderMountedRef]);
-
-  useEffect(() => {
-    if (currentStep === 'chat' && interviewPlanLength === 0) {
-      const interviewType = getActiveInterviewType();
-      setInterviewPlan([getWarmupQuestion(interviewType)]);
-    }
-  }, [currentStep, interviewPlanLength, setInterviewPlan]);
 
   useEffect(() => {
     if (!isInterviewMode) return;

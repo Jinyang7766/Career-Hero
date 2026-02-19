@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   resumeData: any;
@@ -9,12 +9,13 @@ type Params = {
   setJdText: (v: string) => void;
   getAnalysisSession: (effectiveJdText: string) => any;
   makeJdKey: (text: string) => string;
-  hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string) => boolean;
-  restoreInterviewSession: (effectiveJdText: string, interviewType: string) => void;
+  hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
+  restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
   openChat: (source: 'internal' | 'preview') => void;
-  navigateToStep: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
+  isInterviewMode?: boolean;
 };
 
 export const useAnalysisSessionRecovery = ({
@@ -31,6 +32,7 @@ export const useAnalysisSessionRecovery = ({
   navigateToStep,
   loadLastAnalysis,
   recoveredSessionKeyRef,
+  isInterviewMode,
 }: Params) => {
   useEffect(() => {
     if (!resumeData) return;
@@ -39,9 +41,10 @@ export const useAnalysisSessionRecovery = ({
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
     const activeInterviewType = getActiveInterviewType();
+    const activeInterviewMode = getActiveInterviewMode();
 
     const jdKey = makeJdKey(effectiveJdText);
-    const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${currentStep}`;
+    const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${activeInterviewMode}:${currentStep}`;
     if (recoveredSessionKeyRef.current === marker) return;
 
     const session = getAnalysisSession(effectiveJdText) as any;
@@ -49,7 +52,7 @@ export const useAnalysisSessionRecovery = ({
 
     const status = String(session.state || '');
     const sessionStep = String(session.step || '').trim();
-    const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType);
+    const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType, activeInterviewMode);
 
     if (
       hasInterviewMessages &&
@@ -57,7 +60,7 @@ export const useAnalysisSessionRecovery = ({
       currentStep !== 'chat'
     ) {
       if (!jdText) setJdText(effectiveJdText);
-      restoreInterviewSession(effectiveJdText, activeInterviewType);
+      restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       openChat('internal');
       recoveredSessionKeyRef.current = marker;
       return;
@@ -66,7 +69,7 @@ export const useAnalysisSessionRecovery = ({
     if (sessionStep === 'chat' && currentStep !== 'chat') {
       if (!jdText) setJdText(effectiveJdText);
       if (hasInterviewMessages) {
-        restoreInterviewSession(effectiveJdText, activeInterviewType);
+        restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       }
       openChat('internal');
       recoveredSessionKeyRef.current = marker;
@@ -74,11 +77,11 @@ export const useAnalysisSessionRecovery = ({
     }
 
     if (
-      (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'micro_intro' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
+      (sessionStep === 'final_report' || sessionStep === 'interview_report' || sessionStep === 'comparison' || sessionStep === 'micro_intro' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
       currentStep !== sessionStep
     ) {
       const normalizedStep = sessionStep === 'micro_intro' ? 'report' : sessionStep;
-      navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'comparison' | 'final_report', true);
+      navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }
@@ -107,7 +110,7 @@ export const useAnalysisSessionRecovery = ({
       status === 'interview_done' &&
       (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
     ) {
-      navigateToStep('comparison', true);
+      navigateToStep(isInterviewMode ? 'interview_report' : 'comparison', true);
       recoveredSessionKeyRef.current = marker;
       return;
     }
@@ -125,5 +128,6 @@ export const useAnalysisSessionRecovery = ({
     setJdText,
     forcedResumeSelect,
     recoveredSessionKeyRef,
+    isInterviewMode,
   ]);
 };

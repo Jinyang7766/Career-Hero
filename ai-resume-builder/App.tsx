@@ -25,6 +25,7 @@ import MemberCenter from './components/screens/MemberCenter';
 import TermsOfService from './components/screens/TermsOfService';
 import PrivacyPolicy from './components/screens/PrivacyPolicy';
 import { deriveDiagnosisProgress } from './src/diagnosis-progress';
+import { makeJdKey, parseInterviewScopedKey } from './components/screens/ai-analysis/id-utils';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -396,6 +397,14 @@ function App() {
           const analysisBindings = rowData.analysisBindings || {};
           const analysisSessionByJd = rowData.analysisSessionByJd || {};
           const interviewSessions = rowData.interviewSessions || {};
+          const latestSession: any = Object.values(analysisSessionByJd || {}).reduce((acc: any, curr: any) => {
+            const accAt = Date.parse(String(acc?.updatedAt || ''));
+            const currAt = Date.parse(String(curr?.updatedAt || ''));
+            if (!Number.isFinite(accAt)) return curr;
+            if (!Number.isFinite(currAt)) return acc;
+            return currAt > accAt ? curr : acc;
+          }, null);
+          const latestAnalysisStep = String(latestSession?.step || '').trim().toLowerCase() || undefined;
           const reportReadyInSession = Object.values(analysisSessionByJd || {}).some((s: any) => String(s?.state || '') === 'report_ready');
           const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
           const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
@@ -405,8 +414,7 @@ function App() {
           const interviewInterrupted = Object.entries(analysisSessionByJd || {}).some(([jdKey, session]: [string, any]) => {
             const state = String(session?.state || '');
             if (state !== 'paused' && state !== 'interview_in_progress') return false;
-            const messages = interviewSessions?.[jdKey]?.messages;
-            return Array.isArray(messages) && messages.length > 0;
+            return true;
           });
           const interviewHistory = Object.entries(analysisSessionByJd || {})
             .filter(([_, session]: [string, any]) => {
@@ -430,20 +438,95 @@ function App() {
 
           // Determine specific interview stage status
           const interviewStageStatus: Array<'todo' | 'current' | 'done'> = ['todo', 'todo', 'todo'];
-          Object.entries(analysisSessionByJd || {}).forEach(([key, session]: [string, any]) => {
-            const state = String(session?.state || '');
+          const interviewStageStatusByMode: {
+            simple: Array<'todo' | 'current' | 'done'>;
+            comprehensive: Array<'todo' | 'current' | 'done'>;
+          } = {
+            simple: ['todo', 'todo', 'todo'],
+            comprehensive: ['todo', 'todo', 'todo'],
+          };
+          const applyStageStatus = (
+            target: Array<'todo' | 'current' | 'done'>,
+            idx: number,
+            state: string,
+          ) => {
+            if (idx < 0 || idx > 2) return;
+            if (state === 'interview_done') target[idx] = 'done';
+            else if ((state === 'paused' || state === 'interview_in_progress') && target[idx] !== 'done') {
+              target[idx] = 'current';
+            }
+          };
+          const inferTypeFromSessionKey = (key: string) => {
+            const parsed = parseInterviewScopedKey(String(key || ''));
+            if (parsed.interviewType === 'general' || parsed.interviewType === 'technical' || parsed.interviewType === 'hr') {
+              return parsed.interviewType;
+            }
+            return '';
+          };
+          const inferModeFromSessionKey = (key: string) => {
+            const parsed = parseInterviewScopedKey(String(key || ''));
+            return parsed.interviewMode === 'simple' ? 'simple' : (parsed.interviewMode === 'comprehensive' ? 'comprehensive' : '');
+          };
+          const getTypeIndex = (type: string) => {
+            if (type === 'general') return 0;
+            if (type === 'technical') return 1;
+            if (type === 'hr') return 2;
+            return -1;
+          };
+          let hasUnmappedInProgress = false;
+          let hasUnmappedDone = false;
+          Object.entries(analysisSessionByJd || {}).forEach(([key, sessionByJd]: [string, any]) => {
+            const state = String(sessionByJd?.state || '');
+            const stateType = String(sessionByJd?.interviewType || inferTypeFromSessionKey(key)).trim().toLowerCase();
+            const stateMode = String(sessionByJd?.interviewMode || inferModeFromSessionKey(key)).trim().toLowerCase();
+            const stateJdKey = String(sessionByJd?.jdKey || '').trim() || makeJdKey(String(sessionByJd?.jdText || '').trim() || '__no_jd__');
+            const matchedSessions = Object.entries(interviewSessions || {}).filter(([_, iv]: [string, any]) => {
+              const ivJdKey = makeJdKey(String(iv?.jdText || '').trim());
+              return ivJdKey === stateJdKey;
+            });
+            const directIdx = getTypeIndex(stateType);
+            if (directIdx !== -1) {
+              const directMode = stateMode === 'simple' ? 'simple' : (stateMode === 'comprehensive' ? 'comprehensive' : '');
+              applyStageStatus(interviewStageStatus, directIdx, state);
+              if (directMode) {
+                applyStageStatus(interviewStageStatusByMode[directMode], directIdx, state);
+              } else {
+                applyStageStatus(interviewStageStatusByMode.comprehensive, directIdx, state);
+              }
+              return;
+            }
+            if (matchedSessions.length > 0) {
+              matchedSessions.forEach(([sessionKey, iv]: [string, any]) => {
+                const interviewType = String(iv?.interviewType || inferTypeFromSessionKey(sessionKey)).trim().toLowerCase();
+                const idx = getTypeIndex(interviewType);
+                if (idx === -1) return;
+                const modeRaw = String(iv?.interviewMode || '').trim().toLowerCase();
+                const mode = modeRaw === 'simple' ? 'simple' : 'comprehensive';
+                applyStageStatus(interviewStageStatus, idx, state);
+                applyStageStatus(interviewStageStatusByMode[mode], idx, state);
+              });
+              return;
+            }
+
             let idx = -1;
             if (key.endsWith('__general')) idx = 0;
             else if (key.endsWith('__technical')) idx = 1;
             else if (key.endsWith('__hr')) idx = 2;
 
             if (idx !== -1) {
-              if (state === 'interview_done') interviewStageStatus[idx] = 'done';
-              else if ((state === 'paused' || state === 'interview_in_progress') && interviewStageStatus[idx] !== 'done') {
-                interviewStageStatus[idx] = 'current';
-              }
+              applyStageStatus(interviewStageStatus, idx, state);
+              applyStageStatus(interviewStageStatusByMode.comprehensive, idx, state);
+            } else {
+              if (state === 'interview_done') hasUnmappedDone = true;
+              else if (state === 'paused' || state === 'interview_in_progress') hasUnmappedInProgress = true;
             }
           });
+          if (hasUnmappedDone) interviewStageStatus[0] = 'done';
+          else if (hasUnmappedInProgress && interviewStageStatus[0] !== 'done') interviewStageStatus[0] = 'current';
+          if (hasUnmappedDone) interviewStageStatusByMode.comprehensive[0] = 'done';
+          else if (hasUnmappedInProgress && interviewStageStatusByMode.comprehensive[0] !== 'done') {
+            interviewStageStatusByMode.comprehensive[0] = 'current';
+          }
 
           return {
             id: resume.id,
@@ -452,10 +535,12 @@ function App() {
             score: resume.score,
             analysisScore,
             diagnosisProgress,
+            latestAnalysisStep,
             analyzed,
             interviewInterrupted,
             interviewHistory,
             interviewStageStatus,
+            interviewStageStatusByMode,
             hasDot: resume.has_dot,
             optimizationStatus: rowData.optimizationStatus || 'unoptimized',
             thumbnail: (
@@ -751,13 +836,35 @@ function App() {
 
   const ToastOverlay = () => {
     if (!toast) return null;
-    const cls = 'bg-red-500/85 backdrop-blur-xl text-white border-red-400/30';
+
+    const styles = {
+      success: {
+        bg: 'bg-emerald-500/90 dark:bg-emerald-600/90',
+        border: 'border-emerald-400/30',
+        shadow: 'shadow-emerald-500/20',
+        icon: 'check_circle'
+      },
+      error: {
+        bg: 'bg-rose-500/90 dark:bg-rose-600/90',
+        border: 'border-rose-400/30',
+        shadow: 'shadow-rose-500/20',
+        icon: 'error'
+      },
+      info: {
+        bg: 'bg-slate-800/90 dark:bg-slate-700/90',
+        border: 'border-slate-600/30',
+        shadow: 'shadow-slate-900/20',
+        icon: 'info'
+      }
+    };
+
+    const style = styles[toast.type] || styles.info;
 
     return (
       <div className="fixed inset-x-0 top-6 z-[9999] flex justify-center px-4 pointer-events-none">
-        <div className={`pointer-events-auto flex items-center gap-3 rounded-full shadow-2xl shadow-red-500/40 border ${cls} px-4 py-2.5 animate-in slide-in-from-top duration-300 max-w-sm`}>
-          <span className="material-symbols-outlined text-[18px] shrink-0 opacity-80">notifications</span>
-          <div className="text-[14px] font-bold whitespace-nowrap overflow-hidden text-ellipsis">{toast.msg}</div>
+        <div className={`pointer-events-auto flex items-center gap-3 rounded-2xl shadow-2xl backdrop-blur-xl border ${style.bg} ${style.border} ${style.shadow} px-5 py-3 animate-in slide-in-from-top-4 fade-in duration-300 max-w-[90%]`}>
+          <span className="material-symbols-outlined text-white text-[20px] shrink-0">{style.icon}</span>
+          <div className="text-[14px] font-bold text-white leading-tight">{toast.msg}</div>
         </div>
       </div>
     );
@@ -765,6 +872,8 @@ function App() {
 
   const ConfirmModal = () => {
     if (!confirmState) return null;
+    const isDelete = /(确定要(删除|解绑|退出|注销|移除|清理|重置|清除)|^(删除|解绑|注销|退出|移除|清空|重置|清除)\?)/.test(confirmState.message);
+
     const onCancel = () => {
       confirmState.resolve(false);
       setConfirmState(null);
@@ -775,30 +884,40 @@ function App() {
     };
 
     return (
-      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 animate-in fade-in duration-200">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
-        <div className="relative w-full max-w-[340px] bg-white dark:bg-[#1c2936] rounded-[24px] shadow-2xl overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-200">
-          <div className="p-8">
+      <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 sm:p-4">
+        <div
+          className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300"
+          onClick={onCancel}
+        />
+        <div className="relative w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-[28px] shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 fade-in duration-300">
+          <div className="p-8 pb-6">
             <div className="flex flex-col items-center text-center">
-              <div className="size-14 rounded-full bg-blue-50 dark:bg-primary/10 flex items-center justify-center mb-4">
-                <span className="material-symbols-outlined text-primary dark:text-blue-400 text-[32px]">help_outline</span>
+              <div className={`size-16 rounded-3xl ${isDelete ? 'bg-rose-50 dark:bg-rose-500/10' : 'bg-primary/5 dark:bg-primary/10'} flex items-center justify-center mb-6 rotate-3 transform transition-transform hover:rotate-0 duration-300`}>
+                <span className={`material-symbols-outlined ${isDelete ? 'text-rose-500' : 'text-primary'} text-[36px]`}>
+                  {isDelete ? 'delete_forever' : 'help'}
+                </span>
               </div>
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2 underline decoration-primary/20 underline-offset-4">提示</h3>
-              <p className="text-sm font-medium text-slate-600 dark:text-slate-400 leading-relaxed px-1">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">
+                {isDelete ? '确认操作？' : '提示'}
+              </h3>
+              <p className="text-[15px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed px-2">
                 {confirmState.message}
               </p>
             </div>
           </div>
-          <div className="flex border-t border-slate-100 dark:border-white/5">
+          <div className="p-6 pt-0 flex gap-3">
             <button
               onClick={onCancel}
-              className="flex-1 px-4 py-4 text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors border-r border-slate-100 dark:border-white/5"
+              className="flex-1 h-12 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
             >
               取消
             </button>
             <button
               onClick={onOk}
-              className="flex-1 px-4 py-4 text-sm font-bold text-primary hover:bg-blue-50 dark:hover:bg-primary/10 transition-colors"
+              className={`flex-1 h-12 rounded-2xl text-sm font-bold text-white shadow-lg active:scale-95 transition-all
+                ${isDelete
+                  ? 'bg-rose-500 hover:bg-rose-600 shadow-rose-500/25'
+                  : 'bg-primary hover:bg-blue-600 shadow-primary/25'}`}
             >
               确定
             </button>

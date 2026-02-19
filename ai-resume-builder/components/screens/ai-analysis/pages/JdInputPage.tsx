@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ResumeData, ResumeSummary } from '../../../../types';
-import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
+import { makeJdKey } from '../id-utils';
 import BackButton from '../../../shared/BackButton';
 import { useAppContext } from '../../../../src/app-context';
 
@@ -126,16 +126,51 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   const shouldShowContinueInterview = React.useMemo(() => {
     if (!isInterviewMode) return false;
     const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
-    if (!effectiveJdText) return false;
     const sessions = (resumeData as any)?.interviewSessions || {};
-    const typedKey = makeInterviewSessionKey(effectiveJdText, interviewType);
-    const legacyKey = makeJdKey(effectiveJdText);
-    const session = sessions[typedKey] || sessions[legacyKey];
-    const hasMessages = !!(session && Array.isArray(session.messages) && session.messages.length > 0);
-    if (!hasMessages) return false;
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
-    const analysisState = String(analysisSessionByJd[makeJdKey(effectiveJdText)]?.state || '').toLowerCase();
-    return analysisState === 'interview_in_progress' || analysisState === 'paused';
+    const normalizedMode = String(interviewMode || 'comprehensive').trim().toLowerCase();
+    const normalizedType = String(interviewType || 'general').trim().toLowerCase();
+    const effectiveJdKey = makeJdKey(effectiveJdText);
+
+    const hasInterruptedSessionForJdKey = (jdKey: string) => {
+      const matchedState = Object.values(analysisSessionByJd || {}).some((session: any) => {
+        if (!session) return false;
+        const state = String(session?.state || '').toLowerCase();
+        if (state !== 'interview_in_progress' && state !== 'paused') return false;
+        const stateJdKey = String(session?.jdKey || '').trim() || makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+        if (stateJdKey !== jdKey) return false;
+        const stateMode = String(session?.interviewMode || '').trim().toLowerCase();
+        const stateType = String(session?.interviewType || '').trim().toLowerCase();
+        const modeMatched = !stateMode || stateMode === normalizedMode;
+        const typeMatched = !stateType || stateType === normalizedType;
+        return modeMatched && typeMatched;
+      });
+      if (matchedState) return true;
+      // Legacy compatibility: fall back to chat session records.
+      return Object.values(sessions || {}).some((session: any) => {
+        if (!session) return false;
+        const sessionJdKey = makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+        if (sessionJdKey !== jdKey) return false;
+        const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
+        const sessionType = String(session?.interviewType || '').trim().toLowerCase();
+        const modeMatched = !sessionMode || sessionMode === normalizedMode;
+        const typeMatched = !sessionType || sessionType === normalizedType;
+        return modeMatched && typeMatched;
+      });
+    };
+    if (effectiveJdText) {
+      return hasInterruptedSessionForJdKey(effectiveJdKey);
+    }
+    return Object.values(analysisSessionByJd || {}).some((session: any) => {
+      if (!session) return false;
+      const state = String(session?.state || '').toLowerCase();
+      if (state !== 'interview_in_progress' && state !== 'paused') return false;
+      const stateMode = String(session?.interviewMode || '').trim().toLowerCase();
+      const stateType = String(session?.interviewType || '').trim().toLowerCase();
+      const modeMatched = !stateMode || stateMode === normalizedMode;
+      const typeMatched = !stateType || stateType === normalizedType;
+      return modeMatched && typeMatched;
+    });
   }, [interviewType, isInterviewMode, jdText, resumeData]);
 
   const persistInterviewSceneConfig = React.useCallback(() => {
@@ -289,8 +324,8 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                       key={mode.id}
                       onClick={() => setInterviewMode(mode.id as 'simple' | 'comprehensive')}
                       className={`flex flex-col items-start justify-center p-3 rounded-xl border transition-all ${interviewMode === mode.id
-                          ? 'bg-primary/10 border-primary text-primary'
-                          : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                        ? 'bg-primary/10 border-primary text-primary'
+                        : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
                         }`}
                       type="button"
                     >
@@ -386,31 +421,34 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
 
         {showJdEmptyModal && (
-          <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 backdrop-blur-sm px-6">
-            <div className="w-full max-w-sm rounded-[32px] bg-red-500/90 backdrop-blur-xl border border-red-400/30 shadow-2xl p-8 text-white animate-in zoom-in-95 duration-200">
-              <div className="flex flex-col items-center text-center gap-4">
-                <div className="size-16 rounded-full bg-white/20 flex items-center justify-center mb-2">
-                  <span className="material-symbols-outlined text-white text-[32px]">warning</span>
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+            <div className="w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-[28px] shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="p-8 pb-6">
+                <div className="flex flex-col items-center text-center">
+                  <div className="size-16 rounded-3xl bg-amber-50 dark:bg-amber-400/10 flex items-center justify-center mb-6 rotate-2 transform transition-transform hover:rotate-0 duration-300">
+                    <span className="material-symbols-outlined text-amber-500 text-[36px]">warning</span>
+                  </div>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">缺少职位描述</h3>
+                  <p className="text-[15px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed px-2">
+                    {isInterviewMode
+                      ? '您未填写职位描述，无法生成针对性的模拟面试题。是否坚持继续通用面试？'
+                      : '您未填写职位描述，无法进行岗位定向匹配。是否坚持继续通用诊断？'}
+                  </p>
                 </div>
-                <p className="text-base text-white/95 leading-relaxed font-bold px-2">
-                  {isInterviewMode ? '您未填写职位描述，无法生成针对性的模拟面试题。是否坚持继续通用面试？' : '您未填写职位描述，无法进行岗位定向匹配。是否坚持继续通用诊断？'}
-                </p>
               </div>
-              <div className="mt-8 flex flex-col gap-3">
+              <div className="p-6 pt-0 flex flex-col gap-3">
                 <button
                   onClick={() => {
                     setShowJdEmptyModal(false);
                     startAnalysis(isInterviewMode ? interviewType : undefined);
                   }}
-                  className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
-                  type="button"
+                  className="w-full h-12 rounded-2xl bg-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-500/25 hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center"
                 >
                   {isInterviewMode ? '坚持进入面试' : '坚持继续诊断'}
                 </button>
                 <button
                   onClick={() => setShowJdEmptyModal(false)}
-                  className="w-full rounded-2xl bg-black/20 text-white/90 py-3.5 font-bold hover:bg-black/30 active:scale-[0.98] transition-all border border-white/10"
-                  type="button"
+                  className="w-full h-12 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
                 >
                   返回填写职位描述
                 </button>

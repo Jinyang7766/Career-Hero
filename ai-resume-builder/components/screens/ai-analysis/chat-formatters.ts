@@ -1,4 +1,3 @@
-const INTERVIEW_ANSWER_LIMIT_SUFFIX = '请将回答控制在3分钟内';
 const SELF_INTRO_REMINDER = '自我介绍时间为1分钟';
 
 const normalizeMixedPunctuation = (input: string) => {
@@ -132,12 +131,9 @@ export const formatInterviewQuestion = (q: string) => {
     t.includes('自我介绍时间为1分钟');
 
   if (isSelf) {
-    t = t.replaceAll(INTERVIEW_ANSWER_LIMIT_SUFFIX, '').trim();
+    t = t.replaceAll('请将回答控制在3分钟内', '').trim();
     if (!hasSelf) t = `${t}\n${SELF_INTRO_REMINDER}`;
     return t.trim();
   }
-
-  const hasLimit = t.includes(INTERVIEW_ANSWER_LIMIT_SUFFIX);
-  if (!hasLimit) t = `${t}\n${INTERVIEW_ANSWER_LIMIT_SUFFIX}`;
   return t;
 };

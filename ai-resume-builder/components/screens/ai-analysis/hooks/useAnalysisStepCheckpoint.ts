@@ -29,7 +29,6 @@ export const useAnalysisStepCheckpoint = ({
   useEffect(() => {
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     if (!effectiveJdText) return;
-    if (resumeData?.optimizationStatus !== 'optimized') return;
     if (currentStep === 'resume_select') return;
 
     const map: Record<
@@ -44,6 +43,7 @@ export const useAnalysisStepCheckpoint = ({
       report: { state: 'report_ready', step: 'report' },
       micro_intro: { state: 'interview_in_progress', step: 'micro_intro' },
       chat: { state: 'interview_in_progress', step: 'chat' },
+      interview_report: { state: 'interview_done', step: 'interview_report' },
       comparison: { state: 'interview_done', step: 'comparison' },
       final_report: { state: 'interview_done', step: 'final_report' },
     };
@@ -62,7 +62,6 @@ export const useAnalysisStepCheckpoint = ({
     jdText,
     persistAnalysisSessionState,
     resumeData?.lastJdText,
-    resumeData?.optimizationStatus,
     resumeData?.targetCompany,
     score,
     targetCompany,

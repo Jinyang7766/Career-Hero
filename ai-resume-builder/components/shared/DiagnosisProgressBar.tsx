@@ -9,6 +9,7 @@ interface DiagnosisProgressBarProps {
 
 const DIAGNOSIS_STAGES = ['初步诊断', '微访谈', '最终报告'] as const;
 const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
+type StageStatus = 'todo' | 'current' | 'done';
 
 export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
     resume,
@@ -21,37 +22,26 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
     // Both modes use a 3-stage visual approach
     const stageLabels = isInterviewMode ? INTERVIEW_STAGES : DIAGNOSIS_STAGES;
 
-    // Determine status for each stage
-    const stageStatuses: Array<'todo' | 'current' | 'done'> = stageLabels.map((_, idx) => {
-        if (isInterviewMode) {
-            // For Interview Mode: Independent lighting
-            return resume.interviewStageStatus?.[idx] || 'todo';
-        } else {
-            // For Diagnosis Mode: Sequential lighting
-            let currentStageIndex = -1;
-            if (progress >= 95) currentStageIndex = 2;
-            else if (progress >= 80) currentStageIndex = 1;
-            else if (progress >= 15) currentStageIndex = 0;
-
-            if (idx < currentStageIndex) return 'done';
-            if (idx === currentStageIndex) return 'current';
-            return 'todo';
-        }
-    });
-
-    if (!resume.analyzed && !isInterviewMode) return null;
-
-    return (
+    const renderStatusRow = (
+        statuses: StageStatus[],
+        labels: readonly string[],
+        modeLabel?: string
+    ) => (
         <div className="w-full">
-            <div className="flex items-center justify-between mb-2 px-0.5">
+            <div className="flex items-center gap-2 mb-2 px-0.5">
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${isOnDark ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
                     {isInterviewMode ? '面试进程' : '诊断进度'}
                 </span>
+                {!!modeLabel && (
+                    <span className={`text-[10px] font-bold tracking-tight rounded-[4px] px-1.5 py-0.5 ${isOnDark ? 'bg-white/15 text-white/90' : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-300'}`}>
+                        {modeLabel}
+                    </span>
+                )}
             </div>
 
             <div className="flex items-center gap-1.5 h-1.5 px-0.5">
-                {stageLabels.map((_, idx) => {
-                    const status = stageStatuses[idx];
+                {labels.map((_, idx) => {
+                    const status = statuses[idx] || 'todo';
                     const isDone = status === 'done';
                     const isCurrent = status === 'current';
 
@@ -70,8 +60,8 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
             </div>
 
             <div className="flex items-center mt-3">
-                {stageLabels.map((label, idx) => {
-                    const status = stageStatuses[idx];
+                {labels.map((label, idx) => {
+                    const status = statuses[idx] || 'todo';
                     const isDone = status === 'done';
                     const isCurrent = status === 'current';
 
@@ -100,4 +90,47 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
             </div>
         </div>
     );
+
+    // Determine status for each stage
+    const stageStatuses: Array<'todo' | 'current' | 'done'> = stageLabels.map((_, idx) => {
+        if (isInterviewMode) {
+            // For Interview Mode: Independent lighting
+            return resume.interviewStageStatus?.[idx] || 'todo';
+        } else {
+            // For Diagnosis Mode: Sequential lighting
+            let currentStageIndex = -1;
+            if (progress >= 95) currentStageIndex = 2;
+            else if (progress >= 80) currentStageIndex = 1;
+            else if (progress >= 15) currentStageIndex = 0;
+
+            if (idx < currentStageIndex) return 'done';
+            if (idx === currentStageIndex) return 'current';
+            return 'todo';
+        }
+    });
+
+    if (!resume.analyzed && !isInterviewMode) return null;
+
+    if (isInterviewMode) {
+        const byMode = (resume as any)?.interviewStageStatusByMode as
+            | { simple?: StageStatus[]; comprehensive?: StageStatus[] }
+            | undefined;
+        const simple = Array.isArray(byMode?.simple) ? byMode!.simple! : [];
+        const comprehensive = Array.isArray(byMode?.comprehensive) ? byMode!.comprehensive! : [];
+        const hasSimple = simple.some((s) => s === 'current' || s === 'done');
+        const hasComprehensive = comprehensive.some((s) => s === 'current' || s === 'done');
+
+        if (hasSimple && hasComprehensive) {
+            return (
+                <div className="w-full space-y-3">
+                    {renderStatusRow(simple, INTERVIEW_STAGES, '简单')}
+                    {renderStatusRow(comprehensive, INTERVIEW_STAGES, '全面')}
+                </div>
+            );
+        }
+        if (hasSimple) return renderStatusRow(simple, INTERVIEW_STAGES, '简单');
+        if (hasComprehensive) return renderStatusRow(comprehensive, INTERVIEW_STAGES, '全面');
+    }
+
+    return renderStatusRow(stageStatuses, stageLabels);
 };

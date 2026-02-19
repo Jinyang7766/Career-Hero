@@ -25,10 +25,45 @@ export const normalizeInterviewType = (value: any) => {
   return 'general';
 };
 
-export const makeInterviewSessionKey = (jdText: string, interviewType: any) => {
-  const jdKey = makeJdKey(jdText);
+export const normalizeInterviewMode = (value: any) => {
+  const mode = String(value ?? '').trim().toLowerCase();
+  return mode === 'simple' ? 'simple' : 'comprehensive';
+};
+
+export const makeInterviewScopedKey = (
+  jdKey: string,
+  interviewType: any,
+  interviewMode?: any
+) => {
   const typeKey = normalizeInterviewType(interviewType);
+  const modeKey = String(interviewMode ?? '').trim().toLowerCase();
+  if (modeKey === 'simple' || modeKey === 'comprehensive') {
+    return `${jdKey}__${typeKey}__${modeKey}`;
+  }
   return `${jdKey}__${typeKey}`;
+};
+
+export const makeInterviewSessionKey = (
+  jdText: string,
+  interviewType: any,
+  interviewMode?: any
+) => {
+  const jdKey = makeJdKey(jdText);
+  return makeInterviewScopedKey(jdKey, interviewType, interviewMode);
+};
+
+export const parseInterviewScopedKey = (key: string) => {
+  const raw = String(key || '').trim();
+  const parts = raw.split('__').filter(Boolean);
+  const base = String(parts[0] || '').trim();
+  const type = normalizeInterviewType(parts[1] || '');
+  const modeRaw = String(parts[2] || '').trim().toLowerCase();
+  const mode = modeRaw === 'simple' || modeRaw === 'comprehensive' ? modeRaw : '';
+  return {
+    jdKey: base,
+    interviewType: type,
+    interviewMode: mode,
+  };
 };
 
 export const buildAnalysisReportId = (originalResumeId: any, jdText: string) => {

@@ -8,6 +8,7 @@ type Props = {
   advice: string[];
   onBack: () => void;
   onStartInterview: () => void;
+  onGoToComparison: () => void;
   getScoreColor: (s: number) => string;
 };
 
@@ -17,6 +18,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
   advice,
   onBack,
   onStartInterview,
+  onGoToComparison,
   getScoreColor,
 }) => {
   return (
@@ -68,13 +70,22 @@ const FinalResumeReportPage: React.FC<Props> = ({
           </p>
         </div>
 
-        <button
-          onClick={onStartInterview}
-          className="h-11 w-full rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
-          type="button"
-        >
-          去模拟面试
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={onGoToComparison}
+            className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
+            type="button"
+          >
+            简历批改
+          </button>
+          <button
+            onClick={onStartInterview}
+            className="h-11 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
+            type="button"
+          >
+            去模拟面试
+          </button>
+        </div>
 
         <AiDisclaimer className="pt-1" />
       </main>

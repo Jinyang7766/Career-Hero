@@ -166,6 +166,7 @@ export const useAiAnalysisPassiveFlows = ({
     navigateToStep: navigateToStep as any,
     loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
+    isInterviewMode,
   });
 
   useOptimizedResumeListSync({

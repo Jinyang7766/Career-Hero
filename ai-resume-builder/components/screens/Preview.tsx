@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
-import { supabase } from '../../src/supabase-client';
 import { DatabaseService } from '../../src/database-service';
 import { buildApiUrl } from '../../src/api-config';
+import { recordResumeExportHistory } from '../../src/export-history';
 import BottomNav from '../BottomNav';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
@@ -490,31 +490,11 @@ const Preview: React.FC<ScreenProps> = () => {
   const currentTemplateId = resumeData?.templateId || 'modern';
 
   const recordExportHistory = async (filename: string, size: number) => {
-    if (!resumeData?.id) return;
-
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (userError || !user) return;
-
-      const entry = {
-        filename: buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name),
-        size,
-        type: 'PDF' as const,
-        exportedAt: new Date().toISOString()
-      };
-      const currentHistory = resumeData.exportHistory || [];
-      const updatedResumeData: ResumeData = {
-        ...resumeData,
-        exportHistory: [entry, ...currentHistory].slice(0, 200)
-      };
-
-      await DatabaseService.updateResume(String(resumeData.id), {
-        resume_data: updatedResumeData,
-        updated_at: new Date().toISOString()
-      });
-    } catch (err) {
-      console.error('Failed to record export history:', err);
-    }
+    await recordResumeExportHistory(resumeData, {
+      filename: filename || buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name),
+      size,
+      type: 'PDF',
+    });
   };
 
   const handleExportPDF = async () => {

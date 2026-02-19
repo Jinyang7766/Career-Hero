@@ -1,7 +1,14 @@
 import { DatabaseService } from '../../../../src/database-service';
 import type { ResumeData } from '../../../../types';
 import type { ChatMessage } from '../types';
-import { makeInterviewSessionKey, makeJdKey, normalizeInterviewType } from '../id-utils';
+import {
+  makeInterviewScopedKey,
+  makeInterviewSessionKey,
+  makeJdKey,
+  normalizeInterviewMode,
+  normalizeInterviewType,
+  parseInterviewScopedKey
+} from '../id-utils';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type AnalysisSessionState =
@@ -16,6 +23,7 @@ type AnalysisSessionState =
 
 type Params = {
   currentUserId?: string;
+  isInterviewMode?: boolean;
   resumeData: ResumeData;
   setResumeData?: (v: ResumeData) => void;
   jdText: string;
@@ -28,6 +36,7 @@ type Params = {
 
 export const useInterviewSessionStore = ({
   currentUserId,
+  isInterviewMode = false,
   resumeData,
   setResumeData,
   jdText,
@@ -44,10 +53,7 @@ export const useInterviewSessionStore = ({
     return `${LAST_ANALYSIS_KEY}:${uid}`;
   };
   const getCurrentInterviewType = () => normalizeInterviewType(getActiveInterviewType());
-  const getCurrentInterviewMode = () => {
-    const mode = String(getActiveInterviewMode() || '').trim().toLowerCase();
-    return mode === 'simple' ? 'simple' : 'comprehensive';
-  };
+  const getCurrentInterviewMode = () => normalizeInterviewMode(getActiveInterviewMode());
 
   const isSessionModeMatched = (session: any, desiredMode: string) => {
     const current = String(desiredMode || '').trim().toLowerCase();
@@ -65,19 +71,52 @@ export const useInterviewSessionStore = ({
     overrideInterviewMode?: string
   ) => {
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-    const interviewMode = String(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive').trim().toLowerCase();
+    const interviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive');
+    const typedModeKey = makeInterviewSessionKey(sessionJdText, interviewType, interviewMode);
     const typedKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const legacyJdKey = makeJdKey(sessionJdText);
+    const typedModeSession = sessions?.[typedModeKey];
     const typedSession = sessions?.[typedKey];
     const legacySession = sessions?.[legacyJdKey];
+    const expectedChatMode = isInterviewMode ? 'interview' : 'micro';
+    const fallbackCandidates = Object.entries(sessions || {})
+      .map(([key, value]) => {
+        const parsed = parseInterviewScopedKey(String(key || ''));
+        const entryJdKey = String(parsed.jdKey || '').trim();
+        const data = value as any;
+        const dataJdKey =
+          String(data?.jdKey || '').trim() ||
+          makeJdKey(String(data?.jdText || '').trim());
+        const matchByKey = entryJdKey && entryJdKey === legacyJdKey;
+        const matchByData = dataJdKey && dataJdKey === legacyJdKey;
+        const matchByLegacyKey = String(key || '').trim() === legacyJdKey;
+        if (!(matchByKey || matchByData || matchByLegacyKey)) return null;
+        return data;
+      })
+      .filter(Boolean) as any[];
+    const modeMatchedFallback = fallbackCandidates.filter((session: any) => {
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      return !chatMode || chatMode === expectedChatMode;
+    });
+    const latestFallback = (modeMatchedFallback.length ? modeMatchedFallback : fallbackCandidates).reduce((acc: any, curr: any) => {
+      const accAt = Date.parse(String(acc?.updatedAt || ''));
+      const currAt = Date.parse(String(curr?.updatedAt || ''));
+      if (!Number.isFinite(accAt)) return curr;
+      if (!Number.isFinite(currAt)) return acc;
+      return currAt > accAt ? curr : acc;
+    }, null);
+    const typedModeMatched = typedModeSession
+      ? (isSessionModeMatched(typedModeSession, interviewMode) ? typedModeSession : typedModeSession)
+      : null;
     const typedMatched = isSessionModeMatched(typedSession, interviewMode) ? typedSession : null;
     const legacyMatched = isSessionModeMatched(legacySession, interviewMode) ? legacySession : null;
     return {
       interviewType,
       interviewMode,
+      typedModeKey,
       typedKey,
       legacyJdKey,
-      session: typedMatched || legacyMatched || null,
+      session: typedModeMatched || typedMatched || legacyMatched || latestFallback || null,
     };
   };
 
@@ -115,10 +154,32 @@ export const useInterviewSessionStore = ({
 
   const getAnalysisSession = (overrideJdText?: string) => {
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData?.lastJdText ?? '').trim();
-    if (!sessionJdText || !resumeData) return null;
-    const jdKey = makeJdKey(sessionJdText);
+    if (!resumeData) return null;
+    const interviewType = getCurrentInterviewType();
+    const interviewMode = getCurrentInterviewMode();
+    const jdKey = makeJdKey(sessionJdText || '__no_jd__');
     const byJd = (resumeData as any).analysisSessionByJd || {};
-    return byJd[jdKey] || null;
+    const scopedKey = makeInterviewScopedKey(jdKey, interviewType, interviewMode);
+    const typedKey = makeInterviewScopedKey(jdKey, interviewType);
+    if (byJd[scopedKey]) return byJd[scopedKey];
+    if (byJd[typedKey]) return byJd[typedKey];
+    if (byJd[jdKey]) return byJd[jdKey];
+    if (sessionJdText) return null;
+    const entries = Object.values(byJd || {}) as any[];
+    if (!entries.length) return null;
+    const filtered = entries.filter((item: any) => {
+      const itemType = normalizeInterviewType(item?.interviewType || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewType || '');
+      const itemMode = normalizeInterviewMode(item?.interviewMode || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewMode || '');
+      return itemType === interviewType && itemMode === interviewMode;
+    });
+    const source = filtered.length ? filtered : entries;
+    return source.reduce((acc: any, curr: any) => {
+      const accAt = Date.parse(String(acc?.updatedAt || ''));
+      const currAt = Date.parse(String(curr?.updatedAt || ''));
+      if (!Number.isFinite(accAt)) return curr;
+      if (!Number.isFinite(currAt)) return acc;
+      return currAt > accAt ? curr : acc;
+    }, null);
   };
 
   const persistAnalysisSessionState = async (
@@ -134,13 +195,15 @@ export const useInterviewSessionStore = ({
     }>
   ) => {
     if (!resumeData?.id) return;
-    if (resumeData.optimizationStatus !== 'optimized') return;
-    const sessionJdText = (patch?.jdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    if (!sessionJdText) return;
-
-    const jdKey = makeJdKey(sessionJdText);
+    const rawSessionJdText = (patch?.jdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
+    const sessionJdText = rawSessionJdText;
+    const jdKeyBase = sessionJdText || '__no_jd__';
+    const jdKey = makeJdKey(jdKeyBase);
+    const interviewType = getCurrentInterviewType();
+    const interviewMode = getCurrentInterviewMode();
+    const sessionKey = makeInterviewScopedKey(jdKey, interviewType, interviewMode);
     const byJd = (resumeData as any).analysisSessionByJd || {};
-    const prev = byJd[jdKey] || {};
+    const prev = byJd[sessionKey] || byJd[makeInterviewScopedKey(jdKey, interviewType)] || byJd[jdKey] || {};
     const now = new Date().toISOString();
     const force = !!patch?.force;
 
@@ -157,6 +220,9 @@ export const useInterviewSessionStore = ({
       ...prev,
       state,
       jdKey,
+      sessionKey,
+      interviewType,
+      interviewMode,
       jdText: sessionJdText,
       targetCompany: patch?.targetCompany ?? targetCompany ?? resumeData.targetCompany ?? '',
       score: (typeof patch?.score === 'number' ? patch.score : prev.score),
@@ -170,7 +236,7 @@ export const useInterviewSessionStore = ({
       ...resumeData,
       analysisSessionByJd: {
         ...byJd,
-        [jdKey]: nextSession,
+        [sessionKey]: nextSession,
       },
       lastJdText: sessionJdText || resumeData.lastJdText || '',
       targetCompany: targetCompany || resumeData.targetCompany || '',
@@ -181,7 +247,7 @@ export const useInterviewSessionStore = ({
     }
 
     const step = String(patch?.step || nextSession.step || '').trim().toLowerCase();
-    const isInterviewFlowStep = step === 'chat' || step === 'comparison';
+    const isInterviewFlowStep = step === 'chat' || step === 'interview_report' || step === 'comparison';
     const isInterviewFlowState = state === 'interview_in_progress' || state === 'interview_done';
     const touchUpdatedAt = !(isInterviewFlowStep || isInterviewFlowState);
     await DatabaseService.updateResume(
@@ -222,14 +288,14 @@ export const useInterviewSessionStore = ({
   const persistInterviewSession = async (
     messages: ChatMessage[],
     overrideJdText?: string,
-    overrideInterviewType?: string
+    overrideInterviewType?: string,
+    overrideInterviewMode?: string
   ) => {
     if (!resumeData?.id) return;
-    if (resumeData.optimizationStatus !== 'optimized') return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-    const interviewMode = String(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive').trim().toLowerCase();
-    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
+    const interviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive');
+    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType, interviewMode);
     const currentSessions = resumeData.interviewSessions || {};
     const updatedSessions = {
       ...currentSessions,
@@ -237,6 +303,7 @@ export const useInterviewSessionStore = ({
         jdText: sessionJdText,
         interviewType,
         interviewMode,
+        chatMode: isInterviewMode ? 'interview' : 'micro',
         messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
         updatedAt: new Date().toISOString(),
       },
@@ -273,13 +340,17 @@ export const useInterviewSessionStore = ({
     if (!resumeData?.id) return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
+    const interviewMode = normalizeInterviewMode(_overrideInterviewMode || getCurrentInterviewMode());
+    const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType, interviewMode);
+    const typedLegacyKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const legacyJdKey = makeJdKey(sessionJdText);
 
     const currentSessions = resumeData.interviewSessions || {};
     const updatedSessions = { ...currentSessions };
     delete updatedSessions[sessionKey];
-    delete updatedSessions[legacyJdKey];
+    delete updatedSessions[typedLegacyKey];
+    // Keep full JD legacy key cleanup for old data only.
+    if (updatedSessions[legacyJdKey]) delete updatedSessions[legacyJdKey];
 
     const updatedResumeData = {
       ...resumeData,

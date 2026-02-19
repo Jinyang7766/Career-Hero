@@ -186,7 +186,7 @@ export interface ResumeData {
   exportHistory?: {
     filename: string;
     size: number;
-    type: 'PDF';
+    type: 'PDF' | 'IMAGE';
     exportedAt: string;
   }[];
 }
@@ -198,6 +198,7 @@ export interface ResumeSummary {
   score?: number;
   analysisScore?: number;
   diagnosisProgress?: number;
+  latestAnalysisStep?: string;
   analyzed?: boolean;
   interviewInterrupted?: boolean;
   interviewHistory?: Array<{
@@ -207,6 +208,10 @@ export interface ResumeSummary {
     updatedAt: string;
   }>;
   interviewStageStatus?: Array<'todo' | 'current' | 'done'>;
+  interviewStageStatusByMode?: {
+    simple: Array<'todo' | 'current' | 'done'>;
+    comprehensive: Array<'todo' | 'current' | 'done'>;
+  };
   hasDot?: boolean;
   optimizationStatus?: 'optimized' | 'unoptimized';
   thumbnail: any;

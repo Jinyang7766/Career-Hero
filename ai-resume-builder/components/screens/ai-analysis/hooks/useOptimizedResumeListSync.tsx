@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import React from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { deriveDiagnosisProgress } from '../../../../src/diagnosis-progress';
+import { makeJdKey, parseInterviewScopedKey } from '../id-utils';
 
 type Params = {
   optimizedResumeId: string | number | null;
@@ -33,15 +34,15 @@ export const useOptimizedResumeListSync = ({
   };
 
   useEffect(() => {
-    const optimizedId = String(optimizedResumeId || '').trim();
-    if (!optimizedId) return;
+    const targetId = String(optimizedResumeId || (resumeData as any)?.id || '').trim();
+    if (!targetId) return;
 
     const localResumeData: any = resumeData || {};
-    const isLocalOptimizedResume = String(localResumeData?.id || '') === optimizedId;
+    const isLocalOptimizedResume = String(localResumeData?.id || '') === targetId;
     const localSnapshot = isLocalOptimizedResume ? (localResumeData.analysisSnapshot || null) : null;
     const localSessions = isLocalOptimizedResume ? (localResumeData.analysisSessionByJd || {}) : {};
     const localDigest = [
-      optimizedId,
+      targetId,
       String(localSnapshot?.updatedAt || ''),
       String(localSnapshot?.score ?? ''),
       String(Object.keys(localSessions || {}).length),
@@ -66,7 +67,7 @@ export const useOptimizedResumeListSync = ({
         };
         rowData = localResumeData;
       } else {
-        const row = await DatabaseService.getResume(optimizedId);
+        const row = await DatabaseService.getResume(targetId);
         if (cancelled || !row.success || !row.data) return;
         resumeRow = row.data;
         rowData = resumeRow.resume_data || {};
@@ -75,6 +76,14 @@ export const useOptimizedResumeListSync = ({
       const analysisSnapshot = rowData.analysisSnapshot || null;
       const analysisBindings = rowData.analysisBindings || {};
       const analysisSessionByJd = rowData.analysisSessionByJd || {};
+      const latestSession = Object.values(analysisSessionByJd || {}).reduce((acc: any, curr: any) => {
+        const accAt = Date.parse(String(acc?.updatedAt || ''));
+        const currAt = Date.parse(String(curr?.updatedAt || ''));
+        if (!Number.isFinite(accAt)) return curr;
+        if (!Number.isFinite(currAt)) return acc;
+        return currAt > accAt ? curr : acc;
+      }, null);
+      const latestAnalysisStep = String((latestSession as any)?.step || '').trim().toLowerCase() || undefined;
       const interviewSessions = rowData.interviewSessions || {};
       const reportReadyInSession = Object.values(analysisSessionByJd || {}).some(
         (s: any) => String(s?.state || '') === 'report_ready'
@@ -93,8 +102,7 @@ export const useOptimizedResumeListSync = ({
       const interviewInterrupted = Object.entries(analysisSessionByJd || {}).some(([jdKey, session]: [string, any]) => {
         const state = String(session?.state || '');
         if (state !== 'paused' && state !== 'interview_in_progress') return false;
-        const messages = interviewSessions?.[jdKey]?.messages;
-        return Array.isArray(messages) && messages.length > 0;
+        return true;
       });
 
       const interviewHistory = Object.entries(analysisSessionByJd || {})
@@ -118,20 +126,94 @@ export const useOptimizedResumeListSync = ({
         .sort((a: any, b: any) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
       const interviewStageStatus: Array<'todo' | 'current' | 'done'> = ['todo', 'todo', 'todo'];
-      Object.entries(analysisSessionByJd || {}).forEach(([key, session]: [string, any]) => {
-        const state = String(session?.state || '');
+      const interviewStageStatusByMode: {
+        simple: Array<'todo' | 'current' | 'done'>;
+        comprehensive: Array<'todo' | 'current' | 'done'>;
+      } = {
+        simple: ['todo', 'todo', 'todo'],
+        comprehensive: ['todo', 'todo', 'todo'],
+      };
+      const applyStageStatus = (
+        target: Array<'todo' | 'current' | 'done'>,
+        idx: number,
+        state: string
+      ) => {
+        if (idx < 0 || idx > 2) return;
+        if (state === 'interview_done') target[idx] = 'done';
+        else if ((state === 'paused' || state === 'interview_in_progress') && target[idx] !== 'done') {
+          target[idx] = 'current';
+        }
+      };
+      const inferTypeFromSessionKey = (key: string) => {
+        const parsed = parseInterviewScopedKey(String(key || ''));
+        if (parsed.interviewType === 'general' || parsed.interviewType === 'technical' || parsed.interviewType === 'hr') {
+          return parsed.interviewType;
+        }
+        return '';
+      };
+      const inferModeFromSessionKey = (key: string) => {
+        const parsed = parseInterviewScopedKey(String(key || ''));
+        return parsed.interviewMode === 'simple' ? 'simple' : (parsed.interviewMode === 'comprehensive' ? 'comprehensive' : '');
+      };
+      const getTypeIndex = (type: string) => {
+        if (type === 'general') return 0;
+        if (type === 'technical') return 1;
+        if (type === 'hr') return 2;
+        return -1;
+      };
+      let hasUnmappedInProgress = false;
+      let hasUnmappedDone = false;
+      Object.entries(analysisSessionByJd || {}).forEach(([key, sessionByJd]: [string, any]) => {
+          const state = String(sessionByJd?.state || '');
+          const stateType = String(sessionByJd?.interviewType || inferTypeFromSessionKey(key)).trim().toLowerCase();
+          const stateMode = String(sessionByJd?.interviewMode || inferModeFromSessionKey(key)).trim().toLowerCase();
+          const stateJdKey = String(sessionByJd?.jdKey || '').trim() || makeJdKey(String(sessionByJd?.jdText || '').trim() || '__no_jd__');
+          const matchedSessions = Object.entries(interviewSessions || {}).filter(([_, iv]: [string, any]) => {
+            const ivJdKey = makeJdKey(String(iv?.jdText || '').trim());
+            return ivJdKey === stateJdKey;
+          });
+          const directIdx = getTypeIndex(stateType);
+          if (directIdx !== -1) {
+            const directMode = stateMode === 'simple' ? 'simple' : (stateMode === 'comprehensive' ? 'comprehensive' : '');
+            applyStageStatus(interviewStageStatus, directIdx, state);
+            if (directMode) {
+              applyStageStatus(interviewStageStatusByMode[directMode], directIdx, state);
+            } else {
+              applyStageStatus(interviewStageStatusByMode.comprehensive, directIdx, state);
+            }
+            return;
+          }
+          if (matchedSessions.length > 0) {
+            matchedSessions.forEach(([sessionKey, iv]: [string, any]) => {
+              const interviewType = String(iv?.interviewType || inferTypeFromSessionKey(sessionKey)).trim().toLowerCase();
+            const idx = getTypeIndex(interviewType);
+            if (idx === -1) return;
+            const modeRaw = String(iv?.interviewMode || '').trim().toLowerCase();
+            const mode = modeRaw === 'simple' ? 'simple' : 'comprehensive';
+            applyStageStatus(interviewStageStatus, idx, state);
+            applyStageStatus(interviewStageStatusByMode[mode], idx, state);
+          });
+            return;
+          }
         let idx = -1;
         if (key.endsWith('__general')) idx = 0;
         else if (key.endsWith('__technical')) idx = 1;
         else if (key.endsWith('__hr')) idx = 2;
 
         if (idx !== -1) {
-          if (state === 'interview_done') interviewStageStatus[idx] = 'done';
-          else if ((state === 'paused' || state === 'interview_in_progress') && interviewStageStatus[idx] !== 'done') {
-            interviewStageStatus[idx] = 'current';
-          }
+          applyStageStatus(interviewStageStatus, idx, state);
+          applyStageStatus(interviewStageStatusByMode.comprehensive, idx, state);
+        } else {
+          if (state === 'interview_done') hasUnmappedDone = true;
+          else if (state === 'paused' || state === 'interview_in_progress') hasUnmappedInProgress = true;
         }
       });
+      if (hasUnmappedDone) interviewStageStatus[0] = 'done';
+      else if (hasUnmappedInProgress && interviewStageStatus[0] !== 'done') interviewStageStatus[0] = 'current';
+      if (hasUnmappedDone) interviewStageStatusByMode.comprehensive[0] = 'done';
+      else if (hasUnmappedInProgress && interviewStageStatusByMode.comprehensive[0] !== 'done') {
+        interviewStageStatusByMode.comprehensive[0] = 'current';
+      }
 
       const summaryItem: any = {
         id: resumeRow.id,
@@ -140,10 +222,12 @@ export const useOptimizedResumeListSync = ({
         score: resumeRow.score,
         analysisScore,
         diagnosisProgress,
+        latestAnalysisStep,
         analyzed,
         interviewInterrupted,
         interviewHistory,
         interviewStageStatus,
+        interviewStageStatusByMode,
         hasDot: resumeRow.has_dot,
         optimizationStatus: isActuallyOptimized ? 'optimized' : (statusRaw || 'unoptimized'),
         thumbnail: (

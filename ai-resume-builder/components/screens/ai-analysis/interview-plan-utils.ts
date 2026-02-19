@@ -156,10 +156,15 @@ export const composeInterviewPlan = (interviewType: string, baseQuestions: strin
   return [warmup, ...rest];
 };
 
-export const sanitizePlanQuestions = (items: any[], interviewType: string): string[] => {
+export const sanitizePlanQuestions = (
+  items: any[],
+  interviewType: string,
+  options?: { minCount?: number; maxCount?: number }
+): string[] => {
   const selfIntroRe = /(自我介绍|介绍一下你自己|简单介绍一下自己)/;
-  const minCount = 4;
-  const maxCount = 12;
+  const maxCount = Math.max(1, Math.min(12, Number(options?.maxCount) || 12));
+  const desiredMin = Number(options?.minCount);
+  const minCount = Math.max(1, Math.min(maxCount, Number.isFinite(desiredMin) ? desiredMin : 4));
   const unique: string[] = [];
   for (const it of (items || [])) {
     const q = String(it || '').trim();

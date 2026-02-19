@@ -11,9 +11,18 @@ interface DashboardProgressModuleProps {
 const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resume, onContinueDiagnosis, onContinueInterview }) => {
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const hasDiagnosisProgress = diagnosisProgress >= 15;
-    const hasInterviewProgress = Array.isArray((resume as any)?.interviewStageStatus)
+    const byMode = (resume as any)?.interviewStageStatusByMode;
+    const hasInterviewProgressByMode = !!(
+        byMode &&
+        (
+            (Array.isArray(byMode.simple) && byMode.simple.some((s: any) => s === 'current' || s === 'done')) ||
+            (Array.isArray(byMode.comprehensive) && byMode.comprehensive.some((s: any) => s === 'current' || s === 'done'))
+        )
+    );
+    const hasInterviewProgressLegacy = Array.isArray((resume as any)?.interviewStageStatus)
         ? (resume as any).interviewStageStatus.some((s: any) => s === 'current' || s === 'done')
         : false;
+    const hasInterviewProgress = hasInterviewProgressByMode || hasInterviewProgressLegacy;
     const hasAnyProgress = hasDiagnosisProgress || hasInterviewProgress;
     const diagnosisActionLabel = !hasAnyProgress
         ? '去诊断'
@@ -54,13 +63,6 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
                         <h3 className="text-xl font-black text-white tracking-tight leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{resume.title}</h3>
                     </div>
 
-                    {/* Score Badge */}
-                    {score > 0 && (
-                        <div className="shrink-0 flex flex-col items-center justify-center size-14 rounded-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-[inset_0_0_12px_rgba(255,255,255,0.1)]">
-                            <span className="text-[10px] font-black text-white/40 uppercase tracking-widest mb-0.5">SCORE</span>
-                            <span className="text-2xl font-black text-white leading-none drop-shadow-sm">{score}</span>
-                        </div>
-                    )}
                 </div>
 
                 {/* Progress Bar Container */}

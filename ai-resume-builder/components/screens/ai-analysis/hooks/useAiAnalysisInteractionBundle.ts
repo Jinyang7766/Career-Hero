@@ -83,6 +83,11 @@ export const useAiAnalysisInteractionBundle = ({
   const endInterviewFromChat = () => {
     void handleSendMessage(getEndChatCommand(isInterviewMode), null);
   };
+  const skipInterviewQuestionFromChat = () => {
+    void handleSendMessage('我选择跳过本题，请给出该题参考回复并进入下一题。', null, {
+      skipCurrentQuestion: true,
+    });
+  };
 
   const interviewAnsweredCount = countInterviewAnsweredMessages(chatMessages as any);
 
@@ -95,6 +100,7 @@ export const useAiAnalysisInteractionBundle = ({
     handleRestartInterview,
     handleStartInterviewFromFinalReport,
     endInterviewFromChat,
+    skipInterviewQuestionFromChat,
     interviewAnsweredCount,
   };
 };

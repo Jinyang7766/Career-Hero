@@ -138,7 +138,12 @@ export const useAiExternalEntries = ({
       localStorage.getItem('ai_result_step') ||
       localStorage.getItem('ai_report_step') ||
       'report';
-    const targetStep = targetStepRaw === 'comparison' ? 'comparison' : 'report';
+    const targetStep = (
+      ['jd_input', 'analyzing', 'report', 'micro_intro', 'chat', 'interview_report', 'comparison', 'final_report']
+        .includes(String(targetStepRaw || '').trim().toLowerCase())
+        ? String(targetStepRaw || '').trim().toLowerCase()
+        : 'report'
+    );
     if (!shouldOpenReport || !targetId) return;
 
     localStorage.removeItem('ai_result_open');
@@ -151,8 +156,11 @@ export const useAiExternalEntries = ({
     localStorage.removeItem(navOwnerKey);
     localStorage.setItem('ai_analysis_step', targetStep);
     setStepHistory([]);
-    setForceReportEntry(true);
-    setCurrentStep(targetStep);
-    void handleResumeSelect(targetId, true);
+    setForceReportEntry(targetStep === 'report' || targetStep === 'interview_report' || targetStep === 'comparison' || targetStep === 'final_report');
+    (async () => {
+      const preferReport = targetStep === 'report' || targetStep === 'interview_report' || targetStep === 'comparison' || targetStep === 'final_report';
+      await handleResumeSelect(targetId, preferReport);
+      setCurrentStep(targetStep);
+    })();
   }, [currentUserId]);
 };

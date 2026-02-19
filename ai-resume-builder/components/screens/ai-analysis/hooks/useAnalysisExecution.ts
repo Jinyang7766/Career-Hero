@@ -6,8 +6,9 @@ import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
 import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
-import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
+import { makeJdKey } from '../id-utils';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { confirmDialog } from '../../../../src/ui/dialogs';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
@@ -195,24 +196,51 @@ export const useAnalysisExecution = ({
     const normalizedInterviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase();
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     const interviewSessions = (resumeData as any)?.interviewSessions || {};
-    const typedKey = makeInterviewSessionKey(effectiveJdText, normalizedInterviewType);
-    const legacyKey = makeJdKey(effectiveJdText);
-    const resumeSession = interviewSessions[typedKey] || interviewSessions[legacyKey];
-    const resumeSessionMode = String(resumeSession?.interviewMode || '').trim().toLowerCase();
-    const modeMatched = !!resumeSession && !!resumeSessionMode && resumeSessionMode === normalizedInterviewMode;
-    const hasInterviewMessages = !!(
-      resumeSession &&
-      modeMatched &&
-      Array.isArray(resumeSession.messages) &&
-      resumeSession.messages.length > 0
-    );
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
-    const analysisState = String(analysisSessionByJd[makeJdKey(effectiveJdText)]?.state || '').toLowerCase();
+    const isSessionModeMatchedForQuota = (session: any) => {
+      const mode = String(session?.interviewMode || '').trim().toLowerCase();
+      // Legacy session without mode marker: treat as matched for quota protection.
+      if (!mode) return true;
+      return mode === normalizedInterviewMode;
+    };
+    const isSessionTypeMatchedForQuota = (session: any) => {
+      const sessionType = String(session?.interviewType || '').trim().toLowerCase();
+      if (!sessionType) return true;
+      return sessionType === normalizedInterviewType;
+    };
+    const hasInterruptedSessionForJdKey = (jdKey: string) => {
+      const matchingStates = Object.values(analysisSessionByJd || {}).filter((session: any) => {
+        if (!session) return false;
+        const state = String(session?.state || '').toLowerCase();
+        if (state !== 'paused' && state !== 'interview_in_progress') return false;
+        const stateJdKey = String(session?.jdKey || '').trim() || makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+        if (stateJdKey !== jdKey) return false;
+        if (!isSessionModeMatchedForQuota(session)) return false;
+        if (!isSessionTypeMatchedForQuota(session)) return false;
+        return true;
+      });
+      return matchingStates.length > 0;
+    };
+    const effectiveJdKey = makeJdKey(effectiveJdText);
+    const hasInterruptedOnEffectiveJd = !!effectiveJdText && hasInterruptedSessionForJdKey(effectiveJdKey);
+    const hasAnyInterruptedInterview = Object.values(analysisSessionByJd || {}).some((session: any) => {
+      if (!session) return false;
+      const state = String(session?.state || '').toLowerCase();
+      if (state !== 'paused' && state !== 'interview_in_progress') return false;
+      if (!isSessionModeMatchedForQuota(session)) return false;
+      if (!isSessionTypeMatchedForQuota(session)) return false;
+      return true;
+    });
     const isContinuingInterview = Boolean(
       isInterviewMode &&
-      hasInterviewMessages &&
-      (analysisState === 'interview_in_progress' || analysisState === 'paused')
+      (hasInterruptedOnEffectiveJd || hasAnyInterruptedInterview)
     );
+    if (isInterviewMode && !isContinuingInterview) {
+      const confirmed = await confirmDialog(
+        '开始面试前提醒：请预留一段完整时间参与本次面试，尽量不要中途退出或切换页面。确认现在进入面试吗？'
+      );
+      if (!confirmed) return;
+    }
 
     if (consumeUsageQuota && !(isInterviewMode && isContinuingInterview)) {
       const kind: 'analysis' | 'interview' = isInterviewMode ? 'interview' : 'analysis';
@@ -633,12 +661,24 @@ export const useAnalysisExecution = ({
   ]);
 
   const handleStartAnalysisClick = useCallback((interviewType?: string) => {
-    if (!jdText.trim()) {
+    const hasJd = !!jdText.trim();
+    if (!hasJd) {
+      if (isInterviewMode) {
+        const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+        const hasInterruptedInterview = Object.values(analysisSessionByJd || {}).some((session: any) => {
+          const state = String(session?.state || '').toLowerCase();
+          return state === 'interview_in_progress' || state === 'paused';
+        });
+        if (hasInterruptedInterview) {
+          void startAnalysis(interviewType);
+          return;
+        }
+      }
       setShowJdEmptyModal(true);
       return;
     }
     void startAnalysis(interviewType);
-  }, [jdText, setShowJdEmptyModal, startAnalysis]);
+  }, [jdText, isInterviewMode, resumeData, setShowJdEmptyModal, startAnalysis]);
 
   return {
     cancelInFlightAnalysis,

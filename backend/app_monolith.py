@@ -985,6 +985,7 @@ def analyze_resume(current_user_id):
                 'calculate_resume_score': calculate_resume_score,
                 'generate_enhanced_suggestions': generate_enhanced_suggestions,
                 'generate_suggestions': generate_suggestions,
+                'generate_optimized_resume': generate_optimized_resume,
             },
         )
         return jsonify(body), status
@@ -1164,4 +1165,3 @@ def generate_resume(current_user_id):
 if __name__ == '__main__':
     # 使用配置的端口
     app.run(host='0.0.0.0', port=PORT)
-

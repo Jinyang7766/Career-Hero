@@ -24,6 +24,7 @@ type Params = {
   finalReportScore?: number;
   finalReportSummary?: string;
   finalReportAdvice?: string[];
+  finalAnalysisReady?: boolean;
 };
 
 export const usePostInterviewFinalize = ({
@@ -45,14 +46,20 @@ export const usePostInterviewFinalize = ({
   finalReportScore,
   finalReportSummary,
   finalReportAdvice,
+  finalAnalysisReady,
 }: Params) => {
-  const handleCompleteAndSavePostInterview = useCallback(async () => {
+  const handleCompleteAndSavePostInterview = useCallback(async (editedResume?: ResumeData | null) => {
     if (!currentUserId) {
       showToast('登录已过期，请重新登录', 'error');
       return;
     }
-    if (!generatedResume) {
+    const resumeToSave = (editedResume || generatedResume) as ResumeData | null;
+    if (!resumeToSave) {
       showToast('未生成可保存的新简历', 'error');
+      return;
+    }
+    if (!finalAnalysisReady) {
+      showToast('最终报告正在生成，请稍后再试', 'info');
       return;
     }
 
@@ -71,7 +78,7 @@ export const usePostInterviewFinalize = ({
     const newTitle = buildResumeTitle(baseTitle, resumeData as any, effectiveJdText, true, targetCompany);
 
     const payload: any = {
-      ...(generatedResume as any),
+      ...(resumeToSave as any),
       optimizationStatus: 'optimized',
       optimizedFromId: sourceId || undefined,
       optimizationJdKey,
@@ -131,6 +138,7 @@ export const usePostInterviewFinalize = ({
     finalReportScore,
     finalReportSummary,
     finalReportAdvice,
+    finalAnalysisReady,
   ]);
 
   return { handleCompleteAndSavePostInterview };

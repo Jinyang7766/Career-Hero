@@ -14,6 +14,7 @@ const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: 
   if (!field) return field;
   const key = field.trim();
   if (!key) return field;
+  const lowerKey = key.toLowerCase();
   if (section === 'personalInfo') {
     if (['jobTitle', 'job_title', 'position', 'targetTitle', 'title'].includes(key)) {
       return 'title';
@@ -27,13 +28,35 @@ const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: 
     if (['company', 'employer', 'organization', 'org', 'title'].includes(key)) {
       return 'company';
     }
-    return key;
+    // Most LLM suggestion fields for experiences should end up in description text.
+    if (
+      [
+        'description', 'content', 'responsibility', 'responsibilities', 'achievement', 'achievements',
+        'result', 'results', 'impact', 'highlights', 'detail', 'details', 'bullet', 'bullets',
+        'task', 'tasks', 'action', 'actions', 'summary'
+      ].includes(lowerKey)
+    ) {
+      return 'description';
+    }
+    if (['date', 'startDate', 'endDate'].includes(key)) return key;
+    // Unknown workExp fields are rendered nowhere in UI; map to description to avoid silent no-op edits.
+    return 'description';
   }
   if (section === 'projects') {
     if (['role', 'position', 'jobTitle', 'job_title', 'subtitle'].includes(key)) {
       return 'subtitle';
     }
-    return key;
+    if (
+      [
+        'description', 'content', 'responsibility', 'responsibilities', 'achievement', 'achievements',
+        'result', 'results', 'impact', 'highlights', 'detail', 'details', 'bullet', 'bullets',
+        'task', 'tasks', 'action', 'actions', 'summary'
+      ].includes(lowerKey)
+    ) {
+      return 'description';
+    }
+    if (['title', 'date', 'link'].includes(lowerKey)) return key;
+    return 'description';
   }
   if (section === 'educations') {
     if (['school', 'university', 'college', 'title'].includes(key)) {
@@ -45,9 +68,26 @@ const normalizeFieldForSection = (section: Suggestion['targetSection'], field?: 
     if (['degree', 'educationLevel'].includes(key)) {
       return 'degree';
     }
+    if (['description', 'content', 'summary', 'highlights'].includes(lowerKey)) return 'major';
     return key;
   }
   return key;
+};
+
+const looksLikeTemplatePlaceholder = (text: string) => {
+  const raw = String(text || '').trim();
+  if (!raw) return true;
+  const placeholderPattern = /(?:【[^】]*(?:具体|关键|量化|任务|方法|结果|示例|待补充|xx|xxx)[^】]*】|\[[^\]]*(?:具体|关键|量化|任务|方法|结果|示例|待补充|xx|xxx)[^\]]*\]|(?:^|[^a-zA-Z])(?:XX%|XXX|xxx|待补充|请填写|可替换)(?:$|[^a-zA-Z]))/i;
+  if (placeholderPattern.test(raw)) return true;
+  const sentenceParts = (raw.match(/[^。！？!?；;]+[。！？!?；;]?/g) || [])
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (sentenceParts.length >= 3) {
+    const normalized = sentenceParts.map((s) => s.replace(/\s+/g, '').toLowerCase());
+    const uniqueCount = new Set(normalized).size;
+    if (uniqueCount <= Math.ceil(sentenceParts.length / 2)) return true;
+  }
+  return false;
 };
 
 export const applySuggestionToResume = ({
@@ -89,6 +129,11 @@ export const applySuggestionToResume = ({
     }
     let bestIndex = -1;
     let bestScore = -1;
+    const hintText = normalizeForMatch([
+      suggestion.title,
+      suggestion.reason,
+      suggestion.originalValue,
+    ].filter(Boolean).join(' '));
     items.forEach((item: any, idx: number) => {
       const fieldValue = normalizeForMatch(item?.[normalizedField || fieldFallback] || '');
       const haystack = normalizeForMatch([
@@ -105,17 +150,28 @@ export const applySuggestionToResume = ({
         if (fieldValue.includes(suggestionNeedle)) score += 80;
         if (haystack.includes(suggestionNeedle)) score += 60;
       }
+      if (hintText) {
+        const companyOrTitle = normalizeForMatch([item?.company, item?.title, item?.subtitle, item?.position].filter(Boolean).join(' '));
+        if (companyOrTitle && hintText.includes(companyOrTitle)) score += 30;
+        if (haystack && hintText.includes(haystack.slice(0, 32))) score += 10;
+      }
       if (normalizedField && String(item?.[normalizedField] ?? '').trim()) score += 5;
       if (score > bestScore) {
         bestScore = score;
         bestIndex = idx;
       }
     });
-    if (bestScore <= 0 && items.length > 1) return -1;
+    if (bestScore <= 0 && items.length > 1) {
+      // Do not silently drop valid optimization suggestions when anchors are weak.
+      // Prefer the first experience/project item as a deterministic fallback.
+      return 0;
+    }
     return bestIndex >= 0 ? bestIndex : 0;
   };
   const patchFieldValue = (item: any, field: string, value: any) => {
     const next: any = { ...item };
+    const isSameText = (a: any, b: any) =>
+      normalizeForMatch(String(a ?? '')) === normalizeForMatch(String(b ?? ''));
     if (
       field === 'description' &&
       typeof item?.description === 'string' &&
@@ -125,20 +181,41 @@ export const applySuggestionToResume = ({
       const origin = String(suggestion.originalValue).trim();
       if (origin && item.description.includes(origin)) {
         next.description = item.description.replace(origin, value);
-      } else {
+      } else if (!isSameText(item.description, value)) {
         next.description = value;
+      } else {
+        next.description = item.description;
       }
     } else {
-      next[field] = value;
+      next[field] = isSameText(item?.[field], value) ? item?.[field] : value;
     }
     return next;
+  };
+  const getSafeSuggestedValue = (section?: string) => {
+    const value = sanitizeSuggestedValue(suggestion.suggestedValue, section);
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return null;
+      if (looksLikeTemplatePlaceholder(trimmed)) {
+        console.warn('Skip low-quality template-like suggestion value', {
+          section: effectiveSection,
+          field: normalizedField,
+          suggestionId: suggestion.id,
+        });
+        return null;
+      }
+      return trimmed;
+    }
+    return value;
   };
 
   if (effectiveSection === 'personalInfo') {
     if (!normalizedField) return newData;
+    const safeValue = getSafeSuggestedValue(suggestion.targetSection);
+    if (safeValue === null) return newData;
     newData.personalInfo = {
       ...newData.personalInfo,
-      [normalizedField!]: suggestion.suggestedValue
+      [normalizedField!]: safeValue
     };
     return newData;
   }
@@ -151,7 +228,8 @@ export const applySuggestionToResume = ({
     }
     newData.workExps = newData.workExps.map((item, index) => {
       if (index !== targetIndex) return item;
-      const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+      const value = getSafeSuggestedValue(suggestion.targetSection);
+      if (value === null) return item;
       const field = normalizedField || 'description';
       const next: any = patchFieldValue(item, field, value);
       if (field === 'company' || field === 'title') {
@@ -171,7 +249,8 @@ export const applySuggestionToResume = ({
     const targetIndex = findBestTargetIndex(newData.projects, 'description');
     if (targetIndex < 0) {
       if (!newData.projects || newData.projects.length === 0) {
-        const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+        const value = getSafeSuggestedValue(suggestion.targetSection);
+        if (value === null) return newData;
         const desc = String(value || '').trim() || '请填写与你目标岗位相关的项目经历，突出目标、行动与量化结果。';
         const newProject = {
           id: Date.now(),
@@ -189,7 +268,8 @@ export const applySuggestionToResume = ({
     }
     newData.projects = newData.projects.map((item, index) => {
       if (index !== targetIndex) return item;
-      const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+      const value = getSafeSuggestedValue(suggestion.targetSection);
+      if (value === null) return item;
       const field = normalizedField || 'description';
       const next: any = patchFieldValue(item, field, value);
       if (field === 'role' || field === 'subtitle') {
@@ -209,7 +289,8 @@ export const applySuggestionToResume = ({
     }
     newData.educations = newData.educations.map((item, index) => {
       if (index !== targetIndex) return item;
-      const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+      const value = getSafeSuggestedValue(suggestion.targetSection);
+      if (value === null) return item;
       const field = normalizedField || 'major';
       const next: any = patchFieldValue(item, field, value);
       if (field === 'school' || field === 'title') {
@@ -232,7 +313,8 @@ export const applySuggestionToResume = ({
   }
 
   if (effectiveSection === 'summary') {
-    const value = sanitizeSuggestedValue(suggestion.suggestedValue, suggestion.targetSection);
+    const value = getSafeSuggestedValue(suggestion.targetSection);
+    if (value === null) return newData;
     newData.summary = value;
     newData.personalInfo = {
       ...newData.personalInfo,

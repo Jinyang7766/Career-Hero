@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
 import { createMasker, maskChatHistory } from '../chat-payload';
@@ -9,11 +9,18 @@ import {
   buildSummaryRequestBody
 } from '../chat-request-builders';
 import { persistUserDossierToProfile } from '../dossier-persistence';
-import { getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
+type InterviewAnswerTiming = {
+  questionNo: number;
+  seconds: number;
+  questionText?: string;
+  recordedAt: string;
+};
 
 type Params = {
+  currentUserId?: string;
   isInterviewMode?: boolean;
   currentStep: string;
   inputMessage: string;
@@ -46,6 +53,7 @@ type Params = {
 };
 
 export const useInterviewChat = ({
+  currentUserId,
   isInterviewMode = false,
   currentStep,
   inputMessage,
@@ -70,9 +78,152 @@ export const useInterviewChat = ({
   onInterviewCompleted,
 }: Params) => {
   const [isSending, setIsSending] = useState(false);
+  const [hasPendingReply, setHasPendingReply] = useState(false);
+  const [currentQuestionElapsedSec, setCurrentQuestionElapsedSec] = useState(0);
   const sendingCountRef = useRef(0);
   const endingInterviewRef = useRef(false);
   const interviewEndedRef = useRef(false);
+  const pendingReplayRef = useRef<string>('');
+  const activeRequestAbortRef = useRef<AbortController | null>(null);
+  const activeRequestKeyRef = useRef<string>('');
+  const suppressedAbortKeysRef = useRef<Set<string>>(new Set());
+  const activeQuestionMessageIdRef = useRef<string>('');
+  const activeQuestionStartAtRef = useRef<number>(0);
+  const answerTimingsRef = useRef<InterviewAnswerTiming[]>([]);
+
+  const hashText = (value: string) => {
+    const normalized = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!normalized) return 'default';
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i += 1) {
+      hash = (hash * 31 + normalized.charCodeAt(i)) | 0;
+    }
+    return `h_${Math.abs(hash)}`;
+  };
+
+  const getPendingReplyKey = () => {
+    const uid = String(currentUserId || 'anon').trim() || 'anon';
+    const rid = String((resumeData as any)?.id || 'no_resume').trim() || 'no_resume';
+    const jdKey = hashText(String(jdText || (resumeData as any)?.lastJdText || ''));
+    const mode = isInterviewMode ? 'interview' : 'micro';
+    return `ai_chat_pending_reply:${uid}:${rid}:${jdKey}:${mode}`;
+  };
+
+  const getTimingStorageKey = () => {
+    const uid = String(currentUserId || 'anon').trim() || 'anon';
+    const rid = String((resumeData as any)?.id || 'no_resume').trim() || 'no_resume';
+    const jdKey = hashText(String(jdText || (resumeData as any)?.lastJdText || ''));
+    const interviewType = String(getActiveInterviewType() || 'general').trim().toLowerCase() || 'general';
+    const interviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase() || 'comprehensive';
+    const mode = isInterviewMode ? 'interview' : 'micro';
+    return `ai_chat_answer_timing:${uid}:${rid}:${jdKey}:${mode}:${interviewType}:${interviewMode}`;
+  };
+
+  const persistTimingSnapshot = () => {
+    if (!isInterviewMode) return;
+    try {
+      localStorage.setItem(getTimingStorageKey(), JSON.stringify({
+        entries: answerTimingsRef.current,
+        activeQuestionMessageId: activeQuestionMessageIdRef.current || '',
+        activeQuestionStartedAt: activeQuestionStartAtRef.current || 0,
+      }));
+    } catch (err) {
+      console.warn('Failed to persist interview timing snapshot:', err);
+    }
+  };
+
+  const clearTimingSnapshot = () => {
+    answerTimingsRef.current = [];
+    activeQuestionMessageIdRef.current = '';
+    activeQuestionStartAtRef.current = 0;
+    setCurrentQuestionElapsedSec(0);
+    try {
+      localStorage.removeItem(getTimingStorageKey());
+    } catch { }
+  };
+
+  const setPendingReply = (payload: {
+    requestId: string;
+    text: string;
+    userMessageId: string;
+    createdAt: string;
+    replayCount?: number;
+  }) => {
+    try {
+      localStorage.setItem(getPendingReplyKey(), JSON.stringify(payload));
+      setHasPendingReply(true);
+    } catch (err) {
+      console.warn('Failed to persist pending chat reply marker:', err);
+    }
+  };
+
+  const clearPendingReply = () => {
+    try {
+      localStorage.removeItem(getPendingReplyKey());
+      setHasPendingReply(false);
+    } catch { }
+  };
+
+  const countUserAnswers = (messages: ChatMessage[]) => messages.filter((m) => {
+    if (m.role !== 'user') return false;
+    const txt = String(m.text || '').trim();
+    const hasTextAnswer = !!txt && txt !== '结束面试' && txt !== '结束微访谈';
+    const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
+    return hasTextAnswer || hasVoiceAnswer;
+  }).length;
+
+  const summarizeQuestionText = (text: string) => {
+    const line = String(text || '').trim().replace(/^下一题：\s*/u, '');
+    const normalized = line.replace(/\s+/g, ' ');
+    return normalized.slice(0, 80);
+  };
+
+  const findPendingQuestion = (messages: ChatMessage[]) => {
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const msg = messages[i];
+      if (!msg || msg.role !== 'model') continue;
+      const text = String(msg.text || '').trim();
+      if (!text) continue;
+      const hasUserAfter = messages.slice(i + 1).some((m) => m.role === 'user');
+      if (hasUserAfter) continue;
+      const looksLikeQuestion =
+        text.includes('？') ||
+        text.includes('?') ||
+        text.startsWith('下一题：') ||
+        text.startsWith('追问：') ||
+        isSelfIntroQuestion(text);
+      if (!looksLikeQuestion) continue;
+      return {
+        messageId: msg.id,
+        text: summarizeQuestionText(text),
+      };
+    }
+    return null;
+  };
+
+  const buildTimingContextForSummary = () => {
+    const entries = answerTimingsRef.current || [];
+    if (!entries.length) return '';
+    const total = entries.reduce((sum, item) => sum + Math.max(0, Number(item.seconds) || 0), 0);
+    const avg = Math.round(total / entries.length);
+    const max = entries.reduce((m, item) => Math.max(m, Number(item.seconds) || 0), 0);
+    const min = entries.reduce((m, item) => Math.min(m, Number(item.seconds) || 0), Number.MAX_SAFE_INTEGER);
+    const overLong = entries.filter((item) => (Number(item.seconds) || 0) > 180).length;
+    const overShort = entries.filter((item) => (Number(item.seconds) || 0) < 20).length;
+    const perQuestionLines = entries
+      .map((item) => `- 第${item.questionNo}题：${item.seconds}秒${item.questionText ? `（${item.questionText}）` : ''}`)
+      .join('\n');
+    return [
+      `题目数：${entries.length}`,
+      `总作答时长：${total}秒`,
+      `平均每题：${avg}秒`,
+      `最短/最长：${min === Number.MAX_SAFE_INTEGER ? 0 : min}秒 / ${max}秒`,
+      `过短(<20秒)题数：${overShort}`,
+      `过长(>180秒)题数：${overLong}`,
+      '分题用时：',
+      perQuestionLines,
+    ].join('\n');
+  };
 
   const beginSending = () => {
     sendingCountRef.current += 1;
@@ -101,11 +252,13 @@ export const useInterviewChat = ({
     requestBody,
     baseMessages,
     streamingMessageId,
+    signal,
   }: {
     token: string;
     requestBody: any;
     baseMessages: ChatMessage[];
     streamingMessageId: string;
+    signal?: AbortSignal;
   }) => {
     const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
     const perf = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
@@ -116,12 +269,7 @@ export const useInterviewChat = ({
     let firstEventAt: number | null = null;
     let streamedText = '';
     let doneText = '';
-    let incomingBuffer = '';
-    let displayedText = '';
-    let streamFinished = false;
-    let typingTimer: number | null = null;
     let hasRealChunk = false;
-    let typingTickAt = Date.now();
 
     const setStreamingText = (text: string) => {
       setChatMessages(prev => {
@@ -139,56 +287,13 @@ export const useInterviewChat = ({
       });
     };
 
-    const pumpTyping = () => {
-      if (!incomingBuffer) {
-        return;
-      }
-      const now = Date.now();
-      const elapsed = Math.max(1, now - typingTickAt);
-      typingTickAt = now;
-
-      // Smooth typing speed: adapt batch size to backlog and frame interval.
-      const byBacklog =
-        incomingBuffer.length > 180 ? 12 :
-          incomingBuffer.length > 120 ? 8 :
-            incomingBuffer.length > 60 ? 5 :
-              incomingBuffer.length > 24 ? 3 : 2;
-      const byElapsed = Math.max(1, Math.floor(elapsed / 16));
-      const take = Math.min(incomingBuffer.length, Math.max(byBacklog, byElapsed));
-      const delta = incomingBuffer.slice(0, take);
-      incomingBuffer = incomingBuffer.slice(take);
-      displayedText += delta;
-      setStreamingText(displayedText);
-    };
-
-    const startTypingLoop = () => {
-      if (typingTimer) return;
-      typingTickAt = Date.now();
-      typingTimer = window.setInterval(() => {
-        pumpTyping();
-      }, 24);
-    };
-
-    const stopTypingLoop = () => {
-      if (typingTimer) {
-        window.clearInterval(typingTimer);
-        typingTimer = null;
-      }
-    };
-
-    const waitForTypingDrain = async (maxMs: number = 2500) => {
-      const started = Date.now();
-      while (incomingBuffer.length > 0 && (Date.now() - started) < maxMs) {
-        await new Promise(resolve => setTimeout(resolve, 20));
-      }
-    };
-
     const response = await fetch(streamEndpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token.trim()}`,
       },
+      signal,
       body: JSON.stringify(requestBody)
     });
 
@@ -210,20 +315,21 @@ export const useInterviewChat = ({
         totalMs: Number(totalMs.toFixed(1)),
         hasText: !!fallbackText,
       });
-      return fallbackText || '感谢你的回答，我们继续下一题。';
+      if (!fallbackText) {
+        throw new Error('empty_ai_response_json');
+      }
+      return fallbackText;
     }
 
     if (!response.body) {
       throw new Error('流式响应不可用');
     }
 
-    startTypingLoop();
     let chunkCount = 0;
 
-    try {
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
@@ -254,7 +360,7 @@ export const useInterviewChat = ({
               hasRealChunk = true;
               chunkCount += 1;
               streamedText += delta;
-              incomingBuffer += delta;
+              setStreamingText(streamedText);
             } else if (type === 'done') {
               doneText = String(payload?.text || '').trim();
             } else if (type === 'error') {
@@ -266,22 +372,10 @@ export const useInterviewChat = ({
         }
       }
 
-      streamFinished = true;
-      if (doneText) {
-        if (!hasRealChunk) {
-          incomingBuffer += doneText;
-        } else if (doneText.startsWith(displayedText)) {
-          incomingBuffer += doneText.slice(displayedText.length);
-        } else if (doneText !== displayedText) {
-          // Non-prefix correction case: switch to authoritative done text.
-          displayedText = '';
-          incomingBuffer = doneText;
-        }
+      const finalText = (doneText || streamedText || '').trim();
+      if (finalText && finalText !== streamedText) {
+        setStreamingText(finalText);
       }
-      await waitForTypingDrain();
-      pumpTyping();
-
-      const finalText = (doneText || displayedText || streamedText || '').trim();
       const finishedAt = perf ? perf.now() : Date.now();
       const totalMs = Math.max(0, finishedAt - startedAt);
       const firstEventMs = firstEventAt === null ? -1 : Math.max(0, firstEventAt - startedAt);
@@ -295,14 +389,11 @@ export const useInterviewChat = ({
         hasRealChunk,
         finalLen: finalText.length,
       });
-      if (finalText) return finalText;
-      return '感谢你的回答，我们继续下一题。';
-    } finally {
-      stopTypingLoop();
-    }
+    if (finalText) return finalText;
+    throw new Error('empty_ai_response_stream');
   };
 
-  const generateInterviewSummary = async (baseMessages: ChatMessage[]) => {
+  const generateInterviewSummary = async (baseMessages: ChatMessage[], signal?: AbortSignal) => {
     const token = await getBackendAuthToken();
     if (!token) throw new Error('请先登录以使用 AI 功能');
 
@@ -311,7 +402,7 @@ export const useInterviewChat = ({
     const maskedResumeData = masker.maskObject(resumeData);
     const maskedJdText = masker.maskText(jdText || '');
     const maskedChatHistory = maskChatHistory(baseMessages || [], masker.maskText);
-    const summaryPrompt = masker.maskText(buildInterviewSummaryPrompt());
+    const summaryPrompt = masker.maskText(buildInterviewSummaryPrompt(buildTimingContextForSummary()));
 
     const response = await fetch(apiEndpoint, {
       method: 'POST',
@@ -319,6 +410,7 @@ export const useInterviewChat = ({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token.trim()}`
       },
+      signal,
       body: JSON.stringify(buildSummaryRequestBody({
         message: summaryPrompt,
         resumeData: maskedResumeData,
@@ -341,14 +433,20 @@ export const useInterviewChat = ({
   const handleSendMessage = async (
     textOverride?: string,
     audioOverride?: AudioOverride | null,
-    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string; forceEnd?: boolean }
+    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string; forceEnd?: boolean; skipCurrentQuestion?: boolean }
   ) => {
+    const requestKey = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const requestAbortController = new AbortController();
+    activeRequestAbortRef.current = requestAbortController;
+    activeRequestKeyRef.current = requestKey;
     const textToSend = (textOverride ?? inputMessage ?? '').toString();
     const hasText = !!textToSend.trim();
+    const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const normalizedTextOverride = String(textOverride || '').trim();
     const isManualEndCommand = normalizedTextOverride === '结束面试' || normalizedTextOverride === '结束微访谈';
     const isEndCommand =
       isManualEndCommand || !!opts?.forceEnd;
+    const isSkipCurrentQuestion = !!opts?.skipCurrentQuestion;
     if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
@@ -371,12 +469,41 @@ export const useInterviewChat = ({
         audioMime: hasAudio ? audioObj!.mime : undefined,
         audioDuration: hasAudio ? (audioOverride as any)?.duration : undefined,
       };
+    if (isInterviewMode && !isEndCommand && !opts?.skipAddUserMessage) {
+      const answeredBefore = countUserAnswers(chatMessagesRef.current || []);
+      const questionNo = answeredBefore + 1;
+      const elapsedSec = activeQuestionStartAtRef.current > 0
+        ? Math.max(1, Math.round((Date.now() - activeQuestionStartAtRef.current) / 1000))
+        : 0;
+      const question = findPendingQuestion(chatMessagesRef.current || []);
+      answerTimingsRef.current = [
+        ...answerTimingsRef.current,
+        {
+          questionNo,
+          seconds: elapsedSec,
+          questionText: question?.text || '',
+          recordedAt: new Date().toISOString(),
+        },
+      ];
+      activeQuestionMessageIdRef.current = '';
+      activeQuestionStartAtRef.current = 0;
+      setCurrentQuestionElapsedSec(0);
+      persistTimingSnapshot();
+    }
 
     const baseMessages = opts?.skipAddUserMessage ? chatMessagesRef.current : [...chatMessagesRef.current, userMessage];
     if (!opts?.skipAddUserMessage) {
       chatMessagesRef.current = baseMessages;
       setChatMessages(baseMessages);
       setInputMessage('');
+    }
+    if (!isEndCommand && hasText && !hasAudio) {
+      setPendingReply({
+        requestId,
+        text: String(textToSend || '').trim(),
+        userMessageId: userMessage.id,
+        createdAt: new Date().toISOString(),
+      });
     }
 
     beginSending();
@@ -397,6 +524,7 @@ export const useInterviewChat = ({
           const finalMessages = [...baseMessages];
           chatMessagesRef.current = finalMessages;
           setChatMessages(finalMessages);
+          clearPendingReply();
           await persistInterviewSession(finalMessages, jdText);
           try {
             await persistAnalysisSessionState('interview_done', {
@@ -416,23 +544,20 @@ export const useInterviewChat = ({
             }
           }
           interviewEndedRef.current = true;
+          clearTimingSnapshot();
           return;
         }
-        const summaryRaw = await generateInterviewSummary(baseMessages);
+        const summaryRaw = await generateInterviewSummary(baseMessages, requestAbortController.signal);
         const summary = stripMarkdownTableSeparators(summaryRaw);
-        const aiMessage: ChatMessage = {
-          id: `ai-summary-${Date.now()}`,
-          role: 'model',
-          text: summary || '已结束面试，但总结生成失败，请稍后重试。'
-        };
-        const finalMessages = [...baseMessages, aiMessage];
+        const finalMessages = [...baseMessages];
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
+        clearPendingReply();
         await persistInterviewSession(finalMessages, jdText);
         try {
           await persistAnalysisSessionState('interview_done', {
             jdText,
-            step: 'comparison',
+            step: 'interview_report',
             lastMessageAt: new Date().toISOString(),
             force: true,
           });
@@ -459,6 +584,7 @@ export const useInterviewChat = ({
           }
         }
         interviewEndedRef.current = true;
+        clearTimingSnapshot();
         return;
       }
 
@@ -489,7 +615,7 @@ export const useInterviewChat = ({
           hint: reasons.join('、') || '细节不够具体',
         };
       };
-      const followUpDecision = isInterviewChat && hasText
+      const followUpDecision = isInterviewChat && hasText && !isSkipCurrentQuestion
         ? detectFollowUpNeed(textToSend)
         : { shouldFollowUp: false, hint: '' };
       const answeredCountAtThisTurn = baseMessages.filter((m) => {
@@ -537,6 +663,7 @@ export const useInterviewChat = ({
         followUpHint: normalizedFollowUpDecision.hint,
         forcedNextQuestion: strictNextQuestion,
         shouldEnterClosing: isClosingPhase && !strictNextQuestion,
+        skipCurrentQuestion: isSkipCurrentQuestion,
       });
 
       const maskedMessage = masker.maskText(interviewWrapped);
@@ -581,15 +708,36 @@ export const useInterviewChat = ({
         requestBody,
         baseMessages,
         streamingMessageId: streamId,
+        signal: requestAbortController.signal,
       }));
 
-      const safeText = String(unmaskedText || '').replace(/\*/g, '').trim();
+      const cleanMicroInterviewAnswerLimit = (text: string) =>
+        text
+          .replace(/[，,。\s]*请将回答控制在3分钟内[。！!？?]*/g, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      const cleanIntroLengthReminder = (text: string) =>
+        String(text || '')
+          .replace(/[^\n]*自我介绍偏长[^\n]*(\n)?/g, '')
+          .replace(/[^\n]*后续请控制在1分钟内[^\n]*(\n)?/g, '')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+      const normalizedText = String(unmaskedText || '').replace(/\*/g, '').trim();
+      const safeText = cleanIntroLengthReminder(cleanMicroInterviewAnswerLimit(normalizedText));
       if (safeText === '结束面试' || safeText === '结束微访谈') {
         const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
         await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
         return;
       }
-      const { cleaned, next } = splitNextQuestion(safeText);
+      const parsedReply = isInterviewChat
+        ? splitNextQuestion(safeText)
+        : { cleaned: safeText, next: '' };
+      const canEnterNextQuestion =
+        !isInterviewChat ||
+        plannedQuestionCount <= 0 ||
+        answeredCountAtThisTurn < plannedQuestionCount;
+      const cleaned = parsedReply.cleaned;
+      const next = canEnterNextQuestion ? parsedReply.next : '';
       const aiMessage: ChatMessage = {
         id: `ai-${Date.now()}`,
         role: 'model',
@@ -614,6 +762,7 @@ export const useInterviewChat = ({
       }
       chatMessagesRef.current = finalMessages;
       setChatMessages(finalMessages);
+      clearPendingReply();
       await persistInterviewSession(finalMessages, jdText);
       try {
         await persistAnalysisSessionState('interview_in_progress', {
@@ -627,6 +776,37 @@ export const useInterviewChat = ({
 
     } catch (error) {
       console.error('API failed:', error);
+      const errName = String((error as any)?.name || '');
+      const errMsg = String((error as any)?.message || '');
+      const isAbortError =
+        errName === 'AbortError' ||
+        /abort(ed)?/i.test(errName) ||
+        /abort(ed)?/i.test(errMsg);
+      const isSuppressedAbort = isAbortError && suppressedAbortKeysRef.current.has(requestKey);
+      if (isAbortError) {
+        if (isSuppressedAbort) {
+          clearPendingReply();
+        }
+        return;
+      }
+      if (isEndCommand) {
+        if (!isInterviewMode) {
+          // End-micro-interview is a local completion path; do not block UI on persistence hiccups.
+          const finalMessages = [...baseMessages];
+          chatMessagesRef.current = finalMessages;
+          setChatMessages(finalMessages);
+          clearPendingReply();
+          if (onInterviewCompleted) {
+            try {
+              onInterviewCompleted('', finalMessages, { skipSummary: true });
+            } catch (cbErr) {
+              console.warn('onInterviewCompleted callback failed after end fallback:', cbErr);
+            }
+          }
+          interviewEndedRef.current = true;
+          return;
+        }
+      }
       try {
         await persistAnalysisSessionState('paused', {
           jdText,
@@ -647,6 +827,11 @@ export const useInterviewChat = ({
       }
       alert('AI 连接暂时中断');
     } finally {
+      suppressedAbortKeysRef.current.delete(requestKey);
+      if (activeRequestKeyRef.current === requestKey) {
+        activeRequestKeyRef.current = '';
+        activeRequestAbortRef.current = null;
+      }
       if (isEndCommand) {
         endingInterviewRef.current = false;
       }
@@ -654,9 +839,169 @@ export const useInterviewChat = ({
     }
   };
 
+  const interruptCurrentThinking = () => {
+    const activeKey = String(activeRequestKeyRef.current || '').trim();
+    if (activeKey) {
+      suppressedAbortKeysRef.current.add(activeKey);
+    }
+    try {
+      activeRequestAbortRef.current?.abort();
+    } catch {
+      // ignore abort failures
+    }
+  };
+
+  useEffect(() => {
+    if (!isInterviewMode || currentStep !== 'chat') return;
+    try {
+      const raw = localStorage.getItem(getTimingStorageKey()) || '';
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const entries = Array.isArray(parsed?.entries) ? parsed.entries : [];
+      answerTimingsRef.current = entries
+        .map((item: any) => ({
+          questionNo: Number(item?.questionNo) || 0,
+          seconds: Math.max(0, Number(item?.seconds) || 0),
+          questionText: String(item?.questionText || '').trim(),
+          recordedAt: String(item?.recordedAt || '').trim() || new Date().toISOString(),
+        }))
+        .filter((item: InterviewAnswerTiming) => item.questionNo > 0);
+      activeQuestionMessageIdRef.current = String(parsed?.activeQuestionMessageId || '').trim();
+      activeQuestionStartAtRef.current = Math.max(0, Number(parsed?.activeQuestionStartedAt) || 0);
+    } catch (err) {
+      console.warn('Failed to restore interview timing snapshot:', err);
+    }
+  }, [isInterviewMode, currentStep]);
+
+  useEffect(() => {
+    if (!isInterviewMode || currentStep !== 'chat') return;
+    const tick = () => {
+      if ((chatMessagesRef.current || []).length === 0) {
+        if (answerTimingsRef.current.length || activeQuestionMessageIdRef.current) {
+          clearTimingSnapshot();
+        }
+        return;
+      }
+      const pendingQuestion = findPendingQuestion(chatMessagesRef.current || []);
+      if (!pendingQuestion) {
+        if (activeQuestionMessageIdRef.current) {
+          activeQuestionMessageIdRef.current = '';
+          activeQuestionStartAtRef.current = 0;
+          setCurrentQuestionElapsedSec(0);
+          persistTimingSnapshot();
+        }
+        return;
+      }
+      if (activeQuestionMessageIdRef.current !== pendingQuestion.messageId) {
+        activeQuestionMessageIdRef.current = pendingQuestion.messageId;
+        activeQuestionStartAtRef.current = Date.now();
+        setCurrentQuestionElapsedSec(0);
+        persistTimingSnapshot();
+        return;
+      }
+      if (activeQuestionStartAtRef.current <= 0) {
+        activeQuestionStartAtRef.current = Date.now();
+        persistTimingSnapshot();
+      }
+      const elapsed = Math.max(0, Math.floor((Date.now() - activeQuestionStartAtRef.current) / 1000));
+      setCurrentQuestionElapsedSec(elapsed);
+    };
+    tick();
+    const timer = window.setInterval(tick, 1000);
+    return () => window.clearInterval(timer);
+  }, [isInterviewMode, currentStep]);
+
+  useEffect(() => {
+    if (!isInterviewMode) {
+      clearTimingSnapshot();
+      return;
+    }
+    if (currentStep !== 'chat') {
+      setCurrentQuestionElapsedSec(0);
+    }
+  }, [isInterviewMode, currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    try {
+      const raw = localStorage.getItem(getPendingReplyKey()) || '';
+      setHasPendingReply(!!raw);
+    } catch {
+      setHasPendingReply(false);
+    }
+  }, [currentStep]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    if (isSending) return;
+    let raw = '';
+    try {
+      raw = localStorage.getItem(getPendingReplyKey()) || '';
+    } catch {
+      raw = '';
+    }
+    if (!raw) return;
+    let pending: any = null;
+    try {
+      pending = JSON.parse(raw);
+    } catch {
+      clearPendingReply();
+      return;
+    }
+    const requestId = String(pending?.requestId || '').trim();
+    const pendingText = String(pending?.text || '').trim();
+    const pendingUserMessageId = String(pending?.userMessageId || '').trim();
+    const replayCount = Math.max(0, Number(pending?.replayCount) || 0);
+    const createdAt = Date.parse(String(pending?.createdAt || ''));
+    if (!requestId || !pendingText || !pendingUserMessageId) {
+      clearPendingReply();
+      return;
+    }
+    if (Number.isFinite(createdAt) && (Date.now() - createdAt) > 10 * 60 * 1000) {
+      clearPendingReply();
+      return;
+    }
+    // Guard: avoid repeated auto-replay loops when page keeps remounting while backend/network is unstable.
+    if (replayCount >= 1) {
+      clearPendingReply();
+      return;
+    }
+    if (pendingReplayRef.current === requestId) return;
+
+    const msgs = chatMessagesRef.current || [];
+    const userIdx = msgs.findIndex((m) => m.id === pendingUserMessageId && m.role === 'user');
+    if (userIdx < 0) {
+      clearPendingReply();
+      return;
+    }
+    const hasModelAfter = msgs.slice(userIdx + 1).some((m) => m.role === 'model' && String(m.text || '').trim().length > 0);
+    if (hasModelAfter) {
+      clearPendingReply();
+      return;
+    }
+
+    pendingReplayRef.current = requestId;
+    try {
+      localStorage.setItem(getPendingReplyKey(), JSON.stringify({
+        ...pending,
+        replayCount: replayCount + 1,
+      }));
+    } catch {
+      // ignore write failures
+    }
+    void handleSendMessage(
+      pendingText,
+      null,
+      { skipAddUserMessage: true, existingUserMessageId: pendingUserMessageId }
+    );
+  }, [currentStep, isSending]);
+
   return {
     isSending,
+    hasPendingReply,
+    currentQuestionElapsedSec,
     blobToBase64,
+    interruptCurrentThinking,
     handleSendMessage,
   };
 };

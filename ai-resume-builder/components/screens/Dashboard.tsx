@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { ScreenProps, View } from '../../types';
+import { useNavigate } from 'react-router-dom';
 import { useUserProfile } from '../../src/useUserProfile';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
@@ -43,6 +44,7 @@ const CAREER_TIPS = [
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
   const currentUser = useAppContext((s) => s.currentUser);
   const navigateToView = useAppContext((s) => s.navigateToView);
+  const navigate = useNavigate();
   const allResumes = useAppStore((state) => state.allResumes);
   const setResumeData = useAppStore((state) => state.setResumeData);
   const navOwnerKey = 'ai_nav_owner_user_id';
@@ -162,9 +164,18 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   const hasAnyProgressForResume = (resume: any) => {
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const hasDiagnosisProgress = diagnosisProgress >= 15;
-    const hasInterviewProgress = Array.isArray((resume as any)?.interviewStageStatus)
+    const byMode = (resume as any)?.interviewStageStatusByMode;
+    const hasInterviewProgressByMode = !!(
+      byMode &&
+      (
+        (Array.isArray(byMode.simple) && byMode.simple.some((s: any) => s === 'current' || s === 'done')) ||
+        (Array.isArray(byMode.comprehensive) && byMode.comprehensive.some((s: any) => s === 'current' || s === 'done'))
+      )
+    );
+    const hasInterviewProgressLegacy = Array.isArray((resume as any)?.interviewStageStatus)
       ? (resume as any).interviewStageStatus.some((s: any) => s === 'current' || s === 'done')
       : false;
+    const hasInterviewProgress = hasInterviewProgressByMode || hasInterviewProgressLegacy;
     return hasDiagnosisProgress || hasInterviewProgress;
   };
 
@@ -241,11 +252,27 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     }
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const isFinalDone = diagnosisProgress >= 100;
+    const latestStepRaw = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
+    const resumeStep = ['jd_input', 'analyzing', 'report', 'micro_intro', 'chat', 'interview_report', 'comparison', 'final_report'].includes(latestStepRaw)
+      ? latestStepRaw
+      : '';
+    const targetStep = resumeStep || (isFinalDone ? 'comparison' : 'report');
     if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_result_open', '1');
     localStorage.setItem('ai_result_resume_id', resumeId);
-    localStorage.setItem('ai_result_step', isFinalDone ? 'comparison' : 'report');
-    navigateToView(View.AI_ANALYSIS, { replace: true });
+    localStorage.setItem('ai_result_step', targetStep);
+    const pathByStep: Record<string, string> = {
+      jd_input: `/ai-analysis/jd/${resumeId}`,
+      analyzing: `/ai-analysis/analyzing/${resumeId}`,
+      report: `/ai-analysis/report/${resumeId}`,
+      micro_intro: `/ai-analysis/micro-intro/${resumeId}`,
+      chat: `/ai-analysis/chat/${resumeId}`,
+      interview_report: `/ai-analysis/interview-report/${resumeId}`,
+      comparison: `/ai-analysis/comparison/${resumeId}`,
+      final_report: `/ai-analysis/final-report/${resumeId}`,
+    };
+    const targetPath = pathByStep[targetStep] || `/ai-analysis/report/${resumeId}`;
+    navigate(targetPath, { replace: true });
   };
 
   const handleContinueInterview = (resume: any) => {

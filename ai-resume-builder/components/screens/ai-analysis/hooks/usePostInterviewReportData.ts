@@ -65,14 +65,51 @@ export const usePostInterviewReportData = ({
   }, [postInterviewOriginalResume, suggestions]);
 
   const postInterviewAnnotations = useMemo(() => (
-    (suggestions || [])
-      .map((s: any) => ({
-        id: String(s.id),
-        title: String(s.title || '优化建议'),
-        reason: String(s.reason || ''),
-        section: String(s.targetSection || ''),
-        targetId: s.targetId === undefined || s.targetId === null ? '' : String(s.targetId),
-      }))
+    (() => {
+      const normalize = (v: any) =>
+        String(v || '')
+          .trim()
+          .toLowerCase()
+          .replace(/\s+/g, ' ')
+          .replace(/[，,。.;；:：!?！？'"`]/g, '');
+
+      const seen = new Set<string>();
+      const deduped: Array<{
+        id: string;
+        title: string;
+        reason: string;
+        section: string;
+        targetId: string;
+        targetField: string;
+        originalValue: string;
+        suggestedValue: string;
+      }> = [];
+
+      (suggestions || []).forEach((s: any) => {
+        const item = {
+          id: String(s.id),
+          title: String(s.title || '优化建议'),
+          reason: String(s.reason || ''),
+          section: String(s.targetSection || ''),
+          targetId: s.targetId === undefined || s.targetId === null ? '' : String(s.targetId),
+          targetField: String(s.targetField || ''),
+          originalValue: typeof s.originalValue === 'string' ? s.originalValue : '',
+          suggestedValue: typeof s.suggestedValue === 'string' ? s.suggestedValue : '',
+        };
+        const dedupKey = [
+          normalize(item.section),
+          normalize(item.targetId),
+          normalize(item.targetField),
+          normalize(item.title),
+          normalize(item.reason),
+          normalize(item.originalValue),
+        ].join('|');
+        if (seen.has(dedupKey)) return;
+        seen.add(dedupKey);
+        deduped.push(item);
+      });
+      return deduped;
+    })()
   ), [suggestions]);
 
   const effectivePostInterviewSummary = String(postInterviewSummary || reportSummary || '').trim();
