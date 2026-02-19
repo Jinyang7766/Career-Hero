@@ -144,6 +144,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     hasInterviewSessionMessages,
     clearInterviewSession,
   } = useInterviewSessionStore({
+    currentUserId: currentUser?.id,
     resumeData,
     setResumeData: setResumeData as any,
     jdText,
@@ -486,6 +487,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     jdText,
     buildApiUrl,
     makeJdKey,
+    currentUserId: currentUser?.id,
     planFetchTrigger,
     setInterviewPlan,
     getBackendAuthToken,
@@ -516,6 +518,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   });
 
   useAiExternalEntries({
+    currentUserId: currentUser?.id,
     setResumeData: setResumeData as any,
     sourceResumeIdRef: sourceResumeIdRef as any,
     setSelectedResumeId,
@@ -648,6 +651,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     jdText,
     resumeData,
     makeJdKey,
+    currentUserId: currentUser?.id,
     setInterviewPlan,
     setPlanFetchTrigger,
     openChat,

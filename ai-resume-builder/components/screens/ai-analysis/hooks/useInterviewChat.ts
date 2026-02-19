@@ -9,6 +9,7 @@ import {
   buildSummaryRequestBody
 } from '../chat-request-builders';
 import { persistUserDossierToProfile } from '../dossier-persistence';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
 
@@ -540,7 +541,7 @@ export const useInterviewChat = ({
         score,
         suggestions,
         isInterviewChat,
-        interviewType: isInterviewChat ? (localStorage.getItem('ai_interview_type') || 'general') : undefined
+        interviewType: isInterviewChat ? getActiveInterviewType() : undefined
       });
 
       const streamId = `ai-stream-${Date.now()}`;

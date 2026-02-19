@@ -2,6 +2,7 @@ import React from 'react';
 import type { ResumeData, ResumeSummary } from '../../../../types';
 import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
 import BackButton from '../../../shared/BackButton';
+import { useAppContext } from '../../../../src/app-context';
 
 export type ResumeReadState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -53,13 +54,20 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   startAnalysis,
   isInterviewMode,
 }) => {
+  const currentUser = useAppContext((s) => s.currentUser);
+  const currentUserId = String(currentUser?.id || '').trim();
   const JD_MAX_CHARS = 1500;
   const INTERVIEW_TYPE_STORAGE_KEY = 'ai_interview_type';
   const INTERVIEW_MODE_STORAGE_KEY = 'ai_interview_mode';
   const INTERVIEW_FOCUS_STORAGE_KEY = 'ai_interview_focus';
+  const getScopedKey = React.useCallback((baseKey: string) => {
+    if (!currentUserId) return baseKey;
+    return `${baseKey}:${currentUserId}`;
+  }, [currentUserId]);
   const [interviewType, setInterviewType] = React.useState(() => {
     try {
-      const saved = String(localStorage.getItem(INTERVIEW_TYPE_STORAGE_KEY) || '').trim().toLowerCase();
+      const scopedKey = currentUserId ? `${INTERVIEW_TYPE_STORAGE_KEY}:${currentUserId}` : INTERVIEW_TYPE_STORAGE_KEY;
+      const saved = String(localStorage.getItem(scopedKey) || localStorage.getItem(INTERVIEW_TYPE_STORAGE_KEY) || '').trim().toLowerCase();
       if (saved === 'general' || saved === 'technical' || saved === 'hr') return saved;
     } catch {
       // ignore localStorage access errors
@@ -68,7 +76,8 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   });
   const [interviewMode, setInterviewMode] = React.useState<'simple' | 'comprehensive'>(() => {
     try {
-      const saved = String(localStorage.getItem(INTERVIEW_MODE_STORAGE_KEY) || '').trim().toLowerCase();
+      const scopedKey = currentUserId ? `${INTERVIEW_MODE_STORAGE_KEY}:${currentUserId}` : INTERVIEW_MODE_STORAGE_KEY;
+      const saved = String(localStorage.getItem(scopedKey) || localStorage.getItem(INTERVIEW_MODE_STORAGE_KEY) || '').trim().toLowerCase();
       if (saved === 'simple' || saved === 'comprehensive') return saved as 'simple' | 'comprehensive';
     } catch {
       // ignore localStorage access errors
@@ -77,7 +86,8 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   });
   const [interviewFocus, setInterviewFocus] = React.useState(() => {
     try {
-      return String(localStorage.getItem(INTERVIEW_FOCUS_STORAGE_KEY) || '').trim();
+      const scopedKey = currentUserId ? `${INTERVIEW_FOCUS_STORAGE_KEY}:${currentUserId}` : INTERVIEW_FOCUS_STORAGE_KEY;
+      return String(localStorage.getItem(scopedKey) || localStorage.getItem(INTERVIEW_FOCUS_STORAGE_KEY) || '').trim();
     } catch {
       return '';
     }
@@ -86,29 +96,32 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   React.useEffect(() => {
     if (!isInterviewMode) return;
     try {
+      localStorage.setItem(getScopedKey(INTERVIEW_TYPE_STORAGE_KEY), interviewType);
       localStorage.setItem(INTERVIEW_TYPE_STORAGE_KEY, interviewType);
     } catch {
       // ignore localStorage access errors
     }
-  }, [interviewType, isInterviewMode]);
+  }, [INTERVIEW_TYPE_STORAGE_KEY, getScopedKey, interviewType, isInterviewMode]);
 
   React.useEffect(() => {
     if (!isInterviewMode) return;
     try {
+      localStorage.setItem(getScopedKey(INTERVIEW_MODE_STORAGE_KEY), interviewMode);
       localStorage.setItem(INTERVIEW_MODE_STORAGE_KEY, interviewMode);
     } catch {
       // ignore localStorage access errors
     }
-  }, [interviewMode, isInterviewMode]);
+  }, [INTERVIEW_MODE_STORAGE_KEY, getScopedKey, interviewMode, isInterviewMode]);
 
   React.useEffect(() => {
     if (!isInterviewMode) return;
     try {
+      localStorage.setItem(getScopedKey(INTERVIEW_FOCUS_STORAGE_KEY), String(interviewFocus || '').trim());
       localStorage.setItem(INTERVIEW_FOCUS_STORAGE_KEY, String(interviewFocus || '').trim());
     } catch {
       // ignore localStorage access errors
     }
-  }, [interviewFocus, isInterviewMode]);
+  }, [INTERVIEW_FOCUS_STORAGE_KEY, getScopedKey, interviewFocus, isInterviewMode]);
 
   const shouldShowContinueInterview = React.useMemo(() => {
     if (!isInterviewMode) return false;

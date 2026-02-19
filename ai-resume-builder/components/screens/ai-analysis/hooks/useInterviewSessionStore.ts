@@ -2,6 +2,7 @@ import { DatabaseService } from '../../../../src/database-service';
 import type { ResumeData } from '../../../../types';
 import type { ChatMessage } from '../types';
 import { makeInterviewSessionKey, makeJdKey, normalizeInterviewType } from '../id-utils';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type AnalysisSessionState =
   | 'idle'
@@ -14,6 +15,7 @@ type AnalysisSessionState =
   | 'error';
 
 type Params = {
+  currentUserId?: string;
   resumeData: ResumeData;
   setResumeData?: (v: ResumeData) => void;
   jdText: string;
@@ -25,6 +27,7 @@ type Params = {
 };
 
 export const useInterviewSessionStore = ({
+  currentUserId,
   resumeData,
   setResumeData,
   jdText,
@@ -35,11 +38,15 @@ export const useInterviewSessionStore = ({
   setChatInitialized,
 }: Params) => {
   const LAST_ANALYSIS_KEY = 'ai_last_analysis_snapshot';
-  const getActiveInterviewType = () =>
-    normalizeInterviewType(typeof window !== 'undefined' ? localStorage.getItem('ai_interview_type') : 'general');
+  const getScopedLastAnalysisKey = () => {
+    const uid = String(currentUserId || '').trim();
+    if (!uid) return LAST_ANALYSIS_KEY;
+    return `${LAST_ANALYSIS_KEY}:${uid}`;
+  };
+  const getCurrentInterviewType = () => normalizeInterviewType(getActiveInterviewType());
 
   const resolveInterviewSession = (sessions: any, sessionJdText: string, overrideInterviewType?: string) => {
-    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
     const typedKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const legacyJdKey = makeJdKey(sessionJdText);
     const typedSession = sessions?.[typedKey];
@@ -62,7 +69,7 @@ export const useInterviewSessionStore = ({
     optimizedResumeId?: string | number;
   }) => {
     try {
-      localStorage.setItem(LAST_ANALYSIS_KEY, JSON.stringify(payload));
+      localStorage.setItem(getScopedLastAnalysisKey(), JSON.stringify(payload));
     } catch (error) {
       console.warn('Failed to save last analysis snapshot:', error);
     }
@@ -70,7 +77,7 @@ export const useInterviewSessionStore = ({
 
   const loadLastAnalysis = () => {
     try {
-      const raw = localStorage.getItem(LAST_ANALYSIS_KEY);
+      const raw = localStorage.getItem(getScopedLastAnalysisKey()) || localStorage.getItem(LAST_ANALYSIS_KEY);
       if (!raw) return null;
       return JSON.parse(raw);
     } catch (error) {
@@ -80,6 +87,7 @@ export const useInterviewSessionStore = ({
   };
 
   const clearLastAnalysis = () => {
+    localStorage.removeItem(getScopedLastAnalysisKey());
     localStorage.removeItem(LAST_ANALYSIS_KEY);
   };
 
@@ -192,7 +200,7 @@ export const useInterviewSessionStore = ({
     if (!resumeData?.id) return;
     if (resumeData.optimizationStatus !== 'optimized') return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
     const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const currentSessions = resumeData.interviewSessions || {};
     const updatedSessions = {
@@ -234,7 +242,7 @@ export const useInterviewSessionStore = ({
   const clearInterviewSession = async (overrideJdText?: string, overrideInterviewType?: string) => {
     if (!resumeData?.id) return;
     const sessionJdText = (overrideJdText ?? jdText ?? resumeData.lastJdText ?? '').trim();
-    const interviewType = normalizeInterviewType(overrideInterviewType || getActiveInterviewType());
+    const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
     const sessionKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const legacyJdKey = makeJdKey(sessionJdText);
 

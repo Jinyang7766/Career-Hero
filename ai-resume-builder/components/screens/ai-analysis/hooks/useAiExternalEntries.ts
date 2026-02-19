@@ -3,6 +3,7 @@ import type { MutableRefObject } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 
 type Params = {
+  currentUserId?: string;
   setResumeData?: (v: any) => void;
   sourceResumeIdRef: MutableRefObject<string | number | null>;
   setSelectedResumeId: (v: string | number | null) => void;
@@ -21,6 +22,7 @@ type Params = {
 };
 
 export const useAiExternalEntries = ({
+  currentUserId,
   setResumeData,
   sourceResumeIdRef,
   setSelectedResumeId,
@@ -37,7 +39,22 @@ export const useAiExternalEntries = ({
   setForceReportEntry,
   handleResumeSelect,
 }: Params) => {
+  const navOwnerKey = 'ai_nav_owner_user_id';
+  const isOwnedByCurrentUser = () => {
+    const owner = String(localStorage.getItem(navOwnerKey) || '').trim();
+    const uid = String(currentUserId || '').trim();
+    if (!owner) return true;
+    if (!uid) return false;
+    return owner === uid;
+  };
+
   useEffect(() => {
+    if (!isOwnedByCurrentUser()) {
+      localStorage.removeItem('ai_interview_open');
+      localStorage.removeItem('ai_interview_resume_id');
+      localStorage.removeItem('ai_interview_entry_mode');
+      return;
+    }
     const shouldOpen = localStorage.getItem('ai_interview_open') === '1';
     const targetId = localStorage.getItem('ai_interview_resume_id');
     const interviewEntryMode = localStorage.getItem('ai_interview_entry_mode') || 'chat';
@@ -46,6 +63,7 @@ export const useAiExternalEntries = ({
     localStorage.removeItem('ai_interview_open');
     localStorage.removeItem('ai_interview_resume_id');
     localStorage.removeItem('ai_interview_entry_mode');
+    localStorage.removeItem(navOwnerKey);
     if (interviewEntryMode === 'scene_select') {
       setStepHistory([]);
       setCurrentStep('jd_input');
@@ -97,9 +115,19 @@ export const useAiExternalEntries = ({
         }
       }
     })();
-  }, []);
+  }, [currentUserId]);
 
   useEffect(() => {
+    if (!isOwnedByCurrentUser()) {
+      localStorage.removeItem('ai_result_open');
+      localStorage.removeItem('ai_result_resume_id');
+      localStorage.removeItem('ai_result_step');
+      localStorage.removeItem('ai_report_open');
+      localStorage.removeItem('ai_report_resume_id');
+      localStorage.removeItem('ai_report_step');
+      localStorage.removeItem('ai_report_resume_payload');
+      return;
+    }
     const shouldOpenReport =
       localStorage.getItem('ai_result_open') === '1' ||
       localStorage.getItem('ai_report_open') === '1';
@@ -120,10 +148,11 @@ export const useAiExternalEntries = ({
     localStorage.removeItem('ai_report_open');
     localStorage.removeItem('ai_report_resume_id');
     localStorage.removeItem('ai_report_step');
+    localStorage.removeItem(navOwnerKey);
     localStorage.setItem('ai_analysis_step', targetStep);
     setStepHistory([]);
     setForceReportEntry(true);
     setCurrentStep(targetStep);
     void handleResumeSelect(targetId, true);
-  }, []);
+  }, [currentUserId]);
 };

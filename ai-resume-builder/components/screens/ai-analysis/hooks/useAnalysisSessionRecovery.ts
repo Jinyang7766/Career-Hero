@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   resumeData: any;
@@ -37,7 +38,7 @@ export const useAnalysisSessionRecovery = ({
     if (forcedResumeSelect && currentStep === 'resume_select') return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
-    const activeInterviewType = String(localStorage.getItem('ai_interview_type') || 'general').toLowerCase();
+    const activeInterviewType = getActiveInterviewType();
 
     const jdKey = makeJdKey(effectiveJdText);
     const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${currentStep}`;

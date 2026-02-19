@@ -80,8 +80,19 @@ export const useAnalysisRuntime = ({
             'ai_analysis_entry_source',
             'ai_analysis_has_activity',
             'ai_chat_prev_step',
-            'ai_chat_entry_source'
+            'ai_chat_entry_source',
+            'ai_interview_type',
+            'ai_interview_mode',
+            'ai_interview_focus',
+            'ai_nav_owner_user_id',
           ].forEach((k) => localStorage.removeItem(k));
+          for (let i = localStorage.length - 1; i >= 0; i--) {
+            const key = localStorage.key(i);
+            if (!key) continue;
+            if (key.startsWith(`${LAST_ANALYSIS_KEY}:`)) {
+              localStorage.removeItem(key);
+            }
+          }
 
           setStepHistory([]);
           setChatEntrySource(null);
@@ -158,4 +169,3 @@ export const useAnalysisRuntime = ({
     markAnalysisCompleted,
   };
 };
-

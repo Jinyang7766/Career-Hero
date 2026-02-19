@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   composeInterviewPlan,
@@ -7,6 +7,7 @@ import {
   getActiveInterviewType,
   getFallbackPlanByType,
   getInterviewQuestionLimit,
+  getLegacyPlanStorageKey,
   getPlanStorageKey,
   getWarmupQuestion,
   sanitizePlanQuestions,
@@ -18,6 +19,7 @@ type Params = {
   jdText: string;
   buildApiUrl: (path: string) => string;
   makeJdKey: (text: string) => string;
+  currentUserId?: string;
   planFetchTrigger: number;
   setInterviewPlan: Dispatch<SetStateAction<string[]>>;
   getBackendAuthToken: () => Promise<string>;
@@ -30,24 +32,37 @@ export const useInterviewPlanLoader = ({
   jdText,
   buildApiUrl,
   makeJdKey,
+  currentUserId,
   planFetchTrigger,
   setInterviewPlan,
   getBackendAuthToken,
   planLoaderMountedRef,
 }: Params) => {
+  const lastLoadIdentityRef = useRef<string>('');
   useEffect(() => {
     if (!isInterviewMode) return;
     if (!resumeData) return;
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
-    if (!effectiveJdText) return;
     const interviewType = getActiveInterviewType();
     const interviewMode = getActiveInterviewMode();
     const interviewFocus = getActiveInterviewFocus();
     const questionLimit = getInterviewQuestionLimit();
-    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText, interviewFocus);
+    if (!effectiveJdText) {
+      const fallback = composeInterviewPlan(
+        interviewType,
+        sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType)
+      ).slice(0, questionLimit);
+      if (fallback.length > 0) setInterviewPlan(fallback);
+      return;
+    }
+
+    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText, interviewFocus, currentUserId);
+    const legacyStorageKey = getLegacyPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText, interviewFocus);
+    const loadIdentity = `${storageKey}|${planFetchTrigger}`;
+    if (lastLoadIdentityRef.current === loadIdentity) return;
 
     try {
-      const cached = localStorage.getItem(storageKey);
+      const cached = localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey);
       if (cached) {
         const parsed = JSON.parse(cached);
         const q = composeInterviewPlan(
@@ -55,7 +70,16 @@ export const useInterviewPlanLoader = ({
           sanitizePlanQuestions(Array.isArray(parsed?.questions) ? parsed.questions : [], interviewType)
         );
         if (q.length > 0) {
+          lastLoadIdentityRef.current = loadIdentity;
           setInterviewPlan(q.slice(0, questionLimit));
+          // Migrate legacy cache to user-scoped key to avoid cross-account collisions.
+          if (!localStorage.getItem(storageKey)) {
+            try {
+              localStorage.setItem(storageKey, cached);
+            } catch {
+              // ignore migration failures
+            }
+          }
           return;
         }
       }
@@ -64,6 +88,7 @@ export const useInterviewPlanLoader = ({
     }
 
     const run = async () => {
+      lastLoadIdentityRef.current = loadIdentity;
       try {
         setInterviewPlan(prev => {
           if (prev.length > 0) return prev;
@@ -125,9 +150,11 @@ export const useInterviewPlanLoader = ({
     isInterviewMode,
     jdText,
     makeJdKey,
+    currentUserId,
     planFetchTrigger,
     planLoaderMountedRef,
-    resumeData,
+    resumeData?.id,
+    resumeData?.lastJdText,
     setInterviewPlan,
   ]);
 };

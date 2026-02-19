@@ -39,7 +39,7 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
         }
     });
 
-    if (!resume.analyzed) return null;
+    if (!resume.analyzed && !isInterviewMode) return null;
 
     return (
         <div className="w-full">

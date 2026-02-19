@@ -177,8 +177,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
         </div>
 
-        {isInterviewMode && (
-          <div className="relative">
+        <div className="relative">
           <button
             type="button"
             disabled={isRecording || isSending}
@@ -206,14 +205,14 @@ const ChatPage: React.FC<ChatPageProps> = ({
               <button
                 onClick={async () => {
                   setMenuOpen(false);
-                  if (await confirmDialog('确认结束面试并生成总结吗？')) {
+                  if (await confirmDialog(isInterviewMode ? '确认结束面试并生成总结吗？' : '确认结束微访谈并生成总结吗？')) {
                     onEndInterview();
                   }
                 }}
                 className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
               >
                 <span className="material-symbols-outlined text-[18px]">logout</span>
-                结束面试
+                {isInterviewMode ? '结束面试' : '结束微访谈'}
               </button>
             </div>
           )}
@@ -223,8 +222,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
               onClick={() => setMenuOpen(false)}
             />
           )}
-          </div>
-        )}
+        </div>
       </div>
 
       {isInterviewMode && (

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   isInterviewMode?: boolean;
@@ -29,19 +30,9 @@ export const useChatIntroMessages = ({
 }: Params) => {
   const askTimerRef = useRef<number | null>(null);
 
-  const getInterviewType = () => {
-    try {
-      const t = String(localStorage.getItem('ai_interview_type') || '').trim().toLowerCase();
-      if (t === 'technical' || t === 'hr' || t === 'general') return t;
-    } catch {
-      // ignore
-    }
-    return 'general';
-  };
-
   const buildIntroTexts = (userName: string) => {
     const greeting = userName ? `${userName}，您好！` : '您好！';
-    const interviewType = getInterviewType();
+    const interviewType = getActiveInterviewType();
     const hasJd = !!String(jdText || '').trim();
     const generalWarmup =
       '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';

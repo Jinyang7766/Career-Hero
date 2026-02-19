@@ -1,17 +1,56 @@
+const resolveStorageUserId = (): string => {
+  try {
+    const analysisUid = String(localStorage.getItem('ai_analysis_user_id') || '').trim();
+    if (analysisUid) return analysisUid;
+    const userRaw = localStorage.getItem('user');
+    if (userRaw) {
+      const parsed = JSON.parse(userRaw);
+      const uid = String(parsed?.id || '').trim();
+      if (uid) return uid;
+    }
+    const sessionRaw = localStorage.getItem('supabase_session');
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw);
+      const uid = String(parsed?.user?.id || '').trim();
+      if (uid) return uid;
+    }
+  } catch {
+    // ignore storage parsing failures
+  }
+  return '';
+};
+
+const getScopedStorageKey = (baseKey: string, currentUserId?: string | null) => {
+  const uid = String(currentUserId || resolveStorageUserId()).trim();
+  if (!uid) return baseKey;
+  return `${baseKey}:${uid}`;
+};
+
+const readInterviewPreference = (baseKey: string, currentUserId?: string | null): string => {
+  try {
+    const scopedKey = getScopedStorageKey(baseKey, currentUserId);
+    const scoped = String(localStorage.getItem(scopedKey) || '').trim();
+    if (scoped) return scoped;
+    return String(localStorage.getItem(baseKey) || '').trim();
+  } catch {
+    return '';
+  }
+};
+
 export const getActiveInterviewType = () => {
-  const t = String(localStorage.getItem('ai_interview_type') || '').trim().toLowerCase();
+  const t = readInterviewPreference('ai_interview_type').toLowerCase();
   if (t === 'technical' || t === 'hr' || t === 'general') return t;
   return 'general';
 };
 
 export const getActiveInterviewMode = () => {
-  const mode = String(localStorage.getItem('ai_interview_mode') || '').trim().toLowerCase();
+  const mode = readInterviewPreference('ai_interview_mode').toLowerCase();
   if (mode === 'simple' || mode === 'comprehensive') return mode;
   return 'comprehensive';
 };
 
 export const getActiveInterviewFocus = () =>
-  String(localStorage.getItem('ai_interview_focus') || '').trim().slice(0, 300);
+  readInterviewPreference('ai_interview_focus').slice(0, 300);
 
 export const getInterviewQuestionLimit = () => {
   const mode = getActiveInterviewMode();
@@ -19,6 +58,20 @@ export const getInterviewQuestionLimit = () => {
 };
 
 export const getPlanStorageKey = (
+  resumeId: string | number | null | undefined,
+  makeJdKey: (text: string) => string,
+  effectiveJdText: string,
+  interviewFocus?: string,
+  currentUserId?: string | number | null
+) => {
+  const interviewType = getActiveInterviewType();
+  const interviewMode = getActiveInterviewMode();
+  const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
+  const userKey = String(currentUserId || 'anonymous').trim() || 'anonymous';
+  return `ai_interview_plan_${userKey}_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}`;
+};
+
+export const getLegacyPlanStorageKey = (
   resumeId: string | number | null | undefined,
   makeJdKey: (text: string) => string,
   effectiveJdText: string,

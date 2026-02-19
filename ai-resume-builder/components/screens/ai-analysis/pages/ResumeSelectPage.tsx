@@ -76,7 +76,9 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {formatResumeModifiedAt(resume.date)}
               </p>
-              {resume.analyzed && <DiagnosisProgressBar resume={resume} isInterviewMode={!!isInterviewMode} />}
+              {(resume.analyzed || isInterviewMode) && (
+                <DiagnosisProgressBar resume={resume} isInterviewMode={!!isInterviewMode} />
+              )}
             </div>
             <div className="shrink-0 flex items-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '18px' }}>

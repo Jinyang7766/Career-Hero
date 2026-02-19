@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import { getPlanStorageKey } from '../interview-plan-utils';
+import { getLegacyPlanStorageKey, getPlanStorageKey } from '../interview-plan-utils';
 
 type Params = {
   chatIntroScheduledRef: MutableRefObject<boolean>;
@@ -9,6 +9,7 @@ type Params = {
   jdText: string;
   resumeData: any;
   makeJdKey: (text: string) => string;
+  currentUserId?: string;
   setInterviewPlan: (v: string[]) => void;
   setPlanFetchTrigger: Dispatch<SetStateAction<number>>;
   openChat: (source: 'internal' | 'preview') => void;
@@ -20,6 +21,7 @@ export const useInterviewEntryActions = ({
   jdText,
   resumeData,
   makeJdKey,
+  currentUserId,
   setInterviewPlan,
   setPlanFetchTrigger,
   openChat,
@@ -30,12 +32,13 @@ export const useInterviewEntryActions = ({
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     if (effectiveJdText) {
       try {
-        localStorage.removeItem(getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText));
+        localStorage.removeItem(getPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText, undefined, currentUserId));
+        localStorage.removeItem(getLegacyPlanStorageKey(resumeData?.id, makeJdKey, effectiveJdText));
       } catch { }
     }
     setInterviewPlan([]);
     setPlanFetchTrigger((v) => v + 1);
-  }, [chatIntroScheduledRef, clearInterviewSession, jdText, resumeData?.lastJdText, resumeData?.id, makeJdKey, setInterviewPlan, setPlanFetchTrigger]);
+  }, [chatIntroScheduledRef, clearInterviewSession, jdText, resumeData?.lastJdText, resumeData?.id, makeJdKey, currentUserId, setInterviewPlan, setPlanFetchTrigger]);
 
   const handleStartInterviewFromFinalReport = useCallback(async () => {
     await handleRestartInterview();

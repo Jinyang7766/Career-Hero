@@ -45,6 +45,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   const navigateToView = useAppContext((s) => s.navigateToView);
   const allResumes = useAppStore((state) => state.allResumes);
   const setResumeData = useAppStore((state) => state.setResumeData);
+  const navOwnerKey = 'ai_nav_owner_user_id';
   const [greeting, setGreeting] = useState('');
   const [dailyTips, setDailyTips] = useState<string[]>([]);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
@@ -224,9 +225,11 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
   const handleContinueDiagnosis = (resume: any) => {
     const resumeId = String(resume?.id || '').trim();
+    const ownerId = String(currentUser?.id || '').trim();
     if (!resumeId) return;
     if (!hasAnyProgressForResume(resume)) {
       localStorage.setItem('ai_analysis_force_resume_select', '1');
+      if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
       localStorage.removeItem('ai_result_open');
       localStorage.removeItem('ai_result_resume_id');
       localStorage.removeItem('ai_result_step');
@@ -238,6 +241,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     }
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const isFinalDone = diagnosisProgress >= 100;
+    if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_result_open', '1');
     localStorage.setItem('ai_result_resume_id', resumeId);
     localStorage.setItem('ai_result_step', isFinalDone ? 'comparison' : 'report');
@@ -246,9 +250,11 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
   const handleContinueInterview = (resume: any) => {
     const resumeId = String(resume?.id || '').trim();
+    const ownerId = String(currentUser?.id || '').trim();
     if (!resumeId) return;
     if (!hasAnyProgressForResume(resume)) {
       localStorage.setItem('ai_analysis_force_resume_select', '1');
+      if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
       localStorage.removeItem('ai_result_open');
       localStorage.removeItem('ai_result_resume_id');
       localStorage.removeItem('ai_result_step');
@@ -259,6 +265,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       return;
     }
     localStorage.removeItem('ai_analysis_force_resume_select');
+    if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_interview_open', '1');
     localStorage.setItem('ai_interview_resume_id', resumeId);
     localStorage.setItem('ai_interview_entry_mode', 'scene_select');
