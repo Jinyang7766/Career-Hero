@@ -213,7 +213,7 @@ export const useAnalysisExecution = ({
 
     const runId = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
     analysisRunIdRef.current = runId;
-    if (interviewType) {
+    if (isInterviewMode && interviewType) {
       localStorage.setItem('ai_interview_type', interviewType);
     }
 
@@ -561,14 +561,17 @@ export const useAnalysisExecution = ({
       } catch (stateErr) {
         console.warn('Failed to persist paused session state:', stateErr);
       }
-      if (isTimeout) {
-        if (!isInterviewMode && refundUsageQuota) {
-          await refundUsageQuota('analysis', 'AI 诊断超时返还积分');
-        }
-        showToast('AI 诊断超时，请检查后端服务是否可用后重试', 'error', 2800);
-      } else if (isCancelled) {
-        showToast('诊断已取消，请重试', 'info', 1800);
-      } else {
+        if (isTimeout) {
+          if (!isInterviewMode && refundUsageQuota) {
+            await refundUsageQuota('analysis', 'AI 诊断超时返还积分');
+          }
+          showToast('AI 诊断超时，请检查后端服务是否可用后重试', 'error', 2800);
+        } else if (isCancelled) {
+          if (!isInterviewMode && refundUsageQuota) {
+            await refundUsageQuota('analysis', 'AI 诊断取消返还积分');
+          }
+          showToast('诊断已取消，请重试', 'info', 1800);
+        } else {
         if (!isInterviewMode && refundUsageQuota) {
           await refundUsageQuota('analysis', 'AI 诊断失败返还积分');
         }

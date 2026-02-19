@@ -44,9 +44,22 @@ const MemberCenter: React.FC = () => {
         return userProfile?.referral_code || (currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888');
     }, [currentUser, userProfile?.referral_code]);
 
-    // Mock user subscription data - Sync with Profile state if available
+    const normalizeMembershipTier = (raw: any): MembershipTier => {
+        const tier = String(raw || '').trim().toUpperCase();
+        if (tier === MembershipTier.STARTER) return MembershipTier.STARTER;
+        if (tier === MembershipTier.PLUS) return MembershipTier.PLUS;
+        if (tier === MembershipTier.PRO) return MembershipTier.PRO;
+        if (tier === MembershipTier.ULTRA) return MembershipTier.ULTRA;
+        return MembershipTier.FREE;
+    };
+
+    // Sync with database profile state
     const userSub = {
-        tier: MembershipTier.FREE,
+        tier: normalizeMembershipTier(
+            (userProfile as any)?.membership_tier ||
+            (currentUser as any)?.membership_tier ||
+            (currentUser as any)?.user_metadata?.membership_tier
+        ),
         autoRenew: false,
         pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
     };

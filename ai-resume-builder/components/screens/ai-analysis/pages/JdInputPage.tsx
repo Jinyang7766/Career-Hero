@@ -338,7 +338,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             上一步
           </button>
           <button
-            onClick={() => onStart(interviewType)}
+            onClick={() => onStart(isInterviewMode ? interviewType : undefined)}
             className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >
@@ -361,7 +361,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                 <button
                   onClick={() => {
                     setShowJdEmptyModal(false);
-                    startAnalysis(interviewType);
+                    startAnalysis(isInterviewMode ? interviewType : undefined);
                   }}
                   className="w-full rounded-2xl bg-white text-red-600 py-3.5 font-bold hover:bg-white/90 active:scale-[0.98] transition-all shadow-lg"
                   type="button"

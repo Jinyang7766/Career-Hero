@@ -786,7 +786,12 @@ def analyze_resume_core(current_user_id, data, deps):
                 m = str(model_name or '').strip()
                 if not m or m in deduped_models:
                     continue
+                # Force analysis pipeline to use flash models only.
+                if 'pro' in m.lower():
+                    continue
                 deduped_models.append(m)
+            if not deduped_models:
+                deduped_models = ['gemini-2.5-flash']
             analysis_models_tried = deduped_models
             response, used_model = deps['analysis_generate_content_resilient'](
                 current_user_id=current_user_id,

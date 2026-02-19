@@ -201,14 +201,16 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
           setLoading(false);
         }
 
-        // 4. 快速回退：如果有authUser，先使用它来显示基本信息
-        if (authUser) {
+        // 4. 快速回退：如果没有缓存且有 authUser，先使用基础信息显示
+        if (!cachedProfile && authUser) {
           const quickProfile: UserProfile = {
             id: authUser.id,
             email: authUser.email || '',
             name: authUser.user_metadata?.name || authUser.email?.split('@')[0] || '用户',
             created_at: authUser.created_at || new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            membership_tier: authUser.user_metadata?.membership_tier || (authUser as any)?.membership_tier || undefined,
+            points_balance: Number((authUser as any)?.user_metadata?.points_balance ?? (authUser as any)?.points_balance ?? 0),
           };
 
           console.log('Using quick auth user profile for initial load:', quickProfile);

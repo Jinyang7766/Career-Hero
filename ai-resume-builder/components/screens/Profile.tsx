@@ -215,9 +215,21 @@ const Profile: React.FC<ScreenProps> = () => {
     return userProfile?.referral_code || (currentUser?.id ? currentUser.id.substring(0, 6).toUpperCase() : 'AI8888');
   }, [currentUser, userProfile?.referral_code]);
 
-  // Mock user subscription data - keeps consistent with Member Center
+  const normalizeMembershipTier = (raw: any): MembershipTier => {
+    const tier = String(raw || '').trim().toUpperCase();
+    if (tier === MembershipTier.STARTER) return MembershipTier.STARTER;
+    if (tier === MembershipTier.PLUS) return MembershipTier.PLUS;
+    if (tier === MembershipTier.PRO) return MembershipTier.PRO;
+    if (tier === MembershipTier.ULTRA) return MembershipTier.ULTRA;
+    return MembershipTier.FREE;
+  };
+
   const userSub = {
-    tier: MembershipTier.FREE,
+    tier: normalizeMembershipTier(
+      (userProfile as any)?.membership_tier ||
+      (currentUser as any)?.membership_tier ||
+      (currentUser as any)?.user_metadata?.membership_tier
+    ),
     pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
   };
 
@@ -396,7 +408,14 @@ const Profile: React.FC<ScreenProps> = () => {
                   <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                     {isLoggedIn ? (displayName || ' ') : '未登录'}
                   </h2>
-                  <span className="shrink-0 px-2 py-0.5 rounded-full text-[9px] font-black bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-current opacity-90 uppercase tracking-tight">
+                  <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black border border-current opacity-90 uppercase tracking-tight ${isLoggedIn ? (
+                    userSub.tier === MembershipTier.STARTER ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' :
+                      userSub.tier === MembershipTier.PLUS ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                        userSub.tier === MembershipTier.PRO ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' :
+                          userSub.tier === MembershipTier.ULTRA ? 'bg-slate-800 dark:bg-slate-900 text-amber-400' :
+                            'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                  ) : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    }`}>
                     {isLoggedIn ? (userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier) : '访客'}
                   </span>
                 </div>
@@ -420,26 +439,21 @@ const Profile: React.FC<ScreenProps> = () => {
           </div>
         </div>
 
-        {/* Dynamic Upgrade Card */}
+        {/* Dynamic Upgrade Card - Premium Redesign */}
         {isLoggedIn && (() => {
-          // Mock user subscription - in real app this comes from context/props
-          const userSub = {
-            tier: MembershipTier.FREE,
-          };
-
           const getTierStyle = (tier: MembershipTier) => {
             switch (tier) {
               case MembershipTier.STARTER:
                 return {
-                  bg: 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700',
+                  bg: 'bg-gradient-to-br from-slate-500 to-slate-600',
                   icon: 'rocket_launch',
-                  iconColor: 'text-slate-600 dark:text-slate-400',
+                  iconColor: 'text-white',
                   title: '入门版权益已生效',
                   subtitle: '享有基础AI简历诊断与模拟面试权益',
-                  titleColor: 'text-slate-900 dark:text-white',
-                  subColor: 'text-slate-500 dark:text-slate-400',
-                  btnStyle: 'bg-slate-900 text-white dark:bg-white dark:text-slate-900',
-                  shadow: 'shadow-sm'
+                  titleColor: 'text-white',
+                  subColor: 'text-slate-100',
+                  btnStyle: 'bg-white/20 border border-white/30 text-white backdrop-blur-md',
+                  shadow: 'shadow-lg shadow-slate-500/20'
                 };
               case MembershipTier.PLUS:
                 return {
@@ -447,11 +461,11 @@ const Profile: React.FC<ScreenProps> = () => {
                   icon: 'verified',
                   iconColor: 'text-white',
                   title: 'Plus 权益已生效',
-                  subtitle: '尊享更高积分额度与优先能力',
+                  subtitle: '尊享更高积分额度与优先分析能力',
                   titleColor: 'text-white',
                   subColor: 'text-blue-100',
-                  btnStyle: 'bg-white text-blue-700 shadow-sm',
-                  shadow: 'shadow-md shadow-blue-500/20'
+                  btnStyle: 'bg-white/20 border border-white/30 text-white backdrop-blur-md',
+                  shadow: 'shadow-lg shadow-blue-500/20'
                 };
               case MembershipTier.PRO:
                 return {
@@ -462,66 +476,73 @@ const Profile: React.FC<ScreenProps> = () => {
                   subtitle: '解锁PDF导出与海量AI模拟面试',
                   titleColor: 'text-white',
                   subColor: 'text-indigo-100',
-                  btnStyle: 'bg-white text-indigo-700 shadow-sm',
-                  shadow: 'shadow-md shadow-indigo-500/20'
+                  btnStyle: 'bg-white/20 border border-white/30 text-white backdrop-blur-md',
+                  shadow: 'shadow-lg shadow-indigo-500/20'
                 };
               case MembershipTier.ULTRA:
                 return {
-                  bg: 'bg-slate-900',
+                  bg: 'bg-gradient-to-br from-slate-800 to-slate-900',
                   icon: 'diamond',
                   iconColor: 'text-amber-400',
                   title: 'Ultra 尊享版权益已生效',
-                  subtitle: '全能旗舰体验，无限可能',
+                  subtitle: '全能旗舰体验，无限职业可能',
                   titleColor: 'text-white',
-                  subColor: 'text-slate-400',
+                  subColor: 'text-white/60',
                   btnStyle: 'bg-amber-500 text-slate-900 font-bold',
-                  shadow: 'shadow-xl shadow-black/20'
+                  shadow: 'shadow-xl shadow-black/30'
                 };
               default: // FREE
                 return {
                   bg: isDarkMode
-                    ? 'bg-slate-800 border border-slate-700'
+                    ? 'bg-surface-dark border border-white/5'
                     : 'bg-white border border-slate-200',
-                  icon: 'rocket_launch',
+                  icon: 'auto_awesome',
                   iconColor: 'text-primary',
-                  title: '当前版本：免费版',
-                  subtitle: '升级以解锁更多积分，支持诊断与面试',
+                  title: '升级解锁 AI 创作力',
+                  subtitle: '获取更多积分，开启智能面试与诊断',
                   titleColor: 'text-slate-900 dark:text-white',
                   subColor: 'text-slate-500 dark:text-slate-400',
-                  btnStyle: 'bg-primary text-white shadow-primary/20 shadow-lg',
-                  shadow: 'shadow-sm'
+                  btnStyle: 'bg-primary text-white shadow-lg shadow-primary/20',
+                  shadow: 'shadow-md'
                 };
             }
           };
 
           const style = getTierStyle(userSub.tier);
 
-          // For paid tiers, we might want a different layout or just consistent styling
           return (
-            <div className={`relative overflow-hidden rounded-xl p-5 transition-all duration-500 group ${style.bg} ${style.shadow}`}>
-              {/* Subtle Texture for Premium Tiers */}
-              {userSub.tier !== MembershipTier.FREE && userSub.tier !== MembershipTier.STARTER && (
-                <div className="absolute inset-0 opacity-10 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
-              )}
+            <div
+              className={`relative overflow-hidden rounded-[1.5rem] p-6 transition-all duration-500 group cursor-pointer active:scale-[0.98] ${style.bg} ${style.shadow}`}
+              onClick={() => navigateToView(View.MEMBER_CENTER)}
+            >
+              {/* Decorative Elements - Synced with Member Center */}
+              <div className="absolute -right-12 -top-12 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
+              <div className="absolute -left-12 -bottom-12 h-48 w-48 rounded-full bg-white/10 blur-3xl"></div>
+
+              {/* Texture Layer */}
+              <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
 
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className={`material-symbols-outlined text-[20px] ${style.iconColor}`}>{style.icon}</span>
-                    <h3 className={`${style.titleColor} text-[15px] font-bold tracking-tight whitespace-nowrap overflow-hidden text-ellipsis`}>
+                  <div className="flex items-center gap-2">
+                    <div className={`size-8 rounded-full flex items-center justify-center backdrop-blur-sm border ${userSub.tier === MembershipTier.FREE
+                        ? 'bg-primary/10 border-primary/10'
+                        : 'bg-white/10 border-white/10'
+                      }`}>
+                      <span className={`material-symbols-outlined text-[18px] ${style.iconColor}`}>{style.icon}</span>
+                    </div>
+                    <h3 className={`${style.titleColor} text-[16px] font-black tracking-tight`}>
                       {style.title}
                     </h3>
                   </div>
-                  <p className={`text-[12px] font-medium line-clamp-2 ${style.subColor}`}>
-                    {style.subtitle}
-                  </p>
                 </div>
-                <button
-                  onClick={() => navigateToView(View.MEMBER_CENTER)}
-                  className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-all active:scale-95 whitespace-nowrap ${style.btnStyle}`}
-                >
-                  {userSub.tier === MembershipTier.FREE ? '立即升级' : '查看权益'}
-                </button>
+
+                <div className="flex items-center gap-2">
+                  <div className={`shrink-0 px-4 py-2 rounded-xl text-[11px] font-black transition-all group-hover:px-5 ${style.btnStyle}`}>
+                    {userSub.tier === MembershipTier.FREE ? '立即升级' : '查看权益'}
+                  </div>
+                  <span className="material-symbols-outlined text-white/40 text-[18px] group-hover:translate-x-1 transition-transform">chevron_right</span>
+                </div>
               </div>
             </div>
           );

@@ -18,7 +18,9 @@ export const useAnalysisHungGuard = ({
   useEffect(() => {
     if (currentStep !== 'analyzing') return;
 
-    const HUNG_MS = 90 * 1000;
+    // Keep this guard longer than normal analysis response time to avoid
+    // cancelling legitimate in-flight requests and causing non-refunded aborts.
+    const HUNG_MS = 180 * 1000;
     const getStartedAt = () => {
       const raw = localStorage.getItem(inprogressAtKey);
       const at = raw ? Number(raw) : NaN;
