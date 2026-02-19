@@ -90,7 +90,7 @@ CORS(app,
          r"/api/*": {
              "origins": "*",
              "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With"]
+            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "X-Client-Trace-Id"]
          }
      },
      supports_credentials=False
@@ -130,7 +130,7 @@ def apply_cors_headers(response):
     otherwise browser may show `Failed to fetch` even when backend returns 200.
     """
     response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,X-Client-Trace-Id'
     response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
     return response
 
