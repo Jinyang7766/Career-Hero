@@ -7,7 +7,7 @@ import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, 
 import { runRealAnalysis } from '../analysis-api';
 import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
 import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
-import { getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type Params = {
@@ -192,12 +192,20 @@ export const useAnalysisExecution = ({
       cancelInFlightAnalysis(undefined, { preserveStep: true });
     }
     const normalizedInterviewType = String(interviewType || getActiveInterviewType() || 'general').trim().toLowerCase();
+    const normalizedInterviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase();
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     const interviewSessions = (resumeData as any)?.interviewSessions || {};
     const typedKey = makeInterviewSessionKey(effectiveJdText, normalizedInterviewType);
     const legacyKey = makeJdKey(effectiveJdText);
     const resumeSession = interviewSessions[typedKey] || interviewSessions[legacyKey];
-    const hasInterviewMessages = !!(resumeSession && Array.isArray(resumeSession.messages) && resumeSession.messages.length > 0);
+    const resumeSessionMode = String(resumeSession?.interviewMode || '').trim().toLowerCase();
+    const modeMatched = !!resumeSession && !!resumeSessionMode && resumeSessionMode === normalizedInterviewMode;
+    const hasInterviewMessages = !!(
+      resumeSession &&
+      modeMatched &&
+      Array.isArray(resumeSession.messages) &&
+      resumeSession.messages.length > 0
+    );
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
     const analysisState = String(analysisSessionByJd[makeJdKey(effectiveJdText)]?.state || '').toLowerCase();
     const isContinuingInterview = Boolean(

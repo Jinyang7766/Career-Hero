@@ -138,6 +138,29 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     return analysisState === 'interview_in_progress' || analysisState === 'paused';
   }, [interviewType, isInterviewMode, jdText, resumeData]);
 
+  const persistInterviewSceneConfig = React.useCallback(() => {
+    if (!isInterviewMode) return;
+    try {
+      localStorage.setItem(getScopedKey(INTERVIEW_TYPE_STORAGE_KEY), interviewType);
+      localStorage.setItem(INTERVIEW_TYPE_STORAGE_KEY, interviewType);
+      localStorage.setItem(getScopedKey(INTERVIEW_MODE_STORAGE_KEY), interviewMode);
+      localStorage.setItem(INTERVIEW_MODE_STORAGE_KEY, interviewMode);
+      localStorage.setItem(getScopedKey(INTERVIEW_FOCUS_STORAGE_KEY), String(interviewFocus || '').trim());
+      localStorage.setItem(INTERVIEW_FOCUS_STORAGE_KEY, String(interviewFocus || '').trim());
+    } catch {
+      // ignore localStorage access errors
+    }
+  }, [
+    INTERVIEW_FOCUS_STORAGE_KEY,
+    INTERVIEW_MODE_STORAGE_KEY,
+    INTERVIEW_TYPE_STORAGE_KEY,
+    getScopedKey,
+    interviewFocus,
+    interviewMode,
+    interviewType,
+    isInterviewMode,
+  ]);
+
   const selectedResumeLabel = (() => {
     const selected = (allResumes || []).find((item) => isSameResumeId(item.id, selectedResumeId));
     if (selected?.title) return selected.title;
@@ -351,7 +374,10 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             上一步
           </button>
           <button
-            onClick={() => onStart(isInterviewMode ? interviewType : undefined)}
+            onClick={() => {
+              persistInterviewSceneConfig();
+              onStart(isInterviewMode ? interviewType : undefined);
+            }}
             className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
             type="button"
           >

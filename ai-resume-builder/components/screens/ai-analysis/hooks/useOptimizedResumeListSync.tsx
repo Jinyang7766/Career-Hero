@@ -17,6 +17,20 @@ export const useOptimizedResumeListSync = ({
   setAllResumes,
 }: Params) => {
   const syncedOptimizedDigestRef = useRef<string>('');
+  const toDisplayDate = (value: any) => {
+    const raw = String(value || '').trim();
+    if (!raw) return new Date().toISOString();
+    const date = new Date(raw);
+    if (Number.isNaN(date.getTime())) return new Date().toISOString();
+    const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
+    const year = beijingTime.getFullYear();
+    const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
+    const day = String(beijingTime.getDate()).padStart(2, '0');
+    const hours = String(beijingTime.getHours()).padStart(2, '0');
+    const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
+    const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+  };
 
   useEffect(() => {
     const optimizedId = String(optimizedResumeId || '').trim();
@@ -67,6 +81,12 @@ export const useOptimizedResumeListSync = ({
       );
       const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
       const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
+      const statusRaw = String(rowData?.optimizationStatus || '').trim().toLowerCase();
+      const isActuallyOptimized = statusRaw === 'optimized' || !!rowData?.optimizedFromId;
+      if (!isActuallyOptimized && !hasSnapshotScore && !hasBinding && !reportReadyInSession) {
+        // Guard: never upgrade a plain resume into "已诊断/optimized" from partial local state.
+        return;
+      }
       const analysisScore = hasSnapshotScore ? Number(analysisSnapshot.score) : undefined;
       const diagnosisProgress = deriveDiagnosisProgress(rowData);
       const analyzed = Boolean(hasSnapshotScore || hasBinding || reportReadyInSession);
@@ -116,7 +136,7 @@ export const useOptimizedResumeListSync = ({
       const summaryItem: any = {
         id: resumeRow.id,
         title: resumeRow.title,
-        date: String(resumeRow.updated_at || resumeRow.created_at || '').replace(/[^0-9\-:\s]/g, '') || new Date().toISOString(),
+        date: toDisplayDate(resumeRow.updated_at || resumeRow.created_at),
         score: resumeRow.score,
         analysisScore,
         diagnosisProgress,
@@ -125,7 +145,7 @@ export const useOptimizedResumeListSync = ({
         interviewHistory,
         interviewStageStatus,
         hasDot: resumeRow.has_dot,
-        optimizationStatus: rowData.optimizationStatus || 'optimized',
+        optimizationStatus: isActuallyOptimized ? 'optimized' : (statusRaw || 'unoptimized'),
         thumbnail: (
           <>
             <div className="absolute top-2 left-1.5 w-8 h-1 bg-slate-300 dark:bg-slate-500 rounded-sm"></div>
@@ -139,7 +159,16 @@ export const useOptimizedResumeListSync = ({
         const list = Array.isArray(prev) ? prev : [];
         const exists = list.some((r: any) => String(r?.id) === String(summaryItem.id));
         if (exists) {
-          return list.map((r: any) => (String(r?.id) === String(summaryItem.id) ? { ...r, ...summaryItem } : r));
+          return list.map((r: any) => {
+            if (String(r?.id) !== String(summaryItem.id)) return r;
+            return {
+              ...r,
+              ...summaryItem,
+              // Never downgrade/upgrade optimization flag accidentally when current row is not truly optimized.
+              optimizationStatus: isActuallyOptimized ? 'optimized' : (r?.optimizationStatus || 'unoptimized'),
+              analyzed: isActuallyOptimized ? summaryItem.analyzed : (r?.analyzed ?? summaryItem.analyzed),
+            };
+          });
         }
         return [summaryItem, ...list];
       });

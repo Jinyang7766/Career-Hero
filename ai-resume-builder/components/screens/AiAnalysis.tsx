@@ -51,6 +51,8 @@ import {
   isAffirmative
 } from './ai-analysis/chat-text';
 import {
+  getActiveInterviewFocus,
+  getActiveInterviewMode,
   getActiveInterviewType,
   getInterviewerAvatarUrl,
   getInterviewerTitle,
@@ -117,6 +119,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
 
   // Chat State
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const interviewPlanConfigKey = `${getActiveInterviewType()}|${getActiveInterviewMode()}|${getActiveInterviewFocus()}`;
   const chatMessagesRef = useRef<ChatMessage[]>([]);
   useEffect(() => {
     chatMessagesRef.current = chatMessages;
@@ -125,6 +128,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const [interviewPlan, setInterviewPlan] = useState<string[]>([]);
   const [planFetchTrigger, setPlanFetchTrigger] = useState(0);
   const planLoaderMountedRef = useRef(true);
+  const planAutoHealRef = useRef<string>('');
 
   const [isInterviewEntry, setIsInterviewEntry] = useState(false);
   const [forceReportEntry, setForceReportEntry] = useState(false);
@@ -220,6 +224,32 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       setInterviewPlan([warmup]);
     }
   }, [currentStep, interviewPlan.length]);
+
+  useEffect(() => {
+    if (!isInterviewMode) return;
+    if (currentStep !== 'chat') return;
+    const mode = getActiveInterviewMode();
+    const minExpected = mode === 'simple' ? 3 : 4;
+    const maxAllowed = mode === 'simple' ? 3 : 12;
+    const signature = `${String(resumeData?.id || '')}|${makeJdKey(String(jdText || resumeData?.lastJdText || '').trim() || '__no_jd__')}|${getActiveInterviewType()}|${mode}|${getActiveInterviewFocus()}`;
+
+    if (mode === 'simple' && interviewPlan.length > maxAllowed) {
+      setInterviewPlan((prev) => prev.slice(0, maxAllowed));
+      return;
+    }
+
+    if (mode === 'comprehensive' && interviewPlan.length > 0 && interviewPlan.length < minExpected) {
+      if (planAutoHealRef.current === signature) return;
+      planAutoHealRef.current = signature;
+      setInterviewPlan([]);
+      setPlanFetchTrigger((v) => v + 1);
+      return;
+    }
+
+    if (interviewPlan.length >= minExpected) {
+      planAutoHealRef.current = '';
+    }
+  }, [currentStep, interviewPlan.length, isInterviewMode, jdText, makeJdKey, resumeData?.id, resumeData?.lastJdText]);
 
   const {
     messagesEndRef,
@@ -485,6 +515,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isInterviewMode,
     resumeData,
     jdText,
+    interviewPlanConfigKey,
     buildApiUrl,
     makeJdKey,
     currentUserId: currentUser?.id,

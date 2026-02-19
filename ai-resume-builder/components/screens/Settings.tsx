@@ -95,7 +95,7 @@ const Settings: React.FC<ScreenProps> = () => {
   };
 
   const handleClearCache = async () => {
-    if (!(await confirmDialog('确定要清除缓存吗？这会清理本地诊断记录。'))) return;
+    if (!(await confirmDialog('确定要清除缓存吗？这会清理本地诊断和面试记录。'))) return;
 
     setIsClearing(true);
     try {

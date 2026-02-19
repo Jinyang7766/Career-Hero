@@ -353,14 +353,25 @@ function App() {
 
         // Format date to Beijing timezone (UTC+8) with seconds
         const formatDateTime = (dateString: string) => {
+          const formatNow = () => {
+            const now = new Date();
+            const beijingNow = new Date(now.getTime() + (8 * 60 * 60 * 1000) + (now.getTimezoneOffset() * 60 * 1000));
+            const year = beijingNow.getFullYear();
+            const month = String(beijingNow.getMonth() + 1).padStart(2, '0');
+            const day = String(beijingNow.getDate()).padStart(2, '0');
+            const hours = String(beijingNow.getHours()).padStart(2, '0');
+            const minutes = String(beijingNow.getMinutes()).padStart(2, '0');
+            const seconds = String(beijingNow.getSeconds()).padStart(2, '0');
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+          };
           if (!dateString) {
-            return '时间未知';
+            return formatNow();
           }
 
           const date = new Date(dateString);
 
           if (isNaN(date.getTime())) {
-            return '时间格式错误';
+            return formatNow();
           }
 
           // Convert to Beijing timezone (UTC+8)

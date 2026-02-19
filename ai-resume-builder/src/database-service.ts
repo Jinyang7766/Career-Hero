@@ -359,14 +359,19 @@ export class DatabaseService {
   }
 
   // 更新简历
-  static async updateResume(resumeId: string, updates: any) {
+  static async updateResume(
+    resumeId: string,
+    updates: any,
+    options?: { touchUpdatedAt?: boolean }
+  ) {
     try {
+      const touchUpdatedAt = options?.touchUpdatedAt !== false;
+      const payload = touchUpdatedAt
+        ? { ...updates, updated_at: new Date().toISOString() }
+        : { ...updates };
       const { data, error } = await supabase
         .from('resumes')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
+        .update(payload)
         .eq('id', resumeId)
         .select()
         .maybeSingle();

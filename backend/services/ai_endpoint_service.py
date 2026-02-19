@@ -1148,15 +1148,36 @@ def ai_chat_core(data, deps):
                 return True
             return (nq in nw) or (nw in nq)
 
-        default_questions = [
-            '请介绍一个你最有代表性的项目，并说明你的具体职责。',
-            '这个项目的关键挑战是什么？你是如何解决的？',
-            '请分享一次跨团队协作推进结果的案例。',
-            '请讲一个你做过关键决策的场景，并说明你的判断依据。',
-            '如果再做一次，你会如何优化？',
-            '你为什么想加入这个岗位/公司？你的3个月目标是什么？',
-            '请补充一个能体现你岗位匹配度的经历或成果。',
-        ]
+        default_questions_by_type = {
+            'general': [
+                '请介绍一个你最有代表性的项目，并说明你的具体职责。',
+                '这个项目的关键挑战是什么？你是如何解决的？',
+                '请分享一次跨团队协作推进结果的案例。',
+                '请讲一个你做过关键决策的场景，并说明你的判断依据。',
+                '如果再做一次，你会如何优化？',
+                '你为什么想加入这个岗位/公司？你的3个月目标是什么？',
+                '请补充一个能体现你岗位匹配度的经历或成果。',
+            ],
+            'technical': [
+                '请详细介绍一个你主导的核心项目，并说明你负责的技术模块。',
+                '这个项目在技术实现上最难的点是什么？你是如何攻克的？',
+                '你做过哪些性能、稳定性或成本优化？请给出量化结果。',
+                '请讲一次线上故障排查经历，你的定位过程和修复策略是什么？',
+                '如果业务规模翻倍，你会如何改造当前架构？',
+                '你如何保障代码质量、可维护性和团队协作效率？',
+                '回看这个项目，你认为最大的技术遗憾与改进方向是什么？',
+            ],
+            'hr': [
+                '请分享一次你与同事或上级出现分歧并达成一致的经历。',
+                '在高压和紧急任务下，你如何保证交付质量？',
+                '请讲一个你主动推动改进并拿到结果的案例。',
+                '你选择这份工作的核心动机是什么？',
+                '你如何规划接下来两年的职业发展？',
+                '如果加入我们，你前3个月会如何快速融入并创造价值？',
+                '请补充一个最能体现你稳定性与责任感的真实经历。',
+            ],
+        }
+        default_questions = default_questions_by_type.get(interview_type, default_questions_by_type['general'])
         min_count = 3 if question_limit <= 3 else 4
 
         def _sanitize_plan_questions(items, *, min_count=min_count, max_count=question_limit):
@@ -1190,6 +1211,8 @@ def ai_chat_core(data, deps):
                 'success': True,
                 'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
+                'planSource': 'fallback_quota_or_config',
+                'modelAvailable': bool(deps['gemini_client']),
             }, 200
         try:
             role_hint = {
@@ -1234,13 +1257,21 @@ def ai_chat_core(data, deps):
                 if isinstance(c, list):
                     coverage = [str(x).strip() for x in c if str(x).strip()]
             questions = _sanitize_plan_questions(questions or default_questions, min_count=min_count, max_count=question_limit)
-            return {'success': True, 'questions': questions, 'coverage': coverage}, 200
+            return {
+                'success': True,
+                'questions': questions,
+                'coverage': coverage,
+                'planSource': 'model',
+                'modelAvailable': True,
+            }, 200
         except Exception as e:
             deps['logger'].warning("Interview plan generation failed: %s", e)
             return {
                 'success': True,
                 'questions': _sanitize_plan_questions(default_questions, min_count=min_count, max_count=question_limit),
                 'coverage': ['岗位匹配', '项目经历', '问题解决', '协作沟通', '复盘优化', '动机规划'],
+                'planSource': 'fallback_error',
+                'modelAvailable': True,
             }, 200
 
     def _is_voice_placeholder_text(text: str) -> bool:
