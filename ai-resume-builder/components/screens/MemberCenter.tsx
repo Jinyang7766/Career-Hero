@@ -4,6 +4,7 @@ import { useAppContext } from '../../src/app-context';
 import { ReferralModal } from '../ReferralModal';
 import { useUserProfile } from '../../src/useUserProfile';
 import { ADDON_POINT_PACKAGES, PLAN_MONTHLY_POINTS, REFERRAL_BONUS_POINTS } from '../../src/points-config';
+import BackButton from '../shared/BackButton';
 
 const MemberCenter: React.FC = () => {
     const { goBack, navigateToView, currentUser } = useAppContext();
@@ -180,12 +181,7 @@ const MemberCenter: React.FC = () => {
 
             {/* Header */}
             <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5">
-                <button
-                    onClick={goBack}
-                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                >
-                    <span className="material-symbols-outlined text-slate-700 dark:text-slate-200">arrow_back_ios_new</span>
-                </button>
+                <BackButton onClick={goBack} className="hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" />
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white">权益中心</h1>
                 <div className="w-10" /> {/* Spacer */}
             </header>

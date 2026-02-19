@@ -65,6 +65,10 @@ const Profile: React.FC<ScreenProps> = () => {
   // Load avatar from user profile / localStorage
   React.useEffect(() => {
     const uid = String(currentUser?.id || '').trim();
+    if (!uid) {
+      setAvatar(DEFAULT_AVATAR);
+      return;
+    }
     const remoteAvatar = String((userProfile as any)?.avatar_url || '').trim();
     if (remoteAvatar) {
       setAvatar(remoteAvatar);
@@ -72,11 +76,10 @@ const Profile: React.FC<ScreenProps> = () => {
       localStorage.setItem('user_avatar', remoteAvatar);
       return;
     }
-    const savedAvatar = uid
-      ? localStorage.getItem(getAvatarStorageKey(uid))
-      : localStorage.getItem('user_avatar');
+    const savedAvatar = localStorage.getItem(getAvatarStorageKey(uid));
     if (savedAvatar) setAvatar(savedAvatar);
-  }, [currentUser?.id, userProfile?.avatar_url]);
+    else setAvatar(DEFAULT_AVATAR);
+  }, [DEFAULT_AVATAR, currentUser?.id, userProfile?.avatar_url]);
   const displayName =
     userProfile?.name ||
     currentUser?.user_metadata?.name ||
@@ -250,15 +253,17 @@ const Profile: React.FC<ScreenProps> = () => {
         referralCode={referralCode}
       />
       {isCropOpen && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-2xl p-4">
-            <div className="mb-3">
-              <h3 className="text-base font-bold text-slate-900 dark:text-white">裁剪头像</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">拖动调整位置，滑动缩放后保存</p>
+        <div className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md flex items-center justify-center p-6 animate-in fade-in zoom-in duration-300">
+          <div className="w-full max-w-[360px] rounded-[2.5rem] bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-white/20 dark:border-white/5 shadow-[0_32px_64px_-16px_rgba(0,0,0,0.2)] p-8 flex flex-col items-center">
+            <div className="w-full mb-6 text-center">
+              <h3 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">完善您的头像</h3>
+              <p className="text-[13px] text-slate-500 dark:text-slate-400 mt-2 font-medium">双指缩放或拖动，精准捕捉最完美的自己</p>
             </div>
-            <div className="flex justify-center">
+
+            <div className="relative group">
+              {/* Main Crop Container */}
               <div
-                className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-white/10 bg-slate-100 dark:bg-slate-800 touch-none"
+                className="relative rounded-full overflow-hidden border-4 border-white dark:border-slate-800 shadow-2xl bg-slate-100 dark:bg-slate-800 touch-none cursor-move group-active:scale-[0.98] transition-transform duration-300"
                 style={{ width: cropBoxSize, height: cropBoxSize }}
                 onMouseDown={(e) => beginDrag(e.clientX, e.clientY)}
                 onMouseMove={(e) => moveDrag(e.clientX, e.clientY)}
@@ -281,48 +286,76 @@ const Profile: React.FC<ScreenProps> = () => {
                   <img
                     src={cropSrc}
                     alt="avatar-crop"
-                    className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none"
+                    className="absolute left-1/2 top-1/2 max-w-none select-none pointer-events-none transition-opacity duration-300"
                     style={{
                       transform: `translate(calc(-50% + ${cropOffset.x}px), calc(-50% + ${cropOffset.y}px)) scale(${cropScale})`,
                       transformOrigin: 'center center',
                     }}
+                    onLoad={(e) => {
+                      (e.target as HTMLImageElement).style.opacity = '1';
+                    }}
                     draggable={false}
                   />
                 )}
+
+                {/* Visual Guidelines Layer */}
+                <div className="absolute inset-0 pointer-events-none border-[1px] border-white/20 rounded-full"></div>
               </div>
             </div>
-            <div className="mt-4 px-1">
-              <input
-                type="range"
-                min={minCropScale}
-                max={maxCropScale}
-                step={0.01}
-                value={cropScale}
-                onChange={(e) => {
-                  const next = Number(e.target.value || minCropScale);
-                  setCropScale(next);
-                  setCropOffset((prev) => clampOffset(prev.x, prev.y, next));
-                }}
-                className="w-full accent-primary"
-              />
-            </div>
-            <div className="mt-4 flex items-center justify-end gap-2">
-              <button
-                onClick={() => {
-                  setIsCropOpen(false);
-                  setCropSrc('');
-                  endDrag();
-                }}
-                className="px-3 py-2 rounded-lg text-sm font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5"
-              >
-                取消
-              </button>
-              <button
-                onClick={() => { void saveAvatar(); }}
-                className="px-3 py-2 rounded-lg text-sm font-semibold bg-primary text-white hover:opacity-90"
-              >
-                保存头像
-              </button>
+
+            <div className="w-full mt-10 space-y-8">
+              {/* Custom Styled Slider */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between px-1">
+                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[18px]">zoom_out</span>
+                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">缩放比例</span>
+                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[18px]">zoom_in</span>
+                </div>
+                <div className="relative h-6 flex items-center">
+                  <div className="absolute w-full h-1.5 bg-slate-100 dark:bg-white/5 rounded-full"></div>
+                  <div
+                    className="absolute h-1.5 bg-primary rounded-full transition-all duration-150"
+                    style={{ width: `${((cropScale - minCropScale) / (maxCropScale - minCropScale)) * 100}%` }}
+                  ></div>
+                  <input
+                    type="range"
+                    min={minCropScale}
+                    max={maxCropScale}
+                    step={0.001}
+                    value={cropScale}
+                    onChange={(e) => {
+                      const next = Number(e.target.value || minCropScale);
+                      setCropScale(next);
+                      setCropOffset((prev) => clampOffset(prev.x, prev.y, next));
+                    }}
+                    className="absolute w-full h-6 opacity-0 cursor-pointer z-10"
+                  />
+                  <div
+                    className="absolute w-5 h-5 bg-white border-2 border-primary rounded-full shadow-md pointer-events-none transition-all duration-150 z-20"
+                    style={{ left: `calc(${((cropScale - minCropScale) / (maxCropScale - minCropScale)) * 100}% - 10px)` }}
+                  ></div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    setIsCropOpen(false);
+                    setCropSrc('');
+                    endDrag();
+                  }}
+                  className="flex-1 py-4 rounded-2xl text-[14px] font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
+                >
+                  放弃修改
+                </button>
+                <button
+                  onClick={() => { void saveAvatar(); }}
+                  className="flex-[1.5] py-4 rounded-2xl text-[14px] font-bold bg-primary text-white shadow-xl shadow-primary/20 hover:shadow-primary/30 active:scale-95 transition-all flex items-center justify-center gap-2"
+                >
+                  确认保存
+                </button>
+              </div>
             </div>
           </div>
         </div>

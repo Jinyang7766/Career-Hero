@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ResumeData } from '../../../../types';
 import AiDisclaimer from '../AiDisclaimer';
+import BackButton from '../../../shared/BackButton';
 
 type Props = {
   summary: string;
@@ -141,11 +142,9 @@ const PostInterviewReportPage: React.FC<Props> = ({
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
       <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
+          <BackButton onClick={onBack} className="-ml-2" />
           <h1 className="text-base font-bold tracking-tight">微访谈综合报告</h1>
-          <div className="w-8"></div>
+          <div className="w-10"></div>
         </div>
       </header>
 

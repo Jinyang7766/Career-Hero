@@ -525,6 +525,7 @@ function App() {
 
     setIsLoggingOut(true);
     void (async () => {
+      const logoutUserId = String(currentUser?.id || '').trim();
       try {
         // Ensure server/session is actually signed out to avoid auth race.
         await supabase.auth.signOut();
@@ -534,6 +535,18 @@ function App() {
         // Clear local auth caches
         localStorage.removeItem('authToken');
         localStorage.removeItem('user');
+        localStorage.removeItem('supabase_session');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user_avatar');
+        if (logoutUserId) {
+          localStorage.removeItem(`user_avatar:${logoutUserId}`);
+          localStorage.removeItem(`has_created_resume_${logoutUserId}`);
+        }
+
+        // Clear in-memory user data to prevent stale UI after logout.
+        setAllResumes([]);
+        setResumeData(createEmptyResumeData());
+        routeHistoryRef.current = [];
 
         setCurrentUser(null);
         setIsAuthenticated(false);

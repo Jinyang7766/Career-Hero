@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
+import BackButton from '../shared/BackButton';
 
 const Login: React.FC<ScreenProps> = () => {
   const SHOW_SOCIAL_LOGIN = false;
@@ -74,12 +75,7 @@ const Login: React.FC<ScreenProps> = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
       <div className="flex items-center p-4">
-        <button
-          onClick={goBack}
-          className="flex size-10 items-center justify-center rounded-full hover:bg-slate-200 dark:hover:bg-white/10 transition-colors text-slate-900 dark:text-white"
-        >
-          <span className="material-symbols-outlined">arrow_back</span>
-        </button>
+        <BackButton onClick={goBack} className="hover:bg-slate-200 dark:hover:bg-white/10" />
       </div>
 
       <div className="flex flex-1 flex-col justify-center px-4 pt-2 pb-8 lg:px-8 relative overflow-hidden">

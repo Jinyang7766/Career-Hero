@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ResumeData, ResumeSummary } from '../../../../types';
 import { makeInterviewSessionKey, makeJdKey } from '../id-utils';
+import BackButton from '../../../shared/BackButton';
 
 export type ResumeReadState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -179,13 +180,11 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <button onClick={onBack} className="p-2 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/10 text-slate-900 dark:text-white" type="button">
-            <span className="material-symbols-outlined">arrow_back</span>
-          </button>
+          <BackButton onClick={onBack} className="-ml-2" />
           <h1 className="text-lg font-bold tracking-tight">
             {isInterviewMode ? '设置面试场景' : '添加职位描述'}
           </h1>
-          <div className="w-8" />
+          <div className="w-10" />
         </div>
       </header>
 
@@ -386,4 +385,3 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 };
 
 export default JdInputPage;
-

@@ -46,7 +46,35 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   const allResumes = useAppStore((state) => state.allResumes);
   const setResumeData = useAppStore((state) => state.setResumeData);
   const [greeting, setGreeting] = useState('');
-  const [dailyTip, setDailyTip] = useState('');
+  const [dailyTips, setDailyTips] = useState<string[]>([]);
+  const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [touchStart, setTouchStart] = useState<number | null>(null);
+  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+
+  // Minimum swipe distance (in px)
+  const minSwipeDistance = 50;
+
+  const onTouchStart = (e: React.TouchEvent) => {
+    setTouchEnd(null);
+    setTouchStart(e.targetTouches[0].clientX);
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+    setTouchEnd(e.targetTouches[0].clientX);
+  };
+
+  const onTouchEnd = () => {
+    if (!touchStart || !touchEnd) return;
+    const distance = touchStart - touchEnd;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe && currentTipIndex < 2) {
+      setCurrentTipIndex(prev => prev + 1);
+    } else if (isRightSwipe && currentTipIndex > 0) {
+      setCurrentTipIndex(prev => prev - 1);
+    }
+  };
 
   // Get user profile with real name
   const { userProfile } = useUserProfile();
@@ -100,7 +128,11 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       }
 
       const index = Math.abs(hash) % CAREER_TIPS.length;
-      setDailyTip(CAREER_TIPS[index]);
+      setDailyTips([
+        CAREER_TIPS[index],
+        CAREER_TIPS[(index + 1) % CAREER_TIPS.length],
+        CAREER_TIPS[(index + 2) % CAREER_TIPS.length],
+      ]);
     };
 
     updateGreeting();
@@ -115,21 +147,14 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     return () => clearInterval(interval);
   }, []);
 
-  const stats = React.useMemo(() => {
-    if (!allResumes) return { total: 0, optimized: 0 };
-    return {
-      total: allResumes.length,
-      optimized: allResumes.filter(r => r.optimizationStatus === 'optimized').length
-    };
-  }, [allResumes]);
-
   const recentResumes = React.useMemo(() => {
+    if (!currentUser?.id) return [];
     if (!allResumes) return [];
     // Sort by date descending and take top 3
     return [...allResumes]
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 3);
-  }, [allResumes]);
+  }, [allResumes, currentUser?.id]);
 
   const [isLoadingResume, setIsLoadingResume] = React.useState<number | null>(null);
 
@@ -260,17 +285,29 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       </div>
 
       <div className="px-4 space-y-6 pt-2">
-
-        {/* Stats Overview */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">简历总数</p>
-            <p className="text-3xl font-black text-slate-900 dark:text-white mt-1">{stats.total}</p>
-          </div>
-          <div className="bg-white dark:bg-surface-dark rounded-xl p-4 shadow-md border border-slate-200 dark:border-white/5 relative">
-            <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">已诊断</p>
-            <p className="text-3xl font-black text-primary dark:text-primary mt-1">{stats.optimized}</p>
-          </div>
+        {/* Quick Actions Strip */}
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: '新建简历', icon: 'add_circle', onClick: createNewResume, color: 'text-primary' },
+            { label: '我的简历', icon: 'description', onClick: () => navigateToView(View.ALL_RESUMES), color: 'text-primary' },
+            { label: '开始诊断', icon: 'assessment', onClick: () => navigateToView(View.AI_ANALYSIS), color: 'text-primary' },
+            { label: '开始面试', icon: 'forum', onClick: () => navigateToView(View.AI_INTERVIEW), color: 'text-primary' },
+          ].map((action, idx) => (
+            <button
+              key={idx}
+              onClick={action.onClick}
+              className="flex flex-col items-center gap-2 group active:scale-95 transition-transform"
+            >
+              <div className="w-full aspect-square rounded-2xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-white/5 shadow-sm flex items-center justify-center group-hover:shadow-md group-hover:border-primary/20 transition-all">
+                <span className={`material-symbols-outlined text-[28px] ${action.color} transition-transform group-hover:scale-110`}>
+                  {action.icon}
+                </span>
+              </div>
+              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
+                {action.label}
+              </span>
+            </button>
+          ))}
         </div>
 
         {/* Progress Module or Create New Resume */}
@@ -288,21 +325,13 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
             >
               <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
               <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
-              <div className="relative z-10 flex flex-col items-start gap-4">
-                <div className="flex items-center justify-center h-12 w-12 rounded-2xl bg-white/20 backdrop-blur-md shadow-inner border border-white/20">
-                  <span className="material-symbols-outlined text-white" style={{ fontSize: '28px' }}>add</span>
+              <div className="relative z-10">
+                <div className="size-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 border border-white/30">
+                  <span className="material-symbols-outlined text-white text-2xl">add_circle</span>
                 </div>
-                <div>
-                  <div className="flex items-center gap-3 mb-1.5">
-                    <h3 className="text-xl font-black text-white tracking-tight">新建简历</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-black bg-white text-primary uppercase tracking-[0.1em] shadow-sm">AI 智能向导</span>
-                  </div>
-                  <p className="text-blue-100 text-sm font-medium opacity-90 max-w-[85%] leading-relaxed">
-                    通过智能 AI 向导，轻松定制专属于你的高光简历，几步操作即可开启职场新篇章。
-                  </p>
-                </div>
-
-                <div className="mt-1 flex items-center gap-3 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-primary shadow-lg hover:bg-blue-50 transition-all hover:gap-4 group-hover:shadow-white/20">
+                <h3 className="text-xl font-black mb-1">创建您的第一份简历</h3>
+                <p className="text-white/80 text-sm font-medium">使用 AI 智能助攻，让简历脱颖而出</p>
+                <div className="mt-6 flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/20 group-hover:bg-white/30 transition-colors">
                   <span>立即开始</span>
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </div>
@@ -311,13 +340,76 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
           )}
         </div>
 
-
         {/* Daily Tip */}
-        <div className="bg-blue-50/50 dark:bg-surface-dark rounded-xl p-5 border border-blue-100 dark:border-white/5 relative overflow-hidden shadow-sm">
-          <p className="text-sm font-black text-primary mb-2 uppercase tracking-[0.15em]">每日职场建议</p>
-          <p className="text-sm text-slate-800 dark:text-slate-200 font-semibold relative z-10 leading-relaxed italic">
-            "{dailyTip}"
-          </p>
+        <div
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+          className="relative group overflow-hidden touch-pan-y"
+        >
+          {/* Decorative background glow */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 blur-3xl rounded-full -mr-16 -mt-16"></div>
+          <div className="absolute bottom-0 left-0 w-24 h-24 bg-blue-400/5 blur-2xl rounded-full -ml-12 -mb-12"></div>
+
+          <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 border border-slate-100 dark:border-white/5 shadow-sm relative z-10 flex flex-col min-h-[170px]">
+            {/* Header Section */}
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-xl bg-blue-50 dark:bg-primary/10 flex items-center justify-center shadow-inner">
+                  <span className="material-symbols-outlined text-primary text-[16px] font-bold">tips_and_updates</span>
+                </div>
+                <span className="text-[11px] font-black text-slate-500 dark:text-gray-400 uppercase tracking-[0.25em]">每日职场建议</span>
+              </div>
+              <div className="flex gap-1.5 grayscale opacity-60">
+                {[0, 1, 2].map(i => (
+                  <div key={i} className={`h-1 rounded-full transition-all duration-300 ${i === currentTipIndex ? 'bg-primary w-4 grayscale-0 opacity-100' : 'bg-slate-300 dark:bg-white/10 w-1'}`} />
+                ))}
+              </div>
+            </div>
+
+            {/* Content Section */}
+            <div className="flex-1 flex items-center gap-2 relative">
+              {/* Desktop Arrows - Hidden by default, show on hover */}
+              <button
+                onClick={() => setCurrentTipIndex(prev => Math.max(0, prev - 1))}
+                disabled={currentTipIndex === 0}
+                className={`w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-white/10 shadow-sm transition-all active:scale-90 shrink-0 hidden md:flex
+                  ${currentTipIndex === 0 ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0'}`}
+              >
+                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+              </button>
+
+              <div className="flex-1 relative h-full min-h-[70px] flex items-center overflow-hidden px-1">
+                <span className="material-symbols-outlined absolute -top-2 -left-2 text-slate-100 dark:text-white/5 text-[48px] z-0 pointer-events-none rotate-180">format_quote</span>
+                {dailyTips.map((tip, idx) => (
+                  <p
+                    key={idx}
+                    className={`text-[15px] text-slate-800 dark:text-slate-200 font-bold leading-relaxed absolute transition-all duration-500 ease-out w-full
+                      ${idx === currentTipIndex ? 'opacity-100 translate-y-0 scale-100' : idx < currentTipIndex ? 'opacity-0 -translate-y-4 scale-95' : 'opacity-0 translate-y-4 scale-95'}`}
+                  >
+                    {tip}
+                  </p>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setCurrentTipIndex(prev => Math.min(2, prev + 1))}
+                disabled={currentTipIndex === 2}
+                className={`w-9 h-9 flex items-center justify-center rounded-xl bg-slate-50 dark:bg-white/5 text-slate-400 hover:text-primary hover:bg-white dark:hover:bg-white/10 shadow-sm transition-all active:scale-90 shrink-0 hidden md:flex
+                  ${currentTipIndex === 2 ? 'opacity-0 pointer-events-none' : 'opacity-0 group-hover:opacity-100 translate-x-2 group-hover:translate-x-0'}`}
+              >
+                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+              </button>
+            </div>
+
+            {/* Mobile Interaction Hint */}
+            <div className="mt-5 flex justify-center group-hover:opacity-40 transition-opacity md:hidden">
+              <div className="px-3 py-1 rounded-full bg-slate-50 dark:bg-white/5 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[12px] text-slate-400 animate-pulse">swipe</span>
+                <p className="text-[10px] text-slate-400 dark:text-gray-500 font-bold tracking-wider uppercase">左右滑动内容</p>
+              </div>
+            </div>
+          </div>
         </div>
 
       </div>

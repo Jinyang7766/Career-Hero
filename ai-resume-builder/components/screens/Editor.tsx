@@ -24,6 +24,7 @@ import SummaryStep from '../editor/steps/SummaryStep';
 // Popup import removed; inline import UI only
 import { useAppContext } from '../../src/app-context';
 import { selectCompleteness, useAppStore } from '../../src/app-store';
+import BackButton from '../shared/BackButton';
 
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
@@ -1152,7 +1153,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     <div className="flex flex-col pb-12 bg-background-light dark:bg-background-dark min-h-screen animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-[#324d67] transition-colors duration-300">
         <div className="relative grid grid-cols-[auto,1fr,auto] items-center px-4 py-3">
-          <button
+          <BackButton
             onClick={() => {
               if (currentStepIndex === 0 && goBack) {
                 goBack();
@@ -1160,10 +1161,8 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
                 handlePrevStep();
               }
             }}
-            className="flex items-center justify-center p-3 -ml-2 rounded-full hover:bg-slate-200 dark:hover:bg-white/5 transition-colors text-slate-700 dark:text-white"
-          >
-            <span className="material-symbols-outlined text-[28px]">arrow_back</span>
-          </button>
+            className="-ml-2 hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-white"
+          />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">
               <h1 className="text-lg font-bold leading-tight">

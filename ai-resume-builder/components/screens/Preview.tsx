@@ -6,6 +6,7 @@ import { buildApiUrl } from '../../src/api-config';
 import BottomNav from '../BottomNav';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
+import BackButton from '../shared/BackButton';
 
 // --- Helper Functions ---
 
@@ -609,12 +610,10 @@ const Preview: React.FC<ScreenProps> = () => {
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
       <header className="absolute top-0 left-0 w-full z-30 flex items-center justify-between p-4 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
-        <button
+        <BackButton
           onClick={goBack}
-          className="flex size-10 items-center justify-center rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white"
-        >
-          <span className="material-symbols-outlined text-[24px]">arrow_back</span>
-        </button>
+          className="bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 text-slate-700 dark:text-white"
+        />
         <h2 className="text-slate-800 dark:text-white text-lg font-bold tracking-tight">简历预览</h2>
         <button
           onClick={() => navigateToView(View.EDITOR)}

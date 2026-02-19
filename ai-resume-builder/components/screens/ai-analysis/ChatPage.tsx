@@ -2,6 +2,7 @@ import React from 'react';
 import type { ChatMessage } from './types';
 import { confirmDialog } from '../../../src/ui/dialogs';
 import AiDisclaimer from './AiDisclaimer';
+import BackButton from '../../shared/BackButton';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
@@ -156,9 +157,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
 
       <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-50">
         <div className="flex items-center gap-3">
-          <button onClick={handleStepBack} className="p-1 -ml-1 rounded-full hover:bg-black/5 dark:hover:bg-white/10">
-            <span className="material-symbols-outlined text-slate-900 dark:text-white">arrow_back</span>
-          </button>
+          <BackButton onClick={handleStepBack} className="-ml-1 size-9" iconClassName="text-[22px]" />
           <div className="size-10 rounded-full overflow-hidden">
             <img
               src={isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR}

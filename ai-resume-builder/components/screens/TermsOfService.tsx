@@ -1,6 +1,7 @@
 import React from 'react';
 import { ScreenProps } from '../../types';
 import { useAppContext } from '../../src/app-context';
+import BackButton from '../shared/BackButton';
 
 const TermsOfService: React.FC<ScreenProps> = () => {
     const goBack = useAppContext((s) => s.goBack);
@@ -8,12 +9,7 @@ const TermsOfService: React.FC<ScreenProps> = () => {
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-950 animate-in slide-in-from-right duration-300">
             <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-100 dark:border-white/5">
-                <button
-                    onClick={goBack}
-                    className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/5 transition-colors"
-                >
-                    <span className="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back_ios_new</span>
-                </button>
+                <BackButton onClick={goBack} className="hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400" />
                 <h1 className="text-base font-bold text-slate-900 dark:text-white">服务协议</h1>
                 <div className="w-10" />
             </header>

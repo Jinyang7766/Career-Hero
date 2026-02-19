@@ -5,6 +5,7 @@ import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
+import BackButton from '../shared/BackButton';
 
 type ExportItem = {
   id: string;
@@ -236,12 +237,7 @@ const History: React.FC<ScreenProps> = () => {
               <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>close</span>
             </button>
           ) : (
-            <button
-              onClick={goBack}
-              className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
-            >
-              <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
-            </button>
+            <BackButton onClick={goBack} className="z-10" />
           )}
 
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">

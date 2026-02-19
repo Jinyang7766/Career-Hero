@@ -6,6 +6,7 @@ import { buildApiUrl } from '../../src/api-config';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 import { DatabaseService } from '../../src/database-service';
+import BackButton from '../shared/BackButton';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
   const SHOW_THIRD_PARTY_BINDING = false;
@@ -174,12 +175,7 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
     <div className="bg-background-light dark:bg-background-dark h-screen flex flex-col overflow-hidden animate-in slide-in-from-right duration-300">
       <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center px-4 h-14 relative">
-          <button
-            onClick={goBack}
-            className="flex size-10 items-center justify-center rounded-full text-slate-900 dark:text-white hover:bg-black/5 dark:hover:bg-white/10 transition-colors z-10"
-          >
-            <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>arrow_back</span>
-          </button>
+          <BackButton onClick={goBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">账号与安全</h2>
         </div>
       </header>

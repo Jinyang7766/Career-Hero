@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ResumeSummary } from '../../../../types';
+import BackButton from '../../../shared/BackButton';
 
 export type ResumeSelectPageProps = {
   allResumes: ResumeSummary[] | undefined;
@@ -92,7 +93,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
       <header className="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <div className="w-10" />
+          <BackButton onClick={onBack} className="z-10" />
           <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">
             {isInterviewMode ? 'AI 面试' : 'AI 诊断'}
           </h1>
