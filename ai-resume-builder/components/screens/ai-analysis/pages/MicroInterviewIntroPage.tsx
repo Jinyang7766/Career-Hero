@@ -15,7 +15,6 @@ type Props = {
   scoreBreakdown?: ScoreBreakdown;
   getScoreColor: (s: number) => string;
   onBack: () => void;
-  onRetry: () => void;
   onStart: () => void;
 };
 
@@ -26,26 +25,19 @@ const MicroInterviewIntroPage: React.FC<Props> = ({
   scoreBreakdown,
   getScoreColor,
   onBack,
-  onRetry,
   onStart,
 }) => {
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-      <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2" />
           <h1 className="text-base font-bold tracking-tight">初始评价</h1>
-          <button
-            onClick={onRetry}
-            className="text-xs font-bold text-primary hover:text-blue-600 transition-colors"
-            type="button"
-          >
-            重新诊断
-          </button>
+          <div className="w-10" />
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))]">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))]">
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5 mb-4">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">初始评分</p>
           <div className={`text-6xl font-black tracking-tight ${getScoreColor(originalScore || score)}`}>

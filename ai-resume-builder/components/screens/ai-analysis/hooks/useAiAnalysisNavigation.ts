@@ -7,6 +7,7 @@ type Step =
   | 'report'
   | 'micro_intro'
   | 'chat'
+  | 'interview_report_loading'
   | 'interview_report'
   | 'comparison'
   | 'final_report';
@@ -28,13 +29,14 @@ export const useAiAnalysisNavigation = ({
 }: Params) => {
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
   const currentStepRef = useRef<Step>(currentStep);
+  const replaceBackMapRef = useRef<Partial<Record<Step, Step>>>({});
   const [chatEntrySource, setChatEntrySource] = useState<'internal' | 'preview' | null>(() => {
     const stored = localStorage.getItem('ai_chat_entry_source');
     return stored === 'internal' || stored === 'preview' ? stored : null;
   });
   const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
     const stored = localStorage.getItem('ai_chat_prev_step');
-    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'interview_report', 'comparison', 'final_report'];
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'interview_report_loading', 'interview_report', 'comparison', 'final_report'];
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
@@ -47,13 +49,15 @@ export const useAiAnalysisNavigation = ({
     if (nextStep !== nowStep) {
       if (!replace) {
         setStepHistory(prev => [...prev, nowStep]);
+      } else {
+        replaceBackMapRef.current[nextStep] = nowStep;
       }
       setCurrentStep(nextStep);
       currentStepRef.current = nextStep;
     }
   };
 
-  const openChat = (source: 'internal' | 'preview') => {
+  const openChat = (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => {
     if (source === 'internal') {
       setIsInterviewEntry(false);
       // If chat is auto-opened right after analysis, treat report as previous step
@@ -67,7 +71,9 @@ export const useAiAnalysisNavigation = ({
       }
       setChatEntrySource('internal');
       localStorage.setItem('ai_chat_entry_source', 'internal');
-      restoreInterviewSession();
+      if (!options?.skipRestore) {
+        restoreInterviewSession();
+      }
       navigateToStep('chat');
       return;
     }
@@ -81,8 +87,13 @@ export const useAiAnalysisNavigation = ({
   };
 
   const handleStepBack = () => {
+    if (currentStep === 'interview_report') {
+      setCurrentStep('jd_input');
+      currentStepRef.current = 'jd_input';
+      return;
+    }
     if (currentStep === 'chat') {
-      if (chatEntrySource === 'preview') {
+      if (chatEntrySource === 'preview' && stepHistory.length === 0) {
         if (goBack) {
           goBack();
         }
@@ -95,21 +106,46 @@ export const useAiAnalysisNavigation = ({
     }
     if (stepHistory.length > 0) {
       const prev = [...stepHistory];
-      const lastStep = prev.pop()!;
+      let lastStep: Step | undefined = prev.pop();
+      // Skip accidental duplicate history entries that equal current step,
+      // otherwise the first back tap appears to do nothing.
+      while (lastStep && lastStep === currentStep && prev.length > 0) {
+        lastStep = prev.pop();
+      }
+      // Report page should never go back to transient analyzing screen.
+      while (currentStep === 'report' && lastStep === 'analyzing' && prev.length > 0) {
+        lastStep = prev.pop();
+      }
+      if (currentStep === 'report' && lastStep === 'analyzing') {
+        lastStep = 'jd_input';
+      }
       setStepHistory(prev);
-      setCurrentStep(lastStep);
+      if (lastStep && lastStep !== currentStep) {
+        setCurrentStep(lastStep);
+        currentStepRef.current = lastStep;
+      }
+      return;
+    }
+
+    const replacedFrom = replaceBackMapRef.current[currentStep];
+    if (replacedFrom && replacedFrom !== currentStep) {
+      delete replaceBackMapRef.current[currentStep];
+      setCurrentStep(replacedFrom);
+      currentStepRef.current = replacedFrom;
+      return;
     } else if (currentStep === 'final_report') {
       setCurrentStep('comparison');
-    } else if (currentStep === 'interview_report') {
-      setCurrentStep('report');
+      currentStepRef.current = 'comparison';
     } else if (currentStep === 'micro_intro') {
       setCurrentStep('report');
+      currentStepRef.current = 'report';
     } else if (currentStep === 'report') {
       if (goBack) {
         goBack();
         return;
       }
       setCurrentStep('resume_select');
+      currentStepRef.current = 'resume_select';
     } else if (goBack) {
       goBack();
     }

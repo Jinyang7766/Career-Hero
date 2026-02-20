@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { makeJdKey } from '../id-utils';
 
 type Params = {
   currentStep: string;
@@ -6,6 +8,7 @@ type Params = {
   resumeData: any;
   targetCompany: string;
   score: number;
+  isInterviewMode?: boolean;
   persistAnalysisSessionState: (
     state: 'jd_ready' | 'analyzing' | 'report_ready' | 'interview_in_progress' | 'interview_done',
     patch?: Partial<{
@@ -24,6 +27,7 @@ export const useAnalysisStepCheckpoint = ({
   resumeData,
   targetCompany,
   score,
+  isInterviewMode = false,
   persistAnalysisSessionState,
 }: Params) => {
   useEffect(() => {
@@ -50,6 +54,41 @@ export const useAnalysisStepCheckpoint = ({
     const mapped = map[currentStep];
     if (!mapped) return;
 
+    // Interview flow guard:
+    // Once a scene is started, returning to jd_input must not downgrade state to jd_ready,
+    // otherwise "继续面试" and scene lock will be lost.
+    if (isInterviewMode && mapped.state === 'jd_ready') {
+      const normalizedType = String(getActiveInterviewType() || '').trim().toLowerCase();
+      const normalizedMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
+      const normalizedFocus = String(getActiveInterviewFocus() || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalizedCompany = String(targetCompany || resumeData?.targetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalizedResumeId = String((resumeData as any)?.id || '').trim();
+      const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
+      const sessions = Object.values((resumeData as any)?.analysisSessionByJd || {}) as any[];
+      const hasStartedSession = sessions.some((session: any) => {
+        if (!session) return false;
+        const state = String(session?.state || '').trim().toLowerCase();
+        if (state !== 'interview_in_progress' && state !== 'paused' && state !== 'interview_done') return false;
+        const sessionJdKey =
+          String(session?.jdKey || '').trim() ||
+          makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+        if (sessionJdKey !== jdKey) return false;
+        const sessionType = String(session?.interviewType || '').trim().toLowerCase();
+        const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
+        const sessionFocus = String(session?.interviewFocus || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const sessionCompany = String(session?.targetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const sessionResumeId = String(session?.resumeId || '').trim();
+        return (
+          sessionType === normalizedType &&
+          sessionMode === normalizedMode &&
+          sessionFocus === normalizedFocus &&
+          sessionCompany === normalizedCompany &&
+          (!sessionResumeId || sessionResumeId === normalizedResumeId)
+        );
+      });
+      if (hasStartedSession) return;
+    }
+
     void persistAnalysisSessionState(mapped.state, {
       jdText: effectiveJdText,
       targetCompany: targetCompany || resumeData?.targetCompany || '',
@@ -65,5 +104,6 @@ export const useAnalysisStepCheckpoint = ({
     resumeData?.targetCompany,
     score,
     targetCompany,
+    isInterviewMode,
   ]);
 };

@@ -60,6 +60,13 @@ export const useInterviewVoice = ({
   const [visualizerData, setVisualizerData] = useState<number[]>(new Array(24).fill(4));
   const holdVoicePeakRef = useRef(0);
   const holdAudioDiscardRef = useRef(false);
+  const shortHoldToastAtRef = useRef(0);
+  const showShortHoldToast = () => {
+    const now = Date.now();
+    if (now - shortHoldToastAtRef.current < 1500) return;
+    shortHoldToastAtRef.current = now;
+    showToast('按键时间太短，请按住说话', 'info', 1400);
+  };
   const stopMicStreamNow = () => {
     if (!mediaStreamRef.current) return;
     try { mediaStreamRef.current.getTracks().forEach((t) => t.stop()); } catch { }
@@ -513,7 +520,7 @@ export const useInterviewVoice = ({
         stopAudioRecorder(true);
         setRecording(false);
         cleanupVoiceMeter();
-        showToast('按键时间太短，请按住说话', 'info');
+        showShortHoldToast();
         return;
       }
 
@@ -580,7 +587,7 @@ export const useInterviewVoice = ({
         stopAudioRecorder(true);
         setRecording(false);
         cleanupVoiceMeter();
-        showToast('按键时间太短，请按住说话', 'info');
+        showShortHoldToast();
         return;
       }
       const userMsgId = `user-voice-${Date.now()}`;

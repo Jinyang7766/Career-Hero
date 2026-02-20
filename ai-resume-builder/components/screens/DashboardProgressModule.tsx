@@ -69,7 +69,10 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
                 <div className="bg-black/10 rounded-2xl p-4 backdrop-blur-md border border-white/5 shadow-inner">
                     {hasAnyProgress ? (
                         <>
-                            <DiagnosisProgressBar resume={resume} variant="on-dark" />
+                            <DiagnosisProgressBar
+                                resume={resume}
+                                variant="on-dark"
+                            />
                             <div className="mt-3 pt-3 border-t border-white/10">
                                 <DiagnosisProgressBar resume={resume} isInterviewMode variant="on-dark" />
                             </div>

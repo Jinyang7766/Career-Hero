@@ -62,25 +62,29 @@ export const getPlanStorageKey = (
   makeJdKey: (text: string) => string,
   effectiveJdText: string,
   interviewFocus?: string,
+  targetCompany?: string,
   currentUserId?: string | number | null
 ) => {
   const interviewType = getActiveInterviewType();
   const interviewMode = getActiveInterviewMode();
   const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
+  const companyKey = makeJdKey(String(targetCompany || '').trim() || 'none');
   const userKey = String(currentUserId || 'anonymous').trim() || 'anonymous';
-  return `ai_interview_plan_${userKey}_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}`;
+  return `ai_interview_plan_${userKey}_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}_${companyKey}`;
 };
 
 export const getLegacyPlanStorageKey = (
   resumeId: string | number | null | undefined,
   makeJdKey: (text: string) => string,
   effectiveJdText: string,
-  interviewFocus?: string
+  interviewFocus?: string,
+  targetCompany?: string
 ) => {
   const interviewType = getActiveInterviewType();
   const interviewMode = getActiveInterviewMode();
   const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
-  return `ai_interview_plan_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}`;
+  const companyKey = makeJdKey(String(targetCompany || '').trim() || 'none');
+  return `ai_interview_plan_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}_${companyKey}`;
 };
 
 export const getInterviewerTitle = () => {

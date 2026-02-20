@@ -47,6 +47,23 @@ const Profile: React.FC<ScreenProps> = () => {
   const [cropScale, setCropScale] = useState(1);
   const [cropOffset, setCropOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef<{ active: boolean; x: number; y: number }>({ active: false, x: 0, y: 0 });
+  const pinchRef = useRef<{
+    active: boolean;
+    startDistance: number;
+    startScale: number;
+    startOffsetX: number;
+    startOffsetY: number;
+    startMidX: number;
+    startMidY: number;
+  }>({
+    active: false,
+    startDistance: 0,
+    startScale: 1,
+    startOffsetX: 0,
+    startOffsetY: 0,
+    startMidX: 0,
+    startMidY: 0,
+  });
 
   const getAvatarStorageKey = (uid?: string) => `user_avatar:${String(uid || 'guest')}`;
   const clampOffset = React.useCallback((offsetX: number, offsetY: number, scale: number) => {
@@ -195,6 +212,9 @@ const Profile: React.FC<ScreenProps> = () => {
     ? Math.max(cropBoxSize / cropNatural.w, cropBoxSize / cropNatural.h)
     : 1;
   const maxCropScale = Math.max(minCropScale, minCropScale * 4);
+  const clampCropScale = React.useCallback((scale: number) => (
+    Math.max(minCropScale, Math.min(maxCropScale, scale))
+  ), [maxCropScale, minCropScale]);
 
   const beginDrag = (clientX: number, clientY: number) => {
     dragRef.current = { active: true, x: clientX, y: clientY };
@@ -209,6 +229,15 @@ const Profile: React.FC<ScreenProps> = () => {
   const endDrag = () => {
     dragRef.current.active = false;
   };
+  const getTouchDistance = (a: React.Touch, b: React.Touch) => {
+    const dx = b.clientX - a.clientX;
+    const dy = b.clientY - a.clientY;
+    return Math.hypot(dx, dy);
+  };
+  const getTouchMidpoint = (a: React.Touch, b: React.Touch) => ({
+    x: (a.clientX + b.clientX) / 2,
+    y: (a.clientY + b.clientY) / 2,
+  });
 
   // Mock referral code - in real app, derive from user ID or backend
   const referralCode = React.useMemo(() => {
@@ -282,17 +311,72 @@ const Profile: React.FC<ScreenProps> = () => {
                 onMouseUp={endDrag}
                 onMouseLeave={endDrag}
                 onTouchStart={(e) => {
+                  if (e.touches.length >= 2) {
+                    const t1 = e.touches[0];
+                    const t2 = e.touches[1];
+                    if (!t1 || !t2) return;
+                    const midpoint = getTouchMidpoint(t1, t2);
+                    pinchRef.current = {
+                      active: true,
+                      startDistance: getTouchDistance(t1, t2),
+                      startScale: cropScale,
+                      startOffsetX: cropOffset.x,
+                      startOffsetY: cropOffset.y,
+                      startMidX: midpoint.x,
+                      startMidY: midpoint.y,
+                    };
+                    endDrag();
+                    return;
+                  }
                   const t = e.touches[0];
                   if (!t) return;
+                  pinchRef.current.active = false;
                   beginDrag(t.clientX, t.clientY);
                 }}
                 onTouchMove={(e) => {
+                  if (pinchRef.current.active && e.touches.length >= 2) {
+                    const t1 = e.touches[0];
+                    const t2 = e.touches[1];
+                    if (!t1 || !t2) return;
+                    const distance = getTouchDistance(t1, t2);
+                    const ratio = pinchRef.current.startDistance > 0
+                      ? distance / pinchRef.current.startDistance
+                      : 1;
+                    const nextScale = clampCropScale(pinchRef.current.startScale * ratio);
+                    const midpoint = getTouchMidpoint(t1, t2);
+                    const dx = midpoint.x - pinchRef.current.startMidX;
+                    const dy = midpoint.y - pinchRef.current.startMidY;
+                    setCropScale(nextScale);
+                    setCropOffset(
+                      clampOffset(
+                        pinchRef.current.startOffsetX + dx,
+                        pinchRef.current.startOffsetY + dy,
+                        nextScale
+                      )
+                    );
+                    return;
+                  }
                   const t = e.touches[0];
                   if (!t) return;
                   moveDrag(t.clientX, t.clientY);
                 }}
-                onTouchEnd={endDrag}
-                onTouchCancel={endDrag}
+                onTouchEnd={(e) => {
+                  if (pinchRef.current.active && e.touches.length === 1) {
+                    const t = e.touches[0];
+                    if (!t) return;
+                    pinchRef.current.active = false;
+                    beginDrag(t.clientX, t.clientY);
+                    return;
+                  }
+                  if (e.touches.length === 0) {
+                    pinchRef.current.active = false;
+                    endDrag();
+                  }
+                }}
+                onTouchCancel={() => {
+                  pinchRef.current.active = false;
+                  endDrag();
+                }}
               >
                 {cropSrc && (
                   <img
@@ -316,39 +400,6 @@ const Profile: React.FC<ScreenProps> = () => {
             </div>
 
             <div className="w-full mt-10 space-y-8">
-              {/* Custom Styled Slider */}
-              <div className="flex flex-col gap-4">
-                <div className="flex items-center justify-between px-1">
-                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[18px]">zoom_out</span>
-                  <span className="text-[11px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">缩放比例</span>
-                  <span className="material-symbols-outlined text-slate-400 dark:text-slate-600 text-[18px]">zoom_in</span>
-                </div>
-                <div className="relative h-6 flex items-center">
-                  <div className="absolute w-full h-1.5 bg-slate-100 dark:bg-white/5 rounded-full"></div>
-                  <div
-                    className="absolute h-1.5 bg-primary rounded-full transition-all duration-150"
-                    style={{ width: `${((cropScale - minCropScale) / (maxCropScale - minCropScale)) * 100}%` }}
-                  ></div>
-                  <input
-                    type="range"
-                    min={minCropScale}
-                    max={maxCropScale}
-                    step={0.001}
-                    value={cropScale}
-                    onChange={(e) => {
-                      const next = Number(e.target.value || minCropScale);
-                      setCropScale(next);
-                      setCropOffset((prev) => clampOffset(prev.x, prev.y, next));
-                    }}
-                    className="absolute w-full h-6 opacity-0 cursor-pointer z-10"
-                  />
-                  <div
-                    className="absolute w-5 h-5 bg-white border-2 border-primary rounded-full shadow-md pointer-events-none transition-all duration-150 z-20"
-                    style={{ left: `calc(${((cropScale - minCropScale) / (maxCropScale - minCropScale)) * 100}% - 10px)` }}
-                  ></div>
-                </div>
-              </div>
-
               {/* Action Buttons */}
               <div className="flex items-center gap-3">
                 <button

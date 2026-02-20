@@ -3,6 +3,8 @@ import type { ChatMessage } from './types';
 import { confirmDialog } from '../../../src/ui/dialogs';
 import AiDisclaimer from './AiDisclaimer';
 import BackButton from '../../shared/BackButton';
+import ReportFeedback from './ReportFeedback';
+import { USAGE_POINT_COST } from '../../../src/points-config';
 
 type ParsedReference = { before?: string; reference: string; after?: string };
 
@@ -71,6 +73,7 @@ export type ChatPageProps = {
   currentQuestionElapsedSec: number;
   interviewerTitle: string;
   aiAvatarUrl: string;
+  onMessageFeedback?: (message: ChatMessage, rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
 };
 
 const ThinkingIndicator: React.FC<{ avatarUrl: string }> = ({ avatarUrl }) => {
@@ -98,6 +101,18 @@ const ThinkingIndicator: React.FC<{ avatarUrl: string }> = ({ avatarUrl }) => {
       </span>
     </div>
   );
+};
+
+const shouldShowMessageFeedback = (msg: ChatMessage) => {
+  if (msg.role !== 'model') return false;
+  const id = String(msg.id || '').trim();
+  const text = String(msg.text || '').trim();
+  if (!text) return false;
+  if (id === 'ai-summary') return false;
+  const greetingLike =
+    /您好|你好/.test(text) &&
+    /我是您的\s*AI|我是你的\s*AI|微访谈助手|模拟面试官|HR面试官|复试深挖面试官/.test(text);
+  return !greetingLike;
 };
 
 const ChatPage: React.FC<ChatPageProps> = ({
@@ -151,9 +166,33 @@ const ChatPage: React.FC<ChatPageProps> = ({
   currentQuestionElapsedSec,
   interviewerTitle,
   aiAvatarUrl,
+  onMessageFeedback,
 }) => {
+  const restartLabel = isInterviewMode
+    ? '重新开始'
+    : `重新开始（${USAGE_POINT_COST.micro_interview}积分）`;
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [planExpanded, setPlanExpanded] = React.useState(false);
+  const menuWrapperRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (menuWrapperRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [menuOpen]);
 
   const progressPercent = interviewTotalCount > 0
     ? Math.min(100, Math.round((interviewAnsweredCount / interviewTotalCount) * 100))
@@ -164,12 +203,11 @@ const ChatPage: React.FC<ChatPageProps> = ({
     const ss = Math.floor(safe % 60).toString().padStart(2, '0');
     return `${mm}:${ss}`;
   };
-
   return (
-    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden">
+    <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden pt-[76px]">
       <ToastOverlay />
 
-      <div className="flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 sticky top-0 z-50">
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center gap-3">
           <BackButton onClick={handleStepBack} className="-ml-1 size-9" iconClassName="text-[22px]" />
           <div className="size-10 rounded-full overflow-hidden">
@@ -191,7 +229,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
           </div>
         </div>
 
-        <div className="relative">
+        <div ref={menuWrapperRef} className="relative">
           <button
             type="button"
             disabled={isRecording}
@@ -206,7 +244,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
               <button
                 onClick={async () => {
                   setMenuOpen(false);
-                  if (await confirmDialog('确定要重新开始吗？当前面试记录将被清空。')) {
+                  if (await confirmDialog(isInterviewMode ? '重新开始将初始化全部设置并清空当前面试记录，确认继续吗？' : '确定要重新开始吗？当前面试记录将被清空。')) {
                     onInterruptThinking();
                     onRestartInterview();
                   }
@@ -214,7 +252,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 whitespace-nowrap"
               >
                 <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-                重新开始
+                {restartLabel}
               </button>
               <div className="h-px bg-slate-100 dark:bg-white/5"></div>
               <button
@@ -231,12 +269,6 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 {isInterviewMode ? '结束面试' : '结束微访谈'}
               </button>
             </div>
-          )}
-          {menuOpen && (
-            <div
-              className="fixed inset-0 z-[59]"
-              onClick={() => setMenuOpen(false)}
-            />
           )}
         </div>
       </div>
@@ -542,6 +574,16 @@ const ChatPage: React.FC<ChatPageProps> = ({
                       )}
                     </div>
                   )}
+
+                {shouldShowMessageFeedback(msg) && (
+                  <div className="self-start px-1 w-full">
+                    <ReportFeedback
+                      variant="compact"
+                      showTitle={false}
+                      onFeedback={(rating, reason) => onMessageFeedback ? onMessageFeedback(msg, rating, reason) : false}
+                    />
+                  </div>
+                )}
               </div>
             </div>
           </div>

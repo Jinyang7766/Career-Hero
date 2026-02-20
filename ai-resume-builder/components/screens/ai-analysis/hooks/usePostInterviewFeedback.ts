@@ -18,7 +18,7 @@ export const usePostInterviewFeedback = ({
   postInterviewOriginalResume,
   resumeId,
 }: Params) => {
-  const handlePostInterviewFeedback = useCallback(async (rating: 'up' | 'down') => {
+  const handlePostInterviewFeedback = useCallback(async (rating: 'up' | 'down', reason?: string) => {
     if (!currentUserId) {
       showToast('请先登录后再反馈', 'info', 1800);
       return false;
@@ -34,11 +34,12 @@ export const usePostInterviewFeedback = ({
       suggestionId: 'post-interview-generated-resume',
       rating,
       title: '微访谈生成简历整体反馈',
-      reasonMasked: effectivePostInterviewSummary || undefined,
+      reasonMasked: `${String(reason || '').trim() ? `${String(reason || '').trim()} | ` : ''}${effectivePostInterviewSummary || ''}` || undefined,
       originalValueMasked: null,
       suggestedValueMasked: {
         source: 'post_interview_report',
         hasGeneratedResume: Boolean(postInterviewGeneratedResume),
+        feedbackReason: String(reason || '').trim() || null,
       },
     });
     if (!result.success) {

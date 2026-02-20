@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createMasker, maskChatHistory } from '../chat-payload';
+import type { QuotaKind } from './useUsageQuota';
 
 const FINAL_REPORT_TASKS = new Map<string, Promise<any>>();
 const FINAL_REPORT_RESULTS = new Map<string, {
@@ -10,6 +11,54 @@ const FINAL_REPORT_RESULTS = new Map<string, {
   suggestions: any[];
   generatedResume?: any | null;
 }>();
+const FINAL_REPORT_CACHE_VERSION = 'candidate_match_v3';
+
+const normalizeSkillToken = (value: any) => String(value || '').trim().replace(/[，,;；。]+$/g, '');
+const isResumeWordingAdvice = (text: string) => /(简历|措辞|排版|描述|模块|字数|版式|润色|改写|优化文案)/.test(text);
+const rewriteToCandidateAction = (text: string) => {
+  const source = String(text || '').trim();
+  if (!source) return '';
+  if (/数据|量化|指标|贡献|证据/.test(source)) {
+    return '补强数据化表达能力：围绕 2-3 个核心项目沉淀“动作-结果-指标”证据链，并进行口头复盘训练。';
+  }
+  if (/工具|技能栈|商智|生意参谋|sql|python|bi|tableau|power\s*bi/i.test(source)) {
+    return '补强岗位关键工具能力：列出目标岗位核心工具清单，按“实战任务 + 结果复盘”方式逐项强化。';
+  }
+  if (/自我介绍|表达|沟通|逻辑/.test(source)) {
+    return '补强面试表达能力：用 STAR 结构重练自我介绍和高频追问，重点提升逻辑清晰度与业务说服力。';
+  }
+  return '补强岗位胜任能力：针对目标岗位关键任务补充真实案例，并通过模拟面试持续验证。';
+};
+const extractSkillGapAdvice = (result: any, fallback: string[]) => {
+  const fromSuggestions: string[] = [];
+  const suggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
+  suggestions.forEach((item: any) => {
+    if (String(item?.targetSection || '').trim().toLowerCase() !== 'skills') return;
+    const raw = item?.suggestedValue;
+    const skills = Array.isArray(raw)
+      ? raw.map(normalizeSkillToken).filter(Boolean)
+      : String(raw || '')
+        .split(/[、,，\n/]/)
+        .map(normalizeSkillToken)
+        .filter(Boolean);
+    if (!skills.length) return;
+    fromSuggestions.push(`补强关键技能：优先强化 ${skills.slice(0, 3).join('、')}，每项至少准备 1 个可验证项目案例用于面试证明。`);
+  });
+
+  const missingKeywords = Array.isArray(result?.missingKeywords)
+    ? result.missingKeywords.map(normalizeSkillToken).filter(Boolean)
+    : [];
+  const fromMissing = missingKeywords.slice(0, 3).map((k: string) =>
+    `补齐能力缺口：围绕“${k}”完成专题学习与实战复盘，形成可量化成果再进入下一轮面试。`
+  );
+
+  const fromWeaknesses = (Array.isArray(result?.weaknesses) ? result.weaknesses : fallback)
+    .map((x: any) => String(x || '').trim())
+    .filter(Boolean)
+    .map((line: string) => (isResumeWordingAdvice(line) ? rewriteToCandidateAction(line) : line));
+
+  return Array.from(new Set([...fromSuggestions, ...fromMissing, ...fromWeaknesses])).slice(0, 6);
+};
 
 type Params = {
   currentUserId?: string;
@@ -27,6 +76,8 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   chatMessagesRef: { current: any[] };
+  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
 };
 
 export const useFinalDiagnosisReportGenerator = ({
@@ -45,6 +96,8 @@ export const useFinalDiagnosisReportGenerator = ({
   getBackendAuthToken,
   buildApiUrl,
   chatMessagesRef,
+  consumeUsageQuota,
+  refundUsageQuota,
 }: Params) => {
   const [override, setOverride] = useState<{
     score: number;
@@ -57,9 +110,13 @@ export const useFinalDiagnosisReportGenerator = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const requestKeyRef = useRef<string>('');
 
-  const makeCacheKey = (requestKey: string) => {
+    const makeCacheKey = (requestKey: string) => {
     const uid = String(currentUserId || 'anon').trim() || 'anon';
-    return `final_report_result:${uid}:${requestKey}`;
+    return `final_report_result:${FINAL_REPORT_CACHE_VERSION}:${uid}:${requestKey}`;
+  };
+  const makeChargeKey = (requestKey: string) => {
+    const uid = String(currentUserId || 'anon').trim() || 'anon';
+    return `final_report_charge:${FINAL_REPORT_CACHE_VERSION}:${uid}:${requestKey}`;
   };
 
   const readCachedResult = (requestKey: string) => {
@@ -94,10 +151,49 @@ export const useFinalDiagnosisReportGenerator = ({
     const requestKey = [
       String((effectiveResume as any)?.id || ''),
       makeJdKey(effectiveJdText),
-      baseSummary.slice(0, 160),
     ].join('|');
     if (!requestKey || requestKeyRef.current === requestKey) return;
     requestKeyRef.current = requestKey;
+
+    const persistedReport = (resumeData as any)?.postInterviewFinalReport;
+    if (persistedReport && typeof persistedReport === 'object') {
+      const persistedSummary = String(persistedReport?.summary || '').trim();
+      const persistedScoreNum = Number(persistedReport?.score);
+      const persistedJdText = String(persistedReport?.jdText || '').trim();
+      const persistedJdKey = makeJdKey(persistedJdText || '');
+      const effectiveJdKey = makeJdKey(effectiveJdText || '');
+      const jdMatched = !effectiveJdText || persistedJdKey === effectiveJdKey;
+      if (persistedSummary && Number.isFinite(persistedScoreNum) && jdMatched) {
+        const persistedWeaknesses = Array.isArray(persistedReport?.weaknesses)
+          ? persistedReport.weaknesses
+          : [];
+        const persistedAdvice = Array.isArray(persistedReport?.advice)
+          ? persistedReport.advice
+          : persistedWeaknesses;
+        const persistedSuggestions = Array.isArray(persistedReport?.suggestions)
+          ? persistedReport.suggestions
+          : [];
+        const hydratedAdvice = extractSkillGapAdvice(
+          { suggestions: persistedSuggestions, weaknesses: persistedWeaknesses },
+          persistedAdvice.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 6)
+        );
+        const hydrated = {
+          score: Math.max(0, Math.min(100, Math.round(persistedScoreNum))),
+          summary: persistedSummary,
+          advice: hydratedAdvice,
+          weaknesses: persistedWeaknesses.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 6),
+          suggestions: persistedSuggestions,
+          generatedResume: persistedReport?.generatedResume && typeof persistedReport.generatedResume === 'object'
+            ? persistedReport.generatedResume
+            : null,
+        };
+        setOverride(hydrated);
+        setIsGenerating(false);
+        writeCachedResult(requestKey, hydrated);
+        return;
+      }
+    }
+
     const cached = readCachedResult(requestKey);
     if (cached) {
       setOverride(cached);
@@ -121,9 +217,27 @@ export const useFinalDiagnosisReportGenerator = ({
     const run = async () => {
       const token = await getBackendAuthToken();
       if (!token) return null;
+      const chargeKey = makeChargeKey(requestKey);
+      try {
+        const charged = localStorage.getItem(chargeKey) === '1';
+        if (!charged && consumeUsageQuota) {
+          const allowed = await consumeUsageQuota('final_report');
+          if (!allowed) return null;
+          localStorage.setItem(chargeKey, '1');
+        }
+      } catch {
+        // ignore storage failures
+      }
       const masker = createMasker();
       const maskedResumeData = masker.maskObject(effectiveResume);
       const maskedJdText = masker.maskText(effectiveJdText);
+      const candidateFocusedSummaryPrompt = [
+        baseSummary,
+        '输出要求：请给出候选人综合评价，并提供 3-5 条候选人后续提升建议（如面试表达、业务能力、项目复盘、沟通协作等），不要输出简历排版或措辞修改建议。'
+      ]
+        .map((x) => String(x || '').trim())
+        .filter(Boolean)
+        .join('\n');
       const diagnosisDossier = (userProfile as any)?.analysis_dossier_latest || (resumeData as any)?.analysisDossierLatest || null;
       const resp = await fetch(buildApiUrl('/api/ai/analyze'), {
         method: 'POST',
@@ -136,7 +250,7 @@ export const useFinalDiagnosisReportGenerator = ({
           jobDescription: maskedJdText,
           analysisStage: 'final_report',
           ragEnabled: getRagEnabledFlag(),
-          interviewSummary: masker.maskText(baseSummary),
+          interviewSummary: masker.maskText(candidateFocusedSummaryPrompt),
           chatHistory: maskChatHistory(chatMessagesRef.current || [], masker.maskText),
           diagnosisDossier: diagnosisDossier ? masker.maskObject(diagnosisDossier) : null,
         }),
@@ -153,6 +267,7 @@ export const useFinalDiagnosisReportGenerator = ({
         .map((x: any) => String(x || '').trim())
         .filter(Boolean)
         .slice(0, 6);
+      const candidateAdvice = extractSkillGapAdvice(result, weaknesses);
       const suggestions = Array.isArray(result?.suggestions) ? result.suggestions : [];
       const generatedResume = result?.resumeData && typeof result.resumeData === 'object'
         ? result.resumeData
@@ -160,14 +275,31 @@ export const useFinalDiagnosisReportGenerator = ({
       return {
         score: scoreValue,
         summary,
-        advice: weaknesses,
+        advice: candidateAdvice,
         weaknesses,
         suggestions,
         generatedResume,
       };
     };
 
-    const task = run()
+    const runWithRefund = async () => {
+      try {
+        return await run();
+      } catch (err) {
+        const chargeKey = makeChargeKey(requestKey);
+        try {
+          if (localStorage.getItem(chargeKey) === '1' && refundUsageQuota) {
+            await refundUsageQuota('final_report', '最终报告生成失败返还积分');
+            localStorage.removeItem(chargeKey);
+          }
+        } catch {
+          // ignore refund/storage failure here
+        }
+        throw err;
+      }
+    };
+
+    const task = runWithRefund()
       .then((result) => {
         if (result) writeCachedResult(requestKey, result);
         return result;

@@ -16,6 +16,7 @@ type Params = {
   isInterviewMode?: boolean;
   resumeData: any;
   jdText: string;
+  targetCompany: string;
   interviewPlanConfigKey?: string;
   buildApiUrl: (path: string) => string;
   makeJdKey: (text: string) => string;
@@ -30,6 +31,7 @@ export const useInterviewPlanLoader = ({
   isInterviewMode,
   resumeData,
   jdText,
+  targetCompany,
   interviewPlanConfigKey,
   buildApiUrl,
   makeJdKey,
@@ -51,13 +53,37 @@ export const useInterviewPlanLoader = ({
     const questionLimit = getInterviewQuestionLimit();
     const planGenerationLimit = interviewMode === 'simple' ? 2 : questionLimit;
     const minExpectedCount = interviewMode === 'simple' ? 3 : 4;
-    const storageKey = getPlanStorageKey(resumeData?.id, makeJdKey, storageJdText, interviewFocus, currentUserId);
-    const legacyStorageKey = getLegacyPlanStorageKey(resumeData?.id, makeJdKey, storageJdText, interviewFocus);
+    const effectiveTargetCompany = String(targetCompany || resumeData?.targetCompany || '').trim();
+    const resumeId = String(resumeData?.id || '').trim() || 'unknown';
+    const scopedUserId = String(currentUserId || '').trim() || 'anonymous';
+    const forceModelPlanKey = `ai_interview_force_model_plan_once:${scopedUserId}:${resumeId}`;
+    const forceModelPlan = (() => {
+      try {
+        return localStorage.getItem(forceModelPlanKey) === '1';
+      } catch {
+        return false;
+      }
+    })();
+    const storageKey = getPlanStorageKey(
+      resumeData?.id,
+      makeJdKey,
+      storageJdText,
+      interviewFocus,
+      effectiveTargetCompany,
+      currentUserId
+    );
+    const legacyStorageKey = getLegacyPlanStorageKey(
+      resumeData?.id,
+      makeJdKey,
+      storageJdText,
+      interviewFocus,
+      effectiveTargetCompany
+    );
     const loadIdentity = `${storageKey}|${planFetchTrigger}`;
     if (lastLoadIdentityRef.current === loadIdentity) return;
 
     try {
-      const cached = localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey);
+      const cached = forceModelPlan ? null : (localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey));
       if (cached) {
         const parsed = JSON.parse(cached);
         const cachedMode = String(parsed?.interviewMode || '').trim().toLowerCase();
@@ -113,6 +139,10 @@ export const useInterviewPlanLoader = ({
       try {
         const token = await getBackendAuthToken();
         if (!token) {
+          if (forceModelPlan) {
+            if (planLoaderMountedRef.current) setInterviewPlan([]);
+            return;
+          }
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
@@ -152,6 +182,10 @@ export const useInterviewPlanLoader = ({
         );
         const planSource = String(data?.planSource || '').trim().toLowerCase();
         const isModelPlan = planSource === 'model';
+        if (forceModelPlan && !isModelPlan) {
+          if (planLoaderMountedRef.current) setInterviewPlan([]);
+          return;
+        }
         const finalPlan = composeInterviewPlan(
           interviewType,
           questions.length > 0
@@ -163,6 +197,9 @@ export const useInterviewPlanLoader = ({
         ).slice(0, questionLimit);
         if (planLoaderMountedRef.current) {
           setInterviewPlan(finalPlan);
+          if (isModelPlan) {
+            try { localStorage.removeItem(forceModelPlanKey); } catch { }
+          }
           // Only cache model-generated plans; avoid sticky fallback plans across sessions.
           if (isModelPlan) {
             try {
@@ -175,6 +212,10 @@ export const useInterviewPlanLoader = ({
         }
       } catch {
         if (planLoaderMountedRef.current) {
+          if (forceModelPlan) {
+            setInterviewPlan([]);
+            return;
+          }
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
@@ -199,6 +240,7 @@ export const useInterviewPlanLoader = ({
     planLoaderMountedRef,
     resumeData?.id,
     resumeData?.lastJdText,
+    targetCompany,
     setInterviewPlan,
   ]);
 };

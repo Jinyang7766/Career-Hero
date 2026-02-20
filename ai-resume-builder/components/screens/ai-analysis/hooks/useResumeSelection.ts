@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { supabase } from '../../../../src/supabase-client';
+import { deriveLatestAnalysisStep } from '../../../../src/diagnosis-progress';
 import type { ResumeData, ResumeSummary } from '../../../../types';
 
 export type ResumeReadState = {
@@ -19,6 +20,7 @@ type Params = {
   setJdText: (v: string) => void;
   setTargetCompany: (v: string) => void;
   navigateToStep: (v: any, replaceHistory?: boolean) => void;
+  openChat?: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
   setOptimizedResumeId: (v: string | number | null) => void;
   applyAnalysisSnapshot: (snapshot: any) => boolean;
   saveLastAnalysis: (payload: {
@@ -46,6 +48,7 @@ export const useResumeSelection = ({
   setJdText,
   setTargetCompany,
   navigateToStep,
+  openChat,
   setOptimizedResumeId,
   applyAnalysisSnapshot,
   saveLastAnalysis,
@@ -53,12 +56,60 @@ export const useResumeSelection = ({
   isSameResumeId,
   isInterviewMode,
 }: Params) => {
+  const normalizeStep = (step: any) => {
+    const v = String(step || '').trim().toLowerCase();
+    return ['report', 'chat', 'final_report', 'comparison', 'interview_report', 'micro_intro'].includes(v) ? v : '';
+  };
+  const hasMicroInterviewHistory = (resumeRow: any) => {
+    const source = (resumeRow as any)?.resume_data || resumeRow || {};
+    const sessions = (source as any)?.interviewSessions || {};
+    return Object.values(sessions || {}).some((session: any) => {
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      if (chatMode !== 'micro') return false;
+      return Array.isArray(session?.messages) && session.messages.length > 0;
+    });
+  };
+  const inferTargetStepFromResume = (resumeRow: any, explicit?: 'report' | 'chat' | 'final_report') => {
+    const canEnterMicroChat = hasMicroInterviewHistory(resumeRow);
+    if (explicit) {
+      if (explicit === 'chat' && !canEnterMicroChat) return 'report';
+      return explicit;
+    }
+    const rawLatestStep =
+      normalizeStep((resumeRow as any)?.latestAnalysisStep) ||
+      normalizeStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
+    if (rawLatestStep === 'chat') return canEnterMicroChat ? 'chat' : 'report';
+    if (rawLatestStep === 'final_report' || rawLatestStep === 'comparison' || rawLatestStep === 'interview_report') return 'final_report';
+    if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro') return 'report';
+
+    const sessionsSource = (resumeRow as any)?.resume_data || resumeData || {};
+    const sessionStep = normalizeStep(deriveLatestAnalysisStep(sessionsSource));
+    if (sessionStep === 'chat') return canEnterMicroChat ? 'chat' : 'report';
+    if (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report') return 'final_report';
+    if (sessionStep === 'report' || sessionStep === 'micro_intro') return 'report';
+
+    const progress = Math.max(0, Math.min(100, Math.round(Number(
+      (resumeRow as any)?.diagnosisProgress ??
+      (resumeRow as any)?.resume_data?.diagnosisProgress ??
+      (resumeData as any)?.diagnosisProgress ??
+      0
+    ))));
+    if (progress >= 95) return 'final_report';
+    // Do not auto-open micro interview only based on progress.
+    if (progress >= 80) return 'report';
+    return 'report';
+  };
+
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
     status: 'idle',
     message: '尚未读取简历，请先选择简历',
   });
 
-  const handleResumeSelect = async (id: string | number, preferReport: boolean = false) => {
+  const handleResumeSelect = async (
+    id: string | number,
+    preferReport: boolean = false,
+    targetStep?: 'report' | 'chat' | 'final_report'
+  ) => {
     setSelectedResumeId(id);
     sourceResumeIdRef.current = id;
     setAnalysisResumeId(id);
@@ -164,7 +215,14 @@ export const useResumeSelection = ({
         }
 
         if (preferReport && !isInterviewMode) {
-          navigateToStep('report');
+          const inferredTarget = inferTargetStepFromResume(resume, targetStep);
+          if (inferredTarget === 'chat' && openChat) {
+            window.setTimeout(() => {
+              openChat('internal');
+            }, 0);
+          } else {
+            navigateToStep(inferredTarget);
+          }
         }
       }
     } catch (error) {

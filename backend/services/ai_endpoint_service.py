@@ -6,7 +6,7 @@ import time
 
 from google.genai import types
 
-ANALYSIS_PROMPT_VERSION = "analysis-v2.2"
+ANALYSIS_PROMPT_VERSION = "analysis-v2.3"
 
 
 class PIIMasker:
@@ -265,6 +265,58 @@ def _split_into_sentences(text: str):
     return [p.strip() for p in parts if len(p.strip()) >= 4]
 
 
+def _normalize_training_day_labels(text: str) -> str:
+    value = str(text or '')
+    if not value:
+        return ''
+
+    digit_map = {
+        '零': 0, '〇': 0,
+        '一': 1, '二': 2, '两': 2, '三': 3, '四': 4,
+        '五': 5, '六': 6, '七': 7, '八': 8, '九': 9, '十': 10,
+    }
+
+    def _parse_day_token(token: str):
+        token = str(token or '').strip()
+        if not token:
+            return None
+        if token.isdigit():
+            try:
+                n = int(token)
+            except Exception:
+                return None
+            return n if 0 < n <= 99 else None
+
+        if token == '十':
+            return 10
+        if token.startswith('十'):
+            tail = token[1:]
+            if len(tail) == 1 and tail in digit_map:
+                return 10 + int(digit_map[tail])
+            return None
+        if token.endswith('十'):
+            head = token[:-1]
+            if len(head) == 1 and head in digit_map and digit_map[head] > 0:
+                return int(digit_map[head]) * 10
+            return None
+        if len(token) == 2 and token[0] in digit_map and token[1] in digit_map and digit_map[token[0]] > 0:
+            return int(digit_map[token[0]]) * 10 + int(digit_map[token[1]])
+        if len(token) == 1 and token in digit_map and digit_map[token] > 0:
+            return int(digit_map[token])
+        return None
+
+    def _replace_cn_day(match):
+        token = match.group(1)
+        n = _parse_day_token(token)
+        if not n:
+            return match.group(0)
+        return f'Day {n}'
+
+    normalized = re.sub(r'第\s*([0-9]{1,2}|[零〇一二两三四五六七八九十]{1,3})\s*天', _replace_cn_day, value)
+    normalized = re.sub(r'\bday\s*([0-9]{1,2})\b', lambda m: f"Day {int(m.group(1))}", normalized, flags=re.IGNORECASE)
+    return normalized
+
+
 def _collect_resume_fragments_for_coverage(resume_data):
     fragments = []
     if not isinstance(resume_data, dict):
@@ -475,6 +527,13 @@ def _build_analysis_prompt(
    - 错误："建议描述：负责后端开发..."
    - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
 5. **严格匹配要求**：必须逐条对照 职位描述 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
+5.1 **评分口径（强制）**：`score` 必须表示“候选人综合匹配度评分”，不是“简历排版完整度评分”。
+    - 评分时必须综合：岗位任务匹配、技能与方法匹配、证据质量（量化结果/可验证案例）、面试反馈（若提供了微访谈上下文）、以及候选人发展潜力。
+    - `scoreBreakdown` 字段映射固定为：
+      - `experience`：岗位任务与经历证据匹配（含职责覆盖、案例相关性）
+      - `skills`：关键能力与技能匹配（含工具/方法、业务能力）
+      - `format`：综合表现质量（含证据可信度、表达结构、面试反馈与潜力）
+    - 严禁仅按“简历格式好坏”给高分。
 6. **数量要求**：suggestions 至少 8 条；若 职位描述 较复杂，建议 12-15 条。
 6.1 **逐句覆盖要求（强制）**：对简历中每条可见叙述句（尤其是工作经历/项目经历/个人简介中的句子）都要进行详细评测；每条句子至少对应 1 条可执行优化建议，禁止“挑重点略过”。
 6.2 **一次性完整优化（强制）**：本次输出必须覆盖整份简历，不允许只优化一部分后结束。
@@ -533,10 +592,10 @@ def _build_analysis_prompt(
 请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
 请使用中文输出，字段值必须为中文。
 
-评分标准（总分100）：
-- 经历匹配（40分）：工作经历与职位描述职责的重合度、项目经验的含金量。
-- 技能匹配（30分）：硬技能（编程语言、工具）和软技能的覆盖率。
-- 格式规范（30分）：简历排版整洁度、关键信息的易读性、是否有错别字。
+评分标准（总分100，候选人综合匹配度评分）：
+- 任务/经历匹配（40分，对应 scoreBreakdown.experience）：工作经历与职位描述关键任务的重合度、可验证案例支撑强度。
+- 能力/技能匹配（35分，对应 scoreBreakdown.skills）：关键能力与技能（工具、方法、业务能力）覆盖率与深度。
+- 综合表现质量（25分，对应 scoreBreakdown.format）：证据可信度、表达结构清晰度、微访谈反馈（若有）与发展潜力。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -553,7 +612,7 @@ def _build_analysis_prompt(
     "skills": 25,
     "format": 25
   }},
-  "summary": "简历整体评估简述（控制在100字以内）。",
+  "summary": "候选人综合匹配度评估简述（控制在100字以内）。",
   "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
@@ -587,10 +646,10 @@ def _build_analysis_prompt(
 请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出**更多、更具体**的优化建议（**至少 8 条**，必要时 12-15 条）。
 请使用中文输出，字段值必须为中文。
 
-评分标准（总分100）：
-- 经历质量（40分）：工作内容的具体程度、是否有量化成果（使用STAR法则）。
-- 技能概况（30分）：技能栈是否完整、是否突出了核心竞争力。
-- 格式规范（30分）：结构是否清晰、排版是否专业、语言是否精炼。
+评分标准（总分100，候选人综合匹配度评分）：
+- 任务/经历匹配（40分，对应 scoreBreakdown.experience）：经历与目标岗位任务的契合度、案例真实性与相关性。
+- 能力/技能匹配（35分，对应 scoreBreakdown.skills）：关键能力、方法与技能栈的覆盖与深度。
+- 综合表现质量（25分，对应 scoreBreakdown.format）：证据密度、表达结构、可迁移能力与潜力。
 
 简历：
 {format_resume_for_ai(resume_data)}
@@ -604,7 +663,7 @@ def _build_analysis_prompt(
     "skills": 20,
     "format": 25
   }},
-  "summary": "简历整体评估简述（控制在100字以内）。",
+  "summary": "候选人综合匹配度评估简述（控制在100字以内）。",
   "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
@@ -1408,22 +1467,38 @@ def ai_chat_core(data, deps):
 
             if mode == 'interview_summary':
                 prompt = f"""
-【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
+【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述与完整对话记录输出“面试综合分析”。
 要求：
 - 用中文输出；不要提出下一题。
-- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
+- 评分只基于本场面试作答表现（表达结构、业务深度、案例证据、数据支撑、应变与逻辑）。
+- 严禁按简历内容、简历完整度、历史诊断结论、候选人背景标签进行任何加分或兜底。
+- 严禁出现“仅按简历静态评估”“若只看简历可得X分”“简历可弥补本场表现”等表述。
+- 若对话样本不足，明确说明“面试证据不足”；且总分必须从严（建议不高于59分）。
 - 必须给出总分（0-100 的整数）。
-- 输出结构：
-1) 总分：<整数>/100（必须是整数）
-2) 综合评价（3-5句）
-3) 表现亮点（3-6条）
-4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-5) 职位描述匹配度与缺口（分点说明）
-6) 简历可改进点（3-6条，针对表达与证据补强）
-7) 1-2 周训练计划（按天/按主题）
+- 禁止冗长铺垫与模板废话（如“基于您提供的信息/以下是针对您的分析”）。
+- 禁止同义重复；同一结论只说一次。
+- 句子要短：单句尽量 <= 35 字。
+- 必须严格按以下模板输出，标题与顺序不可变，且每条都以“- ”开头：
+总分：<整数>/100
+【综合评价】
+- ...
+- ...
+【表现亮点】
+- ...
+- ...
+【需要加强的地方】
+- 问题：...｜改进：...｜练习：...
+- 问题：...｜改进：...｜练习：...
+【职位匹配度与缺口】
+- ...
+- ...
+【后续训练计划】
+- Day 1: ...
+- Day 2: ...
+- 训练计划中的天数标签必须统一使用 `Day N`（例如 Day 1, Day 2），禁止使用“第1天/第一天”。
+- 除上述模板外不得输出任何额外段落、前言或结语。
 
 职位描述：{job_description if job_description else '未提供'}
-简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
@@ -1492,6 +1567,8 @@ def ai_chat_core(data, deps):
             raw_text = (raw_text or '').replace('*', '').strip()
 
             text = raw_text if isinstance(raw_text, str) and raw_text.strip() else '感谢你的回答，我们继续下一题。'
+            if mode == 'interview_summary':
+                text = _normalize_training_day_labels(text)
             return {'response': text}, 200
         except Exception as ai_error:
             deps['logger'].error("AI 面试失败: %s", ai_error)
@@ -1621,23 +1698,38 @@ def ai_chat_stream_core(data, deps):
 
     if mode == 'interview_summary':
         prompt = f"""
-【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述、候选人简历与完整对话记录输出“面试综合分析”。
+【严格角色】你是专业 AI 面试官。现在面试已结束，请基于职位描述与完整对话记录输出“面试综合分析”。
 要求：
 - 用中文输出；不要提出下一题。
-- 重点结合：候选人回答质量（结构、深度、证据、数据/影响）、简历内容与职位描述匹配度、岗位核心能力缺口。
+- 评分只基于本场面试作答表现（表达结构、业务深度、案例证据、数据支撑、应变与逻辑）。
+- 严禁按简历内容、简历完整度、历史诊断结论、候选人背景标签进行任何加分或兜底。
+- 严禁出现“仅按简历静态评估”“若只看简历可得X分”“简历可弥补本场表现”等表述。
+- 若对话样本不足，明确说明“面试证据不足”；且总分必须从严（建议不高于59分）。
 - 必须给出总分（0-100 的整数）。
-- 输出结构：
-1) 总分：<整数>/100（必须是整数）
-2) 综合评价（3-5句）
-3) 表现亮点（3-6条）
-4) 需要加强的地方（5-8条，每条包含：问题 -> 如何改进 -> 建议练习/准备素材）
-5) 职位描述匹配度与缺口（分点说明）
-6) 简历可改进点（3-6条，针对表达与证据补强）
-7) 1-2 周训练计划（按天/按主题）
+- 禁止冗长铺垫与模板废话（如“基于您提供的信息/以下是针对您的分析”）。
+- 禁止同义重复；同一结论只说一次。
+- 句子要短：单句尽量 <= 35 字。
+- 必须严格按以下模板输出，标题与顺序不可变，且每条都以“- ”开头：
+总分：<整数>/100
+【综合评价】
+- ...
+- ...
+【表现亮点】
+- ...
+- ...
+【需要加强的地方】
+- 问题：...｜改进：...｜练习：...
+- 问题：...｜改进：...｜练习：...
+【职位匹配度与缺口】
+- ...
+- ...
+【后续训练计划】
+- Day 1: ...
+- Day 2: ...
+- 训练计划中的天数标签必须统一使用 `Day N`（例如 Day 1, Day 2），禁止使用“第1天/第一天”。
+- 除上述模板外不得输出任何额外段落、前言或结语。
 
 职位描述：{job_description if job_description else '未提供'}
-简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
-诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
 """
@@ -1714,6 +1806,8 @@ def ai_chat_stream_core(data, deps):
                 response, _used = deps['_gemini_generate_content_resilient'](active_chat_model, contents, want_json=False)
                 model_elapsed_ms = (time.perf_counter() - model_started) * 1000.0
                 text = (response.text or "").replace('*', '').strip()
+                if mode == 'interview_summary':
+                    text = _normalize_training_day_labels(text)
                 deps['logger'].info(
                     "interview_stream_latency mode=fallback trace_id=%s model=%s model_ms=%.1f total_ms=%.1f text_len=%s",
                     request_trace_id or '-',
@@ -1753,6 +1847,8 @@ def ai_chat_stream_core(data, deps):
                 full_text = parsed.get('response') or parsed.get('text') or parsed.get('message') or parsed.get('reply') or full_text
 
             final_text = (full_text or '').replace('*', '').strip()
+            if mode == 'interview_summary':
+                final_text = _normalize_training_day_labels(final_text)
             deps['logger'].info(
                 "interview_stream_latency mode=sse trace_id=%s model=%s first_chunk_ms=%s total_ms=%.1f chunks=%s text_len=%s",
                 request_trace_id or '-',

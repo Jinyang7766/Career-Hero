@@ -3,6 +3,8 @@ import type { ResumeData, ResumeSummary } from '../../../../types';
 import { makeJdKey } from '../id-utils';
 import BackButton from '../../../shared/BackButton';
 import { useAppContext } from '../../../../src/app-context';
+import { USAGE_POINT_COST } from '../../../../src/points-config';
+import { confirmDialog } from '../../../../src/ui/dialogs';
 
 export type ResumeReadState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -25,12 +27,13 @@ export type JdInputPageProps = {
   onScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 
   onBack: () => void;
-  onPrev: () => void;
   onStart: (interviewType?: string) => void;
+  onViewReport?: () => void;
 
   showJdEmptyModal: boolean;
   setShowJdEmptyModal: (v: boolean) => void;
   startAnalysis: (interviewType?: string) => void;
+  onRestartCompletedInterviewScene?: () => Promise<void> | void;
   isInterviewMode?: boolean;
 };
 
@@ -47,11 +50,12 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   isUploading,
   onScreenshotUpload,
   onBack,
-  onPrev,
   onStart,
+  onViewReport,
   showJdEmptyModal,
   setShowJdEmptyModal,
   startAnalysis,
+  onRestartCompletedInterviewScene,
   isInterviewMode,
 }) => {
   const currentUser = useAppContext((s) => s.currentUser);
@@ -123,55 +127,101 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     }
   }, [INTERVIEW_FOCUS_STORAGE_KEY, getScopedKey, interviewFocus, isInterviewMode]);
 
-  const shouldShowContinueInterview = React.useMemo(() => {
-    if (!isInterviewMode) return false;
+  const normalizeSceneText = React.useCallback((value: any) =>
+    String(value || '').trim().toLowerCase().replace(/\s+/g, ' '), []);
+
+  const isSessionMatchedForCurrentScene = React.useCallback((session: any) => {
+    if (!session) return false;
     const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
-    const sessions = (resumeData as any)?.interviewSessions || {};
-    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
+    const sessionJdKey =
+      String(session?.jdKey || '').trim() ||
+      makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+    if (sessionJdKey !== effectiveJdKey) return false;
+
     const normalizedMode = String(interviewMode || 'comprehensive').trim().toLowerCase();
     const normalizedType = String(interviewType || 'general').trim().toLowerCase();
-    const effectiveJdKey = makeJdKey(effectiveJdText);
+    const normalizedFocus = normalizeSceneText(interviewFocus);
+    const normalizedTargetCompany = normalizeSceneText(targetCompany || resumeData?.targetCompany || '');
+    const normalizedResumeId = String((resumeData as any)?.id || '').trim();
 
-    const hasInterruptedSessionForJdKey = (jdKey: string) => {
-      const matchedState = Object.values(analysisSessionByJd || {}).some((session: any) => {
-        if (!session) return false;
-        const state = String(session?.state || '').toLowerCase();
-        if (state !== 'interview_in_progress' && state !== 'paused') return false;
-        const stateJdKey = String(session?.jdKey || '').trim() || makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
-        if (stateJdKey !== jdKey) return false;
-        const stateMode = String(session?.interviewMode || '').trim().toLowerCase();
-        const stateType = String(session?.interviewType || '').trim().toLowerCase();
-        const modeMatched = !stateMode || stateMode === normalizedMode;
-        const typeMatched = !stateType || stateType === normalizedType;
-        return modeMatched && typeMatched;
-      });
-      if (matchedState) return true;
-      // Legacy compatibility: fall back to chat session records.
-      return Object.values(sessions || {}).some((session: any) => {
-        if (!session) return false;
-        const sessionJdKey = makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
-        if (sessionJdKey !== jdKey) return false;
-        const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
-        const sessionType = String(session?.interviewType || '').trim().toLowerCase();
-        const modeMatched = !sessionMode || sessionMode === normalizedMode;
-        const typeMatched = !sessionType || sessionType === normalizedType;
-        return modeMatched && typeMatched;
-      });
-    };
-    if (effectiveJdText) {
-      return hasInterruptedSessionForJdKey(effectiveJdKey);
-    }
+    const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
+    const sessionType = String(session?.interviewType || '').trim().toLowerCase();
+    const sessionFocus = normalizeSceneText(session?.interviewFocus);
+    const sessionCompany = normalizeSceneText(session?.targetCompany);
+    const sessionResumeId = String(session?.resumeId || '').trim();
+    return (
+      sessionMode === normalizedMode &&
+      sessionType === normalizedType &&
+      sessionFocus === normalizedFocus &&
+      sessionCompany === normalizedTargetCompany &&
+      (!sessionResumeId || sessionResumeId === normalizedResumeId)
+    );
+  }, [jdText, resumeData, interviewMode, interviewType, interviewFocus, targetCompany, normalizeSceneText]);
+
+  const shouldShowContinueInterview = React.useMemo(() => {
+    if (!isInterviewMode) return false;
+    const sessions = (resumeData as any)?.interviewSessions || {};
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const hasDoneReportInCurrentScene = Object.values(analysisSessionByJd || {}).some((session: any) => {
+      if (!session) return false;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      const state = String(session?.state || '').trim().toLowerCase();
+      const step = String(session?.step || '').trim().toLowerCase();
+      return state === 'interview_done' && (step === 'interview_report' || step === 'final_report');
+    });
+    // If report is already generated for this scene, treat next start as a fresh run,
+    // so JD-empty prompt should still appear.
+    if (hasDoneReportInCurrentScene) return false;
     return Object.values(analysisSessionByJd || {}).some((session: any) => {
       if (!session) return false;
       const state = String(session?.state || '').toLowerCase();
       if (state !== 'interview_in_progress' && state !== 'paused') return false;
-      const stateMode = String(session?.interviewMode || '').trim().toLowerCase();
-      const stateType = String(session?.interviewType || '').trim().toLowerCase();
-      const modeMatched = !stateMode || stateMode === normalizedMode;
-      const typeMatched = !stateType || stateType === normalizedType;
-      return modeMatched && typeMatched;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      return true;
+    }) || Object.values(sessions || {}).some((session: any) => {
+      if (!session) return false;
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      if (chatMode !== 'interview') return false;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      return Array.isArray(session?.messages) && session.messages.length > 0;
     });
-  }, [interviewType, isInterviewMode, jdText, resumeData]);
+  }, [isInterviewMode, resumeData, isSessionMatchedForCurrentScene]);
+
+  const shouldShowViewReport = React.useMemo(() => {
+    if (!isInterviewMode) return false;
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    return Object.values(analysisSessionByJd || {}).some((session: any) => {
+      if (!session) return false;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      const state = String(session?.state || '').trim().toLowerCase();
+      const step = String(session?.step || '').trim().toLowerCase();
+      return state === 'interview_done' && (step === 'interview_report' || step === 'final_report');
+    });
+  }, [isInterviewMode, resumeData, isSessionMatchedForCurrentScene]);
+
+  const isInterviewSceneLocked = React.useMemo(() => {
+    if (!isInterviewMode) return false;
+    // Finished interview scenes should remain editable so user can adjust settings
+    // before starting a new interview run.
+    if (shouldShowViewReport) return false;
+    const sessions = (resumeData as any)?.interviewSessions || {};
+    const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
+    const hasStartedByChat = Object.values(sessions || {}).some((session: any) => {
+      if (!session) return false;
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      if (chatMode !== 'interview') return false;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      return Array.isArray(session?.messages) && session.messages.length > 0;
+    });
+    if (hasStartedByChat) return true;
+    return Object.values(analysisSessionByJd || {}).some((session: any) => {
+      if (!session) return false;
+      if (!isSessionMatchedForCurrentScene(session)) return false;
+      const state = String(session?.state || '').toLowerCase();
+      return state === 'interview_in_progress' || state === 'paused';
+    });
+  }, [isInterviewMode, resumeData, isSessionMatchedForCurrentScene, shouldShowViewReport]);
 
   const persistInterviewSceneConfig = React.useCallback(() => {
     if (!isInterviewMode) return;
@@ -203,6 +253,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     const name = (resumeData?.personalInfo?.name || '').trim();
     if (name) return `${name}的简历`;
     return '无';
+  })();
+  const startButtonLabel = (() => {
+    if (!isInterviewMode) return `开始诊断（${USAGE_POINT_COST.analysis}积分）`;
+    if (shouldShowContinueInterview) return '继续面试';
+    const interviewCost = interviewMode === 'simple'
+      ? USAGE_POINT_COST.interview_simple
+      : USAGE_POINT_COST.interview_comprehensive;
+    return `开始面试（${interviewCost}积分）`;
   })();
 
   const statusTone = (() => {
@@ -249,7 +307,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2" />
           <h1 className="text-lg font-bold tracking-tight">
@@ -259,7 +317,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
       </header>
 
-      <main className="p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
+      <main className="pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
         <div className={`p-4 rounded-2xl border transition-all duration-300 ${statusTone.bg} ${statusTone.border} shadow-sm`}>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -334,6 +392,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                     </button>
                   ))}
                 </div>
+                {isInterviewSceneLocked && (
+                  <div className="mt-3 p-3 rounded-xl border border-amber-200/50 dark:border-amber-400/20 bg-amber-50/50 dark:bg-amber-400/5 flex gap-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <span className="material-symbols-outlined text-amber-500 text-[18px] shrink-0 mt-0.5">lock</span>
+                    <p className="text-[11px] leading-relaxed font-bold text-amber-700/80 dark:text-amber-400/80">
+                      当前面试已开始，已锁定目标公司/岗位、职位描述和训练重点。如需修改，请切换为新场景、另一个模式或在面试对话框右上角点击“重新开始”。
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-4">
@@ -344,6 +410,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   placeholder="例如：重点追问项目量化结果、系统设计深挖、反问环节训练..."
                   className="mt-2 w-full h-20 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none text-sm shadow-sm"
                   maxLength={200}
+                  disabled={isInterviewSceneLocked}
                 />
                 <div className="mt-1 text-right text-[11px] text-slate-500 dark:text-slate-400">
                   {interviewFocus.length}/200
@@ -360,6 +427,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               placeholder="例如：字节跳动 / 腾讯"
               className="mt-2 w-full rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none transition-all text-sm shadow-sm"
               type="text"
+              disabled={isInterviewSceneLocked}
             />
           </div>
           <div className="mb-3">
@@ -370,6 +438,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               placeholder={isInterviewMode ? "请输入目标岗位的职位描述内容，AI 将基于此进行针对性的模拟面试提问..." : "请粘贴目标职位的职位描述内容，AI 将为您进行针对性的人岗匹配分析..."}
               className="mt-2 w-full h-56 rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-transparent p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-2 focus:ring-primary outline-none resize-none text-sm leading-relaxed shadow-sm"
               maxLength={JD_MAX_CHARS}
+              disabled={isInterviewSceneLocked}
             />
             <div className="mt-1 text-right text-xs text-slate-500 dark:text-slate-400">
               {jdText.length}/{JD_MAX_CHARS}
@@ -379,7 +448,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           <div className="mt-3">
             <button
               onClick={() => !isUploading && document.getElementById('jd-screenshot-upload')?.click()}
-              disabled={isUploading}
+              disabled={isUploading || isInterviewSceneLocked}
               className="w-full flex items-center justify-center gap-2 px-4 py-3 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-50 dark:hover:bg-[#111a22] transition-all disabled:opacity-70 disabled:cursor-not-allowed"
               type="button"
             >
@@ -390,6 +459,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               )}
               <span className="text-sm">{isUploading ? '正在解析...' : '上传职位描述截图'}</span>
             </button>
+
             <input
               type="file"
               id="jd-screenshot-upload"
@@ -401,22 +471,37 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
 
         <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex gap-3 mt-2">
+          {isInterviewMode && shouldShowViewReport && (
+            <button
+              onClick={() => {
+                persistInterviewSceneConfig();
+                onViewReport?.();
+              }}
+              className="flex-1 py-3 rounded-xl border border-primary/30 text-primary text-sm font-bold hover:bg-primary/5 active:scale-[0.98] transition-all bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm"
+              type="button"
+            >
+              查看报告
+            </button>
+          )}
           <button
-            onClick={onPrev}
-            className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-white/10 text-slate-600 dark:text-slate-300 text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/5 active:scale-[0.98] transition-all bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm"
-            type="button"
-          >
-            上一步
-          </button>
-          <button
-            onClick={() => {
+            onClick={async () => {
               persistInterviewSceneConfig();
+              if (isInterviewMode && shouldShowViewReport && !shouldShowContinueInterview) {
+                const confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
+                if (!confirmed) return;
+                await onRestartCompletedInterviewScene?.();
+              }
+              const shouldBypassJdEmptyPrompt = Boolean(isInterviewMode && shouldShowContinueInterview);
+              if (shouldBypassJdEmptyPrompt) {
+                void startAnalysis(interviewType);
+                return;
+              }
               onStart(isInterviewMode ? interviewType : undefined);
             }}
-            className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all"
+            className={`${isInterviewMode && shouldShowViewReport ? 'flex-1' : 'w-full'} py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all`}
             type="button"
           >
-            {isInterviewMode ? (shouldShowContinueInterview ? '继续面试' : '开始面试') : '开始诊断'}
+            {startButtonLabel}
           </button>
         </div>
 

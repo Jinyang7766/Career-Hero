@@ -5,6 +5,7 @@ export type AiAnalysisStep =
   | 'report'
   | 'micro_intro'
   | 'chat'
+  | 'interview_report_loading'
   | 'interview_report'
   | 'comparison'
   | 'final_report';

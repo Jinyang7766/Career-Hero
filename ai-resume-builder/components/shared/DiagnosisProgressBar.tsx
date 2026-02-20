@@ -5,18 +5,26 @@ interface DiagnosisProgressBarProps {
     resume: ResumeSummary;
     isInterviewMode?: boolean;
     variant?: 'default' | 'on-dark';
+    onDiagnosisStageClick?: (step: 'report' | 'chat' | 'final_report') => void;
 }
 
 const DIAGNOSIS_STAGES = ['初步诊断', '微访谈', '最终报告'] as const;
+const DIAGNOSIS_STAGE_STEPS: Array<'report' | 'chat' | 'final_report'> = ['report', 'chat', 'final_report'];
 const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
 type StageStatus = 'todo' | 'current' | 'done';
 
 export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
     resume,
     isInterviewMode = false,
-    variant = 'default'
+    variant = 'default',
+    onDiagnosisStageClick,
 }) => {
     const progress = Math.max(0, Math.min(100, Math.round(Number(resume.diagnosisProgress))));
+    const latestStep = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
+    const isFinalReportCompleted =
+        progress >= 100 ||
+        latestStep === 'final_report' ||
+        latestStep === 'comparison';
     const isOnDark = variant === 'on-dark';
 
     // Both modes use a 3-stage visual approach
@@ -39,52 +47,62 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
                 )}
             </div>
 
-            <div className="flex items-center gap-1.5 h-1.5 px-0.5">
-                {labels.map((_, idx) => {
-                    const status = statuses[idx] || 'todo';
-                    const isDone = status === 'done';
-                    const isCurrent = status === 'current';
-
-                    return (
-                        <div
-                            key={idx}
-                            className={`flex-1 h-full rounded-full transition-all duration-700 ${isDone
-                                ? isOnDark ? 'bg-white' : 'bg-emerald-500'
-                                : isCurrent
-                                    ? isOnDark ? 'bg-white/60 animate-pulse' : 'bg-primary animate-pulse'
-                                    : isOnDark ? 'bg-white/10' : 'bg-slate-100 dark:bg-white/5'
-                                }`}
-                        />
-                    );
-                })}
-            </div>
-
-            <div className="flex items-center mt-3">
+            <div className="flex items-start gap-1.5 mt-1.5">
                 {labels.map((label, idx) => {
                     const status = statuses[idx] || 'todo';
                     const isDone = status === 'done';
                     const isCurrent = status === 'current';
+                    const canJumpDiagnosisStage =
+                        !isInterviewMode &&
+                        isDone &&
+                        typeof onDiagnosisStageClick === 'function';
+                    const content = (
+                        <>
+                            <div
+                                className={`w-full h-1.5 rounded-full transition-all duration-700 ${isDone
+                                    ? isOnDark ? 'bg-white' : 'bg-emerald-500'
+                                    : isCurrent
+                                        ? isOnDark ? 'bg-white/60 animate-pulse' : 'bg-primary animate-pulse'
+                                        : isOnDark ? 'bg-white/10' : 'bg-slate-100 dark:bg-white/5'
+                                    }`}
+                            />
 
-                    return (
-                        <div key={idx} className="flex-1 flex flex-col items-center">
-                            <div className="flex items-center gap-1.5 min-h-[14px]">
-                                {isDone ? (
-                                    <span className={`material-symbols-outlined font-black ${isOnDark ? 'text-white' : 'text-emerald-500'}`} style={{ fontSize: '11px' }}>check_circle</span>
-                                ) : isCurrent ? (
-                                    <div className={`size-1.5 rounded-full animate-pulse ${isOnDark ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-primary'}`} />
-                                ) : (
-                                    <div className={`size-1 rounded-full ${isOnDark ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-700'}`} />
-                                )}
-                                <span className={`text-[10px] font-bold tracking-tight whitespace-nowrap transition-colors ${isCurrent
+                            <div className="relative w-full min-h-[14px]">
+                                <span className={`block w-full text-center text-[10px] font-bold tracking-tight whitespace-nowrap transition-colors ${isCurrent
                                     ? isOnDark ? 'text-white' : 'text-slate-900 dark:text-white'
                                     : isDone
                                         ? isOnDark ? 'text-white/80' : 'text-slate-600 dark:text-slate-400'
                                         : isOnDark ? 'text-white/30' : 'text-slate-400 dark:text-slate-500'
-                                    }`}>
+                                    } ${canJumpDiagnosisStage ? 'hover:underline underline-offset-2' : ''}`}>
                                     {label}
                                 </span>
+                                <div className="absolute left-2 top-1/2 -translate-y-1/2">
+                                    {isDone ? (
+                                        <span className={`material-symbols-outlined font-black ${isOnDark ? 'text-white' : 'text-emerald-500'}`} style={{ fontSize: '11px' }}>check_circle</span>
+                                    ) : isCurrent ? (
+                                        <div className={`size-1.5 rounded-full animate-pulse ${isOnDark ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-primary'}`} />
+                                    ) : (
+                                        <div className={`size-1 rounded-full ${isOnDark ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        </>
+                    );
+                    if (!canJumpDiagnosisStage) {
+                        return <div key={idx} className="flex-1 flex flex-col items-center pt-0.5">{content}</div>;
+                    }
+                    return (
+                        <button
+                            key={idx}
+                            type="button"
+                            className="flex-1 flex flex-col items-center pt-0.5 bg-transparent border-0 p-0 text-left cursor-pointer"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDiagnosisStageClick?.(DIAGNOSIS_STAGE_STEPS[idx]);
+                            }}
+                        >
+                            {content}
+                        </button>
                     );
                 })}
             </div>
@@ -96,17 +114,41 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
         if (isInterviewMode) {
             // For Interview Mode: Independent lighting
             return resume.interviewStageStatus?.[idx] || 'todo';
-        } else {
-            // For Diagnosis Mode: Sequential lighting
-            let currentStageIndex = -1;
-            if (progress >= 95) currentStageIndex = 2;
-            else if (progress >= 80) currentStageIndex = 1;
-            else if (progress >= 15) currentStageIndex = 0;
+        }
+        if (isFinalReportCompleted) return 'done';
 
-            if (idx < currentStageIndex) return 'done';
-            if (idx === currentStageIndex) return 'current';
+        // Diagnosis mode: derive by both step + progress so "micro interview in progress"
+        // (state=interview_in_progress/paused) can light stage 2 even when latestStep is not "chat".
+        const inFinalReportGenerating =
+            latestStep === 'interview_report' ||
+            latestStep === 'comparison' ||
+            progress >= 95;
+        if (inFinalReportGenerating) {
+            if (idx === 0) return 'done';
+            if (idx === 1) return 'done';
+            return 'current';
+        }
+
+        const inMicroInterview =
+            latestStep === 'micro_intro' ||
+            latestStep === 'chat' ||
+            progress >= 72;
+        if (inMicroInterview) {
+            if (idx === 0) return 'done';
+            if (idx === 1) return 'current';
             return 'todo';
         }
+
+        const initialReportReady =
+            latestStep === 'report' ||
+            latestStep === 'analyzing' ||
+            latestStep === 'jd_input' ||
+            progress >= 15;
+        if (initialReportReady) {
+            if (idx === 0) return 'done';
+            return 'todo';
+        }
+        return 'todo';
     });
 
     if (!resume.analyzed && !isInterviewMode) return null;

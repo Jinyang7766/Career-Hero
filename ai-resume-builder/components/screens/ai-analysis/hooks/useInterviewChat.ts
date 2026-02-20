@@ -30,7 +30,7 @@ type Params = {
   persistInterviewSession: (messages: ChatMessage[], overrideJdText?: string) => Promise<void>;
   persistAnalysisSessionState: (
     state: 'interview_in_progress' | 'paused' | 'interview_done',
-    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; lastMessageAt: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; lastMessageAt: string; interviewSummary: string; force: boolean }>
   ) => Promise<void>;
   jdText: string;
   getBackendAuthToken: () => Promise<string>;
@@ -50,6 +50,8 @@ type Params = {
     finalMessages: ChatMessage[],
     options?: { skipSummary?: boolean }
   ) => void;
+  onInterviewReportGenerating?: () => void;
+  onInterviewReportFailed?: () => void;
 };
 
 export const useInterviewChat = ({
@@ -76,6 +78,8 @@ export const useInterviewChat = ({
   formatInterviewQuestion,
   isSelfIntroQuestion,
   onInterviewCompleted,
+  onInterviewReportGenerating,
+  onInterviewReportFailed,
 }: Params) => {
   const [isSending, setIsSending] = useState(false);
   const [hasPendingReply, setHasPendingReply] = useState(false);
@@ -430,10 +434,43 @@ export const useInterviewChat = ({
     return String(unmaskedText || '').trim();
   };
 
+  const isUnusableInterviewSummary = (text: string) => {
+    const normalized = String(text || '').trim().toLowerCase();
+    if (!normalized) return true;
+    if (normalized.length < 20) return true;
+    return (
+      normalized.includes('开小差') ||
+      normalized.includes('稍后再试') ||
+      normalized.includes('暂时不可用') ||
+      normalized.includes('系统繁忙') ||
+      normalized.includes('服务不可用') ||
+      normalized.includes('生成失败') ||
+      normalized.includes('连接中断')
+    );
+  };
+
+  const buildFallbackInterviewSummary = (messages: ChatMessage[]) => {
+    const userAnswers = (messages || []).filter((m) => {
+      if (m.role !== 'user') return false;
+      const txt = String(m.text || '').trim();
+      return !!txt && txt !== '结束面试' && txt !== '结束微访谈';
+    });
+    const answerCount = userAnswers.length;
+    const totalSec = (answerTimingsRef.current || []).reduce((sum, item) => sum + Math.max(0, Number(item.seconds) || 0), 0);
+    const avgSec = answerCount > 0 ? Math.round(totalSec / Math.max(1, answerCount)) : 0;
+    return [
+      `综合评价：本次面试已完成，共作答 ${answerCount} 题，平均每题约 ${avgSec} 秒。系统已记录你的作答过程，建议结合下方改进方向继续打磨表达与案例细节。`,
+      '表现亮点：整体作答节奏稳定，能够围绕问题进行回应。',
+      '需要加强的地方：建议进一步补充量化结果、行动细节与复盘反思，提升回答说服力。',
+      '职位匹配度与缺口：当前已具备基础匹配能力，后续可围绕岗位核心能力做更有针对性的准备。',
+      '后续训练计划：选择 3-5 道高频题，按“场景-行动-结果-复盘”结构反复演练并优化答案。',
+    ].join('\n\n');
+  };
+
   const handleSendMessage = async (
     textOverride?: string,
     audioOverride?: AudioOverride | null,
-    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string; forceEnd?: boolean; skipCurrentQuestion?: boolean }
+    opts?: { skipAddUserMessage?: boolean; existingUserMessageId?: string; forceEnd?: boolean; skipCurrentQuestion?: boolean; suppressErrorAlert?: boolean }
   ) => {
     const requestKey = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const requestAbortController = new AbortController();
@@ -447,6 +484,7 @@ export const useInterviewChat = ({
     const isEndCommand =
       isManualEndCommand || !!opts?.forceEnd;
     const isSkipCurrentQuestion = !!opts?.skipCurrentQuestion;
+    const suppressErrorAlert = !!opts?.suppressErrorAlert;
     if (isEndCommand && (endingInterviewRef.current || interviewEndedRef.current)) return;
     const audioObj = audioOverride || null;
     const hasAudio = !!audioObj?.blob;
@@ -496,6 +534,11 @@ export const useInterviewChat = ({
       chatMessagesRef.current = baseMessages;
       setChatMessages(baseMessages);
       setInputMessage('');
+      try {
+        await persistInterviewSession(baseMessages, jdText);
+      } catch (persistErr) {
+        console.warn('Failed to persist interview session after user message:', persistErr);
+      }
     }
     if (!isEndCommand && hasText && !hasAudio) {
       setPendingReply({
@@ -507,19 +550,25 @@ export const useInterviewChat = ({
     }
 
     beginSending();
-    try {
-      await persistAnalysisSessionState('interview_in_progress', {
-        jdText,
-        step: 'chat',
-        lastMessageAt: new Date().toISOString(),
-      });
-    } catch (stateErr) {
-      console.warn('Failed to persist interview_in_progress state:', stateErr);
+    if (!isEndCommand) {
+      try {
+        await persistAnalysisSessionState('interview_in_progress', {
+          jdText,
+          step: 'chat',
+          lastMessageAt: new Date().toISOString(),
+        });
+      } catch (stateErr) {
+        console.warn('Failed to persist interview_in_progress state:', stateErr);
+      }
     }
 
     try {
       if (isEndCommand) {
         endingInterviewRef.current = true;
+        if (isInterviewMode) {
+          // Enter loading state immediately so "end interview" click always has visible feedback.
+          onInterviewReportGenerating?.();
+        }
         if (!isInterviewMode) {
           const finalMessages = [...baseMessages];
           chatMessagesRef.current = finalMessages;
@@ -547,8 +596,17 @@ export const useInterviewChat = ({
           clearTimingSnapshot();
           return;
         }
-        const summaryRaw = await generateInterviewSummary(baseMessages, requestAbortController.signal);
-        const summary = stripMarkdownTableSeparators(summaryRaw);
+        let summary = '';
+        try {
+          const summaryRaw = await generateInterviewSummary(baseMessages, requestAbortController.signal);
+          const cleaned = stripMarkdownTableSeparators(summaryRaw);
+          summary = isUnusableInterviewSummary(cleaned)
+            ? buildFallbackInterviewSummary(baseMessages)
+            : cleaned;
+        } catch (summaryErr) {
+          console.warn('Interview summary generation failed, using fallback summary:', summaryErr);
+          summary = buildFallbackInterviewSummary(baseMessages);
+        }
         const finalMessages = [...baseMessages];
         chatMessagesRef.current = finalMessages;
         setChatMessages(finalMessages);
@@ -559,6 +617,7 @@ export const useInterviewChat = ({
             jdText,
             step: 'interview_report',
             lastMessageAt: new Date().toISOString(),
+            interviewSummary: summary || '',
             force: true,
           });
         } catch (stateErr) {
@@ -601,15 +660,30 @@ export const useInterviewChat = ({
         const normalized = text.replace(/\s+/g, '');
         const isShort = normalized.length < 18;
         const hasNumberEvidence = /(\d+(\.\d+)?%?)|(\d+\s*(ms|s|秒|天|周|月|年|人|次|万|百万|亿元|k|K|w|W))/i.test(text);
+        const hasActionEvidence = /(负责|主导|推进|制定|设计|执行|落地|优化|搭建|复盘|拆解|调整|实施|改造|推动|协调|分析了|我做了|我通过|通过.+(优化|调整|分析|改造))/i.test(text);
+        const hasDataKeyword = /(gmv|roi|ctr|cvr|uv|pv|客单价|转化率|点击率|留存率|复购率|曝光|订单量|营收|成本|毛利|投产比|客诉率|退款率|履约率|nps)/i.test(text);
+        const hasDataEvidence = hasNumberEvidence || hasDataKeyword;
+        const hasResultEvidence = /(提升|增长|下降|降低|减少|改善|达成|实现|结果|产出|收益|效果|拉升|优化后|最终|同比|环比)/i.test(text);
+        const structureHitCount = [hasActionEvidence, hasDataEvidence, hasResultEvidence].filter(Boolean).length;
         const vagueWords = ['负责', '参与', '很多', '一些', '一般', '还行', '差不多', '优化了', '提升了', '做过', '了解'];
         const uncertainWords = ['记不清', '不太清楚', '不确定', '可能', '大概', '应该', '差不多'];
         const vagueHits = vagueWords.filter((w) => text.includes(w)).length;
         const uncertainHits = uncertainWords.filter((w) => text.includes(w)).length;
-        const shouldFollowUp = isShort || uncertainHits > 0 || (vagueHits >= 2 && !hasNumberEvidence);
+        const missingStructuredFields: string[] = [];
+        if (!hasActionEvidence) missingStructuredFields.push('动作');
+        if (!hasDataEvidence) missingStructuredFields.push('数据');
+        if (!hasResultEvidence) missingStructuredFields.push('结果');
+        const lacksStructuredEvidence = structureHitCount < 2;
+        const shouldFollowUp =
+          isShort ||
+          uncertainHits > 0 ||
+          (vagueHits >= 2 && !hasNumberEvidence) ||
+          lacksStructuredEvidence;
         const reasons: string[] = [];
         if (isShort) reasons.push('回答过短');
         if (uncertainHits > 0) reasons.push('不确定表达较多');
         if (vagueHits >= 2 && !hasNumberEvidence) reasons.push('缺少量化证据');
+        if (lacksStructuredEvidence) reasons.push(`结构化信息不足（动作/数据/结果至少需覆盖两项，当前缺少：${missingStructuredFields.join('、') || '关键要素'}）`);
         return {
           shouldFollowUp,
           hint: reasons.join('、') || '细节不够具体',
@@ -722,8 +796,21 @@ export const useInterviewChat = ({
           .replace(/[^\n]*后续请控制在1分钟内[^\n]*(\n)?/g, '')
           .replace(/\n{3,}/g, '\n\n')
           .trim();
+      const cleanRedundantReaskLine = (text: string) => {
+        const source = String(text || '').trim();
+        if (!source) return source;
+        const hasSupplementHint = /请你在回答中明确补充|请在回答中明确补充|请在回答中补充|请补充以下要点|请围绕上述要点补充/i.test(source);
+        if (!hasSupplementHint) return source;
+        const next = source
+          .split(/\r?\n/)
+          .filter((line) => !/^请重新回答\s*[：:]/.test(String(line || '').trim()))
+          .join('\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim();
+        return next || source;
+      };
       const normalizedText = String(unmaskedText || '').replace(/\*/g, '').trim();
-      const safeText = cleanIntroLengthReminder(cleanMicroInterviewAnswerLimit(normalizedText));
+      const safeText = cleanRedundantReaskLine(cleanIntroLengthReminder(cleanMicroInterviewAnswerLimit(normalizedText)));
       if (safeText === '结束面试' || safeText === '结束微访谈') {
         const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
         await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
@@ -732,11 +819,25 @@ export const useInterviewChat = ({
       const parsedReply = isInterviewChat
         ? splitNextQuestion(safeText)
         : { cleaned: safeText, next: '' };
+      const aiSignalsFollowUp = isInterviewChat && /回答(?:过短|不足|不完整|模糊|空泛|几乎为空)|信息量(?:不足|不够)|无法识别|请(?:针对该问题)?重新回答|请补充|请继续补充|追问[:：]/.test(
+        String(parsedReply.cleaned || safeText || '')
+      );
+      const shouldBlockNextQuestion = Boolean(
+        isInterviewChat &&
+        (normalizedFollowUpDecision.shouldFollowUp || aiSignalsFollowUp)
+      );
       const canEnterNextQuestion =
-        !isInterviewChat ||
-        plannedQuestionCount <= 0 ||
-        answeredCountAtThisTurn < plannedQuestionCount;
-      const cleaned = parsedReply.cleaned;
+        !shouldBlockNextQuestion &&
+        (
+          !isInterviewChat ||
+          plannedQuestionCount <= 0 ||
+          answeredCountAtThisTurn < plannedQuestionCount
+        );
+      const cleaned = shouldBlockNextQuestion
+        ? String(parsedReply.cleaned || safeText || '')
+          .replace(/(?:\n|^)\s*(下一题|下一道问题|下一道具体问题|下一个问题)\s*[:：][\s\S]*$/u, '')
+          .trim()
+        : parsedReply.cleaned;
       const next = canEnterNextQuestion ? parsedReply.next : '';
       const aiMessage: ChatMessage = {
         id: `ai-${Date.now()}`,
@@ -744,7 +845,7 @@ export const useInterviewChat = ({
         text: (cleaned || safeText).trim()
       };
       let finalMessages: ChatMessage[] = [...baseMessages, aiMessage];
-      if (strictNextQuestion) {
+      if (strictNextQuestion && !shouldBlockNextQuestion) {
         const nextMsg: ChatMessage = {
           id: `ai-next-${Date.now()}`,
           role: 'model',
@@ -806,6 +907,7 @@ export const useInterviewChat = ({
           interviewEndedRef.current = true;
           return;
         }
+        onInterviewReportFailed?.();
       }
       try {
         await persistAnalysisSessionState('paused', {
@@ -825,7 +927,9 @@ export const useInterviewChat = ({
           try { URL.revokeObjectURL(audioObj.url); } catch { }
         }
       }
-      alert('AI 连接暂时中断');
+      if (!suppressErrorAlert) {
+        alert('AI 连接暂时中断');
+      }
     } finally {
       suppressedAbortKeysRef.current.delete(requestKey);
       if (activeRequestKeyRef.current === requestKey) {
@@ -992,7 +1096,7 @@ export const useInterviewChat = ({
     void handleSendMessage(
       pendingText,
       null,
-      { skipAddUserMessage: true, existingUserMessageId: pendingUserMessageId }
+      { skipAddUserMessage: true, existingUserMessageId: pendingUserMessageId, suppressErrorAlert: true }
     );
   }, [currentStep, isSending]);
 

@@ -23,6 +23,8 @@ import { useAiAnalysisPageEffects } from './ai-analysis/hooks/useAiAnalysisPageE
 import { useAiAnalysisPassiveFlows } from './ai-analysis/hooks/useAiAnalysisPassiveFlows';
 import { useAiAnalysisPostInterviewFlow } from './ai-analysis/hooks/useAiAnalysisPostInterviewFlow';
 import { useAiAnalysisInteractionBundle } from './ai-analysis/hooks/useAiAnalysisInteractionBundle';
+import { useAiAnalysisFeedback } from './ai-analysis/hooks/useAiAnalysisFeedback';
+import { useAnalysisResetActions } from './ai-analysis/hooks/useAnalysisResetActions';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -138,6 +140,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     persistInterviewSession,
     hasInterviewSessionMessages,
     clearInterviewSession,
+    clearInterviewSceneState,
   } = useInterviewSessionStore({
     currentUserId: currentUser?.id,
     isInterviewMode,
@@ -204,6 +207,14 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       }
       setPostInterviewSummary(String(summaryText || '').trim());
       navigateToStep(isInterviewMode ? 'interview_report' : 'final_report', true);
+    },
+    onInterviewReportGenerating: () => {
+      if (!isInterviewMode) return;
+      navigateToStep('interview_report_loading', true);
+    },
+    onInterviewReportFailed: () => {
+      if (!isInterviewMode) return;
+      navigateToStep('chat', true);
     },
   });
 
@@ -304,6 +315,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setJdText,
     setTargetCompany,
     navigateToStep: navigateToStep as any,
+    openChat,
     setOptimizedResumeId,
     applyAnalysisSnapshot,
     saveLastAnalysis,
@@ -385,7 +397,30 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setCurrentStep,
   });
 
-  const hasJdInput = () => jdText.length > 0;
+  const { clearInitialReportForRetry, handleRediagnoseFromResumeSelect } = useAnalysisResetActions({
+    allResumes: allResumes as any[],
+    resumeData,
+    clearLastAnalysis,
+    setReport: setReport as any,
+    setSuggestions: setSuggestions as any,
+    setScore,
+    setOriginalScore,
+    setPostInterviewSummary,
+    setIsFromCache,
+    setChatMessages: setChatMessages as any,
+    setChatInitialized,
+    setInterviewPlan,
+    setTargetCompany,
+    setJdText,
+    setForceReportEntry,
+    setResumeData: setResumeData as any,
+    setAllResumes: setAllResumes as any,
+    setSelectedResumeId,
+    sourceResumeIdRef: sourceResumeIdRef as any,
+    setAnalysisResumeId,
+    navigateToStep: navigateToStep as any,
+    showToast,
+  });
 
   useAiAnalysisPassiveFlows({
     isInterviewMode,
@@ -463,6 +498,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getScoreColor,
     handleResumeSelectBack,
     handleStartMicroInterview,
+    microInterviewActionLabel,
     handleRetryAnalysisFromIntro,
     handleRestartInterview,
     handleStartInterviewFromFinalReport,
@@ -477,15 +513,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     showToast,
     getBackendAuthToken,
     navigateToView,
-    navigateToStep: navigateToStep as any,
     openChat,
     jdText,
+    targetCompany,
     resumeData,
     makeJdKey,
+    consumeUsageQuota,
     currentUserId: currentUser?.id,
+    setAllResumes,
     setInterviewPlan,
     setPlanFetchTrigger,
     clearInterviewSession: clearInterviewSession as any,
+    clearInterviewSceneState: clearInterviewSceneState as any,
+    persistAnalysisSessionState: persistAnalysisSessionState as any,
+    navigateToStep: navigateToStep as any,
+    setTargetCompany,
+    setJdText,
+    onRetryAnalysisFromIntro: clearInitialReportForRetry,
     isInterviewMode,
     chatMessages,
     chatIntroScheduledRef,
@@ -520,6 +564,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     chatMessagesRef: chatMessagesRef as any,
     currentUserId: currentUser?.id,
     showToast,
+    consumeUsageQuota,
+    refundUsageQuota,
     sourceResumeIdRef: sourceResumeIdRef as any,
     targetCompany,
     allResumes: allResumes as any,
@@ -530,6 +576,110 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setOptimizedResumeId,
     navigateToStep: navigateToStep as any,
   });
+
+  const {
+    handleChatMessageFeedback,
+    handleInitialReportFeedback,
+    handleFinalReportFeedback,
+    handleInterviewReportFeedback,
+  } = useAiAnalysisFeedback({
+    currentUserId: currentUser?.id,
+    isInterviewMode,
+    currentStep,
+    resumeData,
+    selectedResumeId,
+    showToast,
+    initialReportSummary: String(report?.summary || ''),
+    finalReportSummary: String(finalReportSummary || ''),
+    interviewReportSummary: String(postInterviewSummary || ''),
+  });
+
+  const handleRestartCompletedInterviewScene = React.useCallback(async () => {
+    try {
+      await clearInterviewSession();
+    } catch (err) {
+      console.warn('Failed to clear interview chat history before restart:', err);
+    }
+    try {
+      await clearInterviewSceneState();
+    } catch (err) {
+      console.warn('Failed to clear interview report state before restart:', err);
+    }
+    setPostInterviewSummary('');
+    setChatMessages([]);
+    setChatInitialized(false);
+    // Force regenerate interview plan after restarting a completed scene.
+    try {
+      const resumeId = String((resumeData as any)?.id || '').trim();
+      const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
+      const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
+      const interviewType = String(getActiveInterviewType() || '').trim().toLowerCase();
+      const interviewMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
+      const userKey = String(currentUser?.id || '').trim();
+      if (resumeId && jdKey && interviewType && interviewMode) {
+        const userScopedPrefix = userKey
+          ? `ai_interview_plan_${userKey}_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`
+          : '';
+        const legacyPrefix = `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
+        const genericNeedle = `_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
+        const genericJdNeedle = `_${jdKey}_${interviewType}_${interviewMode}_`;
+        const toDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const key = String(localStorage.key(i) || '');
+          if (!key.startsWith('ai_interview_plan_')) continue;
+          if (
+            (userScopedPrefix && key.startsWith(userScopedPrefix)) ||
+            key.startsWith(legacyPrefix) ||
+            key.includes(genericNeedle) ||
+            key.includes(genericJdNeedle)
+          ) {
+            toDelete.push(key);
+          }
+        }
+        toDelete.forEach((key) => {
+          try { localStorage.removeItem(key); } catch { }
+        });
+      }
+      const forceResumeId = resumeId || 'unknown';
+      const forceUserId = userKey || 'anonymous';
+      localStorage.setItem(`ai_interview_force_model_plan_once:${forceUserId}:${forceResumeId}`, '1');
+    } catch {
+      // ignore storage failures
+    }
+    setInterviewPlan([]);
+    setPlanFetchTrigger((v) => v + 1);
+  }, [
+    clearInterviewSceneState,
+    clearInterviewSession,
+    currentUser?.id,
+    jdText,
+    makeJdKey,
+    resumeData,
+    setChatInitialized,
+    setChatMessages,
+    setInterviewPlan,
+    setPlanFetchTrigger,
+    setPostInterviewSummary,
+  ]);
+
+  React.useEffect(() => {
+    if (!isInterviewMode) return;
+    if (currentStep !== 'interview_report') return;
+    if (String(postInterviewSummary || '').trim()) return;
+    const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+    const session = getAnalysisSession(effectiveJdText);
+    const persistedSummary = String((session as any)?.interviewSummary || '').trim();
+    if (!persistedSummary) return;
+    setPostInterviewSummary(persistedSummary);
+  }, [
+    currentStep,
+    getAnalysisSession,
+    isInterviewMode,
+    jdText,
+    postInterviewSummary,
+    resumeData?.lastJdText,
+    setPostInterviewSummary,
+  ]);
 
   return renderAiAnalysisStep(buildAiAnalysisRenderProps({
     currentStep,
@@ -546,6 +696,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     resumeReadState,
     isInterviewMode,
     pointsRemaining: Number((userProfile as any)?.points_balance ?? NaN),
+    onRediagnoseResume: handleRediagnoseFromResumeSelect,
     isSameResumeId,
     resumeData,
     targetCompany,
@@ -560,13 +711,18 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     showJdEmptyModal,
     setShowJdEmptyModal,
     startAnalysis,
-    hasJdInput,
+    onRestartCompletedInterviewScene: handleRestartCompletedInterviewScene,
+    hasJdInput: () => jdText.length > 0,
     score,
     originalScore,
     report,
     getScoreColor,
     handleStartMicroInterview,
+    microInterviewActionLabel,
     handleRetryAnalysisFromIntro,
+    onInitialReportFeedback: handleInitialReportFeedback,
+    onFinalReportFeedback: handleFinalReportFeedback,
+    onInterviewReportFeedback: handleInterviewReportFeedback,
     ToastOverlay,
     visualizerData,
     interruptCurrentThinking,
@@ -614,6 +770,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     currentQuestionElapsedSec,
     getInterviewerTitle,
     getInterviewerAvatarUrl,
+    onChatMessageFeedback: handleChatMessageFeedback,
     effectivePostInterviewSummary,
     interviewReportSummary: String(postInterviewSummary || '').trim(),
     interviewReportScore: Number(score || 0),
@@ -629,7 +786,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportOverride,
     isFinalReportGenerating,
     handleStartInterviewFromFinalReport,
-    handleGoToComparisonFromFinalReport: () => navigateToStep('comparison', true),
+    handleGoToComparisonFromFinalReport: () => navigateToStep('comparison'),
   }));
 };
 

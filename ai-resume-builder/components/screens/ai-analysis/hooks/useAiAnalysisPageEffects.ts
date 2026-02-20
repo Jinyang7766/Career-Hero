@@ -139,10 +139,12 @@ export const useAiAnalysisPageEffects = ({
 
   useEffect(() => {
     const path = (pathname || '').toLowerCase();
-    if (path !== '/ai-analysis' && path !== '/ai-interview') return;
-    if (localStorage.getItem('ai_analysis_force_resume_select') !== '1') return;
+    const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
+    const expectedPath = isInterviewMode ? '/ai-interview' : '/ai-analysis';
+    if (path !== expectedPath) return;
+    if (localStorage.getItem(forceKey) !== '1') return;
 
-    localStorage.removeItem('ai_analysis_force_resume_select');
+    localStorage.removeItem(forceKey);
     forcedResumeSelectRef.current = true;
     setStepHistory([]);
     setSelectedResumeId(null);
@@ -152,6 +154,7 @@ export const useAiAnalysisPageEffects = ({
     setCurrentStep('resume_select');
   }, [
     forcedResumeSelectRef,
+    isInterviewMode,
     pathname,
     setAnalysisResumeId,
     setCurrentStep,

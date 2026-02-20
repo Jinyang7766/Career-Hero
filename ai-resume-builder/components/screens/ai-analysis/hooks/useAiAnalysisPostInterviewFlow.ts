@@ -7,6 +7,7 @@ import { usePostInterviewFeedback } from './usePostInterviewFeedback';
 import { usePostInterviewFinalize } from './usePostInterviewFinalize';
 import { usePostInterviewReportData } from './usePostInterviewReportData';
 import { persistUserDossierToProfile } from '../dossier-persistence';
+import type { QuotaKind } from './useUsageQuota';
 
 type Params = {
   currentStep: string;
@@ -26,6 +27,8 @@ type Params = {
   chatMessagesRef: React.MutableRefObject<any[]>;
   currentUserId?: string;
   showToast: (msg: string, type?: 'info' | 'success' | 'error', ms?: number) => void;
+  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
   sourceResumeIdRef: React.MutableRefObject<string | number | null>;
   targetCompany: string;
   allResumes: any[];
@@ -35,6 +38,71 @@ type Params = {
   setAnalysisResumeId: (v: string | number | null) => void;
   setOptimizedResumeId: (v: string | number | null) => void;
   navigateToStep: (...args: any[]) => any;
+};
+
+const normalizeText = (value: any) =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/[，,。.;；:：\-—_()（）\[\]【】'"`]/g, '');
+
+const pickFirstFilled = (...values: any[]) => {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text) return text;
+  }
+  return '';
+};
+
+const fillGeneratedResumeTimeline = (generated: any, source: any) => {
+  if (!generated || typeof generated !== 'object') return generated;
+  const next: any = { ...generated };
+  const src = (source && typeof source === 'object') ? source : {};
+
+  if (Array.isArray(next.workExps)) {
+    const sourceList = Array.isArray(src.workExps) ? src.workExps : [];
+    const used = new Set<number>();
+    next.workExps = next.workExps.map((item: any, idx: number) => {
+      if (!item || typeof item !== 'object') return item;
+      const itemSig = normalizeText([item.company, item.title, item.position, item.subtitle].filter(Boolean).join(' '));
+      let hitIndex = -1;
+      if (itemSig) {
+        hitIndex = sourceList.findIndex((candidate: any, cIdx: number) => {
+          if (used.has(cIdx) || !candidate) return false;
+          const candidateSig = normalizeText([candidate.company, candidate.title, candidate.position, candidate.subtitle].filter(Boolean).join(' '));
+          return !!candidateSig && (candidateSig.includes(itemSig) || itemSig.includes(candidateSig));
+        });
+      }
+      if (hitIndex < 0 && idx < sourceList.length && !used.has(idx)) {
+        hitIndex = idx;
+      }
+      if (hitIndex >= 0) used.add(hitIndex);
+      const srcItem: any = hitIndex >= 0 ? (sourceList[hitIndex] || {}) : {};
+      return {
+        ...item,
+        date: pickFirstFilled(item.date, srcItem.date, srcItem.startDate && srcItem.endDate ? `${srcItem.startDate} - ${srcItem.endDate}` : ''),
+        startDate: pickFirstFilled(item.startDate, srcItem.startDate),
+        endDate: pickFirstFilled(item.endDate, srcItem.endDate),
+      };
+    });
+  }
+
+  if (Array.isArray(next.projects)) {
+    const sourceList = Array.isArray(src.projects) ? src.projects : [];
+    next.projects = next.projects.map((item: any, idx: number) => {
+      if (!item || typeof item !== 'object') return item;
+      const srcItem: any = sourceList[idx] || {};
+      return {
+        ...item,
+        date: pickFirstFilled(item.date, srcItem.date, srcItem.startDate && srcItem.endDate ? `${srcItem.startDate} - ${srcItem.endDate}` : ''),
+        startDate: pickFirstFilled(item.startDate, srcItem.startDate),
+        endDate: pickFirstFilled(item.endDate, srcItem.endDate),
+      };
+    });
+  }
+
+  return next;
 };
 
 export const useAiAnalysisPostInterviewFlow = ({
@@ -55,6 +123,8 @@ export const useAiAnalysisPostInterviewFlow = ({
   chatMessagesRef,
   currentUserId,
   showToast,
+  consumeUsageQuota,
+  refundUsageQuota,
   sourceResumeIdRef,
   targetCompany,
   allResumes,
@@ -100,6 +170,8 @@ export const useAiAnalysisPostInterviewFlow = ({
     getBackendAuthToken,
     buildApiUrl,
     chatMessagesRef: chatMessagesRef as any,
+    consumeUsageQuota,
+    refundUsageQuota,
   });
 
   const resolvedFinalReport = finalReportOverride
@@ -134,7 +206,7 @@ export const useAiAnalysisPostInterviewFlow = ({
     if (!aiGenerated || typeof aiGenerated !== 'object') {
       return baseComparisonGeneratedResume;
     }
-    const normalized: any = { ...aiGenerated };
+    const normalized: any = fillGeneratedResumeTimeline({ ...aiGenerated }, sourceResume);
     normalized.optimizationStatus = 'optimized';
     normalized.optimizedFromId = String((sourceResume as any)?.id || '');
     delete normalized.id;
@@ -180,17 +252,33 @@ export const useAiAnalysisPostInterviewFlow = ({
   });
 
   useEffect(() => {
+    if (currentStep !== 'comparison' && currentStep !== 'final_report') return;
     if (!resolvedFinalReport || isFinalReportGenerating) return;
     const resumeId = String((resumeData as any)?.id || '').trim();
     if (!resumeId) return;
     const normalizedSummary = String(resolvedFinalReport.summary || '').trim();
     if (!normalizedSummary) return;
+    const existingFinal = (resumeData as any)?.postInterviewFinalReport || {};
+    const existingSummary = String(existingFinal?.summary || '').trim();
+    const existingScore = Number(existingFinal?.score);
+    const incomingScore = Number(resolvedFinalReport.score);
+    const existingJdKey = makeJdKey(String(existingFinal?.jdText || '').trim());
+    const incomingJdKey = makeJdKey(String(jdText || (resumeData as any)?.lastJdText || '').trim());
+    if (
+      existingSummary === normalizedSummary &&
+      Number.isFinite(existingScore) &&
+      Number.isFinite(incomingScore) &&
+      Math.round(existingScore) === Math.round(incomingScore) &&
+      existingJdKey === incomingJdKey
+    ) {
+      return;
+    }
 
     const persistKey = [
       resumeId,
       String(resolvedFinalReport.score ?? ''),
       normalizedSummary.slice(0, 160),
-      String((resumeData as any)?.lastJdText || jdText || '').trim().slice(0, 160),
+      incomingJdKey,
     ].join('|');
     if (persistedFinalReportKeyRef.current === persistKey) return;
     persistedFinalReportKeyRef.current = persistKey;
@@ -260,7 +348,7 @@ export const useAiAnalysisPostInterviewFlow = ({
         const write = await DatabaseService.updateResume(
           resumeId,
           { resume_data: updatedResumeData },
-          { touchUpdatedAt: true }
+          { touchUpdatedAt: false }
         );
         if (!write.success) {
           persistedFinalReportKeyRef.current = '';
@@ -291,8 +379,10 @@ export const useAiAnalysisPostInterviewFlow = ({
       cancelled = true;
     };
   }, [
+    currentStep,
     isFinalReportGenerating,
     jdText,
+    makeJdKey,
     resumeData,
     resolvedFinalReport,
     setResumeData,

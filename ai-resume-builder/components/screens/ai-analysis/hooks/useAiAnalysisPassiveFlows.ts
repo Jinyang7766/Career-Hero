@@ -36,7 +36,7 @@ type Params = {
   makeJdKey: (v: string) => string;
   hasInterviewSessionMessages: (...args: any[]) => boolean;
   restoreInterviewSession: (...args: any[]) => any;
-  openChat: (...args: any[]) => any;
+  openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
   navigateToStep: (...args: any[]) => any;
   loadLastAnalysis: (...args: any[]) => any;
   recoveredSessionKeyRef: React.MutableRefObject<string>;
@@ -182,6 +182,7 @@ export const useAiAnalysisPassiveFlows = ({
     resumeData,
     targetCompany,
     score,
+    isInterviewMode,
     persistAnalysisSessionState: persistAnalysisSessionState as any,
   });
 
@@ -224,6 +225,8 @@ export const useAiAnalysisPassiveFlows = ({
 
   useAiExternalEntries({
     currentUserId,
+    currentStep,
+    isInterviewMode,
     setResumeData: setResumeData as any,
     sourceResumeIdRef: sourceResumeIdRef as any,
     setSelectedResumeId,
@@ -236,6 +239,8 @@ export const useAiAnalysisPassiveFlows = ({
     setChatInitialized,
     openChat,
     setStepHistory: setStepHistory as any,
+    setChatEntrySource: setChatEntrySource as any,
+    setLastChatStep: setLastChatStep as any,
     setCurrentStep: setCurrentStep as any,
     setForceReportEntry,
     handleResumeSelect: handleResumeSelect as any,

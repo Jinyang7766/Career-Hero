@@ -30,6 +30,12 @@ export const useAiAnalysisLifecycle = ({
   const resolveFallbackStep = () => {
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
     const states = Object.values(analysisSessionByJd)
+      .filter((item: any) => {
+        const chatMode = String(item?.chatMode || '').trim().toLowerCase();
+        // Diagnosis lifecycle should only react to diagnosis/micro sessions.
+        if (chatMode === 'interview') return false;
+        return true;
+      })
       .map((item: any) => String(item?.state || '').toLowerCase())
       .filter(Boolean);
     if (states.includes('interview_done')) return 'comparison';

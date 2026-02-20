@@ -7,6 +7,7 @@ import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
 import InterviewReportPage from './pages/InterviewReportPage';
 import FinalAnalysisLoadingPage from './pages/FinalAnalysisLoadingPage';
+import InterviewReportLoadingPage from './pages/InterviewReportLoadingPage';
 import type { AiAnalysisStep } from './step-types';
 
 type Params = {
@@ -19,11 +20,16 @@ type Params = {
   isUnoptimizedOpen: boolean;
   setIsUnoptimizedOpen: (v: boolean) => void;
   handleResumeSelectBack: () => void;
-  handleResumeSelect: (resumeId: string | number, preferReport: boolean) => void;
+  handleResumeSelect: (
+    resumeId: string | number,
+    preferReport: boolean,
+    targetStep?: 'report' | 'chat' | 'final_report'
+  ) => void;
   selectedResumeId: string | number | null;
   resumeReadState: any;
   isInterviewMode?: boolean;
   pointsRemaining?: number | null;
+  onRediagnoseResume?: (resumeId: number) => void | Promise<void>;
   isSameResumeId: (a: any, b: any) => boolean;
   resumeData: any;
   targetCompany: string;
@@ -38,6 +44,7 @@ type Params = {
   showJdEmptyModal: boolean;
   setShowJdEmptyModal: (v: boolean) => void;
   startAnalysis: (interviewType?: string) => void | Promise<void>;
+  onRestartCompletedInterviewScene?: () => Promise<void> | void;
   hasJdInput: () => boolean;
   score: number;
   originalScore: number;
@@ -45,7 +52,11 @@ type Params = {
   getScoreColor: (s: number) => string;
   handleAnalyzeOtherResume: () => void;
   handleStartMicroInterview: () => void;
+  microInterviewActionLabel?: string;
   handleRetryAnalysisFromIntro: () => void;
+  onInitialReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
+  onFinalReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
+  onInterviewReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   ToastOverlay: React.ComponentType;
   WaveformVisualizer: React.ComponentType<{ active: boolean; cancel: boolean }>;
   interruptCurrentThinking: () => void;
@@ -93,6 +104,7 @@ type Params = {
   currentQuestionElapsedSec: number;
   getInterviewerTitle: () => string;
   getInterviewerAvatarUrl: () => string;
+  onChatMessageFeedback?: (message: any, rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   postInterviewSummary: string;
   interviewReportSummary: string;
   interviewReportScore: number;
@@ -100,7 +112,7 @@ type Params = {
   postInterviewOriginalResume: any;
   postInterviewGeneratedResume: any;
   postInterviewAnnotations: Array<{ id: string; title: string; reason: string; section: string; targetId?: string; targetField?: string }>;
-  handlePostInterviewFeedback: (rating: 'up' | 'down') => Promise<boolean> | boolean;
+  handlePostInterviewFeedback: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   handleCompleteAndSavePostInterview: (editedResume?: any) => Promise<void> | void;
   finalReportScore: number;
   finalReportSummary: string;
@@ -122,11 +134,12 @@ export const renderAiAnalysisStep = (p: Params) => {
         isUnoptimizedOpen={p.isUnoptimizedOpen}
         setIsUnoptimizedOpen={p.setIsUnoptimizedOpen}
         onBack={p.handleResumeSelectBack}
-        onSelectResume={(resumeId, preferReport) => p.handleResumeSelect(resumeId, !!preferReport)}
+        onSelectResume={(resumeId, preferReport, targetStep) => p.handleResumeSelect(resumeId, !!preferReport, targetStep)}
         selectedResumeId={p.selectedResumeId}
         isReading={p.resumeReadState.status === 'loading'}
         isInterviewMode={p.isInterviewMode}
         pointsRemaining={p.pointsRemaining}
+        onRediagnoseResume={p.onRediagnoseResume}
       />
     );
   }
@@ -146,11 +159,12 @@ export const renderAiAnalysisStep = (p: Params) => {
         isUploading={p.isUploading}
         onScreenshotUpload={p.handleScreenshotUpload}
         onBack={p.handleStepBack}
-        onPrev={() => p.setCurrentStep('resume_select')}
         onStart={p.handleStartAnalysisClick}
+        onViewReport={() => p.setCurrentStep('interview_report')}
         showJdEmptyModal={p.showJdEmptyModal}
         setShowJdEmptyModal={p.setShowJdEmptyModal}
         startAnalysis={p.startAnalysis}
+        onRestartCompletedInterviewScene={p.onRestartCompletedInterviewScene}
         isInterviewMode={p.isInterviewMode}
       />
     );
@@ -165,8 +179,9 @@ export const renderAiAnalysisStep = (p: Params) => {
         score={p.score}
         report={p.report}
         getScoreColor={p.getScoreColor}
-        handleAnalyzeOtherResume={p.handleAnalyzeOtherResume}
         handleStartMicroInterview={p.handleStartMicroInterview}
+        microInterviewActionLabel={p.microInterviewActionLabel}
+        onFeedback={p.onInitialReportFeedback}
       />
     );
   }
@@ -180,8 +195,9 @@ export const renderAiAnalysisStep = (p: Params) => {
         score={p.score}
         report={p.report}
         getScoreColor={p.getScoreColor}
-        handleAnalyzeOtherResume={p.handleAnalyzeOtherResume}
         handleStartMicroInterview={p.handleStartMicroInterview}
+        microInterviewActionLabel={p.microInterviewActionLabel}
+        onFeedback={p.onInitialReportFeedback}
       />
     );
   }
@@ -239,6 +255,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         currentQuestionElapsedSec={p.currentQuestionElapsedSec}
         interviewerTitle={p.getInterviewerTitle()}
         aiAvatarUrl={p.getInterviewerAvatarUrl()}
+        onMessageFeedback={p.onChatMessageFeedback}
       />
     );
   }
@@ -266,8 +283,13 @@ export const renderAiAnalysisStep = (p: Params) => {
         score={p.interviewReportScore}
         advice={p.interviewReportAdvice}
         onBack={p.handleStepBack}
+        onFeedback={p.onInterviewReportFeedback}
       />
     );
+  }
+
+  if (p.currentStep === 'interview_report_loading') {
+    return <InterviewReportLoadingPage />;
   }
 
   if (p.currentStep === 'final_report') {
@@ -283,9 +305,29 @@ export const renderAiAnalysisStep = (p: Params) => {
         onBack={p.handleStepBack}
         onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
         onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
+        onFeedback={p.onFinalReportFeedback}
       />
     );
   }
 
-  return null;
+  // Defensive fallback: never render a blank screen when step state is corrupted.
+  console.warn('[AI_ANALYSIS] unexpected step, fallback to resume_select:', p.currentStep);
+  return (
+    <ResumeSelectPage
+      allResumes={p.allResumes}
+      searchQuery={p.searchQuery}
+      setSearchQuery={p.setSearchQuery}
+      isOptimizedOpen={p.isOptimizedOpen}
+      setIsOptimizedOpen={p.setIsOptimizedOpen as any}
+      isUnoptimizedOpen={p.isUnoptimizedOpen}
+      setIsUnoptimizedOpen={p.setIsUnoptimizedOpen as any}
+      onBack={p.handleResumeSelectBack}
+      onSelectResume={(resumeId, preferReport, targetStep) => p.handleResumeSelect(resumeId, !!preferReport, targetStep)}
+      selectedResumeId={p.selectedResumeId}
+      isReading={p.resumeReadState?.status === 'loading'}
+      isInterviewMode={p.isInterviewMode}
+      pointsRemaining={p.pointsRemaining}
+      onRediagnoseResume={p.onRediagnoseResume}
+    />
+  );
 };

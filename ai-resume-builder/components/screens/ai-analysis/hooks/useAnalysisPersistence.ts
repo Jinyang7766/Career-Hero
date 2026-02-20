@@ -47,8 +47,7 @@ export const useAnalysisPersistence = ({
     try {
       await DatabaseService.updateResume(String(resumeData.id), {
         resume_data: updatedResumeData,
-        updated_at: new Date().toISOString()
-      });
+      }, { touchUpdatedAt: false });
     } catch (err) {
       console.error('Failed to persist suggestion state:', err);
     }
@@ -120,8 +119,7 @@ export const useAnalysisPersistence = ({
     }
     await DatabaseService.updateResume(targetId, {
       resume_data: updatedResumeData,
-      updated_at: new Date().toISOString()
-    });
+    }, { touchUpdatedAt: false });
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (!userError && user?.id) {

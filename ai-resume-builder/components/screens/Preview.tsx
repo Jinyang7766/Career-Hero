@@ -135,7 +135,7 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     id="resume-content-modern"
     className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]"
     style={{
-      fontFamily: "'PingFang SC', 'Microsoft YaHei', sans-serif",
+      fontFamily: "'CustomFont'",
     }}
   >
     {/* Modern Header */}
@@ -246,7 +246,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     id="resume-content-classic"
     className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]"
     style={{
-      fontFamily: "'Times New Roman', 'SimSun', serif",
+      fontFamily: "'CustomFont'",
     }}
   >
     {/* Classic Centered Header */}
@@ -346,7 +346,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
     id="resume-content-minimal"
     className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]"
     style={{
-      fontFamily: "'Helvetica Neue', Arial, sans-serif",
+      fontFamily: "'CustomFont'",
     }}
   >
     {/* Minimal Header */}
@@ -360,7 +360,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
       </div>
       <h1 className="text-4xl font-black text-black tracking-tight mb-2" style={{ fontSize: '36px', fontWeight: '900' }}>{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-lg text-gray-500 font-light mb-4" style={{ fontSize: '18px' }}>{resolveJobTitle(data)}</p>
-      <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono" style={{ fontSize: '11px', fontFamily: 'monospace' }}>
+      <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono" style={{ fontSize: '11px', fontFamily: "'CustomFont'" }}>
         {(data?.gender || data?.personalInfo?.age) && (
           <span>
             {[

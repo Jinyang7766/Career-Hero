@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'interview_report' | 'comparison' | 'final_report';
+type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'interview_report_loading' | 'interview_report' | 'comparison' | 'final_report';
 
 export const deriveInitialStepFromPath = (): Step => {
   const path = (window.location.pathname || '').toLowerCase();
@@ -13,6 +13,7 @@ export const deriveInitialStepFromPath = (): Step => {
       if (sub === 'report') return 'report';
       if (sub === 'micro-interview') return 'micro_intro';
       if (sub === 'chat') return 'chat';
+      if (sub === 'interview-report-loading') return 'interview_report_loading';
       if (sub === 'interview-report') return 'interview_report';
       if (sub === 'comparison') return 'comparison';
       if (sub === 'final-report') return 'final_report';
@@ -50,6 +51,7 @@ export const useAiRouteSync = ({
         case 'report': return selectedResumeId ? `${base}/report/${selectedResumeId}` : `${base}/report`;
         case 'micro_intro': return `${base}/micro-interview`;
         case 'chat': return `${base}/chat`;
+        case 'interview_report_loading': return `${base}/interview-report-loading`;
         case 'interview_report': return selectedResumeId ? `${base}/interview-report/${selectedResumeId}` : `${base}/interview-report`;
         case 'comparison': return selectedResumeId ? `${base}/comparison/${selectedResumeId}` : `${base}/comparison`;
         case 'final_report': return selectedResumeId ? `${base}/final-report/${selectedResumeId}` : `${base}/final-report`;

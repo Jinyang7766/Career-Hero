@@ -10,6 +10,7 @@ import { makeJdKey } from '../id-utils';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 import type { AnalysisReport, Suggestion } from '../types';
+import type { QuotaKind } from './useUsageQuota';
 
 type Params = {
   resumeData: any;
@@ -57,8 +58,8 @@ type Params = {
   setShowJdEmptyModal: (value: boolean) => void;
   isInterviewMode?: boolean;
   openChat: (source: 'internal' | 'preview') => void;
-  consumeUsageQuota?: (kind: 'analysis' | 'interview') => Promise<boolean>;
-  refundUsageQuota?: (kind: 'analysis' | 'interview', note?: string) => Promise<boolean>;
+  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
 };
 
 export const useAnalysisExecution = ({
@@ -100,6 +101,7 @@ export const useAnalysisExecution = ({
   consumeUsageQuota,
   refundUsageQuota,
 }: Params) => {
+  const CACHE_BYPASS_ONCE_KEY = 'ai_analysis_bypass_cache_once';
   const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
     return runRealAnalysis({
       interviewType,
@@ -235,7 +237,7 @@ export const useAnalysisExecution = ({
       isInterviewMode &&
       (hasInterruptedOnEffectiveJd || hasAnyInterruptedInterview)
     );
-    if (isInterviewMode && !isContinuingInterview) {
+    if (isInterviewMode) {
       const confirmed = await confirmDialog(
         '开始面试前提醒：请预留一段完整时间参与本次面试，尽量不要中途退出或切换页面。确认现在进入面试吗？'
       );
@@ -243,7 +245,10 @@ export const useAnalysisExecution = ({
     }
 
     if (consumeUsageQuota && !(isInterviewMode && isContinuingInterview)) {
-      const kind: 'analysis' | 'interview' = isInterviewMode ? 'interview' : 'analysis';
+      const kind: 'analysis' | 'interview_simple' | 'interview_comprehensive' =
+        isInterviewMode
+          ? (normalizedInterviewMode === 'simple' ? 'interview_simple' : 'interview_comprehensive')
+          : 'analysis';
       const allowed = await consumeUsageQuota(kind);
       if (!allowed) return;
     }
@@ -312,8 +317,17 @@ export const useAnalysisExecution = ({
     navigateToStep('analyzing');
 
     try {
+      let bypassCacheOnce = false;
+      try {
+        bypassCacheOnce = localStorage.getItem(CACHE_BYPASS_ONCE_KEY) === '1';
+        if (bypassCacheOnce) {
+          localStorage.removeItem(CACHE_BYPASS_ONCE_KEY);
+        }
+      } catch {
+        bypassCacheOnce = false;
+      }
       const aiAnalysisResult = await generateRealAnalysisWithOptions(runId, interviewType, {
-        bypassCache: !!opts?.bypassCache,
+        bypassCache: !!opts?.bypassCache || bypassCacheOnce,
       });
       if (analysisRunIdRef.current !== runId) return;
       if (!aiAnalysisResult) return;
@@ -452,18 +466,22 @@ export const useAnalysisExecution = ({
           ? resumeData.id
           : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
       if (originalResumeId) {
-        const baseResumeForBinding = resumeData.optimizationStatus === 'optimized'
-          ? { ...resumeData, id: originalResumeId }
-          : resumeData;
-        const binding = await ensureAnalysisBinding(
-          originalResumeId,
-          baseResumeForBinding,
-          jdText || resumeData.lastJdText || ''
-        );
-        resolvedAnalysisReportId = binding.analysisReportId;
-        resolvedOptimizedResumeId = binding.optimizedResumeId;
-        optimizedResumeIdRef.current = binding.optimizedResumeId;
-        setOptimizedResumeId(binding.optimizedResumeId);
+        try {
+          const baseResumeForBinding = resumeData.optimizationStatus === 'optimized'
+            ? { ...resumeData, id: originalResumeId }
+            : resumeData;
+          const binding = await ensureAnalysisBinding(
+            originalResumeId,
+            baseResumeForBinding,
+            jdText || resumeData.lastJdText || ''
+          );
+          resolvedAnalysisReportId = binding.analysisReportId;
+          resolvedOptimizedResumeId = binding.optimizedResumeId;
+          optimizedResumeIdRef.current = binding.optimizedResumeId;
+          setOptimizedResumeId(binding.optimizedResumeId);
+        } catch (bindingError) {
+          console.warn('ensureAnalysisBinding failed, continue with local report rendering:', bindingError);
+        }
       }
 
       const snapshotForPersist = {
@@ -492,17 +510,21 @@ export const useAnalysisExecution = ({
           ? (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || null)
           : persistTargetId;
       if (safePersistTargetId) {
-        const persistedResume = await persistAnalysisSnapshot(
-          { ...resumeData, id: safePersistTargetId as any },
-          newReport,
-          totalScore,
-          appliedSuggestions
-        );
-        if (persistedResume && setResumeData) {
-          setResumeData({
-            ...persistedResume,
-            id: safePersistTargetId as any,
-          });
+        try {
+          const persistedResume = await persistAnalysisSnapshot(
+            { ...resumeData, id: safePersistTargetId as any },
+            newReport,
+            totalScore,
+            appliedSuggestions
+          );
+          if (persistedResume && setResumeData) {
+            setResumeData({
+              ...persistedResume,
+              id: safePersistTargetId as any,
+            });
+          }
+        } catch (persistError) {
+          console.warn('persistAnalysisSnapshot failed, continue with in-memory report:', persistError);
         }
       }
       if (resumeData?.id) {
@@ -663,22 +685,11 @@ export const useAnalysisExecution = ({
   const handleStartAnalysisClick = useCallback((interviewType?: string) => {
     const hasJd = !!jdText.trim();
     if (!hasJd) {
-      if (isInterviewMode) {
-        const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
-        const hasInterruptedInterview = Object.values(analysisSessionByJd || {}).some((session: any) => {
-          const state = String(session?.state || '').toLowerCase();
-          return state === 'interview_in_progress' || state === 'paused';
-        });
-        if (hasInterruptedInterview) {
-          void startAnalysis(interviewType);
-          return;
-        }
-      }
       setShowJdEmptyModal(true);
       return;
     }
     void startAnalysis(interviewType);
-  }, [jdText, isInterviewMode, resumeData, setShowJdEmptyModal, startAnalysis]);
+  }, [jdText, setShowJdEmptyModal, startAnalysis]);
 
   return {
     cancelInFlightAnalysis,

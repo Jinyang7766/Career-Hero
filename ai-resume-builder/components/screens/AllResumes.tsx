@@ -18,8 +18,6 @@ const AllResumes: React.FC<ScreenProps> = () => {
   const [activeMenuId, setActiveMenuId] = useState<number | null>(null);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
   const [isLoadingResume, setIsLoadingResume] = useState<number | null>(null);
-  const [isOptimizedOpen, setIsOptimizedOpen] = useState(true);
-  const [isUnoptimizedOpen, setIsUnoptimizedOpen] = useState(true);
   const [isRenamingId, setIsRenamingId] = useState<number | null>(null);
   const [renameInputValue, setRenameInputValue] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
@@ -680,69 +678,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             </div>
           )}
 
-          {filteredResumes.length > 0 && (
-            <>
-              <div className="flex flex-col pt-2 bg-transparent">
-                <button
-                  onClick={() => setIsOptimizedOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2 group"
-                >
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className="material-symbols-outlined text-primary" style={{ fontSize: '18px' }}>task_alt</span>
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">已诊断</h3>
-                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
-                      {filteredResumes.filter(r => r.optimizationStatus === 'optimized').length}
-                    </span>
-                  </div>
-                  <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isOptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
-                    expand_more
-                  </span>
-                </button>
-                {(() => {
-                  const optimizedResumes = filteredResumes.filter(r => r.optimizationStatus === 'optimized');
-                  return isOptimizedOpen ? (
-                    optimizedResumes.length > 0 ? (
-                      renderResumeList(optimizedResumes)
-                    ) : (
-                      <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无已诊断简历
-                      </div>
-                    )
-                  ) : null;
-                })()}
-              </div>
-
-              <div className="flex flex-col pt-2 bg-transparent">
-                <button
-                  onClick={() => setIsUnoptimizedOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2 group"
-                >
-                  <div className="flex items-center gap-2 ml-4">
-                    <span className="material-symbols-outlined text-slate-400" style={{ fontSize: '18px' }}>fiber_manual_record</span>
-                    <h3 className="text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">未诊断</h3>
-                    <span className="px-1.2 py-0.2 rounded-md bg-slate-100 dark:bg-white/5 text-[9px] text-slate-500 dark:text-slate-500 font-bold border border-slate-200 dark:border-white/5 shadow-sm">
-                      {filteredResumes.filter(r => r.optimizationStatus !== 'optimized').length}
-                    </span>
-                  </div>
-                  <span className="material-symbols-outlined text-[20px] text-slate-300 dark:text-slate-600 transition-transform duration-300 mr-4" style={{ transform: isUnoptimizedOpen ? 'none' : 'rotate(-90deg)' }}>
-                    expand_more
-                  </span>
-                </button>
-                {(() => {
-                  const unoptimizedResumes = filteredResumes.filter(r => r.optimizationStatus !== 'optimized');
-                  return isUnoptimizedOpen ? (
-                    unoptimizedResumes.length > 0 ? (
-                      renderResumeList(unoptimizedResumes)
-                    ) : (
-                      <div className="mx-8 my-2 p-3 text-center text-slate-400 text-xs italic bg-slate-50/50 dark:bg-white/5 rounded-xl border border-dashed border-slate-200 dark:border-white/5">
-                        暂无未诊断简历
-                      </div>
-                    )
-                  ) : null;
-                })()}
-              </div>
-            </>
-          )}
+          {filteredResumes.length > 0 && renderResumeList(filteredResumes)}
         </div>
 
         {filteredResumes.length > 0 && (
@@ -810,4 +746,3 @@ const AllResumes: React.FC<ScreenProps> = () => {
 };
 
 export default AllResumes;
-

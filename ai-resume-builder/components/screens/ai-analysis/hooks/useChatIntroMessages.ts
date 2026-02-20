@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
-import { getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { makeJdKey } from '../id-utils';
 
 type Params = {
   isInterviewMode?: boolean;
@@ -29,6 +30,46 @@ export const useChatIntroMessages = ({
   jdText,
 }: Params) => {
   const askTimerRef = useRef<number | null>(null);
+  const normalizeSceneText = (value: any) =>
+    String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const hasPersistedHistory = () => {
+    const sessions = (resumeData as any)?.interviewSessions || {};
+    const list = Object.values(sessions || {}) as any[];
+    if (!list.length) return false;
+    const expectedChatMode = isInterviewMode ? 'interview' : 'micro';
+    const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+    const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
+    const expectedType = String(getActiveInterviewType() || '').trim().toLowerCase();
+    const expectedMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
+    const expectedFocus = normalizeSceneText(getActiveInterviewFocus());
+    const expectedCompany = normalizeSceneText((resumeData as any)?.targetCompany || '');
+    const expectedResumeId = String((resumeData as any)?.id || '').trim();
+    return list.some((session: any) => {
+      const messages = Array.isArray(session?.messages) ? session.messages : [];
+      if (!messages.length) return false;
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      if (!chatMode || chatMode !== expectedChatMode) return false;
+      if (isInterviewMode) {
+        const sessionType = String(session?.interviewType || '').trim().toLowerCase();
+        const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
+        const sessionFocus = normalizeSceneText(session?.interviewFocus);
+        const sessionCompany = normalizeSceneText(session?.targetCompany);
+        const sessionResumeId = String(session?.resumeId || '').trim();
+        if (sessionType !== expectedType) return false;
+        if (sessionMode !== expectedMode) return false;
+        if (sessionFocus !== expectedFocus) return false;
+        if (sessionCompany !== expectedCompany) return false;
+        if (sessionResumeId !== expectedResumeId) return false;
+      } else {
+        const sessionResumeId = String(session?.resumeId || '').trim();
+        if (sessionResumeId && sessionResumeId !== expectedResumeId) return false;
+      }
+      const sessionJdKey =
+        String(session?.jdKey || '').trim() ||
+        makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+      return sessionJdKey === effectiveJdKey;
+    });
+  };
 
   const buildIntroTexts = (userName: string) => {
     const greeting = userName ? `${userName}，您好！` : '您好！';
@@ -89,6 +130,11 @@ export const useChatIntroMessages = ({
     if (chatInitialized) return;
     if (chatIntroScheduledRef.current) return;
     if (chatMessagesRef.current.length !== 0) return;
+    if (hasPersistedHistory()) {
+      // History exists and may still be restoring into chatMessages state; do not inject intro again.
+      setChatInitialized(true);
+      return;
+    }
 
     chatIntroScheduledRef.current = true;
     setChatInitialized(true);
@@ -126,5 +172,5 @@ export const useChatIntroMessages = ({
       setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
       askTimerRef.current = null;
     }, 900);
-  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, resumeData?.interviewSessions, resumeData?.lastJdText, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

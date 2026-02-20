@@ -238,41 +238,20 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     const resumeId = String(resume?.id || '').trim();
     const ownerId = String(currentUser?.id || '').trim();
     if (!resumeId) return;
-    if (!hasAnyProgressForResume(resume)) {
-      localStorage.setItem('ai_analysis_force_resume_select', '1');
-      if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
-      localStorage.removeItem('ai_result_open');
-      localStorage.removeItem('ai_result_resume_id');
-      localStorage.removeItem('ai_result_step');
-      localStorage.removeItem('ai_interview_open');
-      localStorage.removeItem('ai_interview_resume_id');
-      localStorage.removeItem('ai_interview_entry_mode');
-      navigateToView(View.AI_ANALYSIS, { replace: true });
-      return;
-    }
-    const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
-    const isFinalDone = diagnosisProgress >= 100;
-    const latestStepRaw = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
-    const resumeStep = ['jd_input', 'analyzing', 'report', 'micro_intro', 'chat', 'interview_report', 'comparison', 'final_report'].includes(latestStepRaw)
-      ? latestStepRaw
-      : '';
-    const targetStep = resumeStep || (isFinalDone ? 'comparison' : 'report');
+    // Enter via resume select first, then auto-select this resume.
+    // Keep behavior fully aligned with manually clicking a resume in ResumeSelectPage.
+    localStorage.setItem('ai_analysis_force_resume_select', '1');
+    localStorage.removeItem('ai_interview_force_resume_select');
     if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_result_open', '1');
     localStorage.setItem('ai_result_resume_id', resumeId);
-    localStorage.setItem('ai_result_step', targetStep);
-    const pathByStep: Record<string, string> = {
-      jd_input: `/ai-analysis/jd/${resumeId}`,
-      analyzing: `/ai-analysis/analyzing/${resumeId}`,
-      report: `/ai-analysis/report/${resumeId}`,
-      micro_intro: `/ai-analysis/micro-intro/${resumeId}`,
-      chat: `/ai-analysis/chat/${resumeId}`,
-      interview_report: `/ai-analysis/interview-report/${resumeId}`,
-      comparison: `/ai-analysis/comparison/${resumeId}`,
-      final_report: `/ai-analysis/final-report/${resumeId}`,
-    };
-    const targetPath = pathByStep[targetStep] || `/ai-analysis/report/${resumeId}`;
-    navigate(targetPath, { replace: true });
+    localStorage.setItem('ai_result_prefer_report', (resume as any)?.analyzed ? '1' : '0');
+    localStorage.removeItem('ai_result_step');
+    localStorage.setItem('ai_result_wait_resume_select', '1');
+    localStorage.removeItem('ai_interview_open');
+    localStorage.removeItem('ai_interview_resume_id');
+    localStorage.removeItem('ai_interview_entry_mode');
+    navigate('/ai-analysis', { replace: true });
   };
 
   const handleContinueInterview = (resume: any) => {
@@ -280,7 +259,8 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     const ownerId = String(currentUser?.id || '').trim();
     if (!resumeId) return;
     if (!hasAnyProgressForResume(resume)) {
-      localStorage.setItem('ai_analysis_force_resume_select', '1');
+      localStorage.setItem('ai_interview_force_resume_select', '1');
+      localStorage.removeItem('ai_analysis_force_resume_select');
       if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
       localStorage.removeItem('ai_result_open');
       localStorage.removeItem('ai_result_resume_id');
@@ -292,6 +272,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       return;
     }
     localStorage.removeItem('ai_analysis_force_resume_select');
+    localStorage.removeItem('ai_interview_force_resume_select');
     if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_interview_open', '1');
     localStorage.setItem('ai_interview_resume_id', resumeId);
@@ -436,13 +417,6 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               </button>
             </div>
 
-            {/* Mobile Interaction Hint */}
-            <div className="mt-5 flex justify-center group-hover:opacity-40 transition-opacity md:hidden">
-              <div className="px-3 py-1 rounded-full bg-slate-50 dark:bg-white/5 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[12px] text-slate-400 animate-pulse">swipe</span>
-                <p className="text-[10px] text-slate-400 dark:text-gray-500 font-bold tracking-wider uppercase">左右滑动内容</p>
-              </div>
-            </div>
           </div>
         </div>
 

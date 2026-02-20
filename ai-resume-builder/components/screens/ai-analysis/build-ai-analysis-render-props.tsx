@@ -11,13 +11,18 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   isUnoptimizedOpen: p.isUnoptimizedOpen,
   setIsUnoptimizedOpen: p.setIsUnoptimizedOpen,
   handleResumeSelectBack: p.handleResumeSelectBack,
-  handleResumeSelect: (resumeId: string | number, preferReport: boolean) => {
-    void p.handleResumeSelect(resumeId, preferReport);
+  handleResumeSelect: (
+    resumeId: string | number,
+    preferReport: boolean,
+    targetStep?: 'report' | 'chat' | 'final_report'
+  ) => {
+    void p.handleResumeSelect(resumeId, preferReport, targetStep);
   },
   selectedResumeId: p.selectedResumeId,
   resumeReadState: p.resumeReadState,
   isInterviewMode: p.isInterviewMode,
   pointsRemaining: p.pointsRemaining,
+  onRediagnoseResume: p.onRediagnoseResume,
   isSameResumeId: p.isSameResumeId,
   resumeData: p.resumeData,
   targetCompany: p.targetCompany,
@@ -32,6 +37,7 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   showJdEmptyModal: p.showJdEmptyModal,
   setShowJdEmptyModal: p.setShowJdEmptyModal,
   startAnalysis: p.startAnalysis,
+  onRestartCompletedInterviewScene: p.onRestartCompletedInterviewScene,
   hasJdInput: p.hasJdInput,
   score: p.score,
   originalScore: p.originalScore,
@@ -41,7 +47,11 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
     void p.startAnalysis(undefined, { preserveReportOnError: true, bypassCache: true });
   },
   handleStartMicroInterview: p.handleStartMicroInterview,
+  microInterviewActionLabel: p.microInterviewActionLabel,
   handleRetryAnalysisFromIntro: p.handleRetryAnalysisFromIntro,
+  onInitialReportFeedback: p.onInitialReportFeedback,
+  onFinalReportFeedback: p.onFinalReportFeedback,
+  onInterviewReportFeedback: p.onInterviewReportFeedback,
   ToastOverlay: p.ToastOverlay,
   WaveformVisualizer: (props: any) => <WaveformVisualizer {...props} visualizerData={p.visualizerData} />,
   interruptCurrentThinking: p.interruptCurrentThinking,
@@ -91,6 +101,7 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   currentQuestionElapsedSec: p.currentQuestionElapsedSec,
   getInterviewerTitle: p.getInterviewerTitle,
   getInterviewerAvatarUrl: p.getInterviewerAvatarUrl,
+  onChatMessageFeedback: p.onChatMessageFeedback,
   postInterviewSummary: p.effectivePostInterviewSummary,
   interviewReportSummary: p.interviewReportSummary,
   interviewReportScore: p.interviewReportScore,

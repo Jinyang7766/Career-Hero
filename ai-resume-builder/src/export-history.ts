@@ -36,12 +36,10 @@ export const recordResumeExportHistory = async (
         ...latest.data.resume_data,
         exportHistory: [historyEntry, ...currentHistory].slice(0, 200),
       },
-      updated_at: new Date().toISOString(),
-    });
+    }, { touchUpdatedAt: false });
     return true;
   } catch (err) {
     console.error('Failed to record export history:', err);
     return false;
   }
 };
-

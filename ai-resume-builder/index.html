@@ -5,12 +5,6 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
   <title>AI Resume Builder</title>
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com" rel="preconnect" />
-  <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@100..900&family=Inter:wght@400;500;600;700&display=swap"
-    rel="stylesheet" />
   <!-- Material Symbols -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
     rel="stylesheet" />
@@ -31,8 +25,8 @@
             "text-secondary": "#92adc9",
           },
           fontFamily: {
-            sans: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
-            display: ["CustomFont", "Noto Sans SC", "Inter", "sans-serif"],
+            sans: ["CustomFont"],
+            display: ["CustomFont"],
           },
         },
       },
@@ -51,14 +45,14 @@
       min-height: 100vh;
       background-color: #101922;
       /* Default to dark match */
-      font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
+      font-family: 'CustomFont';
     }
 
     input,
     button,
     select,
     textarea {
-      font-family: 'CustomFont', 'Noto Sans SC', 'Inter', sans-serif;
+      font-family: 'CustomFont';
     }
 
     .no-scrollbar::-webkit-scrollbar {
@@ -71,6 +65,11 @@
     }
 
     .material-symbols-outlined {
+      font-family: 'Material Symbols Outlined';
+      font-style: normal;
+      font-weight: normal;
+      line-height: 1;
+      display: inline-block;
       font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
     }
 
@@ -89,27 +88,44 @@
 
     /* Custom Scrollbar */
     ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
+      width: 5px;
+      height: 5px;
     }
 
     ::-webkit-scrollbar-track {
-      background: #101922;
+      background: transparent;
     }
 
     ::-webkit-scrollbar-thumb {
-      background: #324d67;
+      background: rgba(0, 0, 0, 0.15);
       border-radius: 10px;
+      border: 1px solid transparent;
+      background-clip: content-box;
+    }
+
+    .dark ::-webkit-scrollbar-thumb,
+    .dark*::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #137fec;
+      background: rgba(0, 0, 0, 0.3);
+    }
+
+    .dark ::-webkit-scrollbar-thumb:hover,
+    .dark*::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
     }
 
     /* For Firefox */
     * {
       scrollbar-width: thin;
-      scrollbar-color: #324d67 #101922;
+      scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+    }
+
+    .dark,
+    .dark * {
+      scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
     }
   </style>
   <script type="importmap">

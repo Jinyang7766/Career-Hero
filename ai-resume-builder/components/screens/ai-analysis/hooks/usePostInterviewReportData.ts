@@ -16,6 +16,57 @@ type Params = {
   weaknesses?: string[];
 };
 
+const normalizeContact = (value: unknown) => String(value || '').trim();
+const isLikelyEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeContact(value));
+const isLikelyPhone = (value: unknown) => {
+  const raw = normalizeContact(value);
+  if (!raw) return false;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) return false;
+  if (!/^[+()\-.\s\d]+$/.test(raw)) return false;
+  return true;
+};
+const isMaskedContactValue = (value: unknown) => {
+  const text = normalizeContact(value);
+  if (!text) return true;
+  const lowered = text.toLowerCase();
+  if (
+    lowered.includes('[email_') ||
+    lowered.includes('[phone_') ||
+    lowered.includes('masked') ||
+    lowered.includes('脱敏') ||
+    lowered.includes('隐私')
+  ) {
+    return true;
+  }
+  if (/^\*+$/.test(text)) return true;
+  if (/^x+$/i.test(text)) return true;
+  if (/^(\*|x|X|-|_|\s){6,}$/.test(text)) return true;
+  return false;
+};
+
+const repairGeneratedContacts = (generated: ResumeData, primarySource: ResumeData | null, fallbackSource: ResumeData | null) => {
+  const next: any = { ...(generated as any) };
+  next.personalInfo = { ...(next.personalInfo || {}) };
+  const sourcePersonal = (primarySource as any)?.personalInfo || {};
+  const fallbackPersonal = (fallbackSource as any)?.personalInfo || {};
+  const sourceEmail = normalizeContact(sourcePersonal?.email) || normalizeContact(fallbackPersonal?.email);
+  const sourcePhone = normalizeContact(sourcePersonal?.phone) || normalizeContact(fallbackPersonal?.phone);
+  const validSourceEmail = isLikelyEmail(sourceEmail) ? sourceEmail : '';
+  const validSourcePhone = isLikelyPhone(sourcePhone) ? sourcePhone : '';
+
+  const generatedEmail = normalizeContact(next.personalInfo?.email);
+  const generatedPhone = normalizeContact(next.personalInfo?.phone);
+
+  if (validSourceEmail && (isMaskedContactValue(generatedEmail) || !isLikelyEmail(generatedEmail))) {
+    next.personalInfo.email = validSourceEmail;
+  }
+  if (validSourcePhone && (isMaskedContactValue(generatedPhone) || !isLikelyPhone(generatedPhone))) {
+    next.personalInfo.phone = validSourcePhone;
+  }
+  return next as ResumeData;
+};
+
 export const usePostInterviewReportData = ({
   originalResumeData,
   resumeData,
@@ -61,8 +112,12 @@ export const usePostInterviewReportData = ({
       normalized.optimizedFromId = sourceId;
     }
     delete normalized.id;
-    return normalized as ResumeData;
-  }, [postInterviewOriginalResume, suggestions]);
+    return repairGeneratedContacts(
+      normalized as ResumeData,
+      postInterviewOriginalResume,
+      resumeData || null
+    );
+  }, [postInterviewOriginalResume, suggestions, resumeData]);
 
   const postInterviewAnnotations = useMemo(() => (
     (() => {

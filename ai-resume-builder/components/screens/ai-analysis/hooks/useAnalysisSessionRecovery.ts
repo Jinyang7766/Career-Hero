@@ -11,7 +11,7 @@ type Params = {
   makeJdKey: (text: string) => string;
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
-  openChat: (source: 'internal' | 'preview') => void;
+  openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
   navigateToStep: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
@@ -56,22 +56,25 @@ export const useAnalysisSessionRecovery = ({
 
     if (
       hasInterviewMessages &&
-      (status === 'interview_in_progress' || status === 'paused') &&
-      currentStep !== 'chat'
+      (status === 'interview_in_progress' || status === 'paused')
     ) {
       if (!jdText) setJdText(effectiveJdText);
       restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
-      openChat('internal');
+      if (currentStep !== 'chat') {
+        openChat('internal', { skipRestore: true });
+      }
       recoveredSessionKeyRef.current = marker;
       return;
     }
 
-    if (sessionStep === 'chat' && currentStep !== 'chat') {
+    if (sessionStep === 'chat') {
       if (!jdText) setJdText(effectiveJdText);
-      if (hasInterviewMessages) {
-        restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
+      // Always restore (or clear) chat history for the active scene before opening chat,
+      // otherwise stale messages from previous mode can leak into current mode.
+      restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
+      if (currentStep !== 'chat') {
+        openChat('internal', { skipRestore: true });
       }
-      openChat('internal');
       recoveredSessionKeyRef.current = marker;
       return;
     }

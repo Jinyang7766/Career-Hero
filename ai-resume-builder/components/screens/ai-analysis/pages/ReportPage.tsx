@@ -1,8 +1,7 @@
 import React from 'react';
 import AiDisclaimer from '../AiDisclaimer';
-import { confirmDialog } from '../../../../src/ui/dialogs';
-import { USAGE_POINT_COST } from '../../../../src/points-config';
 import BackButton from '../../../shared/BackButton';
+import ReportFeedback from '../ReportFeedback';
 
 export type ReportPageProps = {
   mode: 'analyzing' | 'report';
@@ -11,8 +10,9 @@ export type ReportPageProps = {
   score: number;
   report: any;
   getScoreColor: (s: number) => string;
-  handleAnalyzeOtherResume: () => void;
   handleStartMicroInterview: () => void;
+  microInterviewActionLabel?: string;
+  onFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
 };
 
 const ReportPage: React.FC<ReportPageProps> = ({
@@ -22,8 +22,9 @@ const ReportPage: React.FC<ReportPageProps> = ({
   score,
   report,
   getScoreColor,
-  handleAnalyzeOtherResume,
   handleStartMicroInterview,
+  microInterviewActionLabel,
+  onFeedback,
 }) => {
   if (mode === 'analyzing') {
     return (
@@ -50,15 +51,15 @@ const ReportPage: React.FC<ReportPageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300 relative">
-      <header className="sticky top-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={handleStepBack} className="-ml-2" />
-          <h1 className="text-base font-bold tracking-tight">初步诊断</h1>
+          <h1 className="text-base font-bold tracking-tight">初步诊断报告</h1>
           <div className="w-10"></div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-4">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-4">
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5">
           <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
             {hasJdInput() ? '人岗匹配度' : '简历综合评估'}
@@ -90,24 +91,15 @@ const ReportPage: React.FC<ReportPageProps> = ({
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3 pt-2">
-          <button
-            onClick={async () => {
-              const ok = await confirmDialog(`重新诊断会重新生成结果，并耗费 ${USAGE_POINT_COST.analysis} 点积分，确定继续吗？`);
-              if (!ok) return;
-              handleAnalyzeOtherResume();
-            }}
-            className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
-            type="button"
-          >
-            重新诊断
-          </button>
+        <ReportFeedback onFeedback={onFeedback} showTitle={false} />
+
+        <div className="pt-2">
           <button
             onClick={handleStartMicroInterview}
-            className="h-11 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
+            className="w-full h-11 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
             type="button"
           >
-            进入微访谈
+            {microInterviewActionLabel || '进入微访谈'}
           </button>
         </div>
 

@@ -10,8 +10,32 @@ type Params = {
   showToast: (msg: string, type?: 'info' | 'success' | 'error', durationMs?: number) => void;
 };
 
+export type QuotaKind =
+  | 'analysis'
+  | 'micro_interview'
+  | 'final_report'
+  | 'interview'
+  | 'interview_simple'
+  | 'interview_comprehensive';
+
 export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Params) => {
-  const consumeUsageQuota = React.useCallback(async (kind: 'analysis' | 'interview') => {
+  const resolveNeededPoints = (kind: QuotaKind) => {
+    if (kind === 'analysis') return USAGE_POINT_COST.analysis;
+    if (kind === 'micro_interview') return USAGE_POINT_COST.micro_interview;
+    if (kind === 'final_report') return USAGE_POINT_COST.final_report;
+    if (kind === 'interview_simple') return USAGE_POINT_COST.interview_simple;
+    if (kind === 'interview_comprehensive') return USAGE_POINT_COST.interview_comprehensive;
+    return USAGE_POINT_COST.interview;
+  };
+  const isInterviewKind = (kind: QuotaKind) =>
+    kind !== 'analysis' && kind !== 'final_report';
+  const getKindLabel = (kind: QuotaKind) => {
+    if (kind === 'analysis') return '诊断';
+    if (kind === 'micro_interview') return '微访谈';
+    if (kind === 'final_report') return '最终报告';
+    return '面试';
+  };
+  const consumeUsageQuota = React.useCallback(async (kind: QuotaKind) => {
     const userId = String(currentUserId || '').trim();
     if (!userId) return true;
 
@@ -24,7 +48,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
     const row = (readResult.data as any) || {};
     const tier = String(row?.membership_tier || 'FREE').toUpperCase();
     const isFirstTime = tier === MembershipTier.FREE;
-    const neededPoints = kind === 'analysis' ? USAGE_POINT_COST.analysis : USAGE_POINT_COST.interview;
+    const neededPoints = resolveNeededPoints(kind);
     const migratedFromLegacy = Number(row?.diagnoses_remaining ?? 0) * USAGE_POINT_COST.analysis
       + Number(row?.interviews_remaining ?? 0) * USAGE_POINT_COST.interview;
     const currentPoints = Number(row?.points_balance ?? migratedFromLegacy ?? 0);
@@ -32,9 +56,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
     if (!Number.isFinite(currentPoints) || currentPoints < neededPoints) {
       const confirmMessage = isFirstTime
         ? `您的积分不足。是否立即开通 Starter（月赠 ${PLAN_MONTHLY_POINTS.STARTER} 积分）并继续？`
-        : (kind === 'analysis'
-          ? `您的积分不足，当前诊断需 ${neededPoints} 积分。升级会员或购买积分包后可继续。`
-          : `您的积分不足，当前面试需 ${neededPoints} 积分。升级会员或购买积分包后可继续。`);
+        : `您的积分不足，当前${getKindLabel(kind)}需 ${neededPoints} 积分。升级会员或购买积分包后可继续。`;
 
       let confirmed = false;
       try {
@@ -60,9 +82,9 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
             await DatabaseService.createPointsLedger({
               userId,
               delta: -neededPoints,
-              action: kind === 'analysis' ? 'analysis_consume' : 'interview_consume',
-              sourceType: kind,
-              note: `Starter 激活后扣减${kind === 'analysis' ? '诊断' : '面试'}积分`,
+              action: !isInterviewKind(kind) ? 'analysis_consume' : 'interview_consume',
+              sourceType: !isInterviewKind(kind) ? 'analysis' : 'interview',
+              note: `Starter 激活后扣减${getKindLabel(kind)}积分`,
               balanceAfter: afterConsume,
             });
             showToast(`Starter 已激活，已扣除 ${neededPoints} 积分`, 'success');
@@ -85,9 +107,9 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
     await DatabaseService.createPointsLedger({
       userId,
       delta: -neededPoints,
-      action: kind === 'analysis' ? 'analysis_consume' : 'interview_consume',
-      sourceType: kind,
-      note: kind === 'analysis' ? 'AI 诊断扣减' : 'AI 面试扣减',
+      action: !isInterviewKind(kind) ? 'analysis_consume' : 'interview_consume',
+      sourceType: !isInterviewKind(kind) ? 'analysis' : 'interview',
+      note: `AI ${getKindLabel(kind)}扣减`,
       balanceAfter: nextPoints,
     });
 
@@ -95,7 +117,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
   }, [currentUserId, navigateToView, showToast]);
 
   const refundUsageQuota = React.useCallback(async (
-    kind: 'analysis' | 'interview',
+    kind: QuotaKind,
     note?: string
   ) => {
     const userId = String(currentUserId || '').trim();
@@ -107,7 +129,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
     }
 
     const row = (readResult.data as any) || {};
-    const refundPoints = kind === 'analysis' ? USAGE_POINT_COST.analysis : USAGE_POINT_COST.interview;
+    const refundPoints = resolveNeededPoints(kind);
     const currentPoints = Number(row?.points_balance ?? 0);
     const nextPoints = Math.max(0, currentPoints + refundPoints);
 
@@ -121,9 +143,9 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
     await DatabaseService.createPointsLedger({
       userId,
       delta: refundPoints,
-      action: kind === 'analysis' ? 'analysis_refund' : 'interview_refund',
-      sourceType: kind,
-      note: note || (kind === 'analysis' ? 'AI 诊断失败返还积分' : 'AI 面试失败返还积分'),
+      action: !isInterviewKind(kind) ? 'analysis_refund' : 'interview_refund',
+      sourceType: !isInterviewKind(kind) ? 'analysis' : 'interview',
+      note: note || `AI ${getKindLabel(kind)}失败返还积分`,
       balanceAfter: nextPoints,
     });
 

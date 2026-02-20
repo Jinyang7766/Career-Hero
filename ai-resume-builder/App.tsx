@@ -24,8 +24,44 @@ import DeletionPending from './components/screens/DeletionPending';
 import MemberCenter from './components/screens/MemberCenter';
 import TermsOfService from './components/screens/TermsOfService';
 import PrivacyPolicy from './components/screens/PrivacyPolicy';
-import { deriveDiagnosisProgress } from './src/diagnosis-progress';
+import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from './src/diagnosis-progress';
+import { deriveInterviewStageStatus } from './components/screens/ai-analysis/interview-stage-status';
 import { makeJdKey, parseInterviewScopedKey } from './components/screens/ai-analysis/id-utils';
+
+class ScreenErrorBoundary extends React.Component<
+  { children: React.ReactNode; title?: string },
+  { hasError: boolean; message: string }
+> {
+  constructor(props: { children: React.ReactNode; title?: string }) {
+    super(props);
+    this.state = { hasError: false, message: '' };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return {
+      hasError: true,
+      message: String(error?.message || error || '未知错误'),
+    };
+  }
+
+  componentDidCatch(error: any, errorInfo: any) {
+    console.error('[ScreenErrorBoundary]', error, errorInfo);
+  }
+
+  render() {
+    if (!this.state.hasError) return this.props.children;
+    return (
+      <div className="flex min-h-screen items-center justify-center px-6">
+        <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-700">
+          <div className="text-base font-bold">
+            {this.props.title || '页面加载失败'}
+          </div>
+          <div className="mt-2 text-sm break-all">{this.state.message}</div>
+        </div>
+      </div>
+    );
+  }
+}
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -397,27 +433,50 @@ function App() {
           const analysisBindings = rowData.analysisBindings || {};
           const analysisSessionByJd = rowData.analysisSessionByJd || {};
           const interviewSessions = rowData.interviewSessions || {};
-          const latestSession: any = Object.values(analysisSessionByJd || {}).reduce((acc: any, curr: any) => {
-            const accAt = Date.parse(String(acc?.updatedAt || ''));
-            const currAt = Date.parse(String(curr?.updatedAt || ''));
-            if (!Number.isFinite(accAt)) return curr;
-            if (!Number.isFinite(currAt)) return acc;
-            return currAt > accAt ? curr : acc;
-          }, null);
-          const latestAnalysisStep = String(latestSession?.step || '').trim().toLowerCase() || undefined;
+          const latestAnalysisStep = deriveLatestAnalysisStep(rowData);
           const reportReadyInSession = Object.values(analysisSessionByJd || {}).some((s: any) => String(s?.state || '') === 'report_ready');
           const hasBinding = !!(analysisBindings && Object.keys(analysisBindings).length > 0);
           const hasSnapshotScore = typeof analysisSnapshot?.score === 'number' && analysisSnapshot.score > 0;
           const analysisScore = hasSnapshotScore ? Number(analysisSnapshot.score) : undefined;
           const diagnosisProgress = deriveDiagnosisProgress(rowData);
           const analyzed = Boolean(hasSnapshotScore || hasBinding || reportReadyInSession);
+          const isInterviewSceneSession = (sessionKey: string, session: any) => {
+            const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+            if (chatMode) return chatMode === 'interview';
+            const legacyStep = String(session?.step || '').trim().toLowerCase();
+            if (legacyStep === 'final_report' || legacyStep === 'comparison' || legacyStep === 'report' || legacyStep === 'micro_intro') {
+              return false;
+            }
+            if (legacyStep === 'chat' || legacyStep === 'interview_report') {
+              return true;
+            }
+            const parsedState = parseInterviewScopedKey(String(sessionKey || ''));
+            const stateType = String(session?.interviewType || parsedState.interviewType || '').trim().toLowerCase();
+            const stateMode = String(session?.interviewMode || parsedState.interviewMode || '').trim().toLowerCase();
+            const stateJdKey =
+              String(session?.jdKey || '').trim() ||
+              makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+            return Object.entries(interviewSessions || {}).some(([interviewKey, iv]: [string, any]) => {
+              if (String(iv?.chatMode || '').trim().toLowerCase() !== 'interview') return false;
+              const ivJdKey = makeJdKey(String(iv?.jdText || '').trim() || '__no_jd__');
+              if (stateJdKey && ivJdKey && ivJdKey !== stateJdKey) return false;
+              const parsed = parseInterviewScopedKey(String(interviewKey || ''));
+              const ivType = String(iv?.interviewType || parsed.interviewType || '').trim().toLowerCase();
+              const ivMode = String(iv?.interviewMode || parsed.interviewMode || '').trim().toLowerCase();
+              if (stateType && ivType && stateType !== ivType) return false;
+              if (stateMode && ivMode && stateMode !== ivMode) return false;
+              return true;
+            });
+          };
           const interviewInterrupted = Object.entries(analysisSessionByJd || {}).some(([jdKey, session]: [string, any]) => {
+            if (!isInterviewSceneSession(jdKey, session)) return false;
             const state = String(session?.state || '');
             if (state !== 'paused' && state !== 'interview_in_progress') return false;
             return true;
           });
           const interviewHistory = Object.entries(analysisSessionByJd || {})
-            .filter(([_, session]: [string, any]) => {
+            .filter(([key, session]: [string, any]) => {
+              if (!isInterviewSceneSession(key, session)) return false;
               const state = String(session?.state || '');
               const isDone = state === 'interview_done';
               const isInProgress = state === 'paused' || state === 'interview_in_progress';
@@ -436,97 +495,13 @@ function App() {
             })
             .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
-          // Determine specific interview stage status
-          const interviewStageStatus: Array<'todo' | 'current' | 'done'> = ['todo', 'todo', 'todo'];
-          const interviewStageStatusByMode: {
-            simple: Array<'todo' | 'current' | 'done'>;
-            comprehensive: Array<'todo' | 'current' | 'done'>;
-          } = {
-            simple: ['todo', 'todo', 'todo'],
-            comprehensive: ['todo', 'todo', 'todo'],
-          };
-          const applyStageStatus = (
-            target: Array<'todo' | 'current' | 'done'>,
-            idx: number,
-            state: string,
-          ) => {
-            if (idx < 0 || idx > 2) return;
-            if (state === 'interview_done') target[idx] = 'done';
-            else if ((state === 'paused' || state === 'interview_in_progress') && target[idx] !== 'done') {
-              target[idx] = 'current';
-            }
-          };
-          const inferTypeFromSessionKey = (key: string) => {
-            const parsed = parseInterviewScopedKey(String(key || ''));
-            if (parsed.interviewType === 'general' || parsed.interviewType === 'technical' || parsed.interviewType === 'hr') {
-              return parsed.interviewType;
-            }
-            return '';
-          };
-          const inferModeFromSessionKey = (key: string) => {
-            const parsed = parseInterviewScopedKey(String(key || ''));
-            return parsed.interviewMode === 'simple' ? 'simple' : (parsed.interviewMode === 'comprehensive' ? 'comprehensive' : '');
-          };
-          const getTypeIndex = (type: string) => {
-            if (type === 'general') return 0;
-            if (type === 'technical') return 1;
-            if (type === 'hr') return 2;
-            return -1;
-          };
-          let hasUnmappedInProgress = false;
-          let hasUnmappedDone = false;
-          Object.entries(analysisSessionByJd || {}).forEach(([key, sessionByJd]: [string, any]) => {
-            const state = String(sessionByJd?.state || '');
-            const stateType = String(sessionByJd?.interviewType || inferTypeFromSessionKey(key)).trim().toLowerCase();
-            const stateMode = String(sessionByJd?.interviewMode || inferModeFromSessionKey(key)).trim().toLowerCase();
-            const stateJdKey = String(sessionByJd?.jdKey || '').trim() || makeJdKey(String(sessionByJd?.jdText || '').trim() || '__no_jd__');
-            const matchedSessions = Object.entries(interviewSessions || {}).filter(([_, iv]: [string, any]) => {
-              const ivJdKey = makeJdKey(String(iv?.jdText || '').trim());
-              return ivJdKey === stateJdKey;
-            });
-            const directIdx = getTypeIndex(stateType);
-            if (directIdx !== -1) {
-              const directMode = stateMode === 'simple' ? 'simple' : (stateMode === 'comprehensive' ? 'comprehensive' : '');
-              applyStageStatus(interviewStageStatus, directIdx, state);
-              if (directMode) {
-                applyStageStatus(interviewStageStatusByMode[directMode], directIdx, state);
-              } else {
-                applyStageStatus(interviewStageStatusByMode.comprehensive, directIdx, state);
-              }
-              return;
-            }
-            if (matchedSessions.length > 0) {
-              matchedSessions.forEach(([sessionKey, iv]: [string, any]) => {
-                const interviewType = String(iv?.interviewType || inferTypeFromSessionKey(sessionKey)).trim().toLowerCase();
-                const idx = getTypeIndex(interviewType);
-                if (idx === -1) return;
-                const modeRaw = String(iv?.interviewMode || '').trim().toLowerCase();
-                const mode = modeRaw === 'simple' ? 'simple' : 'comprehensive';
-                applyStageStatus(interviewStageStatus, idx, state);
-                applyStageStatus(interviewStageStatusByMode[mode], idx, state);
-              });
-              return;
-            }
-
-            let idx = -1;
-            if (key.endsWith('__general')) idx = 0;
-            else if (key.endsWith('__technical')) idx = 1;
-            else if (key.endsWith('__hr')) idx = 2;
-
-            if (idx !== -1) {
-              applyStageStatus(interviewStageStatus, idx, state);
-              applyStageStatus(interviewStageStatusByMode.comprehensive, idx, state);
-            } else {
-              if (state === 'interview_done') hasUnmappedDone = true;
-              else if (state === 'paused' || state === 'interview_in_progress') hasUnmappedInProgress = true;
-            }
+          const {
+            interviewStageStatus,
+            interviewStageStatusByMode,
+          } = deriveInterviewStageStatus({
+            ...rowData,
+            id: resume.id,
           });
-          if (hasUnmappedDone) interviewStageStatus[0] = 'done';
-          else if (hasUnmappedInProgress && interviewStageStatus[0] !== 'done') interviewStageStatus[0] = 'current';
-          if (hasUnmappedDone) interviewStageStatusByMode.comprehensive[0] = 'done';
-          else if (hasUnmappedInProgress && interviewStageStatusByMode.comprehensive[0] !== 'done') {
-            interviewStageStatusByMode.comprehensive[0] = 'current';
-          }
 
           return {
             id: resume.id,
@@ -795,9 +770,17 @@ function App() {
       case View.TEMPLATES:
         return <Editor />;
       case View.AI_ANALYSIS:
-        return <AiAnalysis />;
+        return (
+          <ScreenErrorBoundary title="AI诊断页面异常">
+            <AiAnalysis key="ai-analysis-mode" />
+          </ScreenErrorBoundary>
+        );
       case View.AI_INTERVIEW:
-        return <AiAnalysis isInterviewMode={true} />;
+        return (
+          <ScreenErrorBoundary title="AI面试页面异常">
+            <AiAnalysis key="ai-interview-mode" isInterviewMode={true} />
+          </ScreenErrorBoundary>
+        );
       case View.PROFILE:
         return <Profile />;
       case View.PREVIEW:
@@ -872,7 +855,7 @@ function App() {
 
   const ConfirmModal = () => {
     if (!confirmState) return null;
-    const isDelete = /(确定要(删除|解绑|退出|注销|移除|清理|重置|清除)|^(删除|解绑|注销|退出|移除|清空|重置|清除)\?)/.test(confirmState.message);
+    const isDelete = /(确定要(删除|解绑|退出|注销|移除|清理|重置|清除|重新诊断|清空)|^(删除|解绑|注销|退出|移除|清空|重置|清除|重新诊断)\?|重新诊断|清空)/.test(confirmState.message);
 
     const onCancel = () => {
       confirmState.resolve(false);

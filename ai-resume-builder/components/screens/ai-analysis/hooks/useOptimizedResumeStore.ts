@@ -290,7 +290,7 @@ export const useOptimizedResumeStore = ({
           lastJdText: effectiveJdText || optimizedData.lastJdText || '',
           targetCompany: targetCompany || optimizedData.targetCompany || '',
         },
-      });
+      }, { touchUpdatedAt: false });
     }
 
     setOptimizedResumeId(optimizedResumeId);

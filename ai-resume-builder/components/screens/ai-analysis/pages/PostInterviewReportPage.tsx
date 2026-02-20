@@ -2,6 +2,7 @@ import React from 'react';
 import type { ResumeData } from '../../../../types';
 import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
+import ReportFeedback from '../ReportFeedback';
 
 type Props = {
   originalResume: ResumeData | null;
@@ -16,7 +17,7 @@ type Props = {
     originalValue?: string;
     suggestedValue?: string;
   }>;
-  onFeedback?: (rating: 'up' | 'down') => Promise<boolean> | boolean;
+  onFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   onCompleteAndSave?: (editedResume?: ResumeData | null) => Promise<void> | void;
   onBack: () => void;
 };
@@ -31,6 +32,34 @@ const ResumeBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ t
   </div>
 );
 
+const AutoResizeTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElement>> = (props) => {
+  const localRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const { className = '', onInput, ...rest } = props;
+
+  const resize = React.useCallback(() => {
+    const el = localRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+
+  React.useLayoutEffect(() => {
+    resize();
+  }, [resize, props.value]);
+
+  return (
+    <textarea
+      {...rest}
+      ref={localRef}
+      onInput={(e) => {
+        resize();
+        onInput?.(e);
+      }}
+      className={`${className} overflow-hidden`}
+    />
+  );
+};
+
 const PostInterviewReportPage: React.FC<Props> = ({
   originalResume,
   generatedResume,
@@ -39,8 +68,6 @@ const PostInterviewReportPage: React.FC<Props> = ({
   onCompleteAndSave,
   onBack,
 }) => {
-  const [feedback, setFeedback] = React.useState<'up' | 'down' | null>(null);
-  const [isSubmittingFeedback, setIsSubmittingFeedback] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [editableGeneratedResume, setEditableGeneratedResume] = React.useState<ResumeData | null>(generatedResume);
   React.useEffect(() => {
@@ -71,13 +98,20 @@ const PostInterviewReportPage: React.FC<Props> = ({
   }, {});
 
   const renderInlineNote = (key: string, note: { title: string; reason: string }) => (
-    <div key={key} className="mt-3 rounded-2xl border border-amber-200/50 dark:border-amber-500/10 bg-amber-50/50 dark:bg-amber-500/5 p-4 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex items-center gap-2 mb-1.5">
-        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[16px]">edit_note</span>
-        <p className="text-[11px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-widest">{note.title}</p>
+    <div key={key} className="mt-2 rounded-xl border border-amber-200/50 dark:border-amber-500/10 bg-amber-50/50 dark:bg-amber-500/5 p-3 animate-in fade-in zoom-in-95 duration-300">
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[14px]">edit_note</span>
+        <p className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-[0.12em]">{note.title}</p>
       </div>
-      <p className="text-xs font-bold text-amber-600/80 dark:text-amber-200/60 leading-relaxed">{note.reason}</p>
+      <p className="text-[11px] font-semibold text-amber-600/80 dark:text-amber-200/60 leading-[1.5]">{note.reason}</p>
     </div>
+  );
+  const renderModuleFeedback = () => (
+    onFeedback ? (
+      <div className="mt-3">
+        <ReportFeedback onFeedback={onFeedback} showTitle={false} variant="compact" />
+      </div>
+    ) : null
   );
 
   const getSectionNotes = (section: string) => annBySection[section] || [];
@@ -254,12 +288,12 @@ const PostInterviewReportPage: React.FC<Props> = ({
     const overview = buildModuleOverview(section, hasContent);
     if (!overview) return null;
     return (
-      <div className="mb-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 animate-in fade-in slide-in-from-top-2 duration-300">
-        <div className="flex items-center gap-2 mb-2.5">
-          <span className="material-symbols-outlined text-primary text-[18px]">verified</span>
-          <p className="text-[11px] font-black text-primary uppercase tracking-[0.2em]">{label}诊断建议</p>
+      <div className="mb-2.5 rounded-lg border border-primary/20 bg-primary/5 p-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
+        <div className="flex items-center gap-1.5 mb-1.5">
+          <span className="material-symbols-outlined text-primary text-[16px]">verified</span>
+          <p className="text-[9px] font-black text-primary uppercase tracking-[0.12em]">{label}诊断建议</p>
         </div>
-        <p className="text-[13px] font-black text-slate-700 dark:text-slate-300 leading-relaxed">{overview}</p>
+        <p className="text-[11px] font-semibold text-slate-700 dark:text-slate-300 leading-[1.5]">{overview}</p>
       </div>
     );
   };
@@ -482,39 +516,29 @@ const PostInterviewReportPage: React.FC<Props> = ({
           <p>{data.personalInfo?.name || ''} {data.personalInfo?.title ? `· ${data.personalInfo.title}` : ''}</p>
           <p className="text-xs opacity-80">{data.personalInfo?.email || ''} {data.personalInfo?.phone ? `· ${data.personalInfo.phone}` : ''}</p>
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="个人简介">
           {withAnnotations && renderModuleOverview('summary', '个人简介')}
           {withAnnotations ? renderSummaryWithInlineNotes(data, true) : <p className="whitespace-pre-wrap">{data.summary || data.personalInfo?.summary || '暂无'}</p>}
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="工作经历">
           {withAnnotations && hasWorkContent && renderModuleOverview('workExps', '工作经历')}
           {hasWorkContent ? renderWorkList(workItems, withAnnotations) : <p className="text-sm text-slate-500 dark:text-slate-400">暂无工作经历</p>}
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="项目经历">
           {withAnnotations && renderModuleOverview('projects', '项目经历', hasProjectContent)}
           {hasProjectContent ? renderProjectList(projectItems, withAnnotations) : <p className="text-sm text-slate-500 dark:text-slate-400">暂无项目经历</p>}
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="技能">
           {withAnnotations && renderModuleOverview('skills', '技能')}
           <p>{Array.isArray((data as any).skills) ? (data as any).skills.join('、') : ''}</p>
         </ResumeBlock>
+        {renderModuleFeedback()}
       </div>
     );
-  };
-
-  const handleFeedbackClick = async (next: 'up' | 'down') => {
-    const nextValue = feedback === next ? null : next;
-    setFeedback(nextValue);
-    if (!nextValue || !onFeedback) return;
-    setIsSubmittingFeedback(true);
-    try {
-      const ok = await onFeedback(nextValue);
-      if (ok === false) {
-        setFeedback(feedback);
-      }
-    } finally {
-      setIsSubmittingFeedback(false);
-    }
   };
 
   const handleCompleteAndSaveClick = async () => {
@@ -575,6 +599,15 @@ const PostInterviewReportPage: React.FC<Props> = ({
     });
   };
 
+  const getDisplayDate = (item: any) => {
+    const date = String(item?.date || '').trim();
+    if (date) return date;
+    const start = String(item?.startDate || '').trim();
+    const end = String(item?.endDate || '').trim();
+    if (start && end) return `${start} - ${end}`;
+    return '';
+  };
+
   const renderEditableGeneratedResume = (data: ResumeData | null) => {
     if (!data) return <p className="text-sm text-slate-500 dark:text-slate-400">暂无简历内容</p>;
     const workItems = Array.isArray((data as any).workExps) ? (data as any).workExps : [];
@@ -590,66 +623,69 @@ const PostInterviewReportPage: React.FC<Props> = ({
             <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(data.personalInfo?.phone || '')} onChange={(e) => updateGeneratedPersonalInfo('phone', e.target.value)} placeholder="电话" />
           </div>
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="个人简介">
-          <textarea className="w-full min-h-[120px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(data.summary || data.personalInfo?.summary || '')} onChange={(e) => updateGeneratedSummary(e.target.value)} placeholder="个人简介" />
+          <AutoResizeTextarea className="w-full min-h-[120px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(data.summary || data.personalInfo?.summary || '')} onChange={(e) => updateGeneratedSummary(e.target.value)} placeholder="个人简介" />
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="工作经历">
           {workItems.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 italic">暂无工作经历</p> : workItems.map((w: any, idx: number) => (
             <div key={String(w?.id ?? idx)} className="mb-6 last:mb-0 space-y-3 pb-6 last:pb-0 border-b last:border-0 border-slate-100 dark:border-white/5">
               <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(w?.company || w?.title || '')} onChange={(e) => updateGeneratedWorkField(idx, 'company', e.target.value)} placeholder="公司/经历名称" />
               <div className="grid grid-cols-2 gap-3">
                 <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(w?.position || w?.subtitle || '')} onChange={(e) => updateGeneratedWorkField(idx, 'position', e.target.value)} placeholder="岗位" />
-                <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(w?.date || '')} onChange={(e) => updateGeneratedWorkField(idx, 'date', e.target.value)} placeholder="时间" />
+                <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={getDisplayDate(w)} onChange={(e) => updateGeneratedWorkField(idx, 'date', e.target.value)} placeholder="时间" />
               </div>
-              <textarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(w?.description || '')} onChange={(e) => updateGeneratedWorkField(idx, 'description', e.target.value)} placeholder="工作描述" />
+              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(w?.description || '')} onChange={(e) => updateGeneratedWorkField(idx, 'description', e.target.value)} placeholder="工作描述" />
             </div>
           ))}
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="项目经历">
           {projectItems.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 italic">暂无项目经历</p> : projectItems.map((p: any, idx: number) => (
             <div key={String(p?.id ?? idx)} className="mb-6 last:mb-0 space-y-3 pb-6 last:pb-0 border-b last:border-0 border-slate-100 dark:border-white/5">
               <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(p?.title || '')} onChange={(e) => updateGeneratedProjectField(idx, 'title', e.target.value)} placeholder="项目名称" />
-              <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(p?.date || '')} onChange={(e) => updateGeneratedProjectField(idx, 'date', e.target.value)} placeholder="时间" />
-              <textarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(p?.description || '')} onChange={(e) => updateGeneratedProjectField(idx, 'description', e.target.value)} placeholder="项目描述" />
+              <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={getDisplayDate(p)} onChange={(e) => updateGeneratedProjectField(idx, 'date', e.target.value)} placeholder="时间" />
+              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(p?.description || '')} onChange={(e) => updateGeneratedProjectField(idx, 'description', e.target.value)} placeholder="项目描述" />
             </div>
           ))}
         </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="技能">
-          <textarea className="w-full min-h-[100px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={skillsText} onChange={(e) => updateGeneratedSkills(e.target.value)} placeholder="技能（用顿号/逗号分隔）" />
+          <AutoResizeTextarea className="w-full min-h-[100px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={skillsText} onChange={(e) => updateGeneratedSkills(e.target.value)} placeholder="技能（用顿号/逗号分隔）" />
         </ResumeBlock>
+        {renderModuleFeedback()}
       </div>
     );
   };
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2 size-9" iconClassName="text-[22px]" />
-          <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">分析报告详情</h1>
+          <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">简历批改</h1>
           <div className="w-10"></div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-10">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-10">
         <section className="animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center justify-center mb-4 px-1">
             <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
               <span className="material-symbols-outlined text-amber-500 text-[20px]">mark_chat_read</span>
               原简历诊断
             </h3>
-            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 italic">含 AI 深度修正建议</span>
           </div>
           {renderResume(originalResume, true)}
         </section>
 
         <section className="animate-in slide-in-from-bottom-6 duration-700">
-          <div className="flex items-center justify-between mb-4 px-1">
+          <div className="flex items-center justify-center mb-4 px-1">
             <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-[20px]">auto_awesome</span>
               AI 优化方案
             </h3>
-            <span className="text-[10px] font-bold text-primary italic">已完成核心表达重构</span>
           </div>
 
           <div className="relative">
@@ -660,54 +696,23 @@ const PostInterviewReportPage: React.FC<Props> = ({
           </div>
 
           <div className="mt-6 flex flex-col gap-4 px-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">方案质量反馈</span>
-              <div className="flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => { void handleFeedbackClick('up'); }}
-                  disabled={isSubmittingFeedback}
-                  className={`size-11 rounded-2xl border-2 flex items-center justify-center transition-all active:scale-95 ${feedback === 'up'
-                    ? 'border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                    : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/5 text-slate-400 hover:text-emerald-500 hover:border-emerald-500/30'
-                    } ${isSubmittingFeedback ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <span className="material-symbols-outlined text-[22px]">thumb_up</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { void handleFeedbackClick('down'); }}
-                  disabled={isSubmittingFeedback}
-                  className={`size-11 rounded-2xl border-2 flex items-center justify-center transition-all active:scale-95 ${feedback === 'down'
-                    ? 'border-rose-500 bg-rose-500 text-white shadow-lg shadow-rose-500/20'
-                    : 'border-slate-100 dark:border-white/5 bg-white dark:bg-white/5 text-slate-400 hover:text-rose-500 hover:border-rose-500/30'
-                    } ${isSubmittingFeedback ? 'opacity-60 cursor-not-allowed' : ''}`}
-                >
-                  <span className="material-symbols-outlined text-[22px]">thumb_down</span>
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => { void handleCompleteAndSaveClick(); }}
-              disabled={!editableGeneratedResume || isSaving}
-              className={`group w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${(!editableGeneratedResume || isSaving) ? 'opacity-70 cursor-not-allowed shadow-none' : ''}`}
-            >
-              <div className="flex items-center justify-center gap-2">
+            <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-2">
+              <button
+                type="button"
+                onClick={() => { void handleCompleteAndSaveClick(); }}
+                disabled={!editableGeneratedResume || isSaving}
+                className={`w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${(!editableGeneratedResume || isSaving) ? 'opacity-70 cursor-not-allowed shadow-none' : ''}`}
+              >
                 {isSaving ? (
                   <>
                     <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                     <span>正在保存至云端...</span>
                   </>
                 ) : (
-                  <>
-                    <span className="material-symbols-outlined text-[20px] transition-transform group-hover:scale-110">save_as</span>
-                    <span>确认为最终简历并保存</span>
-                  </>
+                  '确认为最终简历并保存'
                 )}
-              </div>
-            </button>
+              </button>
+            </div>
             <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-bold opacity-60 uppercase tracking-widest">保存后可前往“我的简历”下载 PDF 版本</p>
           </div>
         </section>

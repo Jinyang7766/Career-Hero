@@ -130,7 +130,7 @@ const History: React.FC<ScreenProps> = () => {
           ...result.data.resume_data,
           exportHistory: updatedHistory
         }
-      });
+      }, { touchUpdatedAt: false });
       return true;
     } catch (err) {
       console.error('Failed to delete export record:', err);
@@ -201,7 +201,7 @@ const History: React.FC<ScreenProps> = () => {
               ...resume.resume_data,
               exportHistory: []
             }
-          });
+          }, { touchUpdatedAt: false });
         }
         return Promise.resolve({ success: true });
       });
