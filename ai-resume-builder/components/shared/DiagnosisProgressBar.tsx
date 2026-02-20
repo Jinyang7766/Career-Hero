@@ -67,8 +67,20 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
                                     }`}
                             />
 
-                            <div className="relative w-full min-h-[14px]">
-                                <span className={`block w-full text-center text-[10px] font-bold tracking-tight whitespace-nowrap transition-colors ${isCurrent
+                            <div className="w-full min-h-[14px] mt-1 flex items-center justify-center gap-1 px-0.5">
+                                {isDone ? (
+                                    <span
+                                        className={`material-symbols-outlined shrink-0 font-black ${isOnDark ? 'text-white' : 'text-emerald-500'}`}
+                                        style={{ fontSize: '11px' }}
+                                    >
+                                        check_circle
+                                    </span>
+                                ) : isCurrent ? (
+                                    <div className={`size-1.5 shrink-0 rounded-full animate-pulse ${isOnDark ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-primary'}`} />
+                                ) : (
+                                    <div className={`size-1 shrink-0 rounded-full ${isOnDark ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-700'}`} />
+                                )}
+                                <span className={`block text-center text-[10px] font-bold tracking-tight leading-none whitespace-nowrap transition-colors ${isCurrent
                                     ? isOnDark ? 'text-white' : 'text-slate-900 dark:text-white'
                                     : isDone
                                         ? isOnDark ? 'text-white/80' : 'text-slate-600 dark:text-slate-400'
@@ -76,15 +88,6 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
                                     } ${canJumpDiagnosisStage ? 'hover:underline underline-offset-2' : ''}`}>
                                     {label}
                                 </span>
-                                <div className="absolute left-2 top-1/2 -translate-y-1/2">
-                                    {isDone ? (
-                                        <span className={`material-symbols-outlined font-black ${isOnDark ? 'text-white' : 'text-emerald-500'}`} style={{ fontSize: '11px' }}>check_circle</span>
-                                    ) : isCurrent ? (
-                                        <div className={`size-1.5 rounded-full animate-pulse ${isOnDark ? 'bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]' : 'bg-primary'}`} />
-                                    ) : (
-                                        <div className={`size-1 rounded-full ${isOnDark ? 'bg-white/20' : 'bg-slate-300 dark:bg-slate-700'}`} />
-                                    )}
-                                </div>
                             </div>
                         </>
                     );

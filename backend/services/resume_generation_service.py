@@ -27,6 +27,195 @@ def _normalize_resume_shape(data):
     }
 
 
+def _remove_location_field(resume):
+    next_resume = _normalize_resume_shape(resume or {})
+    personal_info = next_resume.get('personalInfo') or {}
+    if isinstance(personal_info, dict) and 'location' in personal_info:
+        personal_info = dict(personal_info)
+        personal_info.pop('location', None)
+    next_resume['personalInfo'] = personal_info
+    return next_resume
+
+
+def _split_skill_candidates(value):
+    if isinstance(value, list):
+        items = []
+        for item in value:
+            items.extend(_split_skill_candidates(item))
+        return items
+    text = str(value or '').strip()
+    if not text:
+        return []
+    parts = re.split(r'[\n\r,，、;；|]+', text)
+    return [p.strip() for p in parts if str(p or '').strip()]
+
+
+def _normalize_skill_text(text: str) -> str:
+    value = str(text or '').strip()
+    value = re.sub(r'^[\-\*\d\.\)\(、\s]+', '', value)
+    value = re.sub(r'[\s。；;，,：:]+$', '', value)
+    return value
+
+
+def _canonicalize_skill(skill: str) -> str:
+    value = _normalize_skill_text(skill)
+    if not value:
+        return ''
+    value = value.strip('()（）[]【】{}')
+    value = re.sub(r'\s+', ' ', value).strip()
+
+    direct_map = {
+        'python自动化脚本': 'Python',
+        'python脚本': 'Python',
+        'lora模型与精调': 'LoRA模型',
+        'lora模型精调': 'LoRA模型',
+        'comfyui工作流搭建': 'ComfyUI工作流',
+        'aib短视频分镜': '',
+        '智能化数据看板': 'Tableau',
+        '跨部门协同': '',
+        '活动策划': '',
+    }
+    compact = re.sub(r'[\s\W_]+', '', value.lower())
+    if compact in direct_map:
+        return direct_map[compact]
+
+    value = re.sub(r'(自动化脚本|脚本开发|脚本编写)$', '', value, flags=re.IGNORECASE).strip()
+    value = re.sub(r'(与?精调|与?微调|微调|精调|调优|优化)$', '', value, flags=re.IGNORECASE).strip()
+    value = re.sub(r'(搭建|构建|设计|实现|开发|执行)$', '', value, flags=re.IGNORECASE).strip()
+    value = re.sub(r'^[与和及]\s*', '', value).strip()
+    value = re.sub(r'^[\(\[（【\s]+|[\)\]）】\s]+$', '', value).strip()
+
+    if re.search(r'python', value, flags=re.IGNORECASE):
+        return 'Python'
+    if re.search(r'a\s*/\s*b.*(test|测试)', value, flags=re.IGNORECASE) or re.search(r'\bab\s*测试\b', value, flags=re.IGNORECASE):
+        return 'A/B Test'
+    if re.search(r'\broi\b', value, flags=re.IGNORECASE):
+        return 'ROI'
+    if re.search(r'\bsql\b', value, flags=re.IGNORECASE):
+        return 'SQL'
+    if re.search(r'数据分析', value):
+        return '数据分析'
+    if re.search(r'跨部门协同|活动策划|团队协同|沟通能力', value):
+        return ''
+    if re.search(r'power\s*bi', value, flags=re.IGNORECASE):
+        return 'Power BI'
+    if re.search(r'(^|\\b)bi(\\b|$)', value, flags=re.IGNORECASE):
+        return 'BI'
+    if re.search(r'tableau', value, flags=re.IGNORECASE):
+        return 'Tableau'
+    if re.search(r'comfyui', value, flags=re.IGNORECASE):
+        return 'ComfyUI工作流'
+    if re.search(r'lora', value, flags=re.IGNORECASE):
+        return 'LoRA模型'
+    return _normalize_skill_text(value)
+
+
+def _looks_like_model_family(skill: str) -> bool:
+    value = str(skill or '').strip().lower()
+    if not value:
+        return False
+    return bool(re.search(
+        r'(gpt|chatgpt|openai|claude|anthropic|kimi|moonshot|gemini|qwen|通义|deepseek|llama|glm|智谱|文心|ernie|大模型|对话模型)',
+        value,
+        flags=re.IGNORECASE,
+    ))
+
+
+def _is_hard_skill(skill: str) -> bool:
+    value = _normalize_skill_text(skill)
+    if not value:
+        return False
+    if len(value) < 2 or len(value) > 24:
+        return False
+
+    lowered = value.lower()
+    if _looks_like_model_family(value):
+        return True
+
+    reject_patterns = [
+        r'^(负责|参与|协助|推进|落地|搭建|构建|设计|优化|执行|管理|运营|分析|开发|实现|维护)',
+        r'(能力|意识|经验|思维|协作|沟通|学习|责任心|抗压|执行力)$',
+        r'(全链路|策略|方案|流程|复盘|项目经历|工作经历|业务理解)$',
+        r'(建议|例如|比如|示例|待补充|可优化|可改进)',
+        r'(跨部门协同|团队协同|活动策划|沟通能力|团队合作)',
+    ]
+    if any(re.search(p, value, flags=re.IGNORECASE) for p in reject_patterns):
+        return False
+    generic_non_skill = {
+        '活动', '项目', '流程', '团队', '跨部门', '协作', '沟通', '执行', '运营', '管理', '复盘',
+        '策略', '方案', '业务', '指标', '结果', '增长', '转化'
+    }
+    if value in generic_non_skill:
+        return False
+    if re.search(r'[。！？!?]', value):
+        return False
+
+    # Allow technical tokens and concise Chinese hard-skill nouns.
+    if re.search(r'(sql|python|java|go|rust|excel|tableau|power\s*bi|sap|erp|crm|scrm|a/?b\s*test|etl|bi|llm|rag|agent|linux|docker|k8s|redis|mysql|postgres|clickhouse|hive|spark)', lowered, flags=re.IGNORECASE):
+        return True
+
+    # For Chinese tokens, keep concise hard-skill nouns.
+    if re.search(r'[\u4e00-\u9fff]', value):
+        if re.search(r'(管理|运营|执行|推进|落地|搭建|构建|优化)$', value):
+            return False
+        return bool(re.search(r'(分析|建模|预测|定价|测试|归因|分层|投放|SQL|Python|BI|算法|风控|SCRM|ERP|CRM|RAG|LLM|Agent)', value, flags=re.IGNORECASE))
+    return True
+
+
+def _collect_skill_keywords_from_suggestions(suggestions):
+    keywords = []
+    for item in suggestions or []:
+        if not isinstance(item, dict):
+            continue
+        section = str(item.get('targetSection') or '').strip().lower()
+        title = str(item.get('title') or '')
+        reason = str(item.get('reason') or '')
+        if section != 'skills' and ('关键词' not in title and '关键词' not in reason and '技能' not in title):
+            continue
+        suggested = item.get('suggestedValue')
+        for candidate in _split_skill_candidates(suggested):
+            keywords.append(candidate)
+    return keywords
+
+
+def _normalize_and_merge_skills(generated_resume, source_resume, suggestions):
+    next_resume = _normalize_resume_shape(generated_resume or {})
+    source = _normalize_resume_shape(source_resume or {})
+    generated_skills_raw = next_resume.get('skills') or []
+    source_skills_raw = source.get('skills') or []
+    suggested_skill_keywords = _collect_skill_keywords_from_suggestions(suggestions or [])
+
+    all_candidates = []
+    all_candidates.extend(_split_skill_candidates(generated_skills_raw))
+    all_candidates.extend(_split_skill_candidates(suggested_skill_keywords))
+    all_candidates.extend(_split_skill_candidates(source_skills_raw))
+
+    normalized = []
+    seen = set()
+    has_llm = False
+    for candidate in all_candidates:
+        skill = _canonicalize_skill(candidate)
+        if not skill:
+            continue
+        if _looks_like_model_family(skill):
+            has_llm = True
+            skill = 'LLM'
+        if not _is_hard_skill(skill):
+            continue
+        key = re.sub(r'[\s\W_]+', '', skill.lower())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        normalized.append(skill)
+
+    if has_llm and 'llm' not in seen:
+        normalized.insert(0, 'LLM')
+
+    # Keep result concise and strong.
+    next_resume['skills'] = normalized[:24]
+    return next_resume
+
+
 def _normalize_text(value: str) -> str:
     return re.sub(r'[\s\W_]+', '', str(value or '').lower())
 
@@ -170,7 +359,7 @@ def _restore_source_fact_boundaries(generated_resume, source_resume):
 
     source_pi = source.get('personalInfo') or {}
     target_pi = next_resume.get('personalInfo') or {}
-    for field in ('name', 'title', 'email', 'phone', 'location'):
+    for field in ('name', 'title', 'email', 'phone'):
         if _is_non_empty(source_pi.get(field)):
             target_pi[field] = source_pi.get(field)
     next_resume['personalInfo'] = target_pi
@@ -282,7 +471,7 @@ def generate_optimized_resume(
     if not resume_data:
         raise ValueError('需要提供简历数据')
 
-    fallback_resume = _build_resume_fallback(resume_data)
+    fallback_resume = _remove_location_field(_build_resume_fallback(resume_data))
     if not (gemini_client and check_gemini_quota()):
         return fallback_resume
 
@@ -314,19 +503,14 @@ def generate_optimized_resume(
 4. 优化建议（必须尽量落实到最终简历）：
 {suggestions_context}
 
-**输出要求**
-1. 仅返回 JSON（不要附加额外文本）。
-2. 内容需结合原始数据、对话上下文和优化建议，生成“可直接投递”的版本。
-2.1 目标是“二次诊断低批注终稿”：除事实缺口外，不要保留容易被判定为“需改写”的低质量句子。
-3. 不得输出模板占位符，如：XX、XXX、[具体任务]、[关键行动]、[可量化结果]、待补充、示例、TBD。
-4. 对于无法确认的数字，不要编造具体数值；改为“可验证结果/关键结果”等自然表达。
-5. workExps/projects 的每条 description 必须是完整自然语言，不得只输出框架句。
-5.1 description 必须包含“动作+方法/工具+结果”三个要素中的至少两个，且语义完整。
-6. 若建议指向某段经历或句子，该处必须被改写；禁止大段原文完全照搬。
-7. 若原简历某模块为空（如 projects），只有在建议明确要求新增时才新增该模块内容。
-8. 保持原始事实边界：不得虚构公司/项目/时间线/证书。
-9. personalInfo 中已存在的 name/email/phone 不得删除或改成空值。
-10. 禁止输出“可进一步优化/建议补充细节/建议完善表达”等评语句；最终内容必须直接是成稿。
+**输出要求（精简版）**
+1. 仅返回 JSON。
+2. 输出可直接投递的终稿，不要说明性文字与占位符（XX/TBD/示例等）。
+3. 保持事实边界：不得虚构公司、项目、时间线、证书。
+4. 无法确认数字时用中性结果口径，不得编造具体值。
+5. workExps/projects 的描述必须是完整自然语句，且至少包含“动作/方法/结果”中的两项。
+6. suggestions 指向的薄弱内容必须落实改写，不得大段原文照搬。
+7. personalInfo 中已有 name/email/phone 不得丢失或置空。
 
 **输出格式**
 {{
@@ -335,8 +519,7 @@ def generate_optimized_resume(
       "name": "姓名",
       "title": "职位标题",
       "email": "邮箱地址",
-      "phone": "电话号码",
-      "location": "所在地"
+      "phone": "电话号码"
     }},
     "workExps": [
       {{
@@ -384,6 +567,8 @@ def generate_optimized_resume(
             generated = _restore_source_fact_boundaries(generated, resume_data)
             generated = _soften_unverified_claims(generated)
             generated = _neutralize_unknown_numbers(generated, resume_data)
+            generated = _remove_location_field(generated)
+            generated = _normalize_and_merge_skills(generated, resume_data, normalized_suggestions)
 
             unresolved = _detect_unresolved_suggestions(generated, normalized_suggestions)
             unresolved_context = '\n'.join([
@@ -393,15 +578,12 @@ def generate_optimized_resume(
 
             verify_prompt = f"""
 你是“简历重写校验器”。请逐条校验优化建议是否已在候选新简历中落实，并输出修订后最终简历。
-要求：
-1) 必须逐条核验 suggestions，不得跳过。
-2) 对“未落实/落实不足”的建议，必须在 resumeData 中继续改写，直到可直接投递。
-2.1 修订后目标是“二次诊断低批注终稿”，禁止遗留明显可改写的低质量句子。
-3) 禁止输出占位符：XX/XXX/[具体任务]/[关键行动]/[可量化结果]/待补充/示例/TBD。
-4) 不得虚构事实；无法确认具体数字时使用自然表达（如“显著提升”“关键结果”）。
-5) personalInfo.name/email/phone 不得丢失。
-6) 输出内容必须是成稿简历，不要输出“建议/说明/注释/待补充”等非简历文本。
-7) 仅返回 JSON，不要解释。
+要求（精简版）：
+1) 逐条核验 suggestions，对未落实项继续改写。
+2) 输出可直接投递终稿，不要“建议/说明/注释”类文本。
+3) 禁止占位符与事实编造；数字不确定时使用中性结果口径。
+4) personalInfo.name/email/phone 不得丢失。
+5) 仅返回 JSON。
 
 原始简历：
 {resume_info}
@@ -441,6 +623,8 @@ def generate_optimized_resume(
             final_generated = _restore_source_fact_boundaries(final_generated, resume_data)
             final_generated = _soften_unverified_claims(final_generated)
             final_generated = _neutralize_unknown_numbers(final_generated, resume_data)
+            final_generated = _remove_location_field(final_generated)
+            final_generated = _normalize_and_merge_skills(final_generated, resume_data, normalized_suggestions)
             return final_generated
     except Exception as ai_error:
         logger.error("AI 生成简历失败: %s", ai_error)

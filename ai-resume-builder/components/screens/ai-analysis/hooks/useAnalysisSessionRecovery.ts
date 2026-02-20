@@ -53,6 +53,22 @@ export const useAnalysisSessionRecovery = ({
     const status = String(session.state || '');
     const sessionStep = String(session.step || '').trim();
     const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType, activeInterviewMode);
+    const completedStep = isInterviewMode ? 'interview_report' : 'comparison';
+    const isOnCompletedFlow =
+      currentStep === completedStep ||
+      currentStep === 'interview_report' ||
+      currentStep === 'comparison' ||
+      currentStep === 'final_report';
+
+    // Priority rule: once interview is done, always pin to completed flow.
+    // Ignore stale `session.step` (e.g. still "report") to avoid step oscillation loops.
+    if (status === 'interview_done') {
+      if (!isOnCompletedFlow) {
+        navigateToStep(completedStep, true);
+      }
+      recoveredSessionKeyRef.current = marker;
+      return;
+    }
 
     if (
       hasInterviewMessages &&
@@ -109,14 +125,6 @@ export const useAnalysisSessionRecovery = ({
       return;
     }
 
-    if (
-      status === 'interview_done' &&
-      (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
-    ) {
-      navigateToStep(isInterviewMode ? 'interview_report' : 'comparison', true);
-      recoveredSessionKeyRef.current = marker;
-      return;
-    }
   }, [
     currentStep,
     getAnalysisSession,

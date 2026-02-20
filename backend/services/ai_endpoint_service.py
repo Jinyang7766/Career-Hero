@@ -265,6 +265,98 @@ def _split_into_sentences(text: str):
     return [p.strip() for p in parts if len(p.strip()) >= 4]
 
 
+def _is_sentence_low_value(sentence: str):
+    text = str(sentence or '').strip()
+    if not text:
+        return False
+    vague_patterns = [
+        r'^(负责|参与|协助|配合|跟进|完成|处理)',
+        r'(相关工作|日常工作|其他工作|等工作|等事项|相关事项)$',
+        r'(良好沟通能力|责任心强|抗压能力强|学习能力强|执行力强)',
+    ]
+    has_action = bool(re.search(r'(主导|搭建|设计|优化|推进|制定|落地|复盘|重构|协调|沉淀)', text))
+    has_result = bool(re.search(r'(提升|增长|达成|实现|降低|缩短|优化|结果|产出|转化|ROI|GMV|留存|复购)', text, re.IGNORECASE))
+    too_short = len(text) < 14
+    too_vague = any(re.search(p, text, flags=re.IGNORECASE) for p in vague_patterns)
+    return too_short or too_vague or (not has_action) or (not has_result)
+
+
+def _extract_sentence_issue(sentence: str):
+    text = str(sentence or '').strip()
+    has_action = bool(re.search(r'(主导|搭建|设计|优化|推进|制定|落地|复盘|重构|协调|沉淀)', text))
+    has_result = bool(re.search(r'(提升|增长|达成|实现|降低|缩短|优化|结果|产出|转化|ROI|GMV|留存|复购)', text, re.IGNORECASE))
+    if (not has_action) and (not has_result):
+        return (
+            '缺少关键动作与结果闭环，招聘方难判断真实贡献。',
+            '补齐“动作-方法-结果”三段信息，突出你个人主导部分。',
+            '按 STAR 口径复述该经历，至少补 1 个结果指标或结果口径。'
+        )
+    if not has_action:
+        return (
+            '动作描述不足，个人贡献边界不清晰。',
+            '补充你具体做了什么、用了什么方法或工具。',
+            '将“负责/参与”改写为可执行动作动词（如主导、搭建、优化）。'
+        )
+    if not has_result:
+        return (
+            '结果证据不足，价值传达不充分。',
+            '补充业务结果或指标变化，体现行动产出。',
+            '补 1 条可验证结果（效率、成本、转化、质量任一口径）。'
+        )
+    return (
+        '表达仍可增强岗位匹配度。',
+        '强化关键动作与业务目标的因果关系。',
+        '将句子压缩为“动作+方法+结果”单句版本。'
+    )
+
+
+def _rewrite_sentence_human(sentence: str, section: str) -> str:
+    text = str(sentence or '').strip().strip('。；;，,')
+    if not text:
+        return ''
+    text = re.sub(r'^\s*主要?负责', '主导', text)
+    text = re.sub(r'^\s*参与', '协同推进', text)
+    text = re.sub(r'^\s*协助', '支持并推进', text)
+    text = re.sub(r'^\s*跟进', '持续推进', text)
+    has_action = bool(re.search(r'(主导|搭建|设计|优化|推进|制定|落地|复盘|重构|协调|沉淀)', text))
+    has_result = bool(re.search(r'(提升|增长|达成|实现|降低|缩短|优化|结果|产出|转化|ROI|GMV|留存|复购)', text, re.IGNORECASE))
+    if section == 'summary':
+        return f"{text}，围绕目标岗位突出核心能力，并用代表性成果建立可信度。"
+    if not has_action and not has_result:
+        return f"{text}，我主导关键动作并通过明确方法推进，最终形成可验证的业务结果与复盘结论。"
+    if not has_action:
+        return f"{text}，补充本人主导动作与执行方法，强化个人贡献识别度。"
+    if not has_result:
+        return f"{text}，并补充关键结果口径，体现行动带来的业务价值。"
+    return f"{text}，并进一步突出该结果对目标岗位的直接价值。"
+
+
+def _split_compound_suggestions(suggestions):
+    source = suggestions if isinstance(suggestions, list) else []
+    out = []
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        s = dict(item)
+        reason = str(s.get('reason') or '').strip()
+        # Split overlong "问题1/问题2..." blobs into separate items.
+        if not re.search(r'问题\s*\d+\s*[:：]', reason):
+            out.append(s)
+            continue
+        parts = re.split(r'(?=问题\s*\d+\s*[:：])', reason)
+        valid_parts = [p.strip(' \n\r\t；;，,。') for p in parts if p and p.strip()]
+        if len(valid_parts) <= 1:
+            out.append(s)
+            continue
+        for idx, piece in enumerate(valid_parts, start=1):
+            ns = dict(s)
+            ns['id'] = f"{s.get('id') or 'suggestion'}-split-{idx}"
+            ns['title'] = re.sub(r'改进建议', '问题', str(s.get('title') or '问题')).strip() or '问题'
+            ns['reason'] = piece
+            out.append(ns)
+    return out
+
+
 def _normalize_training_day_labels(text: str) -> str:
     value = str(text or '')
     if not value:
@@ -343,14 +435,9 @@ def _collect_resume_fragments_for_coverage(resume_data):
 
 
 def _ensure_sentence_level_coverage(suggestions, resume_data):
-    base = suggestions if isinstance(suggestions, list) else []
+    base = _split_compound_suggestions(suggestions if isinstance(suggestions, list) else [])
     fragments = _collect_resume_fragments_for_coverage(resume_data)
     if not fragments:
-        return base
-
-    # Hard cap to prevent extreme payloads from exploding UI.
-    target_count = min(max(10, len(fragments)), 30)
-    if len(base) >= target_count:
         return base
 
     def _norm(v: str):
@@ -378,25 +465,31 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
 
     augmented = list(base)
     used = len(augmented)
+    seen_sentence = set()
     for frag in fragments:
-        if used >= target_count:
-            break
         sentence = str(frag.get('text') or '').strip()
         if not sentence:
+            continue
+        ns = _norm(sentence)
+        if not ns or ns in seen_sentence:
+            continue
+        seen_sentence.add(ns)
+        if not _is_sentence_low_value(sentence):
             continue
         ns = _norm(sentence)
         if ns and ns in existing_blob:
             continue
         section = str(frag.get('section') or 'workExps')
         label = str(frag.get('label') or '简历内容')
-        suggested = _rewrite_sentence(sentence, section)
+        suggested = _rewrite_sentence_human(sentence, section)
         if not suggested:
             continue
+        issue, improve, practice = _extract_sentence_issue(sentence)
         augmented.append({
             'id': f'suggestion-coverage-{used + 1}',
             'type': 'optimization',
-            'title': f'{label}句子精修',
-            'reason': '该句以职责陈述为主，建议补充动作细节与结果指向。',
+            'title': f'{label}逐句批注',
+            'reason': f'问题：{issue} 改进：{improve} 练习：{practice}',
             'targetSection': section,
             'targetField': 'description' if section in ('workExps', 'projects') else ('summary' if section == 'summary' else None),
             'originalValue': sentence,
@@ -437,6 +530,11 @@ def _sanitize_final_stage_suggestions(suggestions, resume_data):
 
         # Remove noisy phrasing.
         reason = re.sub(r'建议按\s*STAR\s*结构完整表达[。]?', '建议补充动作细节与结果指向。', reason, flags=re.IGNORECASE)
+        reason = re.sub(r'^\s*该句[，,:：\s]*', '', reason)
+        reason = re.sub(r'^\s*此句[，,:：\s]*', '', reason)
+        if ('问题：' not in reason) and ('改进：' not in reason) and ('练习：' not in reason):
+            if '建议补充动作细节与结果指向' in reason:
+                reason = '问题：动作与结果证据不足。 改进：补充关键动作细节与结果指向。 练习：按 STAR 口径补写一条可验证结果。'
         s['reason'] = reason[:160]
 
         cleaned.append(s)
@@ -482,6 +580,7 @@ def _merge_duplicate_suggestions(suggestions):
                 str(s.get('targetSection') or '').strip().lower(),
                 str(s.get('targetField') or '').strip().lower(),
                 _compact_text(s.get('title') or ''),
+                _compact_text(s.get('reason') or ''),
                 _compact_text(suggested_value),
             )
         else:
@@ -721,69 +820,23 @@ def _build_analysis_prompt(
     }
 
     final_stage_requirements = """
-13. **任务胜任力模块（最终阶段强制）**：
-   - 对照职位描述中的关键任务判断“有支撑 / 支撑不足 / 无支撑”，并写入 weaknesses 与 suggestions。
-   - reason 仅允许一句话，直接指出缺口，不要使用“任务要求 -> 现有证据 -> 缺口”模板。
-14. **反模板化与行业脱水（最终阶段强制）**：
-   - 严禁空泛水话：如“优秀的团队合作能力”“逻辑性强”“沟通能力好”“有责任心”等。
-   - 必须优先使用“动作动词 + 方法/工具 + 可验证结果”的写法。
-   - 技术岗位默认脱水词典：禁止高频使用“负责了/参与了”；优先改为“重构了/压测了/支撑了/设计并落地了/优化了”。
-   - 若原文无量化数据，不得编造；请改为“关键指标口径描述”（例如“提升核心转化指标”），严禁使用 XX/XXX/占位符。
+13. 最终阶段必须明确“岗位关键任务的支撑缺口”，写入 weaknesses 与 suggestions。
+14. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
+15. 无法确认数字时用中性结果口径，不得编造与占位符。
 """ if is_final_stage else ""
 
     format_requirements = f"""
-重要格式要求（必须严格遵守）：
-1. 诊断总结（summary）必须简练，禁止在总结中罗列具体的优化建议或技能点。
-2. 技能建议必须通过 suggestions 数组给出，且 targetSection 设为 "skills"。
-3. 技能建议的 suggestedValue 必须是一个个独立的技能关键词组成的数组。
-4. **核心要求**：所有优化建议的 suggestedValue 必须是**直接可用的简历原文**，禁止包含“建议修改为”、“比如”、“示例”、“描述示例”等指导性词语。用户会直接复制此内容。
-   - 错误："建议描述：负责后端开发..."
-   - 正确："负责后端核心模块开发，通过重构代码将响应速度提升 50%。"
-5. **严格匹配要求**：必须逐条对照 职位描述 的职责/要求，给出“缺口型建议”，明确指出缺失点并给出可直接写入简历的内容。
-5.1 **评分口径（强制）**：`score` 必须表示“候选人综合匹配度评分”，不是“简历排版完整度评分”。
-    - 评分时必须综合：岗位任务匹配、技能与方法匹配、证据质量（量化结果/可验证案例）、面试反馈（若提供了微访谈上下文）、以及候选人发展潜力。
-    - `scoreBreakdown` 字段映射固定为：
-      - `experience`：岗位任务与经历证据匹配（含职责覆盖、案例相关性）
-      - `skills`：关键能力与技能匹配（含工具/方法、业务能力）
-      - `format`：综合表现质量（含证据可信度、表达结构、面试反馈与潜力）
-    - 严禁仅按“简历格式好坏”给高分。
-6. **数量要求（最终阶段收敛）**：suggestions 仅保留高影响缺口建议，建议 3-6 条；禁止为凑数量输出低价值措辞建议。
-6.1 **禁止逐句挑刺（强制）**：不要按“每句一条”输出建议；仅在存在明确岗位缺口或证据缺口时给建议。
-6.2 **终稿导向（强制）**：本次输出目标是“可直接投递版本”，优先修复结构性与证据性问题，避免泛化润色建议。
-7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
-7.1 所有顶层 key 必须返回，缺失值请用空字符串/空数组/0；不得省略字段。
-7.2 类型强约束：score 和 scoreBreakdown 各字段必须为整数；targetCompanyConfidence 为 0~1 数字；
-    suggestions 中每条都必须包含 id/type/title/reason/targetSection/suggestedValue。
-7.3 targetSection 仅允许：summary、workExps、projects、skills、education、certificates。
-7.4 **目标公司提取（强制）**：若 职位描述中能识别招聘公司，请在 `targetCompany` 字段返回公司名称；若无法确定，返回空字符串。
-7.5 **目标公司置信度（强制）**：请在 `targetCompanyConfidence` 返回 0~1 的数字。1 表示非常确定，0 表示无法判断。
-8. **隐私脱敏占位符说明（强制）**：如果你在简历/职位描述/对话中看到形如 `[[EMAIL_1]]`、`[[PHONE_1]]`、`[[COMPANY_1]]`、`[[ADDRESS_1]]` 的文本，这是系统为保护隐私而替换的占位符，表示该信息**已填写但已被隐藏**。
-   - 严禁把这些占位符当成“未填写/缺失”，不要因此建议“补充邮箱/手机号/公司/地址”等。
-   - 严禁尝试猜测或还原真实隐私信息。
-9. **性别字段使用约束（强制）**：
-   - 简历中的性别字段仅用于面试语境理解，不是优化目标。
-   - 严禁在 `suggestions` 的 `title/reason/targetField/suggestedValue` 中提出任何与性别相关的修改、补充、删除或匹配建议。
-   - 严禁因为性别信息影响评分结果或给出偏向性结论。
-10. **教育信息不可“专业优化”（强制）**：
-   - 教育背景中的“学校/学院名称、专业名称、学历/学位、入学/毕业时间”属于事实字段，必须严格来自简历原文。
-   - 严禁为了贴合 职位描述 而擅自“优化专业名称/主修方向”（例如把“电子商务”改成“电子商务（主修方向：数据挖掘与商务智能）”）。
-   - 若 职位描述 需要某方向而简历专业不完全匹配：请改为建议在教育经历/项目经历/技能中补充“相关课程/研究课题/项目/技能”来证明能力，而不是修改专业本身。
-11. **技能词条白名单/黑名单规则（强制）**：
-   - 仅输出“专业技能名词/工具名词/方法名词”，例如：SQL、Tableau、Power BI、Python、A/B Test、LTV 分析、SCRM、万相台、直通车、京东商智、引力魔方、库存预测、供应链管理、数据建模、定价模型。
-   - 专业证书可以作为技能词条输出（例如：PMP认证、CFA、FRM、CPA、ACCA、CISP、软考证书、教师资格证），优先使用证书标准名称，禁止冗长描述。
-   - **同类合并（强制）**：如果技能候选中出现任意大模型/对话模型/厂商或具体型号（例如：GPT-4/ChatGPT/OpenAI、Claude/Anthropic、Kimi/Moonshot、Gemini/Google、Qwen/通义千问、DeepSeek、Llama、GLM/智谱、文心一言/ERNIE 等），一律合并成单条技能：`LLM`。禁止同时列出多个不同模型名导致技能列表冗余。
-   - 严禁把“工作经历动作描述”写进技能词条。禁止词示例：全链路运营、IP 打造、策略构建、活动执行、团队协同、跨部门沟通、主导推进、复盘优化、SOP 搭建、直播间运营。
-   - 严禁输出动词化/过程化尾词：搭建、构建、设计、训练、微调、精调、调优、优化、执行、推进、落地、管理、脚本、自动化、开发、实现、运营、打造、分析、监控、维护、产出。
-   - 严禁输出“连接残片词”：以“与/和/及”开头的片段，或“与精调”“和优化”“及搭建”这类残缺短语。
-   - 严禁输出“泛业务词/弱技能词”：AI短视频分镜、智能化数据看板、内容策划、活动策划、全链路运营等（这些应放在经历，不是技能）。
-   - 技能词条必须短、可检索、可复用：每条建议控制在 2-12 字符（英文术语可适当放宽），不得是完整句。
-   - 技能词条禁止使用斜杠拼接长短语（如“A/B/C/...”），如需多个技能请拆分为多个数组元素。
-   - 如果某项更适合写在工作经历中，请不要放在 skills 建议里。
-   - 生成后请自检：skills.suggestedValue 中每一项都必须是可验证的硬技能名词。若包含上述动词/残片/泛词，先改写为硬技能（例如“Python自动化脚本”改为“Python”，“LoRA模型与精调”改为“LoRA模型”，“ComfyUI工作流搭建”改为“ComfyUI工作流”，“智能化数据看板”改为“Tableau/Power BI（择一）”）。
-12. **项目经历补全规则（强制）**：
-   - 若简历缺少项目经历（projects 为空或几乎无有效内容），必须至少生成 1 条“补充项目经历”建议。
-   - 该建议的 targetSection 必须为 "projects"，禁止写入 "workExps"。
-   - 建议内容应围绕项目结构化要素：项目背景/目标、个人职责、关键行动、量化结果。
+输出规范（精简版）：
+1. 仅返回合法 JSON，所有顶层字段必须返回；`score`/`scoreBreakdown` 为整数。
+2. 评分表示“候选人综合匹配度”，不是排版分。`experience/skills/format` 按任务匹配、能力匹配、综合表现打分。
+3. suggestions 仅保留高影响缺口（建议 3-6 条），不得凑数量。
+4. 每条 suggestion 必须包含 id/type/title/reason/targetSection/suggestedValue。
+5. targetSection 仅允许：summary、workExps、projects、skills、education、certificates。
+6. suggestedValue 必须是可直接写入简历的终稿文本；禁止“建议/例如/示例/待补充”。
+7. skills 的 suggestedValue 必须是硬技能名词数组；大模型同类统一为 `LLM`，禁止动作词与泛词。
+8. 严禁基于占位符误判“信息缺失”；严禁性别偏见建议；严禁修改教育事实字段。
+9. 若能识别目标公司，填写 targetCompany 与 0~1 的 targetCompanyConfidence。
+10. 批注建议遵循人工逻辑：先模块结论，再逐句问题；每条建议只对应一个问题。
 {final_stage_requirements}
 {rag_context}
 """
