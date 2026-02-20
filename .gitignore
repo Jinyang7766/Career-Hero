@@ -133,3 +133,6 @@ __pycache__/
 backup/
 dev.log
 
+
+# AI simulated outputs
+backend/simulated-output/
