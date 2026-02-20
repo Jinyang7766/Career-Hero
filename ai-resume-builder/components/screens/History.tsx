@@ -333,9 +333,21 @@ const History: React.FC<ScreenProps> = () => {
                             </span>
                           </div>
                         ) : (
-                          <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
-                            <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
-                          </div>
+                          (() => {
+                            const isImage = item.type === 'IMAGE' || /\.(png|jpg|jpeg|webp)$/i.test(item.filename);
+                            if (isImage) {
+                              return (
+                                <div className="shrink-0 w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-500/10 flex items-center justify-center text-blue-500">
+                                  <span className="material-symbols-outlined text-[20px]">image</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="shrink-0 w-10 h-10 rounded-xl bg-red-50 dark:bg-red-500/10 flex items-center justify-center text-red-500">
+                                <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                              </div>
+                            );
+                          })()
                         )}
 
                         <div className="flex flex-col flex-1 min-w-0">
