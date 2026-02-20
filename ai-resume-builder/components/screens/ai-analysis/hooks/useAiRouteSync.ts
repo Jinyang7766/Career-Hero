@@ -38,8 +38,15 @@ export const useAiRouteSync = ({
   setAnalysisResumeId,
   navigate,
 }: Params) => {
+  const normalizePath = (value: string) => {
+    const path = String(value || '').split('?')[0].split('#')[0].trim().toLowerCase();
+    if (!path) return '';
+    const stripped = path.replace(/\/+$/, '');
+    return stripped || '/';
+  };
+
   useEffect(() => {
-    const currentPath = window.location.pathname.toLowerCase();
+    const currentPath = normalizePath(window.location.pathname || '');
     if (!currentPath.startsWith('/ai-analysis')) return;
 
     const base = '/ai-analysis';
@@ -58,22 +65,27 @@ export const useAiRouteSync = ({
         default: return base;
       }
     })();
-    if (currentPath !== targetPath.toLowerCase()) {
+    const normalizedTargetPath = normalizePath(targetPath);
+    if (currentPath !== normalizedTargetPath) {
       navigate(targetPath, { replace: true });
     }
   }, [currentStep, selectedResumeId, navigate]);
 
   useEffect(() => {
-    const path = (window.location.pathname || '').toLowerCase();
+    const path = normalizePath(window.location.pathname || '');
     if (!path.startsWith('/ai-analysis')) return;
     const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
     const parts = rest ? rest.split('/').filter(Boolean) : [];
     const sub = parts[0] || '';
     const id = parts[1] || '';
     if ((sub === 'report' || sub === 'interview-report' || sub === 'comparison' || sub === 'final-report') && id) {
-      setSelectedResumeId(id);
-      sourceResumeIdRef.current = id;
-      setAnalysisResumeId(id);
+      const normalizedId = String(id);
+      const selectedId = selectedResumeId == null ? '' : String(selectedResumeId);
+      if (selectedId !== normalizedId) {
+        setSelectedResumeId(normalizedId);
+        sourceResumeIdRef.current = normalizedId;
+        setAnalysisResumeId(normalizedId);
+      }
     }
-  }, [setSelectedResumeId, sourceResumeIdRef, setAnalysisResumeId]);
+  }, [selectedResumeId, setSelectedResumeId, sourceResumeIdRef, setAnalysisResumeId]);
 };

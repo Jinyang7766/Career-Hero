@@ -52,16 +52,17 @@ const repairGeneratedContacts = (generated: ResumeData, primarySource: ResumeDat
   const fallbackPersonal = (fallbackSource as any)?.personalInfo || {};
   const sourceEmail = normalizeContact(sourcePersonal?.email) || normalizeContact(fallbackPersonal?.email);
   const sourcePhone = normalizeContact(sourcePersonal?.phone) || normalizeContact(fallbackPersonal?.phone);
+  const sourceName = normalizeContact(sourcePersonal?.name) || normalizeContact(fallbackPersonal?.name);
   const validSourceEmail = isLikelyEmail(sourceEmail) ? sourceEmail : '';
   const validSourcePhone = isLikelyPhone(sourcePhone) ? sourcePhone : '';
-
-  const generatedEmail = normalizeContact(next.personalInfo?.email);
-  const generatedPhone = normalizeContact(next.personalInfo?.phone);
-
-  if (validSourceEmail && (isMaskedContactValue(generatedEmail) || !isLikelyEmail(generatedEmail))) {
+  if (sourceName) {
+    next.personalInfo.name = sourceName;
+  }
+  // Strong consistency: keep original contacts unchanged.
+  if (validSourceEmail) {
     next.personalInfo.email = validSourceEmail;
   }
-  if (validSourcePhone && (isMaskedContactValue(generatedPhone) || !isLikelyPhone(generatedPhone))) {
+  if (validSourcePhone) {
     next.personalInfo.phone = validSourcePhone;
   }
   return next as ResumeData;

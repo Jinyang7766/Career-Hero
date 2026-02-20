@@ -185,7 +185,7 @@ const MemberCenter: React.FC = () => {
     const tierStyle = getTierStyle(userSub.tier);
 
     return (
-        <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
+        <div className="flex flex-col min-h-screen pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
             <ReferralModal
                 isOpen={showReferralModal}
                 onClose={() => setShowReferralModal(false)}
@@ -193,13 +193,13 @@ const MemberCenter: React.FC = () => {
             />
 
             {/* Header */}
-            <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5">
+            <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5 mx-auto w-full max-w-md">
                 <BackButton onClick={goBack} className="hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" />
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white">权益中心</h1>
                 <div className="w-10" /> {/* Spacer */}
             </header>
 
-            <main className="flex-1 p-5 space-y-8">
+            <main className="flex-1 p-5 pt-[calc(3.5rem+1.25rem)] space-y-8">
                 {/* User Info Card - Unified with Profile page style */}
                 <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative overflow-hidden">
                     <div className="p-4">

@@ -223,8 +223,8 @@ const History: React.FC<ScreenProps> = () => {
   }, {});
 
   return (
-    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
+    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 pt-14 animate-in slide-in-from-right duration-300">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative justify-between">
           {isSelectionMode ? (
             <button

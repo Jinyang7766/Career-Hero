@@ -361,6 +361,21 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
         for item in base if isinstance(item, dict)
     ]))
 
+    def _rewrite_sentence(sentence: str, section: str) -> str:
+        text = str(sentence or '').strip().strip('。；;')
+        if not text:
+            return ''
+        text = re.sub(r'^\s*负责', '主导', text)
+        text = re.sub(r'^\s*参与', '协同推进', text)
+        text = re.sub(r'^\s*主要负责', '主导', text)
+        has_result_signal = bool(re.search(r'(提升|增长|优化|达成|实现|降低|缩短|沉淀|建立|完善)', text))
+        if not has_result_signal:
+            if section in ('workExps', 'projects'):
+                text = f"{text}，并补充关键动作后的业务结果与复盘结论。"
+            else:
+                text = f"{text}，并用结果导向表达强化岗位匹配度。"
+        return text
+
     augmented = list(base)
     used = len(augmented)
     for frag in fragments:
@@ -374,14 +389,14 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
             continue
         section = str(frag.get('section') or 'workExps')
         label = str(frag.get('label') or '简历内容')
-        suggested = (
-            f"在{label}中，我主导/参与了核心任务，通过关键行动与方法推动了业务结果，并持续跟踪关键指标变化。"
-        )
+        suggested = _rewrite_sentence(sentence, section)
+        if not suggested:
+            continue
         augmented.append({
             'id': f'suggestion-coverage-{used + 1}',
             'type': 'optimization',
             'title': f'{label}句子精修',
-            'reason': '该句描述偏简略，缺少职责边界、行动细节与量化结果，建议按 STAR 结构完整表达。',
+            'reason': '该句以职责陈述为主，建议补充动作细节与结果指向。',
             'targetSection': section,
             'targetField': 'description' if section in ('workExps', 'projects') else ('summary' if section == 'summary' else None),
             'originalValue': sentence,
@@ -389,6 +404,209 @@ def _ensure_sentence_level_coverage(suggestions, resume_data):
         })
         used += 1
     return augmented
+
+
+def _sanitize_final_stage_suggestions(suggestions, resume_data):
+    source = suggestions if isinstance(suggestions, list) else []
+    resume = resume_data if isinstance(resume_data, dict) else {}
+    has_projects = bool(resume.get('projects'))
+
+    cleaned = []
+    for idx, item in enumerate(source, start=1):
+        if not isinstance(item, dict):
+            continue
+        s = dict(item)
+        s['id'] = s.get('id') or f'suggestion-{idx}'
+        s['type'] = s.get('type') or 'optimization'
+        s['title'] = str(s.get('title') or '优化建议').strip()
+        s['targetSection'] = str(s.get('targetSection') or '').strip()
+
+        reason = str(s.get('reason') or '').strip()
+        reason = re.sub(r'\s*[-=]*>\s*', '，', reason)
+        reason = re.sub(r'\s+', ' ', reason).strip(' ，;；')
+        if not reason:
+            reason = '该项内容可进一步强化岗位匹配表达。'
+
+        # Fix false positive: resume already has projects.
+        if has_projects and s['targetSection'].lower() == 'projects':
+            reason = re.sub(r'简历(?:目前)?缺[乏少]独立的?项目(?:经历)?模块[，,。]?', '', reason)
+            reason = re.sub(r'缺[乏少]独立(?:项目)?案例[，,。]?', '', reason)
+            reason = reason.strip(' ，;；')
+            if not reason:
+                reason = '建议将现有项目改写为“动作-方法-结果”结构，强化可验证性。'
+
+        # Remove noisy phrasing.
+        reason = re.sub(r'建议按\s*STAR\s*结构完整表达[。]?', '建议补充动作细节与结果指向。', reason, flags=re.IGNORECASE)
+        s['reason'] = reason[:160]
+
+        cleaned.append(s)
+
+    return cleaned
+
+
+def _compact_text(value: str) -> str:
+    return re.sub(r'[\s\W_]+', '', str(value or '').lower())
+
+
+def _merge_duplicate_suggestions(suggestions):
+    source = suggestions if isinstance(suggestions, list) else []
+    prepared = []
+    for idx, item in enumerate(source, start=1):
+        if not isinstance(item, dict):
+            continue
+        s = dict(item)
+        s['id'] = s.get('id') or f'suggestion-{idx}'
+        s['type'] = s.get('type') or 'optimization'
+        s['title'] = str(s.get('title') or '优化建议').strip()
+        s['targetSection'] = str(s.get('targetSection') or '').strip()
+        s['targetField'] = str(s.get('targetField') or '').strip()
+        s['reason'] = str(s.get('reason') or '').strip()
+        prepared.append(s)
+
+    # Drop suggestions that do not change content (original == suggested).
+    filtered = []
+    for s in prepared:
+        original_value = s.get('originalValue')
+        suggested_value = s.get('suggestedValue')
+        if isinstance(original_value, str) and isinstance(suggested_value, str):
+            if _compact_text(original_value) and _compact_text(original_value) == _compact_text(suggested_value):
+                continue
+        filtered.append(s)
+
+    grouped = {}
+    order = []
+    for s in filtered:
+        suggested_value = s.get('suggestedValue')
+        if isinstance(suggested_value, str):
+            key = (
+                str(s.get('targetSection') or '').strip().lower(),
+                str(s.get('targetField') or '').strip().lower(),
+                _compact_text(s.get('title') or ''),
+                _compact_text(suggested_value),
+            )
+        else:
+            key = ('__non_str__', str(s.get('id') or ''))
+        if key not in grouped:
+            grouped[key] = {
+                'base': s,
+                'originals': [],
+                'seen': set(),
+            }
+            order.append(key)
+        original_value = str(s.get('originalValue') or '').strip()
+        norm_original = _compact_text(original_value)
+        if original_value and norm_original and norm_original not in grouped[key]['seen']:
+            grouped[key]['seen'].add(norm_original)
+            grouped[key]['originals'].append(original_value)
+
+    merged = []
+    for key in order:
+        entry = grouped[key]
+        base = dict(entry['base'])
+        originals = entry['originals']
+
+        reason = str(base.get('reason') or '').strip()
+        reason_tail = re.sub(r'^(该句|这些句子)[，,:：。\s]*', '', reason)
+        reason_tail = reason_tail.strip() or '建议补充动作细节与结果指向。'
+
+        if len(originals) > 1:
+            base['originalValue'] = '\n'.join(originals)
+            if reason_tail.startswith('建议'):
+                base['reason'] = f"这些句子{reason_tail}"
+            else:
+                base['reason'] = f"这些句子存在同类问题，{reason_tail}"
+        else:
+            if originals:
+                base['originalValue'] = originals[0]
+            if reason_tail.startswith('建议'):
+                base['reason'] = f"该句{reason_tail}"
+            else:
+                base['reason'] = f"该句{reason_tail}"
+
+        base['reason'] = str(base.get('reason') or '').strip()[:160]
+        merged.append(base)
+
+    return merged
+
+
+def _prioritize_final_stage_suggestions(suggestions, score):
+    source = suggestions if isinstance(suggestions, list) else []
+    if not source:
+        return []
+
+    def _norm_text(v):
+        return re.sub(r'\s+', ' ', str(v or '')).strip().lower()
+
+    def _signature(item):
+        if not isinstance(item, dict):
+            return ''
+        return '||'.join([
+            _norm_text(item.get('targetSection')),
+            _norm_text(item.get('targetField')),
+            _norm_text(item.get('title')),
+            _norm_text(item.get('reason')),
+            _norm_text(item.get('originalValue')),
+        ])
+
+    generic_note_re = re.compile(
+        r'(表达更清晰|建议优化表述|建议进一步优化|建议补充细节|建议完善描述|措辞|语气|版式|排版|可读性)',
+        re.IGNORECASE,
+    )
+    critical_gap_re = re.compile(
+        r'(缺口|缺失|不足|未体现|不匹配|证据不足|无法验证|缺少|未覆盖|没有体现|薄弱|风险)',
+        re.IGNORECASE,
+    )
+
+    deduped = []
+    seen = set()
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        sig = _signature(item)
+        if not sig or sig in seen:
+            continue
+        seen.add(sig)
+        deduped.append(item)
+
+    critical = []
+    non_critical = []
+    for item in deduped:
+        blob = f"{item.get('title', '')} {item.get('reason', '')} {item.get('suggestedValue', '')}"
+        if generic_note_re.search(blob):
+            continue
+        if critical_gap_re.search(blob):
+            critical.append(item)
+        else:
+            non_critical.append(item)
+
+    ordered = critical + non_critical
+
+    try:
+        n_score = int(float(score))
+    except Exception:
+        n_score = 0
+    if n_score >= 88:
+        cap = 3
+    elif n_score >= 80:
+        cap = 4
+    elif n_score >= 70:
+        cap = 5
+    else:
+        cap = 6
+
+    return ordered[:cap]
+
+
+def _build_final_stage_annotation_suggestions(suggestions, resume_data, score):
+    # Keep high-impact suggestions first, then restore sentence-level coverage
+    # so the comparison page can still render inline annotations.
+    prioritized = _prioritize_final_stage_suggestions(suggestions, score)
+    prioritized = _sanitize_final_stage_suggestions(prioritized, resume_data)
+    covered = _ensure_sentence_level_coverage(prioritized, resume_data)
+    covered = _sanitize_final_stage_suggestions(covered, resume_data)
+    covered = _merge_duplicate_suggestions(covered)
+    # No hard cap: keep full sentence-level annotations for detailed review.
+    return covered or []
 
 
 def _resolve_micro_interview_first_question(ai_result, job_description):
@@ -504,14 +722,9 @@ def _build_analysis_prompt(
 
     final_stage_requirements = """
 13. **任务胜任力模块（最终阶段强制）**：
-   - 你必须逐条对照职位描述中的关键任务（不仅是关键词），判断简历是否存在“可验证案例支撑”。
-   - 对每条关键任务给出“有支撑 / 支撑不足 / 无支撑”判断，并把缺口写入 weaknesses 与 suggestions 的 reason。
-   - reason 必须使用“任务要求 -> 现有证据 -> 缺口 -> 如何补齐”的链路表达，不得只写泛泛结论。
-14. **多版本管理引导（最终阶段强制）**：
-   - 若发现简历主叙事方向与JD方向不一致（例如“前台研发” vs “中台架构”），必须给出版本化引导。
-   - 至少提供 2 条版本化建议，明确：当前版本偏向、目标版本方向、应提升的模块权重（如架构设计/并发治理/稳定性建设等）。
-   - 版本化引导必须落在 suggestions 中，且 suggestedValue 仍需是可直接写入简历的文本。
-15. **反模板化与行业脱水（最终阶段强制）**：
+   - 对照职位描述中的关键任务判断“有支撑 / 支撑不足 / 无支撑”，并写入 weaknesses 与 suggestions。
+   - reason 仅允许一句话，直接指出缺口，不要使用“任务要求 -> 现有证据 -> 缺口”模板。
+14. **反模板化与行业脱水（最终阶段强制）**：
    - 严禁空泛水话：如“优秀的团队合作能力”“逻辑性强”“沟通能力好”“有责任心”等。
    - 必须优先使用“动作动词 + 方法/工具 + 可验证结果”的写法。
    - 技术岗位默认脱水词典：禁止高频使用“负责了/参与了”；优先改为“重构了/压测了/支撑了/设计并落地了/优化了”。
@@ -534,9 +747,9 @@ def _build_analysis_prompt(
       - `skills`：关键能力与技能匹配（含工具/方法、业务能力）
       - `format`：综合表现质量（含证据可信度、表达结构、面试反馈与潜力）
     - 严禁仅按“简历格式好坏”给高分。
-6. **数量要求**：suggestions 至少 8 条；若 职位描述 较复杂，建议 12-15 条。
-6.1 **逐句覆盖要求（强制）**：对简历中每条可见叙述句（尤其是工作经历/项目经历/个人简介中的句子）都要进行详细评测；每条句子至少对应 1 条可执行优化建议，禁止“挑重点略过”。
-6.2 **一次性完整优化（强制）**：本次输出必须覆盖整份简历，不允许只优化一部分后结束。
+6. **数量要求（最终阶段收敛）**：suggestions 仅保留高影响缺口建议，建议 3-6 条；禁止为凑数量输出低价值措辞建议。
+6.1 **禁止逐句挑刺（强制）**：不要按“每句一条”输出建议；仅在存在明确岗位缺口或证据缺口时给建议。
+6.2 **终稿导向（强制）**：本次输出目标是“可直接投递版本”，优先修复结构性与证据性问题，避免泛化润色建议。
 7. 确保 JSON 格式正确，所有字段值使用中文（除技术术语外）。
 7.1 所有顶层 key 必须返回，缺失值请用空字符串/空数组/0；不得省略字段。
 7.2 类型强约束：score 和 scoreBreakdown 各字段必须为整数；targetCompanyConfidence 为 0~1 数字；
@@ -589,7 +802,7 @@ def _build_analysis_prompt(
 
     if job_description:
         return f"""
-请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出**更多、更具体**的优化建议（**至少 8 条**，若差距明显可给出 12-15 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出“高影响、低冗余”的优化建议（建议 3-6 条）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100，候选人综合匹配度评分）：
@@ -643,7 +856,7 @@ def _build_analysis_prompt(
 """
 
     return f"""
-请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出**更多、更具体**的优化建议（**至少 8 条**，必要时 12-15 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出“高影响、低冗余”的优化建议（建议 3-6 条）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100，候选人综合匹配度评分）：
@@ -926,7 +1139,15 @@ def analyze_resume_core(current_user_id, data, deps):
                 ai_result['suggestions'] = []
             else:
                 ai_result['suggestions'] = _sanitize_suggestions_for_metric_consistency(filtered_suggestions, resume_data)
-                ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
+                if is_final_report_stage:
+                    ai_result['suggestions'] = _build_final_stage_annotation_suggestions(
+                        ai_result.get('suggestions', []),
+                        resume_data,
+                        ai_result.get('score', 0),
+                    )
+                else:
+                    ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
+                    ai_result['suggestions'] = _merge_duplicate_suggestions(ai_result.get('suggestions', []))
             final_resume_data = _try_generate_final_resume_for_report(
                 ai_result.get('score', 70),
                 ai_result.get('suggestions', []),
@@ -985,6 +1206,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 ]
                 suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
                 suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+                suggestions = _merge_duplicate_suggestions(suggestions)
             final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
 
             logger.info(
@@ -1030,6 +1252,7 @@ def analyze_resume_core(current_user_id, data, deps):
         ]
         suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
         suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+        suggestions = _merge_duplicate_suggestions(suggestions)
     final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
     rule_based_first_question = _resolve_micro_interview_first_question({
         'weaknesses': ['简历叙述缺少关键细节'],

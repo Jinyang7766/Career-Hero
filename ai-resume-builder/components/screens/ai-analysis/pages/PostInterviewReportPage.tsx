@@ -316,6 +316,15 @@ const PostInterviewReportPage: React.FC<Props> = ({
     return ['description', 'content', 'responsibility', 'achievement', 'highlights'].includes(field);
   };
 
+  const isModuleOnlyNote = (note: AnnotationItem) => {
+    const blob = `${String(note.title || '')} ${String(note.reason || '')}`.toLowerCase();
+    const moduleSignals = /(补充|新增|添加|增加|补齐|补全|完善|扩展|补入|增补|单独以项目|项目形式|新增项目|补充项目|项目模块|模块化)/i;
+    if (moduleSignals.test(blob)) return true;
+    const field = String(note.targetField || '').trim().toLowerCase();
+    if (!field && /(模块|字段|经历|项目)/i.test(blob)) return true;
+    return false;
+  };
+
   const renderTextWithSentenceNotes = (text: string, notes: AnnotationItem[], keyPrefix: string, allowInline: boolean) => {
     const sourceText = String(text || '').trim();
     if (!allowInline || !notes.length || !sourceText) return <p className="text-sm mt-1 whitespace-pre-wrap">{sourceText || '暂无'}</p>;
@@ -379,6 +388,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
       return <p className="whitespace-pre-wrap">{summaryText}</p>;
     }
     const summaryNotes = (annBySection.summary || [])
+      .filter((n) => !isModuleOnlyNote(n))
       .filter((n) => !String(n.targetId || '').trim())
       .slice(0, 6);
     const summaryUniform = getUniformSectionNote('summary');
@@ -408,7 +418,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
   };
 
   const renderWorkList = (items: any[] = [], allowInline = true) => {
-    const sectionNotes = annBySection.workExps || [];
+    const sectionNotes = (annBySection.workExps || []).filter((n) => !isModuleOnlyNote(n));
     const unmatchedNoIdDescNotes = sectionNotes.filter((n) => !String(n.targetId || '').trim() && isDescriptionNote(n));
     const consumedNoId = new Set<string>();
     let roundRobinIdx = 0;
@@ -456,7 +466,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
   };
 
   const renderProjectList = (items: any[] = [], allowInline = true) => {
-    const sectionNotes = annBySection.projects || [];
+    const sectionNotes = (annBySection.projects || []).filter((n) => !isModuleOnlyNote(n));
     const unmatchedNoIdDescNotes = sectionNotes.filter((n) => !String(n.targetId || '').trim() && isDescriptionNote(n));
     const consumedNoId = new Set<string>();
     let roundRobinIdx = 0;

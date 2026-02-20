@@ -8,13 +8,13 @@ const PrivacyPolicy: React.FC<ScreenProps> = () => {
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-950 animate-in slide-in-from-right duration-300">
-            <header className="sticky top-0 z-10 flex items-center justify-between px-4 h-14 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-100 dark:border-white/5">
+            <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 bg-white/90 dark:bg-slate-950/90 backdrop-blur-md border-b border-slate-100 dark:border-white/5 mx-auto w-full max-w-md">
                 <BackButton onClick={goBack} className="hover:bg-slate-100 dark:hover:bg-white/5 text-slate-600 dark:text-slate-400" />
                 <h1 className="text-base font-bold text-slate-900 dark:text-white">隐私政策</h1>
                 <div className="w-10" />
             </header>
 
-            <main className="flex-1 overflow-y-auto px-6 py-8">
+            <main className="flex-1 overflow-y-auto px-6 pt-[5.5rem] pb-8">
                 <div className="max-w-2xl mx-auto">
                     <div className="mb-10 text-center">
                         <h2 className="text-2xl font-black text-slate-900 dark:text-white mb-2">Career Hero 隐私政策</h2>

@@ -107,9 +107,10 @@ export const useAiAnalysisActions = ({
     openChat('internal');
   }, [consumeUsageQuota, hasStartedMicroInterview, isInterviewMode, jdText, openChat, persistAnalysisSessionState, resumeData?.lastJdText, resumeData?.targetCompany]);
 
+  const microAndFinalTotalCost = USAGE_POINT_COST.micro_interview + USAGE_POINT_COST.final_report;
   const microInterviewActionLabel = (!isInterviewMode && hasStartedMicroInterview())
     ? '继续微访谈'
-    : `进入微访谈（${USAGE_POINT_COST.micro_interview}积分）`;
+    : `进入微访谈（${microAndFinalTotalCost}积分）`;
 
   const handleRetryAnalysisFromIntro = useCallback(() => {
     onRetryAnalysisFromIntro?.();

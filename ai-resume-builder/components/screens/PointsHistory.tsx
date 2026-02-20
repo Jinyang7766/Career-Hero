@@ -117,7 +117,7 @@ const PointsHistory: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={goBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
@@ -126,7 +126,7 @@ const PointsHistory: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pt-6">
+      <main className="flex-1 overflow-y-auto pt-20">
         {/* 积分余额卡片 */}
         <div className="px-4">
           <div className="bg-gradient-to-br from-primary via-blue-600 to-indigo-700 rounded-3xl p-6 mb-8 shadow-xl shadow-primary/30 text-white relative overflow-hidden group">

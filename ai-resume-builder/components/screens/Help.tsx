@@ -93,14 +93,14 @@ const Help: React.FC<ScreenProps> = () => {
 
   return (
     <div className="relative flex h-full min-h-screen w-full flex-col bg-background-light dark:bg-background-dark max-w-[480px] mx-auto animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 shrink-0">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-[480px]">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={goBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">帮助与反馈</h2>
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto pb-24">
+      <div className="flex-1 overflow-y-auto pb-24 pt-14">
         <div className="mt-4 px-4">
           <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">问题反馈</h3>
 

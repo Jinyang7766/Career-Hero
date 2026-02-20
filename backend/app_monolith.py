@@ -166,9 +166,9 @@ DEEPSEEK_ANALYSIS_MODEL = (os.getenv('DEEPSEEK_ANALYSIS_MODEL', 'deepseek-chat')
 # 面试对话模型
 GEMINI_INTERVIEW_MODEL = os.getenv('GEMINI_INTERVIEW_MODEL', 'gemini-3-flash-preview')
 # 面试结束后的综合总结模型（质量优先）
-GEMINI_INTERVIEW_SUMMARY_MODEL = os.getenv('GEMINI_INTERVIEW_SUMMARY_MODEL', 'gemini-3-pro-preview')
+GEMINI_INTERVIEW_SUMMARY_MODEL = os.getenv('GEMINI_INTERVIEW_SUMMARY_MODEL', 'gemini-3-flash-preview')
 # 最终新简历生成模型（质量优先）
-GEMINI_RESUME_GENERATION_MODEL = os.getenv('GEMINI_RESUME_GENERATION_MODEL', 'gemini-3-pro-preview')
+GEMINI_RESUME_GENERATION_MODEL = os.getenv('GEMINI_RESUME_GENERATION_MODEL', 'gemini-3-flash-preview')
 # 语音转文字模型（成本优先）
 GEMINI_TRANSCRIBE_MODEL = os.getenv('GEMINI_TRANSCRIBE_MODEL', 'gemini-2.5-flash-lite')
 GEMINI_VISION_MODELS = [
@@ -177,6 +177,22 @@ GEMINI_VISION_MODELS = [
     'gemini-2.5-flash-lite'
 ]
 GEMINI_VISION_MODELS = [m for m in GEMINI_VISION_MODELS if m]
+
+
+def _force_gemini_3_flash(model_name: str) -> str:
+    raw = str(model_name or '').strip()
+    lowered = raw.lower()
+    if 'pro' in lowered or lowered in {'gemini-3', 'gemini-3-preview'}:
+        logger.warning("Model override: forcing %s -> gemini-3-flash-preview", raw or '(empty)')
+        return 'gemini-3-flash-preview'
+    return raw or 'gemini-3-flash-preview'
+
+
+# Hard guard: prevent any pro model from being used in runtime main flows.
+GEMINI_ANALYSIS_MODEL = _force_gemini_3_flash(GEMINI_ANALYSIS_MODEL)
+GEMINI_INTERVIEW_MODEL = _force_gemini_3_flash(GEMINI_INTERVIEW_MODEL)
+GEMINI_INTERVIEW_SUMMARY_MODEL = _force_gemini_3_flash(GEMINI_INTERVIEW_SUMMARY_MODEL)
+GEMINI_RESUME_GENERATION_MODEL = _force_gemini_3_flash(GEMINI_RESUME_GENERATION_MODEL)
 PDF_PARSE_DEBUG = os.getenv('PDF_PARSE_DEBUG', '0') == '1'
 RAG_ENABLED = os.getenv('RAG_ENABLED', '1').strip().lower() in ('1', 'true', 'yes', 'on')
 try:

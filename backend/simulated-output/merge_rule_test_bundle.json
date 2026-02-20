@@ -1,0 +1,120 @@
+{
+  "meta": {
+    "generatedAt": "2026-02-20T15:35:25.805448+00:00",
+    "status": 200,
+    "elapsedSec": 45.89,
+    "suggestionCount": 5
+  },
+  "originalResume": {
+    "personalInfo": {
+      "name": "测试用户",
+      "title": "电商运营",
+      "email": "test@example.com",
+      "phone": "13900001111",
+      "location": "上海"
+    },
+    "summary": "负责店铺日常运营。负责活动执行。负责数据复盘。负责跨部门协同。",
+    "workExps": [
+      {
+        "id": 1,
+        "company": "A公司",
+        "position": "运营",
+        "startDate": "2021.01",
+        "endDate": "2023.12",
+        "description": "负责店铺日常运营。负责活动执行。负责数据复盘。负责跨部门协同。"
+      },
+      {
+        "id": 2,
+        "company": "B公司",
+        "position": "运营",
+        "startDate": "2019.01",
+        "endDate": "2020.12",
+        "description": "负责店铺日常运营。负责活动执行。负责数据复盘。负责跨部门协同。"
+      }
+    ],
+    "projects": [
+      {
+        "id": 1,
+        "title": "项目A",
+        "date": "2023.01-2023.03",
+        "description": "负责项目推进。负责活动执行。负责数据复盘。"
+      },
+      {
+        "id": 2,
+        "title": "项目B",
+        "date": "2023.04-2023.06",
+        "description": "负责项目推进。负责活动执行。负责数据复盘。"
+      }
+    ],
+    "educations": [
+      {
+        "id": 1,
+        "school": "某大学",
+        "degree": "本科",
+        "major": "市场营销",
+        "startDate": "2015.09",
+        "endDate": "2019.06"
+      }
+    ],
+    "skills": [
+      "电商运营",
+      "活动执行",
+      "数据分析"
+    ]
+  },
+  "annotations": [
+    {
+      "id": "suggestion-1",
+      "type": "optimization",
+      "title": "工作经历差异化重塑",
+      "reason": "该句当前工作内容描述过于宽泛且重复，未体现资深级别的规划能力。",
+      "targetSection": "workExps",
+      "originalValue": "负责店铺日常运营。负责活动执行。负责数据复盘。负责跨部门协同。",
+      "suggestedValue": "主导店铺年度运营规划与GMV目标拆解，通过SKU结构优化与流量精细化运营，驱动年度销售额同比增长某可验证比例；同时建立跨部门大促协同机制，提升整体执行效率。",
+      "targetField": ""
+    },
+    {
+      "id": "suggestion-2",
+      "type": "missing",
+      "title": "补充项目经历",
+      "reason": "该句简历缺少具体项目案例，无法证明候选人在复杂任务中的统筹与落地能力。",
+      "targetSection": "projects",
+      "suggestedValue": "双某可验证数值大促全链路统筹项目：负责从选品策略、流量投放计划到活动复盘的全生命周期管理，协调视觉、客服及仓储部门确保大促平稳落地，最终实现大促期间店铺转化率提升某可验证比例。",
+      "targetField": ""
+    },
+    {
+      "id": "suggestion-4",
+      "type": "optimization",
+      "title": "强化流程建设证据",
+      "reason": "该句JD强调“流程建设”，应在经历中体现从执行者到制度制定者的转变。",
+      "targetSection": "workExps",
+      "originalValue": "负责活动执行。",
+      "suggestedValue": "从零搭建店铺活动运营标准化SOP，覆盖选品评估、营销提报及风险预控流程，使团队活动响应周期缩短某可验证比例，并有效降低超卖风险。",
+      "targetField": ""
+    },
+    {
+      "id": "suggestion-coverage-4",
+      "type": "optimization",
+      "title": "项目A句子精修",
+      "reason": "该句以职责陈述为主，建议补充动作细节与结果指向。",
+      "targetSection": "projects",
+      "targetField": "description",
+      "originalValue": "负责项目推进",
+      "suggestedValue": "主导项目推进，并补充关键动作后的业务结果与复盘结论。"
+    },
+    {
+      "id": "suggestion-coverage-5",
+      "type": "optimization",
+      "title": "项目B句子精修",
+      "reason": "该句以职责陈述为主，建议补充动作细节与结果指向。",
+      "targetSection": "projects",
+      "targetField": "description",
+      "originalValue": "负责项目推进",
+      "suggestedValue": "主导项目推进，并补充关键动作后的业务结果与复盘结论。"
+    }
+  ],
+  "mergeCheck": {
+    "multiLineCount": 0,
+    "prefixRuleOk": true
+  }
+}

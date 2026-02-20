@@ -415,7 +415,7 @@ def main():
     ap.add_argument("--supabase-url", default=os.getenv("SUPABASE_URL", ""))
     ap.add_argument("--supabase-anon-key", default=os.getenv("SUPABASE_ANON_KEY", ""))
     ap.add_argument("--gemini-api-key", default=os.getenv("GEMINI_API_KEY", ""))
-    ap.add_argument("--judge-model", default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3-pro-preview"))
+    ap.add_argument("--judge-model", default=os.getenv("GEMINI_JUDGE_MODEL", "gemini-3-flash-preview"))
     ap.add_argument("--timeout", type=int, default=90)
     ap.add_argument("--retries", type=int, default=2)
     ap.add_argument("--sleep-ms", type=int, default=300)

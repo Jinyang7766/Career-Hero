@@ -55,6 +55,59 @@ const pickFirstFilled = (...values: any[]) => {
   return '';
 };
 
+const normalizeContact = (value: unknown) => String(value || '').trim();
+const isLikelyEmail = (value: unknown) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizeContact(value));
+const isLikelyPhone = (value: unknown) => {
+  const raw = normalizeContact(value);
+  if (!raw) return false;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 8 || digits.length > 15) return false;
+  if (!/^[+()\-.\s\d]+$/.test(raw)) return false;
+  return true;
+};
+const isMaskedContactValue = (value: unknown) => {
+  const text = normalizeContact(value);
+  if (!text) return true;
+  const lowered = text.toLowerCase();
+  if (
+    lowered.includes('[email_') ||
+    lowered.includes('[phone_') ||
+    lowered.includes('masked') ||
+    lowered.includes('脱敏') ||
+    lowered.includes('隐私')
+  ) {
+    return true;
+  }
+  if (/^\*+$/.test(text)) return true;
+  if (/^x+$/i.test(text)) return true;
+  if (/^(\*|x|X|-|_|\s){6,}$/.test(text)) return true;
+  return false;
+};
+
+const repairGeneratedContacts = (generated: any, primarySource: any, fallbackSource: any) => {
+  if (!generated || typeof generated !== 'object') return generated;
+  const next: any = { ...generated };
+  next.personalInfo = { ...(next.personalInfo || {}) };
+  const srcPersonal = (primarySource && typeof primarySource === 'object' ? (primarySource.personalInfo || {}) : {});
+  const fallbackPersonal = (fallbackSource && typeof fallbackSource === 'object' ? (fallbackSource.personalInfo || {}) : {});
+  const sourceEmail = normalizeContact(srcPersonal?.email) || normalizeContact(fallbackPersonal?.email);
+  const sourcePhone = normalizeContact(srcPersonal?.phone) || normalizeContact(fallbackPersonal?.phone);
+  const sourceName = normalizeContact(srcPersonal?.name) || normalizeContact(fallbackPersonal?.name);
+  const validSourceEmail = isLikelyEmail(sourceEmail) ? sourceEmail : '';
+  const validSourcePhone = isLikelyPhone(sourcePhone) ? sourcePhone : '';
+  if (sourceName) {
+    next.personalInfo.name = sourceName;
+  }
+  // Strong consistency: keep original contacts unchanged.
+  if (validSourceEmail) {
+    next.personalInfo.email = validSourceEmail;
+  }
+  if (validSourcePhone) {
+    next.personalInfo.phone = validSourcePhone;
+  }
+  return next;
+};
+
 const fillGeneratedResumeTimeline = (generated: any, source: any) => {
   if (!generated || typeof generated !== 'object') return generated;
   const next: any = { ...generated };
@@ -207,10 +260,11 @@ export const useAiAnalysisPostInterviewFlow = ({
       return baseComparisonGeneratedResume;
     }
     const normalized: any = fillGeneratedResumeTimeline({ ...aiGenerated }, sourceResume);
-    normalized.optimizationStatus = 'optimized';
-    normalized.optimizedFromId = String((sourceResume as any)?.id || '');
-    delete normalized.id;
-    return normalized;
+    const contactRepaired: any = repairGeneratedContacts(normalized, sourceResume, resumeData as any);
+    contactRepaired.optimizationStatus = 'optimized';
+    contactRepaired.optimizedFromId = String((sourceResume as any)?.id || '');
+    delete contactRepaired.id;
+    return contactRepaired;
   }, [resolvedFinalReport?.generatedResume, postInterviewOriginalResume, resumeData, baseComparisonGeneratedResume]);
 
   const finalReportScore = resolvedFinalReport?.score ?? 0;

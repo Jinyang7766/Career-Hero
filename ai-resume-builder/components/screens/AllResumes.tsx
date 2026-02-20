@@ -587,7 +587,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
       onClick={handleContainerClick}
       className="relative flex h-screen w-full flex-col mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
     >
-      <header className="sticky top-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 shrink-0">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center justify-between h-14 px-4 relative">
           {isSelectionMode ? (
             <button
@@ -641,7 +641,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
         </div>
       </header>
 
-      <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
+      <div className="px-4 py-3 pt-[calc(3.5rem+0.75rem)] bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
           <input
