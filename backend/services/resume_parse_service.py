@@ -14,6 +14,8 @@ from pypdf import PdfReader
 
 import logging
 from .resume_text_extractors import extract_text_from_pdf as extract_text_from_pdf_core
+from .resume_text_extractors import extract_text_via_pymupdf as extract_text_via_pymupdf_core
+from .resume_text_extractors import extract_text_via_pypdf as extract_text_via_pypdf_core
 from .resume_text_extractors import normalize_extracted_text as normalize_extracted_text_core
 from .resume_parse_postprocess import (
     parse_json_object_from_text as parse_json_object_from_text_core,
@@ -80,6 +82,15 @@ def _generate_content_with_timeout(model_name: str, contents, *, timeout_seconds
 
 def extract_text_from_pdf(file_bytes):
     return extract_text_from_pdf_core(file_bytes, logger_obj=logger)
+
+
+# Backward-compatible aliases used by app_monolith imports.
+def _extract_text_via_pymupdf(file_bytes):
+    return extract_text_via_pymupdf_core(file_bytes, logger_obj=logger)
+
+
+def _extract_text_via_pypdf(file_bytes):
+    return extract_text_via_pypdf_core(file_bytes, logger_obj=logger)
 
 def extract_text_multimodal(file_bytes):
     """Use Gemini Vision to extract text from PDF pages converted to images."""

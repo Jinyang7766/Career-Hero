@@ -29,6 +29,9 @@ import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from './src/diagnos
 import { deriveInterviewStageStatus } from './components/screens/ai-analysis/interview-stage-status';
 import { makeJdKey, parseInterviewScopedKey } from './components/screens/ai-analysis/id-utils';
 import { pathToView, viewToPath } from './src/app-routing';
+import { useAppDialogs } from './src/hooks/useAppDialogs';
+import { useRouteHistoryStack } from './src/hooks/useRouteHistoryStack';
+import { useScrollResetOnRoute } from './src/hooks/useScrollResetOnRoute';
 import { useThemeSync } from './src/hooks/useThemeSync';
 
 function App() {
@@ -61,123 +64,31 @@ function App() {
   const location = useLocation();
   const navigationType = useNavigationType();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
-  const routeHistoryRef = useRef<string[]>([]);
 
   const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
   const currentRoute = useMemo(() => `${location.pathname}${location.search || ''}`, [location.pathname, location.search]);
+  const {
+    routeHistoryRef,
+    clearHistory,
+    setSingleHistory,
+    popPrevRoute,
+  } = useRouteHistoryStack({
+    currentRoute,
+    navigationType: navigationType as 'POP' | 'PUSH' | 'REPLACE',
+  });
+  const {
+    toast,
+    confirmState,
+    setConfirmState,
+    showToast,
+    confirmAsync,
+  } = useAppDialogs();
 
-  // Maintain an app-level route stack so in-app back buttons always return to the previous app page.
-  useEffect(() => {
-    const stack = routeHistoryRef.current;
-    if (!stack.length) {
-      routeHistoryRef.current = [currentRoute];
-      return;
-    }
+  useScrollResetOnRoute({
+    pathname: location.pathname,
+    appContainerRef,
+  });
 
-    const last = stack[stack.length - 1];
-    if (last === currentRoute) return;
-
-    if (navigationType === 'REPLACE') {
-      routeHistoryRef.current = [...stack.slice(0, -1), currentRoute];
-      return;
-    }
-
-    if (navigationType === 'POP') {
-      const idx = stack.lastIndexOf(currentRoute);
-      if (idx >= 0) {
-        routeHistoryRef.current = stack.slice(0, idx + 1);
-      } else {
-        routeHistoryRef.current = [...stack, currentRoute];
-      }
-      return;
-    }
-
-    routeHistoryRef.current = [...stack, currentRoute];
-  }, [currentRoute, navigationType]);
-
-  // Always reset scroll position when entering a new page/route so headers/back buttons stay visible.
-  useEffect(() => {
-    const scrollToTop = () => {
-      try {
-        window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-      } catch {
-        window.scrollTo(0, 0);
-      }
-
-      const scroller = document.scrollingElement as HTMLElement | null;
-      if (scroller) {
-        scroller.scrollTop = 0;
-      }
-
-      const docEl = document.documentElement as HTMLElement | null;
-      if (docEl) {
-        docEl.scrollTop = 0;
-      }
-
-      const bodyEl = document.body as HTMLElement | null;
-      if (bodyEl) {
-        bodyEl.scrollTop = 0;
-      }
-
-      if (appContainerRef.current) {
-        appContainerRef.current.scrollTop = 0;
-      }
-    };
-
-    scrollToTop();
-    const raf = window.requestAnimationFrame(scrollToTop);
-    const timer = window.setTimeout(scrollToTop, 60);
-    return () => {
-      window.cancelAnimationFrame(raf);
-      window.clearTimeout(timer);
-    };
-  }, [location.pathname]);
-
-  // Global toast + confirm overlays to avoid browser-native alert/confirm (which show the site URL).
-  const toastTimerRef = useRef<number | null>(null);
-  const [toast, setToast] = useState<{ msg: string; type: 'info' | 'success' | 'error' } | null>(null);
-  const showToast = useCallback((msg: string, type: 'info' | 'success' | 'error' = 'info', ms: number = 2200) => {
-    const text = String(msg ?? '').trim();
-    if (!text) return;
-    setToast({ msg: text, type });
-    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
-    toastTimerRef.current = window.setTimeout(() => {
-      setToast(null);
-      toastTimerRef.current = null;
-    }, ms);
-  }, []);
-
-  const [confirmState, setConfirmState] = useState<null | { message: string; resolve: (ok: boolean) => void }>(null);
-  const confirmAsync = useCallback((message: string) => {
-    return new Promise<boolean>((resolve) => {
-      const text = String(message ?? '').trim();
-      if (!text) return resolve(false);
-      setConfirmState({ message: text, resolve });
-    });
-  }, []);
-
-  // Intercept browser-native alert() globally to avoid URL-bearing dialogs.
-  useEffect(() => {
-    const originalAlert = window.alert;
-
-    // Expose helpers for any module that wants to call them without prop drilling.
-    (window as any).__careerHeroToast = (msg: string, type?: 'info' | 'success' | 'error', ms?: number) => showToast(msg, type ?? 'info', ms ?? 2200);
-    (window as any).__careerHeroConfirm = (msg: string) => confirmAsync(msg);
-
-    window.alert = (message?: any) => {
-      showToast(String(message ?? ''), 'info', 2600);
-    };
-
-    return () => {
-      window.alert = originalAlert;
-      try {
-        delete (window as any).__careerHeroToast;
-        delete (window as any).__careerHeroConfirm;
-      } catch {
-        // ignore
-      }
-    };
-  }, [showToast, confirmAsync]);
 
   // Show bottom nav on main tabs (allow unauth users to see Home/My entry on dashboard)
   const showBottomNav = (
@@ -505,7 +416,7 @@ function App() {
         // Clear in-memory user data to prevent stale UI after logout.
         setAllResumes([]);
         setResumeData(createEmptyResumeData());
-        routeHistoryRef.current = [];
+        clearHistory();
 
         setCurrentUser(null);
         setIsAuthenticated(false);
@@ -534,10 +445,8 @@ function App() {
       navigate(viewToPath(View.LOGIN), { replace: true });
       return;
     }
-    const stack = routeHistoryRef.current;
-    if (stack.length > 1) {
-      const prev = stack[stack.length - 2];
-      routeHistoryRef.current = stack.slice(0, -1);
+    const prev = popPrevRoute();
+    if (prev) {
       navigate(prev, { replace: true });
       return;
     }
@@ -557,7 +466,7 @@ function App() {
       localStorage.removeItem('ai_analysis_step');
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem('ai_analysis_has_activity');
-      routeHistoryRef.current = ['/ai-analysis'];
+      setSingleHistory('/ai-analysis');
       navigate('/ai-analysis', { replace: true });
       return;
     }
@@ -567,11 +476,11 @@ function App() {
       localStorage.removeItem('ai_analysis_step');
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem('ai_analysis_has_activity');
-      routeHistoryRef.current = ['/ai-interview'];
+      setSingleHistory('/ai-interview');
       navigate('/ai-interview', { replace: true });
       return;
     }
-    routeHistoryRef.current = [viewToPath(view)];
+    setSingleHistory(viewToPath(view));
     handleNavigate(view, true);
   };
 

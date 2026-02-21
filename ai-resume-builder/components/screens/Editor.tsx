@@ -20,6 +20,8 @@ import EducationStep from '../editor/steps/EducationStep';
 import ProjectsStep from '../editor/steps/ProjectsStep';
 import SkillsStep from '../editor/steps/SkillsStep';
 import SummaryStep from '../editor/steps/SummaryStep';
+import { useEditorAutosave } from '../editor/hooks/useEditorAutosave';
+import { useEditorDataNormalization } from '../editor/hooks/useEditorDataNormalization';
 import { useEditorDraftPersistence } from '../editor/hooks/useEditorDraftPersistence';
 import { useEditorImportFlow } from '../editor/hooks/useEditorImportFlow';
 import { useEditorValidation } from '../editor/hooks/useEditorValidation';
@@ -55,7 +57,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const [validationReason, setValidationReason] = useState<'missing' | 'format'>('missing');
   const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
   const [showClearPageConfirm, setShowClearPageConfirm] = useState(false);
-  const lastNormalizedResumeIdRef = useRef<number | null>(null);
   const draftSaveTimerRef = useRef<number | null>(null);
 
   // Always use wizard mode (no free edit mode)
@@ -112,6 +113,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     latestResumeDataRef.current = resumeData;
   }, [resumeData]);
 
+  useEditorDataNormalization({
+    resumeData,
+    setResumeData,
+  });
+
   async function triggerManualSave(data: ResumeData) {
     if (!data.id) {
       persistLocalDraft(data, { onStatusChange: setLastSavedAt });
@@ -161,161 +167,20 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     triggerManualSave,
   });
 
-  useEffect(() => {
-    if (!resumeData?.id || !setResumeData) return;
-    if (lastNormalizedResumeIdRef.current === resumeData.id) return;
-
-    const normalizeDateRange = (start?: string, end?: string) => {
-      const s = (start || '').trim();
-      const e = (end || '').trim();
-      if (s && e) return `${s} - ${e}`;
-      return s || e || '';
-    };
-
-    const parseDateRange = (date?: string) => {
-      const raw = (date || '').trim();
-      if (!raw) return { startDate: '', endDate: '' };
-      const parts = raw.split(/\s*[-–—]\s*/);
-      if (parts.length >= 2) {
-        return { startDate: parts[0], endDate: parts.slice(1).join(' - ') };
-      }
-      return { startDate: raw, endDate: '' };
-    };
-
-    const mergeDateFields = (item: any) => {
-      const existingStart = (item?.startDate || '').trim();
-      const existingEnd = (item?.endDate || '').trim();
-      const parsed = parseDateRange(item?.date);
-      return {
-        startDate: existingStart || parsed.startDate,
-        endDate: existingEnd || parsed.endDate,
-      };
-    };
-
-    const normalizeWork = (exp: any) => ({
-      ...exp,
-      ...mergeDateFields(exp),
-      title: exp?.title || exp?.company || '',
-      subtitle: exp?.subtitle || exp?.position || '',
-      date: exp?.date || normalizeDateRange(exp?.startDate, exp?.endDate),
-      company: exp?.company || exp?.title || '',
-      position: exp?.position || exp?.subtitle || '',
-    });
-
-    const normalizeEdu = (edu: any) => ({
-      ...edu,
-      ...mergeDateFields(edu),
-      title: edu?.title || edu?.school || '',
-      subtitle: edu?.subtitle || edu?.major || '',
-      date: edu?.date || normalizeDateRange(edu?.startDate, edu?.endDate),
-      school: edu?.school || edu?.title || '',
-      degree: edu?.degree || '',
-      major: edu?.major || edu?.subtitle || '',
-    });
-
-    const normalizeProjects = (proj: any) => ({
-      ...proj,
-      ...mergeDateFields(proj),
-      title: proj?.title || '',
-      subtitle: proj?.subtitle || proj?.role || '',
-      date: proj?.date || normalizeDateRange(proj?.startDate, proj?.endDate),
-      role: proj?.role || proj?.subtitle || '',
-    });
-
-    setResumeData(prev => ({
-      ...prev,
-      workExps: (prev.workExps || []).map(normalizeWork),
-      educations: (prev.educations || []).map(normalizeEdu),
-      projects: (prev.projects || []).map(normalizeProjects),
-      // Also normalize skills once per resume load to fix historical bad tokens like "(PowerBI" / "Tableau)" / "B Test)".
-      skills: toSkillList(prev.skills),
-    }));
-
-    lastNormalizedResumeIdRef.current = resumeData.id;
-  }, [resumeData?.id]);
-
-  useEffect(() => {
-    if (!resumeData?.id) return;
-
-    if (autosaveIntervalRef.current) {
-      window.clearInterval(autosaveIntervalRef.current);
-    }
-
-    // Initialize baseline snapshot for this resume to avoid unnecessary writes.
-    lastAutosavedRef.current = JSON.stringify(latestResumeDataRef.current);
-
-    autosaveIntervalRef.current = window.setInterval(async () => {
-      try {
-        const currentData = latestResumeDataRef.current;
-        if (!currentData?.id) return;
-        const serialized = JSON.stringify(currentData);
-        if (serialized === lastAutosavedRef.current) return;
-        setIsAutosaving(true);
-        const saveResult = await DatabaseService.updateResume(String(currentData.id), {
-          resume_data: currentData,
-          updated_at: new Date().toISOString()
-        });
-        if (!saveResult?.success) {
-          throw saveResult?.error || new Error('Auto-save failed');
-        }
-        lastAutosavedRef.current = serialized;
-        const now = new Date();
-        const timeLabel = now.toLocaleTimeString('zh-CN', {
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        setLastSavedAt(timeLabel);
-        if (setAllResumes) {
-          const formatDateTime = (dateString: string) => {
-            if (!dateString) return '时间未知';
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return '时间格式错误';
-            const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
-            const year = beijingTime.getFullYear();
-            const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
-            const day = String(beijingTime.getDate()).padStart(2, '0');
-            const hours = String(beijingTime.getHours()).padStart(2, '0');
-            const minutes = String(beijingTime.getMinutes()).padStart(2, '0');
-            const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
-            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-          };
-          const formatted = formatDateTime(now.toISOString()).replace(/[^0-9\-:\s]/g, '');
-          setAllResumes((prev: any) => (prev || []).map((r: any) =>
-            r.id === currentData.id ? { ...r, date: formatted } : r
-          ));
-        }
-      } catch (error) {
-        console.error('Auto-save failed:', error);
-      } finally {
-        setIsAutosaving(false);
-      }
-    }, 30000);
-
-    return () => {
-      if (autosaveIntervalRef.current) {
-        window.clearInterval(autosaveIntervalRef.current);
-      }
-    };
-  }, [resumeData?.id]);
-
-  // Draft auto-save for resumes not yet persisted to DB.
-  useEffect(() => {
-    if (resumeData?.id) return;
-    if (!hasMeaningfulContent(resumeData)) return;
-
-    if (draftSaveTimerRef.current) {
-      window.clearTimeout(draftSaveTimerRef.current);
-    }
-    draftSaveTimerRef.current = window.setTimeout(() => {
-      persistLocalDraft({ ...resumeData, summary }, { onStatusChange: setLastSavedAt });
-    }, 800);
-
-    return () => {
-      if (draftSaveTimerRef.current) {
-        window.clearTimeout(draftSaveTimerRef.current);
-      }
-    };
-  }, [resumeData, summary, editorDraftKey]);
+  useEditorAutosave({
+    resumeData,
+    summary,
+    editorDraftKey,
+    hasMeaningfulContent,
+    persistLocalDraft,
+    setAllResumes,
+    setIsAutosaving,
+    setLastSavedAt,
+    latestResumeDataRef,
+    autosaveIntervalRef,
+    lastAutosavedRef,
+    draftSaveTimerRef,
+  });
 
 
 
