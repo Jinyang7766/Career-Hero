@@ -118,12 +118,14 @@ def _build_analysis_prompt(
 14. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
 15. 无法确认数字时用中性结果口径，不得编造与占位符。
 """ if is_final_stage else ""
-
     format_requirements = f"""
 输出规范（精简版）：
 1. 仅返回合法 JSON，所有顶层字段必须返回；`score`/`scoreBreakdown` 为整数。
 2. 评分表示“候选人综合匹配度”，不是排版分。`experience/skills/format` 按任务匹配、能力匹配、综合表现打分。
-3. suggestions 仅保留高影响缺口（建议 3-6 条），不得凑数量。
+3. suggestions 仅保留高影响缺口，不得凑数量：
+   - 高质量简历（score>=88 且无关键缺口）可返回 []；
+   - 中等质量简历建议 1-2 条；
+   - 有待加强简历建议 4-7 条，且覆盖最影响初筛的缺口。
 4. 每条 suggestion 必须包含 id/type/title/reason/targetSection/suggestedValue。
 5. targetSection 仅允许：summary、workExps、projects、skills、education、certificates。
 6. suggestedValue 必须是可直接写入简历的终稿文本；禁止“建议/例如/示例/待补充”。
@@ -131,6 +133,8 @@ def _build_analysis_prompt(
 8. 严禁基于占位符误判“信息缺失”；严禁性别偏见建议；严禁修改教育事实字段。
 9. 若能识别目标公司，填写 targetCompany 与 0~1 的 targetCompanyConfidence。
 10. 批注建议遵循人工逻辑：先模块结论，再逐句问题；每条建议只对应一个问题。
+11. 严禁重复输出同义建议；同一能力缺口只保留一条合并建议。
+12. 当简历存在多个关键短板时，suggestions 需覆盖不同 targetSection（如 summary/workExps/skills），避免集中在单一模块。
 {final_stage_requirements}
 {rag_context}
 """
@@ -149,7 +153,7 @@ def _build_analysis_prompt(
 
     if job_description:
         return f"""
-请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出“高影响、低冗余”的优化建议（建议 3-6 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出“高影响、低冗余”的优化建议（数量由简历质量决定）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100，候选人综合匹配度评分）：
@@ -203,7 +207,7 @@ def _build_analysis_prompt(
 """
 
     return f"""
-请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出“高影响、低冗余”的优化建议（建议 3-6 条）。
+请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，输出“高影响、低冗余”的优化建议（数量由简历质量决定）。
 请使用中文输出，字段值必须为中文。
 
 评分标准（总分100，候选人综合匹配度评分）：

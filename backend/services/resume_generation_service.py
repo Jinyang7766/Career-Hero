@@ -240,34 +240,39 @@ def _normalize_and_merge_skills(generated_resume, source_resume, suggestions):
     source_skills_raw = source.get('skills') or []
     suggested_skill_keywords = _collect_skill_keywords_from_suggestions(suggestions or [])
 
-    all_candidates = []
-    all_candidates.extend(_split_skill_candidates(generated_skills_raw))
-    all_candidates.extend(_split_skill_candidates(suggested_skill_keywords))
-    all_candidates.extend(_split_skill_candidates(source_skills_raw))
+    source_candidates = _split_skill_candidates(source_skills_raw)
+    generated_candidates = _split_skill_candidates(generated_skills_raw)
+    suggested_candidates = _split_skill_candidates(suggested_skill_keywords)
 
-    normalized = []
+    merged = []
     seen = set()
-    has_llm = False
-    for candidate in all_candidates:
+
+    def _append_skill(raw_skill):
+        text = str(raw_skill or '').strip()
+        if not text:
+            return
+        key = re.sub(r'[\s\W_]+', '', text.lower())
+        if not key or key in seen:
+            return
+        seen.add(key)
+        merged.append(text)
+
+    # Preserve all original user skills first (do not drop user facts).
+    for candidate in source_candidates:
+        _append_skill(_normalize_skill_text(candidate))
+
+    # Then append model-generated/suggested hard skills when valid.
+    for candidate in [*generated_candidates, *suggested_candidates]:
         skill = _canonicalize_skill(candidate)
         if not skill:
             continue
         if _looks_like_model_family(skill):
-            has_llm = True
             skill = 'LLM'
         if not _is_hard_skill(skill):
             continue
-        key = re.sub(r'[\s\W_]+', '', skill.lower())
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        normalized.append(skill)
+        _append_skill(skill)
 
-    if has_llm and 'llm' not in seen:
-        normalized.insert(0, 'LLM')
-
-    # Keep result concise and strong.
-    next_resume['skills'] = normalized[:24]
+    next_resume['skills'] = merged[:40]
     return next_resume
 
 

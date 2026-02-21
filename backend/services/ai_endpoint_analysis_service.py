@@ -447,8 +447,15 @@ def analyze_resume_core(current_user_id, data, deps):
                     if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
                 ]
                 suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
-                suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
-                suggestions = _merge_duplicate_suggestions(suggestions)
+                if is_final_report_stage:
+                    suggestions = _build_final_stage_annotation_suggestions(
+                        suggestions,
+                        resume_data,
+                        score,
+                    )
+                else:
+                    suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+                    suggestions = _merge_duplicate_suggestions(suggestions)
                 suggestions = _append_education_gap_advisory(suggestions)
             final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
 
@@ -494,8 +501,15 @@ def analyze_resume_core(current_user_id, data, deps):
             if not deps['is_gender_related_suggestion'](suggestion) and not deps['is_education_related_suggestion'](suggestion)
         ]
         suggestions = _sanitize_suggestions_for_metric_consistency(suggestions, resume_data)
-        suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
-        suggestions = _merge_duplicate_suggestions(suggestions)
+        if is_final_report_stage:
+            suggestions = _build_final_stage_annotation_suggestions(
+                suggestions,
+                resume_data,
+                score,
+            )
+        else:
+            suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
+            suggestions = _merge_duplicate_suggestions(suggestions)
         suggestions = _append_education_gap_advisory(suggestions)
     final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
     rule_based_first_question = _resolve_micro_interview_first_question({

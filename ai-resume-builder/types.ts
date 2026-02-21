@@ -89,6 +89,7 @@ export interface ResumeData {
   summary?: string;
   gender?: string;
   templateId?: string;
+  previewSectionOrder?: string[];
   optimizationStatus?: 'optimized' | 'unoptimized';
   optimizedResumeId?: string | number;
   optimizedFromId?: string | number;

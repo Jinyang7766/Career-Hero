@@ -49,33 +49,24 @@ const actionToInfo = (action: string) => {
   }
 };
 
-const parseInterviewLedgerTags = (row: LedgerRow) => {
-  const meta = (row?.metadata && typeof row.metadata === 'object') ? row.metadata : {};
-  const note = String(row?.note || '').trim();
-  let scenario = String(meta?.scenario || '').trim().toLowerCase();
-  let mode = String(meta?.mode || '').trim().toLowerCase();
-
-  if (!scenario && note.includes('场景:')) {
-    if (note.includes('技术深挖')) scenario = 'technical';
-    else if (note.includes('HR面')) scenario = 'hr';
-    else scenario = 'general';
+const resolveLedgerDisplayTexts = (row: LedgerRow, fallbackLabel: string, fallbackSubtitle: string) => {
+  const act = String(row?.action || '').toLowerCase();
+  const diagnosisStepByAction: Record<string, string> = {
+    analysis_consume: '初步诊断',
+    micro_interview_consume: '微访谈',
+    final_report_consume: '最终报告',
+    analysis_refund: '初步诊断（退还）',
+    micro_interview_refund: '微访谈（退还）',
+    final_report_refund: '最终报告（退还）',
+  };
+  const diagnosisStep = diagnosisStepByAction[act];
+  if (diagnosisStep) {
+    return {
+      title: 'AI诊断',
+      subtitle: diagnosisStep,
+    };
   }
-  if (!mode && note.includes('模式:')) {
-    if (note.includes('简单') || note.includes('极速')) mode = 'simple';
-    else if (note.includes('全面') || note.includes('详细')) mode = 'comprehensive';
-  }
-
-  const scenarioLabel =
-    scenario === 'technical' ? '技术深挖'
-      : scenario === 'hr' ? 'HR面'
-        : scenario === 'general' ? '通用'
-          : '';
-  const modeLabel =
-    mode === 'simple' ? '简单'
-      : mode === 'comprehensive' ? '全面'
-        : '';
-
-  return { scenarioLabel, modeLabel };
+  return { title: fallbackLabel, subtitle: fallbackSubtitle };
 };
 
 const PointsHistory: React.FC = () => {
@@ -262,7 +253,8 @@ const PointsHistory: React.FC = () => {
                     {group.map((row) => {
                       const info = actionToInfo(row.action);
                       const isGain = Number(row.delta) > 0;
-                      const tags = parseInterviewLedgerTags(row);
+                      const fallbackSubtitle = row.note || (isGain ? '积分发放' : '积分扣减');
+                      const display = resolveLedgerDisplayTexts(row, info.label, fallbackSubtitle);
                       return (
                         <div
                           key={String(row.id)}
@@ -277,7 +269,7 @@ const PointsHistory: React.FC = () => {
                           <div className="flex flex-col flex-1 min-w-0">
                             <div className="flex items-center justify-between gap-2">
                               <p className="text-sm font-bold text-slate-900 dark:text-white truncate leading-tight">
-                                {info.label}
+                                {display.title}
                               </p>
                               <p className={`text-base font-black tracking-tight ${isGain ? 'text-emerald-500' : 'text-rose-500'}`}>
                                 {isGain ? `+${row.delta}` : row.delta}
@@ -285,7 +277,7 @@ const PointsHistory: React.FC = () => {
                             </div>
                             <div className="flex items-center justify-between mt-1.5">
                               <p className="text-[12px] text-slate-500 dark:text-slate-500 font-medium truncate opacity-80 leading-normal">
-                                {row.note || (isGain ? '积分发放' : '积分扣减')}
+                                {display.subtitle}
                               </p>
                               <div className="flex items-center gap-2 shrink-0">
                                 {row.balance_after != null && Number.isFinite(Number(row.balance_after)) && (

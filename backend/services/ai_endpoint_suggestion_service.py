@@ -1,6 +1,7 @@
 import re
 import json
 import copy
+from collections import OrderedDict
 
 def _collect_resume_numeric_tokens(resume_data) -> set:
     """Collect numeric tokens from resume content for anti-fabrication checks."""
@@ -81,7 +82,6 @@ def _format_diagnosis_dossier(dossier):
         target_company = str(dossier.get('targetCompany') or '').strip()
         jd_text = str(dossier.get('jdText') or '').strip()
         score_breakdown = dossier.get('scoreBreakdown') or {}
-        overview = dossier.get('suggestionsOverview') or {}
         strengths = dossier.get('strengths') or []
         weaknesses = dossier.get('weaknesses') or []
         missing_keywords = dossier.get('missingKeywords') or []
@@ -98,10 +98,6 @@ def _format_diagnosis_dossier(dossier):
         if isinstance(score_breakdown, dict) and score_breakdown:
             lines.append(
                 f"- 评分拆解：经验{score_breakdown.get('experience', 0)} / 技能{score_breakdown.get('skills', 0)} / 格式{score_breakdown.get('format', 0)}"
-            )
-        if isinstance(overview, dict) and overview:
-            lines.append(
-                f"- 建议概览：总计{overview.get('total', 0)}，待处理{overview.get('pending', 0)}，已采纳{overview.get('accepted', 0)}，已忽略{overview.get('ignored', 0)}"
             )
         if strengths:
             lines.append(f"- 亮点：{'；'.join([str(x) for x in strengths[:6]])}")
@@ -439,7 +435,6 @@ def _merge_duplicate_suggestions(suggestions):
                 str(s.get('targetField') or '').strip().lower(),
                 _compact_text(s.get('title') or ''),
                 _compact_text(s.get('reason') or ''),
-                _compact_text(suggested_value),
             )
         else:
             key = ('__non_str__', str(s.get('id') or ''))
@@ -543,25 +538,83 @@ def _prioritize_final_stage_suggestions(suggestions, score):
     except Exception:
         n_score = 0
     if n_score >= 88:
-        cap = 3
-    elif n_score >= 80:
-        cap = 4
-    elif n_score >= 70:
+        cap = 1 if critical else 0
+        floor = 0
+    elif n_score >= 82:
+        cap = 2
+        floor = 1 if critical else 0
+    elif n_score >= 72:
         cap = 5
+        floor = 3
     else:
-        cap = 6
+        cap = 7
+        floor = 4
 
-    return ordered[:cap]
+    if cap <= 0:
+        return []
+    selected = ordered[:cap]
+    if len(selected) < floor:
+        selected = ordered[:max(floor, min(cap, len(ordered)))]
+
+    # For lower-quality resumes, force cross-section coverage so one round
+    # of optimization can close major gaps instead of over-focusing one block.
+    min_sections = 0
+    if n_score < 72:
+        min_sections = 3
+    elif n_score < 82:
+        min_sections = 2
+
+    if min_sections > 0 and len(selected) >= 2:
+        buckets = OrderedDict()
+        for item in ordered:
+            section = str(item.get('targetSection') or '').strip().lower() or '__unknown__'
+            buckets.setdefault(section, []).append(item)
+
+        diverse = []
+        used_sections = set()
+        # Pass 1: take one from each section first.
+        for section, entries in buckets.items():
+            if not entries:
+                continue
+            diverse.append(entries.pop(0))
+            used_sections.add(section)
+            if len(diverse) >= cap:
+                break
+
+        # Pass 2: fill remaining slots by original priority.
+        if len(diverse) < cap:
+            for item in ordered:
+                if len(diverse) >= cap:
+                    break
+                if any(item is picked for picked in diverse):
+                    continue
+                diverse.append(item)
+
+        diverse_sections = {
+            str(item.get('targetSection') or '').strip().lower() or '__unknown__'
+            for item in diverse
+        }
+        # If diversity target is not met, keep baseline `selected`.
+        if len(diverse_sections) >= min(min_sections, len(buckets)):
+            selected = diverse
+
+    return selected
 
 
 def _build_final_stage_annotation_suggestions(suggestions, resume_data, score):
-    # Keep high-impact suggestions first, then restore sentence-level coverage
-    # so the comparison page can still render inline annotations.
+    # Keep high-impact suggestions first. For low-score resumes, allow controlled
+    # sentence-level backfill so advice is not too sparse.
+    try:
+        n_score = int(float(score))
+    except Exception:
+        n_score = 0
     prioritized = _prioritize_final_stage_suggestions(suggestions, score)
     prioritized = _sanitize_final_stage_suggestions(prioritized, resume_data)
-    covered = _ensure_sentence_level_coverage(prioritized, resume_data)
-    covered = _sanitize_final_stage_suggestions(covered, resume_data)
-    covered = _merge_duplicate_suggestions(covered)
-    # No hard cap: keep full sentence-level annotations for detailed review.
-    return covered or []
+    merged = _merge_duplicate_suggestions(prioritized)
+    if n_score < 72 and len(merged) < 4:
+        backfilled = _ensure_sentence_level_coverage(merged, resume_data)
+        backfilled = _sanitize_final_stage_suggestions(backfilled, resume_data)
+        backfilled = _merge_duplicate_suggestions(backfilled)
+        merged = (backfilled or [])[:7]
+    return merged or []
 

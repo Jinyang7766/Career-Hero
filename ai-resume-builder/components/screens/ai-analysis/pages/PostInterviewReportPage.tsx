@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ResumeData } from '../../../../types';
 import { formatTimeline } from '../../../../src/timeline-utils';
+import { normalizeTimelineFields } from '../../../../src/timeline-utils';
 import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
 import ReportFeedback from '../ReportFeedback';
@@ -619,7 +620,14 @@ const PostInterviewReportPage: React.FC<Props> = ({
       if (!prev) return prev;
       const list = Array.isArray((prev as any).workExps) ? [...((prev as any).workExps as any[])] : [];
       if (!list[index]) return prev;
-      list[index] = { ...list[index], [field]: value };
+      const nextItem: any = { ...list[index], [field]: value };
+      if (field === 'date' || field === 'startDate' || field === 'endDate') {
+        const normalized = normalizeTimelineFields(nextItem);
+        nextItem.date = normalized.date;
+        nextItem.startDate = normalized.startDate;
+        nextItem.endDate = normalized.endDate;
+      }
+      list[index] = nextItem;
       return { ...prev, workExps: list as any };
     });
   };
@@ -629,7 +637,14 @@ const PostInterviewReportPage: React.FC<Props> = ({
       if (!prev) return prev;
       const list = Array.isArray((prev as any).projects) ? [...((prev as any).projects as any[])] : [];
       if (!list[index]) return prev;
-      list[index] = { ...list[index], [field]: value };
+      const nextItem: any = { ...list[index], [field]: value };
+      if (field === 'date' || field === 'startDate' || field === 'endDate') {
+        const normalized = normalizeTimelineFields(nextItem);
+        nextItem.date = normalized.date;
+        nextItem.startDate = normalized.startDate;
+        nextItem.endDate = normalized.endDate;
+      }
+      list[index] = nextItem;
       return { ...prev, projects: list as any };
     });
   };
@@ -643,6 +658,12 @@ const PostInterviewReportPage: React.FC<Props> = ({
       if (field === 'title') nextItem.school = value;
       if (field === 'subtitle') nextItem.major = value;
       if (field === 'major') nextItem.subtitle = value;
+      if (field === 'date' || field === 'startDate' || field === 'endDate') {
+        const normalized = normalizeTimelineFields(nextItem);
+        nextItem.date = normalized.date;
+        nextItem.startDate = normalized.startDate;
+        nextItem.endDate = normalized.endDate;
+      }
       list[index] = nextItem;
       return { ...prev, educations: list as any };
     });

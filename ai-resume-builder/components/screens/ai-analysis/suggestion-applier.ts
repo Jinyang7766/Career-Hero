@@ -308,7 +308,20 @@ export const applySuggestionToResume = ({
 
   if (effectiveSection === 'skills') {
     const safeSkills = toSkillList(suggestion.suggestedValue);
-    if (safeSkills.length > 0) newData.skills = safeSkills;
+    if (safeSkills.length > 0) {
+      const existing = Array.isArray(newData.skills) ? newData.skills : [];
+      const seen = new Set<string>();
+      const merged: string[] = [];
+      [...existing, ...safeSkills].forEach((raw) => {
+        const text = String(raw || '').trim();
+        if (!text) return;
+        const key = normalizeForMatch(text);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        merged.push(text);
+      });
+      newData.skills = merged;
+    }
     return newData;
   }
 

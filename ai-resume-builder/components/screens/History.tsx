@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { View, ScreenProps } from '../../types';
+import { ScreenProps } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
-import { useAppStore } from '../../src/app-store';
 import BackButton from '../shared/BackButton';
 
 type ExportItem = {
@@ -17,9 +16,7 @@ type ExportItem = {
 };
 
 const History: React.FC<ScreenProps> = () => {
-  const navigateToView = useAppContext((s) => s.navigateToView);
   const goBack = useAppContext((s) => s.goBack);
-  const setResumeData = useAppStore((state) => state.setResumeData);
   const [items, setItems] = useState<ExportItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -83,21 +80,6 @@ const History: React.FC<ScreenProps> = () => {
       setItems(exports);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleReExport = async (resumeId: number) => {
-    try {
-      const result = await DatabaseService.getResume(resumeId);
-      if (!result.success) return;
-      const resume = result.data;
-      if (!resume?.resume_data) return;
-      if (setResumeData) {
-        setResumeData({ id: resume.id, ...resume.resume_data, resumeTitle: resume.title });
-      }
-      navigateToView(View.PREVIEW);
-    } catch (err) {
-      console.error('Failed to open resume for export:', err);
     }
   };
 
@@ -307,14 +289,13 @@ const History: React.FC<ScreenProps> = () => {
                     {group.map((item) => (
                       <div
                         key={item.id}
-                        className={`relative flex items-center gap-4 px-4 py-3.5 transition-colors cursor-pointer select-none
+                        className={`relative flex items-center gap-4 px-4 py-3.5 transition-colors select-none
                           ${selectedIds.has(item.id) ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}
+                          ${isSelectionMode ? 'cursor-pointer' : 'cursor-default'}
                         `}
                         onClick={() => {
                           if (isSelectionMode) {
                             toggleSelection(item.id);
-                          } else {
-                            handleReExport(item.resumeId);
                           }
                         }}
                         onContextMenu={(e) => {

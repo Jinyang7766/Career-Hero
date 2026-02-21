@@ -5,6 +5,8 @@ import ReportFeedback from '../ReportFeedback';
 import { useAppStore } from '../../../../src/app-store';
 import { recordResumeExportHistory } from '../../../../src/export-history';
 
+const EXPORT_WATERMARK_TEXT = '本面试报告由Career Hero生成';
+
 type Props = {
   summary: string;
   score: number;
@@ -34,6 +36,29 @@ const downloadDataUrl = (dataUrl: string, filename: string) => {
   a.click();
   document.body.removeChild(a);
   return estimateDataUrlBytes(dataUrl);
+};
+
+const stampCanvasWatermark = (canvas: HTMLCanvasElement, text: string = EXPORT_WATERMARK_TEXT) => {
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  const label = String(text || '').trim();
+  if (!label) return;
+
+  const width = canvas.width || 1;
+  const height = canvas.height || 1;
+  const padY = Math.max(64, Math.round(height * 0.085));
+  const fontSize = Math.max(14, Math.min(24, Math.round(width * 0.018)));
+  ctx.save();
+
+  ctx.font = `600 ${fontSize}px Arial, "PingFang SC", "Microsoft YaHei", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const centerX = Math.round(width / 2);
+  const centerY = Math.round(height - padY);
+  ctx.fillStyle = 'rgba(100, 116, 139, 0.78)';
+  ctx.fillText(label, centerX, centerY);
+  ctx.restore();
 };
 
 const downloadCanvasWithChunking = (canvas: HTMLCanvasElement, baseName: string) => {
@@ -749,32 +774,86 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
   const planItems = React.useMemo(() => splitModuleItems(parsedSections.plan), [parsedSections.plan]);
   const trainingPlanGroups = React.useMemo(() => parseTrainingPlanGroups(parsedSections.plan), [parsedSections.plan]);
 
+  const waitForExportReady = async (node: HTMLElement) => {
+    if ((document as any).fonts?.ready) {
+      try { await (document as any).fonts.ready; } catch {}
+    }
+
+    const images = Array.from(node.querySelectorAll('img'));
+    await Promise.all(images.map(async (img) => {
+      try {
+        if ((img as any).decode) await (img as any).decode();
+      } catch {}
+    }));
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+    });
+  };
+
   const handleSaveImage = async () => {
     if (!reportRef.current || isExporting) return;
     setIsExporting(true);
     try {
-      const mod: any = await import('html2pdf.js');
-      const html2pdf = mod?.default || mod;
       const node = reportRef.current;
-      const worker = html2pdf()
-        .set({
-          margin: 0,
-          filename: `面试报告-${Date.now()}.pdf`,
-          image: { type: 'png', quality: 1 },
-          html2canvas: {
-            scale: 2,
-            useCORS: true,
-            scrollY: 0,
-            windowWidth: node.scrollWidth,
-            windowHeight: node.scrollHeight,
-            backgroundColor: '#ffffff',
-          },
-          jsPDF: { unit: 'px', format: [node.scrollWidth, node.scrollHeight], orientation: 'portrait' },
-        })
-        .from(node)
-        .toCanvas();
+      await waitForExportReady(node);
 
-      const canvas = await worker.get('canvas');
+      const captureScale = 2;
+      const captureWidth = Math.max(1, Math.round(node.scrollWidth || node.clientWidth));
+      const captureHeight = Math.max(1, Math.round(node.scrollHeight || node.clientHeight));
+      const viewportWidth = Math.max(1, Math.round(window.innerWidth || document.documentElement.clientWidth || captureWidth));
+      const viewportHeight = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || captureHeight));
+      let canvas: HTMLCanvasElement;
+      try {
+        const mod: any = await import('html-to-image');
+        const toCanvas = mod?.toCanvas;
+        canvas = await toCanvas(node, {
+          pixelRatio: captureScale,
+          cacheBust: true,
+          backgroundColor: '#ffffff',
+          width: captureWidth,
+          height: captureHeight,
+          canvasWidth: Math.round(captureWidth * captureScale),
+          canvasHeight: Math.round(captureHeight * captureScale),
+          style: {
+            width: `${captureWidth}px`,
+            height: `${captureHeight}px`,
+            transform: 'none',
+          },
+        });
+      } catch (primaryError) {
+        console.warn('html-to-image export failed, fallback to html2canvas:', primaryError);
+        const mod: any = await import('html2canvas');
+        const html2canvas = mod?.default || mod;
+        canvas = await html2canvas(node, {
+          scale: captureScale,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          foreignObjectRendering: false,
+          scrollX: 0,
+          scrollY: 0,
+          width: captureWidth,
+          height: captureHeight,
+          windowWidth: viewportWidth,
+          windowHeight: viewportHeight,
+          onclone: (doc: Document) => {
+            const style = doc.createElement('style');
+            style.textContent = `
+              .report-exporting .animate-in,
+              .report-exporting .animate-pulse,
+              .report-exporting [class*="slide-in-"],
+              .report-exporting [class*="fade-in"] {
+                animation: none !important;
+                transition: none !important;
+                transform: none !important;
+                opacity: 1 !important;
+              }
+            `;
+            doc.head.appendChild(style);
+          },
+        });
+      }
+
       const exports = downloadCanvasWithChunking(canvas, `面试报告-${Date.now()}`);
       for (const item of exports) {
         await recordResumeExportHistory(resumeData as any, {
@@ -794,6 +873,15 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
   const scoreNum = Number.isFinite(summaryScore as number)
     ? Math.round(summaryScore as number)
     : Math.round(score || 0);
+  const scoreLabel = scoreNum >= 90
+    ? '卓越表现'
+    : scoreNum >= 80
+      ? '优秀表现'
+      : scoreNum >= 70
+        ? '良好表现'
+        : scoreNum >= 60
+          ? '及格表现'
+          : '仍需努力';
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-[#0b1219] animate-in fade-in duration-500">
@@ -806,23 +894,23 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
       </header>
 
       <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(3.75rem+env(safe-area-inset-bottom))] space-y-6">
-        <div ref={reportRef} className="space-y-6">
+        <div ref={reportRef} className={`space-y-6 ${isExporting ? 'report-exporting' : ''}`}>
           {/* Score Card */}
           <div className="relative overflow-hidden bg-white dark:bg-[#1c2936] rounded-[28px] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-white/5 group">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 size-48 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-700" />
 
             <div className="relative z-10 flex flex-col items-center text-center">
               <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4">综合评估得分</span>
-              <div className="flex items-baseline gap-1">
+              <div className="report-score-main flex items-end justify-center gap-1">
                 <span className={`text-[72px] font-black tracking-tighter leading-none drop-shadow-sm ${getScoreColorClass(scoreNum)}`}>
                   {scoreNum}
                 </span>
                 <span className="text-xl font-bold text-slate-300 dark:text-slate-600 tracking-tight">/ 100</span>
               </div>
-              <div className="mt-6 flex items-center gap-2 px-3 py-1 bg-primary/5 dark:bg-primary/10 rounded-full border border-primary/10">
-                <div className={`size-1.5 rounded-full ${getScoreDotClass(scoreNum)} animate-pulse`} />
-                <span className="text-[11px] font-black text-primary dark:text-blue-400 uppercase tracking-wider">
-                  {scoreNum >= 90 ? '卓越表现' : scoreNum >= 80 ? '优秀表现' : scoreNum >= 70 ? '良好表现' : scoreNum >= 60 ? '及格表现' : '仍需努力'}
+              <div className="report-score-badge mt-6 w-fit mx-auto flex items-center justify-center gap-2 px-3 py-1 bg-primary/5 dark:bg-primary/10 rounded-full border border-primary/10">
+                <div className={`size-1.5 rounded-full ${getScoreDotClass(scoreNum)} ${isExporting ? '' : 'animate-pulse'}`} />
+                <span className="text-[11px] font-black text-primary dark:text-blue-400 uppercase tracking-wider whitespace-nowrap shrink-0">
+                  {scoreLabel}
                 </span>
               </div>
             </div>
@@ -836,16 +924,11 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
                 <ReportIcon name="format_quote" className="size-[140px]" />
               </div>
 
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="size-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
-                    <ReportIcon name="analytics" className="size-5 text-primary" />
-                  </div>
-                  <h3 className="font-black text-slate-900 dark:text-white text-base tracking-tight">综合评价总结</h3>
+              <div className="flex items-center gap-3 mb-6">
+                <div className="size-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                  <ReportIcon name="analytics" className="size-5 text-primary" />
                 </div>
-                <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10">
-                  <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">Analysis Result</span>
-                </div>
+                <h3 className="font-black text-slate-900 dark:text-white text-base tracking-tight">综合评价总结</h3>
               </div>
 
               <div className="relative space-y-4">
@@ -1004,6 +1087,15 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
               {!isExporting && onFeedback && <ReportFeedback onFeedback={onFeedback} showTitle={false} />}
             </>
           )}
+
+          {isExporting ? (
+            <>
+              <div className="report-export-watermark mt-4 mb-12 py-1 text-center text-[12px] font-semibold tracking-[0.14em] text-slate-400">
+                {EXPORT_WATERMARK_TEXT}
+              </div>
+              <div className="h-4" aria-hidden="true" />
+            </>
+          ) : null}
         </div>
 
         {/* Global Action */}
@@ -1035,6 +1127,43 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
           <AiDisclaimer className="pt-4 opacity-40 text-center" />
         </div>
       </main>
+      <style>
+        {`
+          .report-exporting,
+          .report-exporting * {
+            animation: none !important;
+            transition: none !important;
+          }
+          .report-exporting .animate-in,
+          .report-exporting .animate-pulse,
+          .report-exporting [class*="slide-in-"],
+          .report-exporting [class*="fade-in"] {
+            transform: none !important;
+            opacity: 1 !important;
+          }
+          .report-exporting .report-score-main {
+            align-items: flex-end !important;
+            justify-content: center !important;
+          }
+          .report-exporting .report-score-badge {
+            margin-top: 20px !important;
+            margin-left: auto !important;
+            margin-right: auto !important;
+            position: static !important;
+            display: inline-flex !important;
+            width: fit-content !important;
+            align-items: center !important;
+            justify-content: center !important;
+            min-height: 34px !important;
+            transform: none !important;
+          }
+          .report-exporting .report-export-watermark {
+            display: block !important;
+            opacity: 1 !important;
+            transform: none !important;
+          }
+        `}
+      </style>
     </div>
   );
 };

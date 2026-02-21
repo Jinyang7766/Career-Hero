@@ -5,7 +5,17 @@ export const createMasker = () => {
   let counter = 0;
 
   const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
-  const phoneRegex = /(?<!\d)(\+?\d[\d\s-]{7,}\d)(?!\d)/g;
+  const phoneRegex = /(?<!\d)(\+?\d[\d\s\-()]{7,}\d)(?!\d)/g;
+  const timelineKeys = new Set(['date', 'startDate', 'endDate', 'start_date', 'end_date']);
+
+  const looksLikeTimeline = (value: string) => {
+    const text = String(value || '').trim();
+    if (!text) return false;
+    if (/^(至今|present|current|now)$/i.test(text)) return true;
+    if (/^\d{4}([./-]\d{1,2})?$/.test(text)) return true;
+    if (/^\d{4}([./-]\d{1,2})?\s*[-~—–至到]\s*(\d{4}([./-]\d{1,2})?|至今|present|current|now)$/i.test(text)) return true;
+    return false;
+  };
 
   const maskValue = (value: string, type: string) => {
     const token = `[[${type}_${++counter}]]`;
@@ -13,11 +23,16 @@ export const createMasker = () => {
     return token;
   };
 
-  const maskText = (text: string) => {
+  const maskText = (text: string, opts?: { skipPhone?: boolean }) => {
     if (!text) return text;
-    return text
-      .replace(emailRegex, (m) => maskValue(m, 'EMAIL'))
-      .replace(phoneRegex, (m) => maskValue(m, 'PHONE'));
+    let result = text.replace(emailRegex, (m) => maskValue(m, 'EMAIL'));
+    if (!opts?.skipPhone) {
+      result = result.replace(phoneRegex, (m) => {
+        if (looksLikeTimeline(m)) return m;
+        return maskValue(m, 'PHONE');
+      });
+    }
+    return result;
   };
 
   const companyKeys = new Set(['company', 'employer', 'organization', 'org', 'school']);
@@ -37,6 +52,10 @@ export const createMasker = () => {
         }
         if (typeof value === 'string' && addressKeys.has(key)) {
           out[key] = maskValue(value, 'ADDRESS');
+          return;
+        }
+        if (typeof value === 'string' && timelineKeys.has(key)) {
+          out[key] = value;
           return;
         }
         out[key] = maskObject(value);
@@ -78,4 +97,3 @@ export const maskChatHistory = (
   messages: ChatMessage[],
   maskText: (text: string) => string
 ) => messages.map((m) => ({ ...m, text: maskText(m.text || '') }));
-

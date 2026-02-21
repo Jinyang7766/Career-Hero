@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import type { AiAnalysisPageEffectsParams } from './useAiAnalysisPageEffects.types';
 
 export const useAiAnalysisPageUiEffects = ({
@@ -20,14 +20,22 @@ export const useAiAnalysisPageUiEffects = ({
   setOptimizedResumeId,
   setAnalysisResumeId,
 }: AiAnalysisPageEffectsParams) => {
+  const navHiddenRef = useRef(false);
   useEffect(() => {
-    if (setIsNavHidden) {
-      setIsNavHidden(currentStep === 'chat');
-    }
-    return () => {
-      if (setIsNavHidden) setIsNavHidden(false);
-    };
+    if (!setIsNavHidden) return;
+    const nextHidden = currentStep === 'chat';
+    if (navHiddenRef.current === nextHidden) return;
+    navHiddenRef.current = nextHidden;
+    setIsNavHidden(nextHidden);
   }, [currentStep, setIsNavHidden]);
+
+  useEffect(() => {
+    if (!setIsNavHidden) return;
+    return () => {
+      navHiddenRef.current = false;
+      setIsNavHidden(false);
+    };
+  }, [setIsNavHidden]);
 
   useEffect(() => {
     if (currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
@@ -91,4 +99,3 @@ export const useAiAnalysisPageUiEffects = ({
     }
   }, [currentStep, forcedResumeSelectRef]);
 };
-

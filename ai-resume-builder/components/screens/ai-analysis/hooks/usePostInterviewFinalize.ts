@@ -81,6 +81,13 @@ const resolveMetricText = (generatedValue: unknown, sourceValue: unknown) => {
 const pickFilledTimelineValue = (...values: unknown[]) => {
   for (const value of values) {
     const text = normalizeText(value);
+    if (!text) continue;
+    if (/\[\[[^\]]+\]\]/.test(text)) continue;
+    if (/^\d+$/.test(text) && text.length <= 3) continue;
+    if (/^\d{4}$/.test(text)) {
+      const year = Number(text);
+      if (year < 1900 || year > 2099) continue;
+    }
     if (text) return text;
   }
   return '';
@@ -148,6 +155,39 @@ const fillMissingExperienceTimeline = (resume: any, primarySource: any, fallback
       const srcB = (sourceBList[index] && typeof sourceBList[index] === 'object') ? sourceBList[index] : {};
       const normalizedTimeline = normalizeTimelineFields({
         date: pickFilledTimelineValue(item.date, srcA.date, srcB.date),
+        startDate: pickFilledTimelineValue(item.startDate, srcA.startDate, srcB.startDate),
+        endDate: pickFilledTimelineValue(item.endDate, srcA.endDate, srcB.endDate),
+      });
+      return {
+        ...item,
+        date: normalizedTimeline.date,
+        startDate: normalizedTimeline.startDate,
+        endDate: normalizedTimeline.endDate,
+      };
+    });
+  }
+
+  if (Array.isArray(next.educations)) {
+    const sourceAList = Array.isArray(sourceA.educations) ? sourceA.educations : [];
+    const sourceBList = Array.isArray(sourceB.educations) ? sourceB.educations : [];
+    const usedA = new Set<number>();
+    const usedB = new Set<number>();
+    next.educations = next.educations.map((item: any, index: number) => {
+      if (!item || typeof item !== 'object') return item;
+      const srcAIdx = findBestTimelineSourceIndex(item, sourceAList, usedA, index);
+      const srcBIdx = findBestTimelineSourceIndex(item, sourceBList, usedB, index);
+      if (srcAIdx >= 0) usedA.add(srcAIdx);
+      if (srcBIdx >= 0) usedB.add(srcBIdx);
+      const srcA = (srcAIdx >= 0 && sourceAList[srcAIdx] && typeof sourceAList[srcAIdx] === 'object') ? sourceAList[srcAIdx] : {};
+      const srcB = (srcBIdx >= 0 && sourceBList[srcBIdx] && typeof sourceBList[srcBIdx] === 'object') ? sourceBList[srcBIdx] : {};
+      const normalizedTimeline = normalizeTimelineFields({
+        date: pickFilledTimelineValue(
+          item.date,
+          srcA.date,
+          srcA.startDate && srcA.endDate ? `${srcA.startDate} - ${srcA.endDate}` : '',
+          srcB.date,
+          srcB.startDate && srcB.endDate ? `${srcB.startDate} - ${srcB.endDate}` : '',
+        ),
         startDate: pickFilledTimelineValue(item.startDate, srcA.startDate, srcB.startDate),
         endDate: pickFilledTimelineValue(item.endDate, srcA.endDate, srcB.endDate),
       });

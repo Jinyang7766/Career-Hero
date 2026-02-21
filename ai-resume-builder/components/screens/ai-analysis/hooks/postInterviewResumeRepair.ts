@@ -10,6 +10,13 @@ const normalizeText = (value: any) =>
 const pickFirstFilled = (...values: any[]) => {
   for (const value of values) {
     const text = String(value || '').trim();
+    if (!text) continue;
+    if (/\[\[[^\]]+\]\]/.test(text)) continue;
+    if (/^\d+$/.test(text) && text.length <= 3) continue;
+    if (/^\d{4}$/.test(text)) {
+      const year = Number(text);
+      if (year < 1900 || year > 2099) continue;
+    }
     if (text) return text;
   }
   return '';
@@ -94,6 +101,43 @@ export const fillGeneratedResumeTimeline = (generated: any, source: any) => {
       const srcItem: any = sourceList[idx] || {};
       const normalizedTimeline = normalizeTimelineFields({
         date: pickFirstFilled(item.date, srcItem.date, srcItem.startDate && srcItem.endDate ? `${srcItem.startDate} - ${srcItem.endDate}` : ''),
+        startDate: pickFirstFilled(item.startDate, srcItem.startDate),
+        endDate: pickFirstFilled(item.endDate, srcItem.endDate),
+      });
+      return {
+        ...item,
+        date: normalizedTimeline.date,
+        startDate: normalizedTimeline.startDate,
+        endDate: normalizedTimeline.endDate,
+      };
+    });
+  }
+
+  if (Array.isArray(next.educations)) {
+    const sourceList = Array.isArray(src.educations) ? src.educations : [];
+    const used = new Set<number>();
+    next.educations = next.educations.map((item: any, idx: number) => {
+      if (!item || typeof item !== 'object') return item;
+      const itemSig = normalizeText([item.school, item.title, item.major, item.subtitle, item.degree].filter(Boolean).join(' '));
+      let hitIndex = -1;
+      if (itemSig) {
+        hitIndex = sourceList.findIndex((candidate: any, cIdx: number) => {
+          if (used.has(cIdx) || !candidate) return false;
+          const candidateSig = normalizeText([candidate.school, candidate.title, candidate.major, candidate.subtitle, candidate.degree].filter(Boolean).join(' '));
+          return !!candidateSig && (candidateSig.includes(itemSig) || itemSig.includes(candidateSig));
+        });
+      }
+      if (hitIndex < 0 && idx < sourceList.length && !used.has(idx)) {
+        hitIndex = idx;
+      }
+      if (hitIndex >= 0) used.add(hitIndex);
+      const srcItem: any = hitIndex >= 0 ? (sourceList[hitIndex] || {}) : {};
+      const normalizedTimeline = normalizeTimelineFields({
+        date: pickFirstFilled(
+          item.date,
+          srcItem.date,
+          srcItem.startDate && srcItem.endDate ? `${srcItem.startDate} - ${srcItem.endDate}` : '',
+        ),
         startDate: pickFirstFilled(item.startDate, srcItem.startDate),
         endDate: pickFirstFilled(item.endDate, srcItem.endDate),
       });

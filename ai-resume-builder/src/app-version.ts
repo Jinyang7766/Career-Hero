@@ -1,5 +1,5 @@
 export const APP_VERSION = '1.4.0';
-export const APP_BUILD = '304';
+export const APP_BUILD = '305';
 
 export const APP_VERSION_SHORT = `v${APP_VERSION}`;
 export const APP_VERSION_WITH_BUILD = `${APP_VERSION_SHORT} (Build ${APP_BUILD})`;

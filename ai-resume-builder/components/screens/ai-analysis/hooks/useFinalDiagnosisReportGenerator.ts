@@ -49,9 +49,12 @@ const extractSkillGapAdvice = (result: any, fallback: string[]) => {
   const missingKeywords = Array.isArray(result?.missingKeywords)
     ? result.missingKeywords.map(normalizeSkillToken).filter(Boolean)
     : [];
-  const fromMissing = missingKeywords.slice(0, 3).map((k: string) =>
-    `补齐能力缺口：围绕“${k}”完成专题学习与实战复盘，形成可量化成果再进入下一轮面试。`
-  );
+  const topMissingKeywords = Array.from(new Set(missingKeywords)).slice(0, 3);
+  const fromMissing = topMissingKeywords.length > 0
+    ? [
+      `补齐能力缺口：围绕“${topMissingKeywords.join('”、“')}”完成专题学习与实战复盘，形成可量化成果。`,
+    ]
+    : [];
 
   const fromWeaknesses = (Array.isArray(result?.weaknesses) ? result.weaknesses : fallback)
     .map((x: any) => String(x || '').trim())
