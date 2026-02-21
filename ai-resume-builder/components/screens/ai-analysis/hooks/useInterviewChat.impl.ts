@@ -4,16 +4,15 @@ import type { ChatMessage } from '../types';
 import { createMasker, maskChatHistory } from '../chat-payload';
 import {
   buildChatRequestBody,
-  buildInterviewSummaryPrompt,
   buildInterviewWrappedMessage,
-  buildSummaryRequestBody
 } from '../chat-request-builders';
 import { persistUserDossierToProfile } from '../dossier-persistence';
 import { getActiveInterviewType } from '../interview-plan-utils';
+import { generateInterviewSummary, streamInterviewResponse } from '../interview-chat-api';
+import { normalizeInterviewReplyText, shouldTreatAsFollowUpSignal } from '../interview-chat-text';
 import { useInterviewChatStorage } from './useInterviewChatStorage';
 import {
   buildFallbackInterviewSummary,
-  buildTimingContextForSummary,
   countUserAnswers,
   findPendingQuestion,
   isUnusableInterviewSummary,
@@ -137,191 +136,6 @@ export const useInterviewChat = ({
       reader.onerror = () => reject(new Error('read failed'));
       reader.readAsDataURL(blob);
     });
-
-  const streamInterviewResponse = async ({
-    token,
-    requestBody,
-    baseMessages,
-    streamingMessageId,
-    signal,
-  }: {
-    token: string;
-    requestBody: any;
-    baseMessages: ChatMessage[];
-    streamingMessageId: string;
-    signal?: AbortSignal;
-  }) => {
-    const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
-    const perf = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
-      ? performance
-      : null;
-    const traceId = `iv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const startedAt = perf ? perf.now() : Date.now();
-    let firstEventAt: number | null = null;
-    let streamedText = '';
-    let doneText = '';
-    let hasRealChunk = false;
-
-    const setStreamingText = (text: string) => {
-      setChatMessages(prev => {
-        const has = prev.some(msg => msg.id === streamingMessageId);
-        if (!has) {
-          const next = [...prev, { id: streamingMessageId, role: 'model' as const, text }];
-          chatMessagesRef.current = next as ChatMessage[];
-          return next;
-        }
-        const next = prev.map(msg => (
-          msg.id === streamingMessageId ? { ...msg, text } : msg
-        ));
-        chatMessagesRef.current = next as ChatMessage[];
-        return next;
-      });
-    };
-
-    const response = await fetch(streamEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.trim()}`,
-      },
-      signal,
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error((errorData as any).error || 'Backend API failed');
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    // Early-return path from backend keeps JSON semantics.
-    if (!contentType.includes('text/event-stream')) {
-      const result = await response.json().catch(() => ({} as any));
-      const fallbackText = String(result?.response || '').trim();
-      const finishedAt = perf ? perf.now() : Date.now();
-      const totalMs = Math.max(0, finishedAt - startedAt);
-      console.info('[InterviewLatency]', {
-        traceId,
-        mode: 'json_fallback',
-        totalMs: Number(totalMs.toFixed(1)),
-        hasText: !!fallbackText,
-      });
-      if (!fallbackText) {
-        throw new Error('empty_ai_response_json');
-      }
-      return fallbackText;
-    }
-
-    if (!response.body) {
-      throw new Error('流式响应不可用');
-    }
-
-    let chunkCount = 0;
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (firstEventAt === null) {
-          firstEventAt = perf ? perf.now() : Date.now();
-        }
-        buffer += decoder.decode(value, { stream: true });
-
-        let boundary = buffer.indexOf('\n\n');
-        while (boundary !== -1) {
-          const rawEvent = buffer.slice(0, boundary);
-          buffer = buffer.slice(boundary + 2);
-          boundary = buffer.indexOf('\n\n');
-
-          const lines = rawEvent.split('\n').map(line => line.trim());
-          const dataLines = lines.filter(line => line.startsWith('data:'));
-          if (!dataLines.length) continue;
-          const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
-          if (!dataRaw) continue;
-
-          try {
-            const payload = JSON.parse(dataRaw);
-            const type = String(payload?.type || '');
-            if (type === 'chunk') {
-              const delta = String(payload?.delta || '');
-              if (!delta) continue;
-              hasRealChunk = true;
-              chunkCount += 1;
-              streamedText += delta;
-              setStreamingText(streamedText);
-            } else if (type === 'done') {
-              doneText = String(payload?.text || '').trim();
-            } else if (type === 'error') {
-              throw new Error(String(payload?.message || '流式面试失败'));
-            }
-          } catch (parseError) {
-            console.warn('Failed to parse SSE payload:', parseError);
-          }
-        }
-      }
-
-      const finalText = (doneText || streamedText || '').trim();
-      if (finalText && finalText !== streamedText) {
-        setStreamingText(finalText);
-      }
-      const finishedAt = perf ? perf.now() : Date.now();
-      const totalMs = Math.max(0, finishedAt - startedAt);
-      const firstEventMs = firstEventAt === null ? -1 : Math.max(0, firstEventAt - startedAt);
-      console.info('[InterviewLatency]', {
-        traceId,
-        mode: 'sse',
-        firstEventMs: Number(firstEventMs.toFixed(1)),
-        totalMs: Number(totalMs.toFixed(1)),
-        chunkCount,
-        hasDoneText: !!doneText,
-        hasRealChunk,
-        finalLen: finalText.length,
-      });
-    if (finalText) return finalText;
-    throw new Error('empty_ai_response_stream');
-  };
-
-  const generateInterviewSummary = async (baseMessages: ChatMessage[], signal?: AbortSignal) => {
-    const token = await getBackendAuthToken();
-    if (!token) throw new Error('请先登录以使用 AI 功能');
-
-    const apiEndpoint = buildApiUrl('/api/ai/chat');
-    const masker = createMasker();
-    const maskedResumeData = masker.maskObject(resumeData);
-    const maskedJdText = masker.maskText(jdText || '');
-    const maskedChatHistory = maskChatHistory(baseMessages || [], masker.maskText);
-    const summaryPrompt = masker.maskText(
-      buildInterviewSummaryPrompt(buildTimingContextForSummary(answerTimingsRef.current || []))
-    );
-
-    const response = await fetch(apiEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token.trim()}`
-      },
-      signal,
-      body: JSON.stringify(buildSummaryRequestBody({
-        message: summaryPrompt,
-        resumeData: maskedResumeData,
-        jobDescription: maskedJdText,
-        chatHistory: maskedChatHistory,
-        score
-      }))
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error((errorData as any)?.error || '总结生成失败');
-    }
-
-    const result = await response.json().catch(() => ({} as any));
-    const unmaskedText = masker.unmaskText(result?.response || '');
-    return String(unmaskedText || '').trim();
-  };
 
   const handleSendMessage = async (
     textOverride?: string,
@@ -454,7 +268,16 @@ export const useInterviewChat = ({
         }
         let summary = '';
         try {
-          const summaryRaw = await generateInterviewSummary(baseMessages, requestAbortController.signal);
+          const summaryRaw = await generateInterviewSummary({
+            baseMessages,
+            signal: requestAbortController.signal,
+            getBackendAuthToken,
+            buildApiUrl,
+            resumeData,
+            jdText,
+            score,
+            answerTimings: answerTimingsRef.current || [],
+          });
           const cleaned = stripMarkdownTableSeparators(summaryRaw);
           summary = isUnusableInterviewSummary(cleaned)
             ? buildFallbackInterviewSummary(baseMessages, answerTimingsRef.current || [])
@@ -636,37 +459,27 @@ export const useInterviewChat = ({
       const unmaskedText = masker.unmaskText(await streamInterviewResponse({
         token,
         requestBody,
-        baseMessages,
         streamingMessageId: streamId,
         signal: requestAbortController.signal,
+        buildApiUrl,
+        setStreamingText: (text: string) => {
+          setChatMessages(prev => {
+            const has = prev.some(msg => msg.id === streamId);
+            if (!has) {
+              const next = [...prev, { id: streamId, role: 'model' as const, text }];
+              chatMessagesRef.current = next as ChatMessage[];
+              return next;
+            }
+            const next = prev.map(msg => (
+              msg.id === streamId ? { ...msg, text } : msg
+            ));
+            chatMessagesRef.current = next as ChatMessage[];
+            return next;
+          });
+        },
       }));
 
-      const cleanMicroInterviewAnswerLimit = (text: string) =>
-        text
-          .replace(/[，,。\s]*请将回答控制在3分钟内[。！!？?]*/g, '')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
-      const cleanIntroLengthReminder = (text: string) =>
-        String(text || '')
-          .replace(/[^\n]*自我介绍偏长[^\n]*(\n)?/g, '')
-          .replace(/[^\n]*后续请控制在1分钟内[^\n]*(\n)?/g, '')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
-      const cleanRedundantReaskLine = (text: string) => {
-        const source = String(text || '').trim();
-        if (!source) return source;
-        const hasSupplementHint = /请你在回答中明确补充|请在回答中明确补充|请在回答中补充|请补充以下要点|请围绕上述要点补充/i.test(source);
-        if (!hasSupplementHint) return source;
-        const next = source
-          .split(/\r?\n/)
-          .filter((line) => !/^请重新回答\s*[：:]/.test(String(line || '').trim()))
-          .join('\n')
-          .replace(/\n{3,}/g, '\n\n')
-          .trim();
-        return next || source;
-      };
-      const normalizedText = String(unmaskedText || '').replace(/\*/g, '').trim();
-      const safeText = cleanRedundantReaskLine(cleanIntroLengthReminder(cleanMicroInterviewAnswerLimit(normalizedText)));
+      const safeText = normalizeInterviewReplyText(unmaskedText);
       if (safeText === '结束面试' || safeText === '结束微访谈') {
         const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
         await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
@@ -675,9 +488,7 @@ export const useInterviewChat = ({
       const parsedReply = isInterviewChat
         ? splitNextQuestion(safeText)
         : { cleaned: safeText, next: '' };
-      const aiSignalsFollowUp = isInterviewChat && /回答(?:过短|不足|不完整|模糊|空泛|几乎为空)|信息量(?:不足|不够)|无法识别|请(?:针对该问题)?重新回答|请补充|请继续补充|追问[:：]/.test(
-        String(parsedReply.cleaned || safeText || '')
-      );
+      const aiSignalsFollowUp = isInterviewChat && shouldTreatAsFollowUpSignal(parsedReply.cleaned || safeText || '');
       const shouldBlockNextQuestion = Boolean(
         isInterviewChat &&
         (normalizedFollowUpDecision.shouldFollowUp || aiSignalsFollowUp)

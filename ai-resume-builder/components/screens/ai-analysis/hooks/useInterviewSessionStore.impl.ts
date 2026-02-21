@@ -11,6 +11,15 @@ import {
   parseInterviewScopedKey
 } from '../id-utils';
 import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import {
+  buildAnalysisSessionStorageKey,
+  buildInterviewSessionStorageKey,
+  isSessionChatModeMatched,
+  isSessionModeMatched,
+  isSessionSceneMatched,
+  normalizeSceneText,
+  pickFirstNonEmptyText,
+} from '../interview-session-key-utils';
 
 type AnalysisSessionState =
   | 'idle'
@@ -58,106 +67,10 @@ export const useInterviewSessionStore = ({
     if (!uid) return LAST_ANALYSIS_KEY;
     return `${LAST_ANALYSIS_KEY}:${uid}`;
   };
-  const pickFirstNonEmptyText = (...values: Array<any>) => {
-    for (const value of values) {
-      const text = String(value ?? '').trim();
-      if (text) return text;
-    }
-    return '';
-  };
   const getCurrentInterviewType = () => normalizeInterviewType(getActiveInterviewType());
   const getCurrentInterviewMode = () => normalizeInterviewMode(getActiveInterviewMode());
   const getCurrentChatMode = () => (isInterviewMode ? 'interview' : 'micro') as 'interview' | 'micro';
-  const normalizeSceneText = (value: any) =>
-    String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
   const getCurrentInterviewFocus = () => normalizeSceneText(getActiveInterviewFocus());
-  const hashSceneSignature = (value: string) => {
-    const normalized = normalizeSceneText(value) || 'scene_default';
-    let hash = 0;
-    for (let i = 0; i < normalized.length; i += 1) {
-      hash = (hash * 31 + normalized.charCodeAt(i)) | 0;
-    }
-    return `s_${Math.abs(hash)}`;
-  };
-  const buildInterviewSessionStorageKey = ({
-    jdText,
-    interviewType,
-    interviewMode,
-    targetCompany: sceneTargetCompany,
-    interviewFocus: sceneInterviewFocus,
-    resumeId,
-    chatMode,
-  }: {
-    jdText: string;
-    interviewType: string;
-    interviewMode: string;
-    targetCompany?: string;
-    interviewFocus?: string;
-    resumeId?: string | number | null;
-    chatMode: 'interview' | 'micro';
-  }) => {
-    const baseKey = makeInterviewSessionKey(jdText, interviewType, interviewMode);
-    if (chatMode !== 'interview') return baseKey;
-    const signature = [
-      `rid=${String(resumeId ?? '').trim() || 'unknown'}`,
-      `tc=${normalizeSceneText(sceneTargetCompany) || 'none'}`,
-      `focus=${normalizeSceneText(sceneInterviewFocus) || 'none'}`,
-      `mode=${String(chatMode).trim().toLowerCase()}`,
-    ].join('|');
-    return `${baseKey}__scene_${hashSceneSignature(signature)}`;
-  };
-  const buildAnalysisSessionStorageKey = ({
-    jdKey,
-    interviewType,
-    interviewMode,
-    chatMode,
-  }: {
-    jdKey: string;
-    interviewType: any;
-    interviewMode?: any;
-    chatMode: 'interview' | 'micro';
-  }) => `${makeInterviewScopedKey(jdKey, interviewType, interviewMode)}__${chatMode}`;
-
-  const isSessionModeMatched = (session: any, desiredMode: string) => {
-    const current = String(desiredMode || '').trim().toLowerCase();
-    const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
-    if (!current) return true;
-    // Legacy session without mode marker: do not auto-continue to avoid simple/comprehensive cross-hit.
-    if (!sessionMode) return false;
-    return sessionMode === current;
-  };
-  const isSessionSceneMatched = ({
-    session,
-    expectedChatMode,
-    expectedTargetCompany,
-    expectedInterviewFocus,
-    expectedResumeId,
-  }: {
-    session: any;
-    expectedChatMode: string;
-    expectedTargetCompany: string;
-    expectedInterviewFocus: string;
-    expectedResumeId: string;
-  }) => {
-    const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-    if (!chatMode || chatMode !== expectedChatMode) return false;
-    const sessionTargetCompany = normalizeSceneText(session?.targetCompany);
-    const sessionInterviewFocus = normalizeSceneText(session?.interviewFocus);
-    const sessionResumeId = String(session?.resumeId || '').trim();
-    return (
-      sessionTargetCompany === expectedTargetCompany &&
-      sessionInterviewFocus === expectedInterviewFocus &&
-      sessionResumeId === expectedResumeId
-    );
-  };
-  const isSessionChatModeMatched = (session: any, expectedMode: string) => {
-    const expected = String(expectedMode || '').trim().toLowerCase();
-    const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-    if (!expected) return true;
-    // Strict mode isolation: only exact chatMode can be matched.
-    if (!chatMode) return false;
-    return chatMode === expected;
-  };
 
   const resolveInterviewSession = (
     sessions: any,

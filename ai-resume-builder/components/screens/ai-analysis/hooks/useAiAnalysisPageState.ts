@@ -4,6 +4,7 @@ import type { ResumeData } from '../../../../types';
 import type { AnalysisReport, ChatMessage, Suggestion } from '../types';
 import { deriveInitialStepFromPath } from './useAiRouteSync';
 import type { AiAnalysisStep } from '../step-types';
+import { pushRuntimeTrace } from '../../../../src/runtime-diagnostics';
 
 const DEFAULT_AVATAR = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='12' r='12' fill='%23f1f5f9'/%3E%3Cg transform='translate(4.8, 4.8) scale(0.6)' fill='%2394a3b8'%3E%3Cpath d='M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'%3E%3C/path%3E%3C/g%3E%3C/svg%3E`;
 
@@ -24,9 +25,19 @@ export const useAiAnalysisPageState = () => {
           guard.count = 0;
         }
         guard.count += 1;
+        pushRuntimeTrace('ai_analysis', 'step_transition', {
+          prev,
+          next: resolved,
+          windowCount: guard.count,
+        });
         // Safety net for accidental step oscillation loops (prevents React #185).
         if (guard.count > 40) {
           console.warn('[AI_ANALYSIS] blocked excessive step switching loop', { prev, next: resolved });
+          pushRuntimeTrace('ai_analysis', 'step_transition_blocked', {
+            prev,
+            next: resolved,
+            windowCount: guard.count,
+          });
           return prev;
         }
         return resolved;

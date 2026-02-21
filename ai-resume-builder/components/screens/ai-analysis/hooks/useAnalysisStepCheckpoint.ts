@@ -1,6 +1,7 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { makeJdKey } from '../id-utils';
+import { pushRuntimeTrace } from '../../../../src/runtime-diagnostics';
 
 type Params = {
   currentStep: string;
@@ -30,6 +31,8 @@ export const useAnalysisStepCheckpoint = ({
   isInterviewMode = false,
   persistAnalysisSessionState,
 }: Params) => {
+  const lastCheckpointRef = useRef<string>('');
+
   useEffect(() => {
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
     if (!effectiveJdText) return;
@@ -89,6 +92,24 @@ export const useAnalysisStepCheckpoint = ({
       if (hasStartedSession) return;
     }
 
+    const checkpointKey = [
+      String((resumeData as any)?.id || ''),
+      mapped.state,
+      mapped.step,
+      effectiveJdText,
+      String(targetCompany || resumeData?.targetCompany || ''),
+      String(typeof score === 'number' ? score : ''),
+    ].join('|');
+    if (lastCheckpointRef.current === checkpointKey) return;
+    lastCheckpointRef.current = checkpointKey;
+    pushRuntimeTrace('ai_analysis.checkpoint', 'persist_session_state', {
+      step: currentStep,
+      state: mapped.state,
+      jdLen: effectiveJdText.length,
+      hasCompany: Boolean(String(targetCompany || resumeData?.targetCompany || '').trim()),
+      score: Number(score || 0),
+    });
+
     void persistAnalysisSessionState(mapped.state, {
       jdText: effectiveJdText,
       targetCompany: targetCompany || resumeData?.targetCompany || '',
@@ -99,8 +120,8 @@ export const useAnalysisStepCheckpoint = ({
   }, [
     currentStep,
     jdText,
-    persistAnalysisSessionState,
     resumeData?.lastJdText,
+    resumeData?.id,
     resumeData?.targetCompany,
     score,
     targetCompany,

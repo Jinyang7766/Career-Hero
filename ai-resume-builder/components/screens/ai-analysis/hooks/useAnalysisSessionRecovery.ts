@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { pushRuntimeTrace } from '../../../../src/runtime-diagnostics';
 
 type Params = {
   resumeData: any;
@@ -65,6 +66,11 @@ export const useAnalysisSessionRecovery = ({
     // Ignore stale `session.step` (e.g. still "report") to avoid step oscillation loops.
     if (status === 'interview_done') {
       if (!isOnCompletedFlow) {
+        pushRuntimeTrace('ai_analysis.recovery', 'goto_completed', {
+          from: currentStep,
+          to: completedStep,
+          actionMarker,
+        });
         navigateToStep(completedStep, true);
       }
       recoveredSessionKeyRef.current = actionMarker;
@@ -80,6 +86,11 @@ export const useAnalysisSessionRecovery = ({
       }
       restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       if (currentStep !== 'chat') {
+        pushRuntimeTrace('ai_analysis.recovery', 'open_chat_from_in_progress', {
+          from: currentStep,
+          actionMarker,
+          status: String(status || '').toLowerCase(),
+        });
         openChat('internal', { skipRestore: true });
       }
       recoveredSessionKeyRef.current = actionMarker;
@@ -94,6 +105,11 @@ export const useAnalysisSessionRecovery = ({
       // otherwise stale messages from previous mode can leak into current mode.
       restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       if (currentStep !== 'chat') {
+        pushRuntimeTrace('ai_analysis.recovery', 'open_chat_from_session_step', {
+          from: currentStep,
+          actionMarker,
+          sessionStep: String(sessionStep || '').toLowerCase(),
+        });
         openChat('internal', { skipRestore: true });
       }
       recoveredSessionKeyRef.current = actionMarker;
@@ -105,6 +121,11 @@ export const useAnalysisSessionRecovery = ({
       currentStep !== sessionStep
     ) {
       const normalizedStep = sessionStep === 'micro_intro' ? 'report' : sessionStep;
+      pushRuntimeTrace('ai_analysis.recovery', 'goto_session_step', {
+        from: currentStep,
+        to: normalizedStep,
+        actionMarker,
+      });
       navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', true);
       recoveredSessionKeyRef.current = actionMarker;
       return;
@@ -115,6 +136,10 @@ export const useAnalysisSessionRecovery = ({
       status === 'interview_in_progress' &&
       (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
     ) {
+      pushRuntimeTrace('ai_analysis.recovery', 'goto_report_from_in_progress', {
+        from: currentStep,
+        actionMarker,
+      });
       navigateToStep('report', true);
       recoveredSessionKeyRef.current = actionMarker;
       return;
@@ -125,6 +150,10 @@ export const useAnalysisSessionRecovery = ({
       (currentStep === 'jd_input' || currentStep === 'resume_select') &&
       (resumeData.analysisSnapshot || loadLastAnalysis())
     ) {
+      pushRuntimeTrace('ai_analysis.recovery', 'goto_report_from_ready', {
+        from: currentStep,
+        actionMarker,
+      });
       navigateToStep('report', true);
       recoveredSessionKeyRef.current = actionMarker;
       return;
