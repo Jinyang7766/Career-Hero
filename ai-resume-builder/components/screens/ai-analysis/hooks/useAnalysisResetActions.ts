@@ -53,6 +53,24 @@ export const useAnalysisResetActions = ({
   navigateToStep,
   showToast,
 }: Params) => {
+  const FORCE_JD_RESUME_ID_KEY = 'ai_force_jd_resume_id';
+  const purgeLocalFinalReportCache = React.useCallback(() => {
+    try {
+      const keysToDelete: string[] = [];
+      for (let i = 0; i < localStorage.length; i += 1) {
+        const key = String(localStorage.key(i) || '');
+        if (!key) continue;
+        if (key.startsWith('final_report_result:') || key.startsWith('final_report_charge:')) {
+          keysToDelete.push(key);
+        }
+      }
+      keysToDelete.forEach((key) => {
+        try { localStorage.removeItem(key); } catch { /* ignore */ }
+      });
+    } catch {
+      // ignore storage failures
+    }
+  }, []);
   const retainInterviewSessionsOnly = React.useCallback((sessions: any) => {
     const source = sessions && typeof sessions === 'object' ? sessions : {};
     const kept: Record<string, any> = {};
@@ -74,9 +92,11 @@ export const useAnalysisResetActions = ({
   }, []);
 
   const CACHE_BYPASS_ONCE_KEY = 'ai_analysis_bypass_cache_once';
+  const FINAL_REPORT_BYPASS_ONCE_KEY = 'ai_final_report_bypass_cache_once';
   const markBypassCacheOnce = React.useCallback(() => {
     try {
       localStorage.setItem(CACHE_BYPASS_ONCE_KEY, '1');
+      localStorage.setItem(FINAL_REPORT_BYPASS_ONCE_KEY, '1');
     } catch {
       // ignore storage failures
     }
@@ -90,6 +110,7 @@ export const useAnalysisResetActions = ({
     setPostInterviewSummary('');
     setIsFromCache(false);
     clearLastAnalysis();
+    purgeLocalFinalReportCache();
     markBypassCacheOnce();
     const currentResumeId = String((resumeData as any)?.id || '').trim();
     if (!currentResumeId || !resumeData) return;
@@ -98,6 +119,8 @@ export const useAnalysisResetActions = ({
       analysisSnapshot: null,
       analysisSessionByJd: retainInterviewAnalysisSessionsOnly((resumeData as any)?.analysisSessionByJd),
       interviewSessions: retainInterviewSessionsOnly((resumeData as any)?.interviewSessions),
+      postInterviewFinalReport: null,
+      analysisDossierLatest: null,
       score: 0,
     };
     setResumeData(updatedResumeData as any);
@@ -142,6 +165,7 @@ export const useAnalysisResetActions = ({
     })();
   }, [
     clearLastAnalysis,
+    purgeLocalFinalReportCache,
     markBypassCacheOnce,
     resumeData,
     setAllResumes,
@@ -191,6 +215,7 @@ export const useAnalysisResetActions = ({
       localStorage.removeItem('ai_chat_prev_step');
       localStorage.removeItem('ai_chat_entry_source');
       localStorage.removeItem('ai_last_analysis_snapshot');
+      purgeLocalFinalReportCache();
       markBypassCacheOnce();
     };
 
@@ -212,6 +237,8 @@ export const useAnalysisResetActions = ({
         analysisSnapshot: null,
         analysisSessionByJd: retainInterviewAnalysisSessionsOnly(sourceResumeData?.analysisSessionByJd),
         interviewSessions: retainInterviewSessionsOnly(sourceResumeData?.interviewSessions),
+        postInterviewFinalReport: null,
+        analysisDossierLatest: null,
         analysisBindings: {},
         diagnosisProgress: 0,
         latestAnalysisStep: '',
@@ -265,6 +292,11 @@ export const useAnalysisResetActions = ({
       });
 
       clearLocalAnalysisState();
+      try {
+        localStorage.setItem(FORCE_JD_RESUME_ID_KEY, resumeIdStr);
+      } catch {
+        // ignore storage failures
+      }
       sourceResumeIdRef.current = null;
       setSelectedResumeId(null);
       setAnalysisResumeId(null);
@@ -296,6 +328,7 @@ export const useAnalysisResetActions = ({
     setForceReportEntry,
     setResumeData,
     markBypassCacheOnce,
+    purgeLocalFinalReportCache,
     showToast,
     sourceResumeIdRef,
     retainInterviewAnalysisSessionsOnly,

@@ -56,6 +56,7 @@ export const useResumeSelection = ({
   isSameResumeId,
   isInterviewMode,
 }: Params) => {
+  const FORCE_JD_RESUME_ID_KEY = 'ai_force_jd_resume_id';
   const normalizeStep = (step: any) => {
     const v = String(step || '').trim().toLowerCase();
     return ['report', 'chat', 'final_report', 'comparison', 'interview_report', 'micro_intro'].includes(v) ? v : '';
@@ -110,6 +111,17 @@ export const useResumeSelection = ({
     preferReport: boolean = false,
     targetStep?: 'report' | 'chat' | 'final_report'
   ) => {
+    let effectivePreferReport = preferReport;
+    try {
+      const forcedResumeId = String(localStorage.getItem(FORCE_JD_RESUME_ID_KEY) || '').trim();
+      if (forcedResumeId && String(id) === forcedResumeId) {
+        effectivePreferReport = false;
+        localStorage.removeItem(FORCE_JD_RESUME_ID_KEY);
+      }
+    } catch {
+      // ignore storage failures
+    }
+
     setSelectedResumeId(id);
     sourceResumeIdRef.current = id;
     setAnalysisResumeId(id);
@@ -121,7 +133,7 @@ export const useResumeSelection = ({
       message: `正在读取《${selectedTitle}》...`,
     });
 
-    if (!preferReport || isInterviewMode) {
+    if (!effectivePreferReport || isInterviewMode) {
       navigateToStep('jd_input');
     }
 
@@ -200,7 +212,7 @@ export const useResumeSelection = ({
           setTargetCompany((finalResumeData as any).targetCompany);
         }
 
-        if (preferReport || isInterviewMode) {
+        if (effectivePreferReport || isInterviewMode) {
           applyAnalysisSnapshot((finalResumeData as any).analysisSnapshot);
           if ((finalResumeData as any).analysisSnapshot) {
             saveLastAnalysis({
@@ -214,7 +226,7 @@ export const useResumeSelection = ({
           }
         }
 
-        if (preferReport && !isInterviewMode) {
+        if (effectivePreferReport && !isInterviewMode) {
           const inferredTarget = inferTargetStepFromResume(resume, targetStep);
           if (inferredTarget === 'chat' && openChat) {
             window.setTimeout(() => {

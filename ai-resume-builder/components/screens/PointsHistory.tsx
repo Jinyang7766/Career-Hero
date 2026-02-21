@@ -11,6 +11,7 @@ type LedgerRow = {
   source_type?: string | null;
   source_id?: string | null;
   note?: string | null;
+  metadata?: any;
   balance_after?: number | null;
   created_at: string;
 };
@@ -19,20 +20,62 @@ const actionToInfo = (action: string) => {
   const act = String(action || '').toLowerCase();
   switch (act) {
     case 'analysis_consume':
-      return { label: 'AI 诊断', icon: 'analytics', color: 'rose' };
+      return { label: 'AI 初步诊断', icon: 'assessment', color: 'rose' };
+    case 'analysis_refund':
+      return { label: '诊断退还', icon: 'refresh', color: 'emerald' };
     case 'interview_consume':
-      return { label: 'AI 面试', icon: 'chat_bubble', color: 'rose' };
+      return { label: 'AI 面试', icon: 'forum', color: 'rose' };
+    case 'interview_refund':
+      return { label: '面试退还', icon: 'refresh', color: 'emerald' };
+    case 'micro_interview_consume':
+      return { label: '微访谈', icon: 'forum', color: 'rose' };
+    case 'micro_interview_refund':
+      return { label: '微访谈退还', icon: 'refresh', color: 'emerald' };
+    case 'final_report_consume':
+      return { label: '最终报告', icon: 'description', color: 'rose' };
+    case 'final_report_refund':
+      return { label: '最终报告退还', icon: 'refresh', color: 'emerald' };
     case 'referral_inviter_bonus':
       return { label: '邀请奖励', icon: 'redeem', color: 'emerald' };
     case 'referral_invited_bonus':
       return { label: '注册礼包', icon: 'card_giftcard', color: 'emerald' };
     case 'manual_adjust':
-      return { label: '后台调整', icon: 'tune', color: 'blue' };
+      return { label: '后台调整', icon: 'blue' };
     default:
       if (act.includes('bonus')) return { label: '系统奖励', icon: 'stars', color: 'emerald' };
+      if (act.includes('refund')) return { label: '积分退还', icon: 'refresh', color: 'emerald' };
       if (act.includes('consume')) return { label: '积分消费', icon: 'shopping_cart', color: 'rose' };
       return { label: action || '积分变动', icon: 'receipt_long', color: 'slate' };
   }
+};
+
+const parseInterviewLedgerTags = (row: LedgerRow) => {
+  const meta = (row?.metadata && typeof row.metadata === 'object') ? row.metadata : {};
+  const note = String(row?.note || '').trim();
+  let scenario = String(meta?.scenario || '').trim().toLowerCase();
+  let mode = String(meta?.mode || '').trim().toLowerCase();
+
+  if (!scenario && note.includes('场景:')) {
+    if (note.includes('技术深挖')) scenario = 'technical';
+    else if (note.includes('HR面')) scenario = 'hr';
+    else scenario = 'general';
+  }
+  if (!mode && note.includes('模式:')) {
+    if (note.includes('简单') || note.includes('极速')) mode = 'simple';
+    else if (note.includes('全面') || note.includes('详细')) mode = 'comprehensive';
+  }
+
+  const scenarioLabel =
+    scenario === 'technical' ? '技术深挖'
+      : scenario === 'hr' ? 'HR面'
+        : scenario === 'general' ? '通用'
+          : '';
+  const modeLabel =
+    mode === 'simple' ? '简单'
+      : mode === 'comprehensive' ? '全面'
+        : '';
+
+  return { scenarioLabel, modeLabel };
 };
 
 const PointsHistory: React.FC = () => {
@@ -219,6 +262,7 @@ const PointsHistory: React.FC = () => {
                     {group.map((row) => {
                       const info = actionToInfo(row.action);
                       const isGain = Number(row.delta) > 0;
+                      const tags = parseInterviewLedgerTags(row);
                       return (
                         <div
                           key={String(row.id)}

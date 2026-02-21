@@ -1,5 +1,6 @@
 import React from 'react';
 import type { ResumeData } from '../../../../types';
+import { formatTimeline } from '../../../../src/timeline-utils';
 import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
 import ReportFeedback from '../ReportFeedback';
@@ -387,10 +388,18 @@ const PostInterviewReportPage: React.FC<Props> = ({
     if (!allowInline) {
       return <p className="whitespace-pre-wrap">{summaryText}</p>;
     }
-    const summaryNotes = (annBySection.summary || [])
+    const rawSummaryNotes = (annBySection.summary || [])
       .filter((n) => !isModuleOnlyNote(n))
       .filter((n) => !String(n.targetId || '').trim())
       .slice(0, 6);
+    const seenSummarySignatures = new Set<string>();
+    const summaryNotes = rawSummaryNotes.filter((n) => {
+      const sig = noteSignature(n);
+      if (!sig) return false;
+      if (seenSummarySignatures.has(sig)) return false;
+      seenSummarySignatures.add(sig);
+      return true;
+    });
     const summaryUniform = getUniformSectionNote('summary');
     if (summaryUniform?.reason) {
       return <p className="whitespace-pre-wrap">{summaryText}</p>;
@@ -516,8 +525,10 @@ const PostInterviewReportPage: React.FC<Props> = ({
   const renderResume = (data: ResumeData | null, withAnnotations: boolean) => {
     if (!data) return <p className="text-sm text-slate-500 dark:text-slate-400">暂无简历内容</p>;
     const workItems = (data as any).workExps || [];
+    const educationItems = (data as any).educations || [];
     const projectItems = (data as any).projects || [];
     const hasWorkContent = Array.isArray(workItems) && workItems.length > 0;
+    const hasEducationContent = Array.isArray(educationItems) && educationItems.length > 0;
     const hasProjectContent = Array.isArray(projectItems) && projectItems.length > 0;
     return (
       <div className="space-y-3">
@@ -535,6 +546,20 @@ const PostInterviewReportPage: React.FC<Props> = ({
         <ResumeBlock title="工作经历">
           {withAnnotations && hasWorkContent && renderModuleOverview('workExps', '工作经历')}
           {hasWorkContent ? renderWorkList(workItems, withAnnotations) : <p className="text-sm text-slate-500 dark:text-slate-400">暂无工作经历</p>}
+        </ResumeBlock>
+        {renderModuleFeedback()}
+        <ResumeBlock title="教育背景">
+          {hasEducationContent ? (
+            educationItems.map((e: any, idx: number) => (
+              <div key={String(e?.id ?? idx)} className="mb-3 last:mb-0">
+                <p className="font-semibold">{e.school || e.title || '教育经历'}</p>
+                <p className="text-xs opacity-80">
+                  {e.degree || ''}{(e.degree || (e.major || e.subtitle)) ? ' · ' : ''}{e.major || e.subtitle || ''}
+                  {getDisplayDate(e) ? ` · ${getDisplayDate(e)}` : ''}
+                </p>
+              </div>
+            ))
+          ) : <p className="text-sm text-slate-500 dark:text-slate-400">暂无教育背景</p>}
         </ResumeBlock>
         {renderModuleFeedback()}
         <ResumeBlock title="项目经历">
@@ -609,18 +634,28 @@ const PostInterviewReportPage: React.FC<Props> = ({
     });
   };
 
+  const updateGeneratedEducationField = (index: number, field: string, value: string) => {
+    setEditableGeneratedResume((prev) => {
+      if (!prev) return prev;
+      const list = Array.isArray((prev as any).educations) ? [...((prev as any).educations as any[])] : [];
+      if (!list[index]) return prev;
+      const nextItem = { ...list[index], [field]: value };
+      if (field === 'title') nextItem.school = value;
+      if (field === 'subtitle') nextItem.major = value;
+      if (field === 'major') nextItem.subtitle = value;
+      list[index] = nextItem;
+      return { ...prev, educations: list as any };
+    });
+  };
+
   const getDisplayDate = (item: any) => {
-    const date = String(item?.date || '').trim();
-    if (date) return date;
-    const start = String(item?.startDate || '').trim();
-    const end = String(item?.endDate || '').trim();
-    if (start && end) return `${start} - ${end}`;
-    return '';
+    return formatTimeline(item);
   };
 
   const renderEditableGeneratedResume = (data: ResumeData | null) => {
     if (!data) return <p className="text-sm text-slate-500 dark:text-slate-400">暂无简历内容</p>;
     const workItems = Array.isArray((data as any).workExps) ? (data as any).workExps : [];
+    const educationItems = Array.isArray((data as any).educations) ? (data as any).educations : [];
     const projectItems = Array.isArray((data as any).projects) ? (data as any).projects : [];
     const skillsText = Array.isArray((data as any).skills) ? ((data as any).skills as string[]).join('、') : '';
     return (
@@ -651,6 +686,19 @@ const PostInterviewReportPage: React.FC<Props> = ({
           ))}
         </ResumeBlock>
         {renderModuleFeedback()}
+        <ResumeBlock title="教育背景">
+          {educationItems.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 italic">暂无教育背景</p> : educationItems.map((e: any, idx: number) => (
+            <div key={String(e?.id ?? idx)} className="mb-6 last:mb-0 space-y-3 pb-6 last:pb-0 border-b last:border-0 border-slate-100 dark:border-white/5">
+              <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(e?.school || e?.title || '')} onChange={(ev) => updateGeneratedEducationField(idx, 'title', ev.target.value)} placeholder="学校" />
+              <div className="grid grid-cols-2 gap-3">
+                <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(e?.degree || '')} onChange={(ev) => updateGeneratedEducationField(idx, 'degree', ev.target.value)} placeholder="学历" />
+                <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(e?.major || e?.subtitle || '')} onChange={(ev) => updateGeneratedEducationField(idx, 'major', ev.target.value)} placeholder="专业" />
+              </div>
+              <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={getDisplayDate(e)} onChange={(ev) => updateGeneratedEducationField(idx, 'date', ev.target.value)} placeholder="时间" />
+            </div>
+          ))}
+        </ResumeBlock>
+        {renderModuleFeedback()}
         <ResumeBlock title="项目经历">
           {projectItems.length === 0 ? <p className="text-sm text-slate-500 dark:text-slate-400 italic">暂无项目经历</p> : projectItems.map((p: any, idx: number) => (
             <div key={String(p?.id ?? idx)} className="mb-6 last:mb-0 space-y-3 pb-6 last:pb-0 border-b last:border-0 border-slate-100 dark:border-white/5">
@@ -671,7 +719,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-500">
-      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2 size-9" iconClassName="text-[22px]" />
           <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">简历批改</h1>

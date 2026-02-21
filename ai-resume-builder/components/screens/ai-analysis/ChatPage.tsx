@@ -207,7 +207,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
     <div className="fixed inset-0 z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden pt-[76px]">
       <ToastOverlay />
 
-      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-white/80 dark:bg-[#1c2936]/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between p-4 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center gap-3">
           <BackButton onClick={handleStepBack} className="-ml-1 size-9" iconClassName="text-[22px]" />
           <div className="size-10 rounded-full overflow-hidden">

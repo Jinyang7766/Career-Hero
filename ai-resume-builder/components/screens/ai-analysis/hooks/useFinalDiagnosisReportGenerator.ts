@@ -12,6 +12,7 @@ const FINAL_REPORT_RESULTS = new Map<string, {
   generatedResume?: any | null;
 }>();
 const FINAL_REPORT_CACHE_VERSION = 'candidate_match_v3';
+const FINAL_REPORT_BYPASS_ONCE_KEY = 'ai_final_report_bypass_cache_once';
 
 const normalizeSkillToken = (value: any) => String(value || '').trim().replace(/[，,;；。]+$/g, '');
 const isResumeWordingAdvice = (text: string) => /(简历|措辞|排版|描述|模块|字数|版式|润色|改写|优化文案)/.test(text);
@@ -76,7 +77,7 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   chatMessagesRef: { current: any[] };
-  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
   refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
 };
 
@@ -110,7 +111,17 @@ export const useFinalDiagnosisReportGenerator = ({
   const [isGenerating, setIsGenerating] = useState(false);
   const requestKeyRef = useRef<string>('');
 
-    const makeCacheKey = (requestKey: string) => {
+  const hashText = (text: string) => {
+    const normalized = String(text || '').trim();
+    if (!normalized) return 'empty';
+    let hash = 0;
+    for (let i = 0; i < normalized.length; i += 1) {
+      hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+    }
+    return `${normalized.length}_${hash.toString(16)}`;
+  };
+
+  const makeCacheKey = (requestKey: string) => {
     const uid = String(currentUserId || 'anon').trim() || 'anon';
     return `final_report_result:${FINAL_REPORT_CACHE_VERSION}:${uid}:${requestKey}`;
   };
@@ -148,15 +159,34 @@ export const useFinalDiagnosisReportGenerator = ({
     if (!effectiveResume) return;
     const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
     const baseSummary = String(effectivePostInterviewSummary || finalReportSummary || '').trim();
+    const summaryFingerprint = hashText(baseSummary);
     const requestKey = [
       String((effectiveResume as any)?.id || ''),
       makeJdKey(effectiveJdText),
+      summaryFingerprint,
     ].join('|');
-    if (!requestKey || requestKeyRef.current === requestKey) return;
+    if (!requestKey) return;
+
+    let bypassCacheOnce = false;
+    try {
+      bypassCacheOnce = localStorage.getItem(FINAL_REPORT_BYPASS_ONCE_KEY) === '1';
+      if (bypassCacheOnce) {
+        localStorage.removeItem(FINAL_REPORT_BYPASS_ONCE_KEY);
+      }
+    } catch {
+      bypassCacheOnce = false;
+    }
+
+    if (requestKeyRef.current === requestKey && !bypassCacheOnce) return;
     requestKeyRef.current = requestKey;
 
+    if (bypassCacheOnce) {
+      setOverride(null);
+      setIsGenerating(false);
+    }
+
     const persistedReport = (resumeData as any)?.postInterviewFinalReport;
-    if (persistedReport && typeof persistedReport === 'object') {
+    if (!bypassCacheOnce && persistedReport && typeof persistedReport === 'object') {
       const persistedSummary = String(persistedReport?.summary || '').trim();
       const persistedScoreNum = Number(persistedReport?.score);
       const persistedJdText = String(persistedReport?.jdText || '').trim();
@@ -194,14 +224,14 @@ export const useFinalDiagnosisReportGenerator = ({
       }
     }
 
-    const cached = readCachedResult(requestKey);
+    const cached = bypassCacheOnce ? null : readCachedResult(requestKey);
     if (cached) {
       setOverride(cached);
       setIsGenerating(false);
       return;
     }
 
-    const existingTask = FINAL_REPORT_TASKS.get(requestKey);
+    const existingTask = bypassCacheOnce ? null : FINAL_REPORT_TASKS.get(requestKey);
     if (existingTask) {
       setIsGenerating(true);
       existingTask
@@ -238,7 +268,12 @@ export const useFinalDiagnosisReportGenerator = ({
         .map((x) => String(x || '').trim())
         .filter(Boolean)
         .join('\n');
-      const diagnosisDossier = (userProfile as any)?.analysis_dossier_latest || (resumeData as any)?.analysisDossierLatest || null;
+      const resumeDossier = (resumeData as any)?.analysisDossierLatest || null;
+      const resumeDossierJdKey = makeJdKey(String((resumeDossier as any)?.jdText || '').trim());
+      const effectiveJdKey = makeJdKey(effectiveJdText);
+      const diagnosisDossier = resumeDossier && (!effectiveJdText || resumeDossierJdKey === effectiveJdKey)
+        ? resumeDossier
+        : null;
       const resp = await fetch(buildApiUrl('/api/ai/analyze'), {
         method: 'POST',
         headers: {

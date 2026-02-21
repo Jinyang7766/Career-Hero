@@ -3,6 +3,7 @@ import { View, ScreenProps, ResumeData } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { buildApiUrl } from '../../src/api-config';
 import { recordResumeExportHistory } from '../../src/export-history';
+import { formatTimeline } from '../../src/timeline-utils';
 import BottomNav from '../BottomNav';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
@@ -12,25 +13,7 @@ import BackButton from '../shared/BackButton';
 
 // Format date range: handles 'date' field or 'startDate/endDate' fields
 const formatDateRange = (item: any): string => {
-  // Prefer start/end fields because editor mainly updates these fields.
-  // `date` can be stale after edits/import merges.
-  const startDate = item.startDate || '';
-  const endDate = item.endDate || '';
-
-  if (startDate && endDate) {
-    return `${startDate} - ${endDate}`;
-  } else if (startDate) {
-    return `${startDate} - 至今`;
-  } else if (endDate) {
-    return endDate;
-  }
-
-  // Fallback to legacy `date` only when start/end are empty.
-  if (item.date && item.date.trim()) {
-    return item.date;
-  }
-
-  return '';
+  return formatTimeline(item);
 };
 
 const resolveExperienceTitle = (item: any): string => {
@@ -120,6 +103,9 @@ const resolveJobTitle = (data: any): string => {
   return String(raw || '').trim() || '求职意向';
 };
 
+const resolveSummaryText = (data: any): string =>
+  String(data?.summary || data?.personalInfo?.summary || '').trim();
+
 // --- Template Definitions ---
 
 const TEMPLATE_OPTIONS = [
@@ -168,15 +154,33 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
           <span>{data?.personalInfo?.email || 'email@example.com'}</span>
           <span>•</span>
           <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+          {data?.personalInfo?.location && (
+            <>
+              <span>•</span>
+              <span>{data.personalInfo.location}</span>
+            </>
+          )}
+          {data?.personalInfo?.linkedin && (
+            <>
+              <span>•</span>
+              <span>{data.personalInfo.linkedin}</span>
+            </>
+          )}
+          {data?.personalInfo?.website && (
+            <>
+              <span>•</span>
+              <span>{data.personalInfo.website}</span>
+            </>
+          )}
         </div>
       </div>
     </div>
 
     {/* Summary */}
-    {data?.summary && (
+    {resolveSummaryText(data) && (
       <div className="mb-5 no-break">
         <h3 className="text-sm font-bold text-blue-600 uppercase border-b border-blue-100 pb-1 mb-2" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>个人简介</h3>
-        <p className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{data.summary}</p>
+        <p className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{resolveSummaryText(data)}</p>
       </div>
     )}
 
@@ -222,6 +226,9 @@ const ModernTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
               <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(proj) || '项目时间'}</span>
             </div>
             <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
+            {proj.link && (
+              <p className="text-[10px] text-blue-600 break-all" style={{ fontSize: '10px', color: '#2563eb' }}>{proj.link}</p>
+            )}
             <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{proj.description || '项目描述'}</p>
           </div>
         ))}
@@ -271,14 +278,17 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         )}
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+        {data?.personalInfo?.location && <span>{data.personalInfo.location}</span>}
+        {data?.personalInfo?.linkedin && <span>{data.personalInfo.linkedin}</span>}
+        {data?.personalInfo?.website && <span>{data.personalInfo.website}</span>}
       </div>
     </div>
 
     {/* Summary */}
-    {data?.summary && (
+    {resolveSummaryText(data) && (
       <div className="mb-8 px-2 no-break">
         <h3 className="text-sm font-bold text-gray-900 border-b-2 border-gray-900 mb-2 pb-0.5" style={{ fontSize: '14px', fontWeight: 'bold' }}>个人简介</h3>
-        <p className="text-xs text-gray-700 italic leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>{data.summary}</p>
+        <p className="text-xs text-gray-700 italic leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>{resolveSummaryText(data)}</p>
       </div>
     )}
 
@@ -324,6 +334,9 @@ const ClassicTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
               <span className="text-xs text-gray-600 italic" style={{ fontSize: '10px' }}>{formatDateRange(proj) || '项目时间'}</span>
             </div>
             <p className="text-xs font-bold text-gray-800 mb-1" style={{ fontSize: '10px', fontWeight: 'bold' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
+            {proj.link && (
+              <p className="text-xs text-blue-600 break-all" style={{ fontSize: '10px', color: '#2563eb' }}>{proj.link}</p>
+            )}
             <p className="text-xs text-gray-700 leading-relaxed text-justify" style={{ fontSize: '10px', lineHeight: '1.5' }}>{proj.description || '项目描述'}</p>
           </div>
         ))}
@@ -371,16 +384,19 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
         )}
         <span>{data?.personalInfo?.email || 'email@example.com'}</span>
         <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+        {data?.personalInfo?.location && <span>{data.personalInfo.location}</span>}
+        {data?.personalInfo?.linkedin && <span>{data.personalInfo.linkedin}</span>}
+        {data?.personalInfo?.website && <span>{data.personalInfo.website}</span>}
       </div>
     </div>
 
     <div className="flex flex-col gap-8">
       {/* Summary Section */}
-      {data?.summary && (
+      {resolveSummaryText(data) && (
         <section className="mb-6 no-break">
           <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px] mb-2" style={{ fontSize: '14px' }}>个人总结</h3>
           <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '12px' }}>
-            {data.summary}
+            {resolveSummaryText(data)}
           </p>
         </section>
       )}
@@ -436,6 +452,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData }> = ({ data }) => (
                   <span className="text-sm text-gray-600 font-mono" style={{ fontSize: '10px' }}>{formatDateRange(proj)}</span>
                 </div>
                 <p className="text-sm text-gray-700 mb-2 font-medium italic" style={{ fontSize: '10px' }}>{resolveExperienceSubtitle(proj)}</p>
+                {proj.link && <p className="text-sm text-blue-600 break-all mb-1" style={{ fontSize: '10px', color: '#2563eb' }}>{proj.link}</p>}
                 <p className="text-sm text-gray-800 leading-relaxed text-justify" style={{ fontSize: '10px' }}>{proj.description}</p>
               </div>
             ))}
@@ -589,19 +606,23 @@ const Preview: React.FC<ScreenProps> = () => {
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
-      <header className="absolute top-0 left-0 w-full z-30 flex items-center justify-between p-4 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
+        <div className="h-14 px-4 flex items-center justify-between relative">
         <BackButton
           onClick={goBack}
-          className="bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 text-slate-700 dark:text-white"
+          className="z-10"
         />
-        <h2 className="text-slate-800 dark:text-white text-lg font-bold tracking-tight">简历预览</h2>
+        <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
+          简历预览
+        </h2>
         <button
           onClick={() => navigateToView(View.EDITOR)}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white text-xs font-semibold"
+          className="z-10 flex items-center gap-1.5 h-9 px-3 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white text-xs font-semibold"
         >
           <span className="material-symbols-outlined text-[18px]">edit</span>
           编辑
         </button>
+        </div>
       </header>
 
       <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-slate-50 dark:bg-background-dark pt-24 pb-32 flex flex-col items-center gap-8" id="preview-area">

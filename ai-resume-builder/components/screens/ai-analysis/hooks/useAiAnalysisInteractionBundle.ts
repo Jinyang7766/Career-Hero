@@ -19,7 +19,7 @@ type Params = {
   targetCompany?: string;
   resumeData: any;
   makeJdKey: (v: string) => string;
-  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
   currentUserId?: string;
   setAllResumes?: (updater: (prev: any[]) => any[]) => void;
   setInterviewPlan: React.Dispatch<React.SetStateAction<string[]>>;

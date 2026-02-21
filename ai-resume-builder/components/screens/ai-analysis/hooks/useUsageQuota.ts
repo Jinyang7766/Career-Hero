@@ -19,6 +19,53 @@ export type QuotaKind =
   | 'interview_comprehensive';
 
 export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Params) => {
+  const normalizeScenario = (raw?: string) => {
+    const s = String(raw || '').trim().toLowerCase();
+    if (s === 'technical') return 'technical';
+    if (s === 'hr') return 'hr';
+    return 'general';
+  };
+  const normalizeMode = (raw?: string) => {
+    const m = String(raw || '').trim().toLowerCase();
+    if (m === 'simple') return 'simple';
+    if (m === 'comprehensive') return 'comprehensive';
+    return '';
+  };
+  const getScenarioLabel = (scenario?: string) => {
+    const s = normalizeScenario(scenario);
+    if (s === 'technical') return '复试';
+    if (s === 'hr') return 'HR面';
+    return '初试';
+  };
+  const getModeLabel = (mode?: string) => {
+    const m = normalizeMode(mode);
+    if (m === 'simple') return '简单';
+    if (m === 'comprehensive') return '全面';
+    return '';
+  };
+  const buildLedgerContext = (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => {
+    const scenario = normalizeScenario(context?.scenario);
+    const mode = normalizeMode(context?.mode);
+    const isInterview = kind !== 'analysis' && kind !== 'final_report';
+    const parts: string[] = [];
+    if (isInterview) {
+      parts.push(`${getScenarioLabel(scenario)}`);
+      if (mode) parts.push(`${getModeLabel(mode)}`);
+    }
+    return {
+      noteSuffix: parts.join(' '),
+      metadata: isInterview
+        ? {
+          kind,
+          scenario,
+          mode: mode || null,
+        }
+        : {
+          kind,
+        }
+    };
+  };
+
   const resolveNeededPoints = (kind: QuotaKind) => {
     if (kind === 'analysis') return USAGE_POINT_COST.analysis;
     if (kind === 'micro_interview') return USAGE_POINT_COST.micro_interview;
@@ -30,12 +77,15 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
   const isInterviewKind = (kind: QuotaKind) =>
     kind !== 'analysis' && kind !== 'final_report';
   const getKindLabel = (kind: QuotaKind) => {
-    if (kind === 'analysis') return '诊断';
+    if (kind === 'analysis') return '初步诊断';
     if (kind === 'micro_interview') return '微访谈';
     if (kind === 'final_report') return '最终报告';
     return '面试';
   };
-  const consumeUsageQuota = React.useCallback(async (kind: QuotaKind) => {
+  const consumeUsageQuota = React.useCallback(async (
+    kind: QuotaKind,
+    context?: { scenario?: string; mode?: string }
+  ) => {
     const userId = String(currentUserId || '').trim();
     if (!userId) return true;
 
@@ -74,6 +124,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
         if (isFirstTime) {
           const starterPoints = PLAN_MONTHLY_POINTS.STARTER;
           const afterConsume = Math.max(0, starterPoints - neededPoints);
+          const ledgerContext = buildLedgerContext(kind, context);
           const giftResult = await DatabaseService.updateUser(userId, {
             membership_tier: MembershipTier.STARTER,
             points_balance: afterConsume
@@ -84,8 +135,9 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
               delta: -neededPoints,
               action: !isInterviewKind(kind) ? 'analysis_consume' : 'interview_consume',
               sourceType: !isInterviewKind(kind) ? 'analysis' : 'interview',
-              note: `Starter 激活后扣减${getKindLabel(kind)}积分`,
+              note: isInterviewKind(kind) ? ledgerContext.noteSuffix : getKindLabel(kind),
               balanceAfter: afterConsume,
+              metadata: ledgerContext.metadata,
             });
             showToast(`Starter 已激活，已扣除 ${neededPoints} 积分`, 'success');
             return true;
@@ -104,17 +156,22 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
       showToast('扣减积分失败，请稍后重试', 'error');
       return false;
     }
+
+    const ledgerContext = buildLedgerContext(kind, context);
+    const note = isInterviewKind(kind) ? ledgerContext.noteSuffix : getKindLabel(kind);
+
     await DatabaseService.createPointsLedger({
       userId,
       delta: -neededPoints,
       action: !isInterviewKind(kind) ? 'analysis_consume' : 'interview_consume',
       sourceType: !isInterviewKind(kind) ? 'analysis' : 'interview',
-      note: `AI ${getKindLabel(kind)}扣减`,
+      note: note,
       balanceAfter: nextPoints,
+      metadata: ledgerContext.metadata,
     });
 
     return true;
-  }, [currentUserId, navigateToView, showToast]);
+  }, [buildLedgerContext, currentUserId, navigateToView, showToast]);
 
   const refundUsageQuota = React.useCallback(async (
     kind: QuotaKind,

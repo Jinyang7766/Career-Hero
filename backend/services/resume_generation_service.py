@@ -1,3 +1,4 @@
+import copy
 import json
 import re
 
@@ -5,35 +6,89 @@ from google.genai import types
 
 
 def _build_resume_fallback(resume_data):
-    return {
-        'personalInfo': resume_data.get('personalInfo', {}) or {},
-        'workExps': resume_data.get('workExps', []) or [],
-        'educations': resume_data.get('educations', []) or [],
-        'projects': resume_data.get('projects', []) or [],
-        'skills': resume_data.get('skills', []) or [],
-        'summary': resume_data.get('summary', '') or '',
-    }
+    return _sync_resume_alias_fields(_normalize_resume_shape(resume_data or {}))
 
 
 def _normalize_resume_shape(data):
-    resume = data if isinstance(data, dict) else {}
-    return {
-        'personalInfo': resume.get('personalInfo', {}) or {},
-        'workExps': resume.get('workExps', []) or [],
-        'educations': resume.get('educations', []) or [],
-        'projects': resume.get('projects', []) or [],
-        'skills': resume.get('skills', []) or [],
-        'summary': resume.get('summary', '') or '',
-    }
+    resume = copy.deepcopy(data) if isinstance(data, dict) else {}
+    if not isinstance(resume.get('personalInfo'), dict):
+        resume['personalInfo'] = {}
+    if not isinstance(resume.get('workExps'), list):
+        resume['workExps'] = []
+    if not isinstance(resume.get('educations'), list):
+        resume['educations'] = []
+    if not isinstance(resume.get('projects'), list):
+        resume['projects'] = []
+    if not isinstance(resume.get('skills'), list):
+        resume['skills'] = []
+    if resume.get('summary') is None:
+        resume['summary'] = ''
+    return resume
 
 
 def _remove_location_field(resume):
+    return _normalize_resume_shape(resume or {})
+
+
+def _build_date_from_range(start_date, end_date):
+    start = str(start_date or '').strip()
+    end = str(end_date or '').strip()
+    if start and end:
+        return f"{start} - {end}"
+    return start or end
+
+
+def _sync_resume_alias_fields(resume):
     next_resume = _normalize_resume_shape(resume or {})
-    personal_info = next_resume.get('personalInfo') or {}
-    if isinstance(personal_info, dict) and 'location' in personal_info:
-        personal_info = dict(personal_info)
-        personal_info.pop('location', None)
-    next_resume['personalInfo'] = personal_info
+
+    for item in next_resume.get('workExps') or []:
+        if not isinstance(item, dict):
+            continue
+        company = str(item.get('company') or '').strip()
+        title = str(item.get('title') or '').strip()
+        position = str(item.get('position') or '').strip()
+        subtitle = str(item.get('subtitle') or '').strip()
+        if company and not title:
+            item['title'] = company
+        if title and not company:
+            item['company'] = title
+        if position and not subtitle:
+            item['subtitle'] = position
+        if subtitle and not position:
+            item['position'] = subtitle
+        if not str(item.get('date') or '').strip():
+            item['date'] = _build_date_from_range(item.get('startDate'), item.get('endDate'))
+
+    for item in next_resume.get('educations') or []:
+        if not isinstance(item, dict):
+            continue
+        school = str(item.get('school') or '').strip()
+        title = str(item.get('title') or '').strip()
+        major = str(item.get('major') or '').strip()
+        subtitle = str(item.get('subtitle') or '').strip()
+        if school and not title:
+            item['title'] = school
+        if title and not school:
+            item['school'] = title
+        if major and not subtitle:
+            item['subtitle'] = major
+        if subtitle and not major:
+            item['major'] = subtitle
+        if not str(item.get('date') or '').strip():
+            item['date'] = _build_date_from_range(item.get('startDate'), item.get('endDate'))
+
+    for item in next_resume.get('projects') or []:
+        if not isinstance(item, dict):
+            continue
+        role = str(item.get('role') or '').strip()
+        subtitle = str(item.get('subtitle') or '').strip()
+        if role and not subtitle:
+            item['subtitle'] = role
+        if subtitle and not role:
+            item['role'] = subtitle
+        if not str(item.get('date') or '').strip():
+            item['date'] = _build_date_from_range(item.get('startDate'), item.get('endDate'))
+
     return next_resume
 
 
@@ -310,8 +365,16 @@ def _restore_original_contacts(generated_resume, source_resume):
         target_pi['email'] = source_email
     if source_phone:
         target_pi['phone'] = source_phone
+    for field in ('title', 'location', 'linkedin', 'website', 'avatar', 'age'):
+        src_value = _normalize_contact(source_pi.get(field))
+        if src_value and not _normalize_contact(target_pi.get(field)):
+            target_pi[field] = src_value
 
     next_resume['personalInfo'] = target_pi
+    if _is_non_empty(source.get('gender')) and not _is_non_empty(next_resume.get('gender')):
+        next_resume['gender'] = source.get('gender')
+    if _is_non_empty(source.get('templateId')) and not _is_non_empty(next_resume.get('templateId')):
+        next_resume['templateId'] = source.get('templateId')
     return next_resume
 
 
@@ -362,34 +425,37 @@ def _restore_source_fact_boundaries(generated_resume, source_resume):
     for field in ('name', 'title', 'email', 'phone'):
         if _is_non_empty(source_pi.get(field)):
             target_pi[field] = source_pi.get(field)
+    for field in ('location', 'linkedin', 'website', 'avatar', 'age'):
+        if _is_non_empty(source_pi.get(field)) and not _is_non_empty(target_pi.get(field)):
+            target_pi[field] = source_pi.get(field)
     next_resume['personalInfo'] = target_pi
+    if _is_non_empty(source.get('gender')) and not _is_non_empty(next_resume.get('gender')):
+        next_resume['gender'] = source.get('gender')
+    if _is_non_empty(source.get('templateId')) and not _is_non_empty(next_resume.get('templateId')):
+        next_resume['templateId'] = source.get('templateId')
 
     # Work experience: keep company/position/timeline stable; allow description refinement.
     next_resume['workExps'] = _merge_section_items_with_fact_guard(
         source.get('workExps') or [],
         next_resume.get('workExps') or [],
-        factual_fields=('company', 'position', 'startDate', 'endDate'),
+        factual_fields=('company', 'title', 'position', 'subtitle', 'startDate', 'endDate', 'date'),
     )
 
-    # Education: keep school/degree/major/timeline stable.
-    next_resume['educations'] = _merge_section_items_with_fact_guard(
-        source.get('educations') or [],
-        next_resume.get('educations') or [],
-        factual_fields=('school', 'degree', 'major', 'startDate', 'endDate'),
-    )
+    # Education: keep fully immutable (facts must never be rewritten or removed).
+    next_resume['educations'] = copy.deepcopy(source.get('educations') or [])
 
     # Projects: keep title/date stable; allow description refinement.
     next_resume['projects'] = _merge_section_items_with_fact_guard(
         source.get('projects') or [],
         next_resume.get('projects') or [],
-        factual_fields=('title', 'date'),
+        factual_fields=('title', 'subtitle', 'role', 'startDate', 'endDate', 'date', 'link'),
     )
 
     # Preserve summary fallback.
     if _is_non_empty(source.get('summary')) and not _is_non_empty(next_resume.get('summary')):
         next_resume['summary'] = source.get('summary')
 
-    return next_resume
+    return _sync_resume_alias_fields(next_resume)
 
 
 def _soften_unverified_claims(generated_resume):
@@ -471,7 +537,7 @@ def generate_optimized_resume(
     if not resume_data:
         raise ValueError('需要提供简历数据')
 
-    fallback_resume = _remove_location_field(_build_resume_fallback(resume_data))
+    fallback_resume = _build_resume_fallback(resume_data)
     if not (gemini_client and check_gemini_quota()):
         return fallback_resume
 
@@ -510,7 +576,7 @@ def generate_optimized_resume(
 4. 无法确认数字时用中性结果口径，不得编造具体值。
 5. workExps/projects 的描述必须是完整自然语句，且至少包含“动作/方法/结果”中的两项。
 6. suggestions 指向的薄弱内容必须落实改写，不得大段原文照搬。
-7. personalInfo 中已有 name/email/phone 不得丢失或置空。
+7. personalInfo 中已有 name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
 
 **输出格式**
 {{
@@ -519,7 +585,12 @@ def generate_optimized_resume(
       "name": "姓名",
       "title": "职位标题",
       "email": "邮箱地址",
-      "phone": "电话号码"
+      "phone": "电话号码",
+      "location": "城市",
+      "linkedin": "",
+      "website": "",
+      "age": "",
+      "avatar": ""
     }},
     "workExps": [
       {{
@@ -545,12 +616,17 @@ def generate_optimized_resume(
       {{
         "id": 1,
         "title": "项目名称",
+        "subtitle": "项目角色",
+        "startDate": "开始日期",
+        "endDate": "结束日期",
+        "link": "",
         "description": "详细项目描述",
         "date": "项目时间"
       }}
     ],
     "skills": ["技能1", "技能2", "技能3"],
-    "summary": "专业简介"
+    "summary": "专业简介",
+    "gender": "male|female"
   }}
 }}
 """
@@ -567,8 +643,8 @@ def generate_optimized_resume(
             generated = _restore_source_fact_boundaries(generated, resume_data)
             generated = _soften_unverified_claims(generated)
             generated = _neutralize_unknown_numbers(generated, resume_data)
-            generated = _remove_location_field(generated)
             generated = _normalize_and_merge_skills(generated, resume_data, normalized_suggestions)
+            generated = _sync_resume_alias_fields(generated)
 
             unresolved = _detect_unresolved_suggestions(generated, normalized_suggestions)
             unresolved_context = '\n'.join([
@@ -582,7 +658,7 @@ def generate_optimized_resume(
 1) 逐条核验 suggestions，对未落实项继续改写。
 2) 输出可直接投递终稿，不要“建议/说明/注释”类文本。
 3) 禁止占位符与事实编造；数字不确定时使用中性结果口径。
-4) personalInfo.name/email/phone 不得丢失。
+4) personalInfo.name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
 5) 仅返回 JSON。
 
 原始简历：
@@ -623,8 +699,8 @@ def generate_optimized_resume(
             final_generated = _restore_source_fact_boundaries(final_generated, resume_data)
             final_generated = _soften_unverified_claims(final_generated)
             final_generated = _neutralize_unknown_numbers(final_generated, resume_data)
-            final_generated = _remove_location_field(final_generated)
             final_generated = _normalize_and_merge_skills(final_generated, resume_data, normalized_suggestions)
+            final_generated = _sync_resume_alias_fields(final_generated)
             return final_generated
     except Exception as ai_error:
         logger.error("AI 生成简历失败: %s", ai_error)

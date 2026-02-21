@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { View, ScreenProps, ResumeData, WorkExperience, Education, Project } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
-import { buildApiUrl } from '../../src/api-config';
 import { toSkillList, mergeSkills } from '../../src/skill-utils';
 import { buildResumeTitle } from '../../src/resume-utils';
 import {
@@ -21,6 +20,10 @@ import EducationStep from '../editor/steps/EducationStep';
 import ProjectsStep from '../editor/steps/ProjectsStep';
 import SkillsStep from '../editor/steps/SkillsStep';
 import SummaryStep from '../editor/steps/SummaryStep';
+import { useEditorDraftPersistence } from '../editor/hooks/useEditorDraftPersistence';
+import { useEditorImportFlow } from '../editor/hooks/useEditorImportFlow';
+import { useEditorValidation } from '../editor/hooks/useEditorValidation';
+import { useEditorWizardState } from '../editor/hooks/useEditorWizardState';
 // Popup import removed; inline import UI only
 import { useAppContext } from '../../src/app-context';
 import { selectCompleteness, useAppStore } from '../../src/app-store';
@@ -28,16 +31,6 @@ import BackButton from '../shared/BackButton';
 
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
-
-const WIZARD_STEPS: { key: WizardStep; label: string; icon: string }[] = [
-  { key: 'import', label: '导入简历', icon: 'upload_file' },
-  { key: 'personal', label: '个人信息', icon: 'person' },
-  { key: 'work', label: '工作经历', icon: 'work' },
-  { key: 'education', label: '教育背景', icon: 'school' },
-  { key: 'projects', label: '项目经历', icon: 'rocket_launch' },
-  { key: 'skills', label: '专业技能', icon: 'extension' },
-  { key: 'summary', label: '个人总结', icon: 'auto_awesome' },
-];
 
 const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: initialWizardMode = false }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
@@ -52,133 +45,121 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const hasBottomNav = false;
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
-  const [isPdfProcessing, setIsPdfProcessing] = useState(false);
-  const [pdfError, setPdfError] = useState('');
-  const [textResume, setTextResume] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [textError, setTextError] = useState('');
-  const pdfInputRef = useRef<HTMLInputElement>(null);
   const autosaveIntervalRef = useRef<number | null>(null);
   const lastAutosavedRef = useRef<string>('');
   const latestResumeDataRef = useRef<ResumeData>(resumeData);
   const [isAutosaving, setIsAutosaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
-  const [hasTouchedProjects, setHasTouchedProjects] = useState(false);
-  const [hasImportedResume, setHasImportedResume] = useState(false);
-  const [showImportSuccess, setShowImportSuccess] = useState(false);
   const [showValidationModal, setShowValidationModal] = useState(false);
   const [validationStep, setValidationStep] = useState<WizardStep | null>(null);
   const [validationReason, setValidationReason] = useState<'missing' | 'format'>('missing');
   const [formatErrors, setFormatErrors] = useState<Record<string, string>>({});
   const [showClearPageConfirm, setShowClearPageConfirm] = useState(false);
   const lastNormalizedResumeIdRef = useRef<number | null>(null);
-  const suppressStepResetOnNextIdChangeRef = useRef(false);
   const draftSaveTimerRef = useRef<number | null>(null);
-  const editorDraftKey = useMemo(
-    () => `editor_resume_draft_${currentUser?.id || 'anonymous'}`,
-    [currentUser?.id]
-  );
 
   // Always use wizard mode (no free edit mode)
   const wizardMode = true;
-  const [currentStep, setCurrentStep] = useState<WizardStep>('import');
 
   const [summary, setSummary] = useState(clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS));
+  const {
+    WIZARD_STEPS,
+    currentStep,
+    setCurrentStep,
+    currentStepIndex,
+    progress,
+    hasTouchedProjects,
+    setHasTouchedProjects,
+    hasImportedResume,
+    setHasImportedResume,
+    showImportSuccess,
+    setShowImportSuccess,
+    suppressStepResetOnNextIdChangeRef,
+  } = useEditorWizardState(resumeData);
+  const {
+    editorDraftKey,
+    hasMeaningfulContent,
+    persistLocalDraft,
+  } = useEditorDraftPersistence({
+    currentUserId: currentUser?.id,
+    resumeData,
+    summary,
+    setSummary,
+    setResumeData,
+    onDraftRestored: () => {
+      setHasImportedResume(true);
+      setCurrentStep('personal');
+    },
+  });
+  const {
+    validatePersonalFormats,
+    isPersonalInfoComplete,
+    isWorkExperienceComplete,
+    isEducationComplete,
+    isSkillsComplete,
+    isProjectsComplete,
+    isStepComplete,
+    isStepRequired,
+    isStepMissing,
+  } = useEditorValidation({
+    resumeData,
+    summary,
+    hasTouchedProjects,
+    hasImportedResume,
+  });
 
   useEffect(() => {
     latestResumeDataRef.current = resumeData;
   }, [resumeData]);
 
-  const hasMeaningfulContent = (data: ResumeData) => {
-    const p = data?.personalInfo || ({} as any);
-    return Boolean(
-      (p.name || '').trim() ||
-      (p.title || '').trim() ||
-      (p.email || '').trim() ||
-      (p.phone || '').trim() ||
-      (data.summary || '').trim() ||
-      (data.skills || []).length > 0 ||
-      (data.workExps || []).length > 0 ||
-      (data.educations || []).length > 0 ||
-      (data.projects || []).length > 0
-    );
-  };
-
-  const persistLocalDraft = (data: ResumeData, options?: { updateStatus?: boolean }) => {
+  async function triggerManualSave(data: ResumeData) {
+    if (!data.id) {
+      persistLocalDraft(data, { onStatusChange: setLastSavedAt });
+      return;
+    }
+    setIsAutosaving(true);
     try {
-      localStorage.setItem(editorDraftKey, JSON.stringify({
-        updatedAt: new Date().toISOString(),
-        data: { ...data, id: undefined }
-      }));
-      if (options?.updateStatus !== false) {
+      const title = `${data.personalInfo.name || '未命名'}的简历`;
+      const result = await DatabaseService.updateResume(String(data.id), {
+        title: title,
+        resume_data: data,
+      });
+
+      if (result.success) {
+        lastAutosavedRef.current = JSON.stringify(data);
         const now = new Date();
-        const timeLabel = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+        const timeLabel = now.toLocaleTimeString('zh-CN', {
+          hour: '2-digit', minute: '2-digit'
+        });
         setLastSavedAt(timeLabel);
+        if (loadUserResumes) loadUserResumes();
       }
-    } catch (error) {
-      console.warn('Failed to persist local editor draft:', error);
+    } catch (e) {
+      console.error('Manual save triggered by import failed:', e);
+    } finally {
+      setIsAutosaving(false);
     }
-  };
+  }
 
-  // Sync summary state to resumeData whenever it changes
-  useEffect(() => {
-    if (summary !== resumeData?.summary) {
-      setResumeData(prev => ({ ...prev, summary }));
-    }
-  }, [summary]);
-
-  // Sync resumeData.summary to local state if it changes externally
-  useEffect(() => {
-    if (typeof resumeData?.summary === 'string' && resumeData.summary !== summary) {
-      setSummary(clampByLimit(resumeData.summary, SUMMARY_MAX_CHARS));
-    }
-  }, [resumeData?.summary]);
-
-  useEffect(() => {
-    // Only restore draft for "new resume" flow.
-    if (resumeData?.id) return;
-    if (hasMeaningfulContent(resumeData)) return;
-    try {
-      const raw = localStorage.getItem(editorDraftKey);
-      if (!raw) return;
-      const parsed = JSON.parse(raw);
-      const draftData = parsed?.data;
-      if (!draftData) return;
-      setResumeData((prev) => ({
-        ...prev,
-        ...draftData,
-        id: undefined,
-      }));
-      if (typeof draftData.summary === 'string') {
-        setSummary(clampByLimit(draftData.summary, SUMMARY_MAX_CHARS));
-      }
-      setHasImportedResume(true);
-      setCurrentStep('personal');
-    } catch (error) {
-      console.warn('Failed to restore local editor draft:', error);
-    }
-  }, [editorDraftKey, resumeData?.id]);
-
-  const lastProcessedResumeIdRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    // Only initialize wizard state when a NEW resume is loaded (or ID changes from undefined -> number).
-    // If the ID is the same as before (e.g. after a save), do NOT reset the step.
-    if (resumeData?.id && resumeData.id !== lastProcessedResumeIdRef.current) {
-      if (suppressStepResetOnNextIdChangeRef.current) {
-        lastProcessedResumeIdRef.current = resumeData.id;
-        suppressStepResetOnNextIdChangeRef.current = false;
-        return;
-      }
-      setCurrentStep('personal');
-      setHasImportedResume(true);
-      setShowImportSuccess(false);
-      if ((resumeData.projects || []).length > 0) {
-        setHasTouchedProjects(true);
-      }
-      lastProcessedResumeIdRef.current = resumeData.id;
-    }
-  }, [resumeData?.id]);
+  const {
+    textResume,
+    setTextResume,
+    isProcessing,
+    textError,
+    isPdfProcessing,
+    pdfError,
+    pdfInputRef,
+    handleTextImport,
+    handlePDFImport,
+  } = useEditorImportFlow({
+    resumeData,
+    setResumeData,
+    setSummary,
+    setCurrentStep,
+    setHasImportedResume,
+    setShowImportSuccess,
+    triggerManualSave,
+  });
 
   useEffect(() => {
     if (!resumeData?.id || !setResumeData) return;
@@ -225,11 +206,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       ...edu,
       ...mergeDateFields(edu),
       title: edu?.title || edu?.school || '',
-      subtitle: edu?.subtitle || '',
+      subtitle: edu?.subtitle || edu?.major || '',
       date: edu?.date || normalizeDateRange(edu?.startDate, edu?.endDate),
       school: edu?.school || edu?.title || '',
       degree: edu?.degree || '',
-      major: edu?.major || '',
+      major: edu?.major || edu?.subtitle || '',
     });
 
     const normalizeProjects = (proj: any) => ({
@@ -237,7 +218,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       ...mergeDateFields(proj),
       title: proj?.title || '',
       subtitle: proj?.subtitle || proj?.role || '',
-      date: proj?.date || '',
+      date: proj?.date || normalizeDateRange(proj?.startDate, proj?.endDate),
       role: proj?.role || proj?.subtitle || '',
     });
 
@@ -326,7 +307,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       window.clearTimeout(draftSaveTimerRef.current);
     }
     draftSaveTimerRef.current = window.setTimeout(() => {
-      persistLocalDraft({ ...resumeData, summary });
+      persistLocalDraft({ ...resumeData, summary }, { onStatusChange: setLastSavedAt });
     }, 800);
 
     return () => {
@@ -346,423 +327,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   }
 
   // --- Handlers ---
-  const triggerManualSave = async (data: ResumeData) => {
-    if (!data.id) {
-      // Import should auto-save fields as draft, without creating a formal resume record.
-      persistLocalDraft(data);
-      return;
-    }
-    setIsAutosaving(true);
-    try {
-      const title = `${data.personalInfo.name || '未命名'}的简历`;
-      const result = await DatabaseService.updateResume(String(data.id), {
-        title: title,
-        resume_data: data,
-      });
-
-      if (result.success) {
-        lastAutosavedRef.current = JSON.stringify(data);
-        const now = new Date();
-        const timeLabel = now.toLocaleTimeString('zh-CN', {
-          hour: '2-digit', minute: '2-digit'
-        });
-        setLastSavedAt(timeLabel);
-        if (loadUserResumes) loadUserResumes();
-      }
-    } catch (e) {
-      console.error('Manual save triggered by import failed:', e);
-    } finally {
-      setIsAutosaving(false);
-    }
-  };
-
-  const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
-    console.log('导入简历数据:', importedData);
-    const toText = (value: any) => (typeof value === 'string' ? value.trim() : '');
-    const toKeyText = (value: any) => toText(value).toLowerCase().replace(/\s+/g, '');
-    const parseRangeText = (date?: string) => {
-      const raw = toText(date);
-      if (!raw) return { startDate: '', endDate: '' };
-      // Single date (e.g. 2022 or 2022-06) should not be split into start/end.
-      if (/^\d{4}([./-]\d{1,2})?$/.test(raw) || /^(至今|现在|present|current)$/i.test(raw)) {
-        return { startDate: raw, endDate: '' };
-      }
-      const sep = raw.match(/\s*(?:-|–|—|~|至|到|to)\s*/i);
-      if (!sep) return { startDate: raw, endDate: '' };
-      const parts = raw.split(/\s*(?:-|–|—|~|至|到|to)\s*/i).map((v) => toText(v)).filter(Boolean);
-      if (parts.length >= 2) return { startDate: parts[0], endDate: parts.slice(1).join(' - ') };
-      return { startDate: raw, endDate: '' };
-    };
-    const normalizeYearOnlyFromRaw = (rawValue: string, normalizedValue: string) => {
-      if (/^\d{4}$/.test(toText(rawValue))) {
-        const m = toText(normalizedValue).match(/^(\d{4})[./-]\d{1,2}$/);
-        if (m) return m[1];
-      }
-      return toText(normalizedValue);
-    };
-    const resolveDates = (item: any) => {
-      const rawStart = toText(item?.startDate);
-      const rawEnd = toText(item?.endDate);
-      const parsed = parseRangeText(item?.date);
-      const startDate = rawStart || parsed.startDate;
-      const endDate = rawEnd || parsed.endDate;
-      return {
-        startDate: normalizeYearOnlyFromRaw(rawStart, startDate),
-        endDate: normalizeYearOnlyFromRaw(rawEnd, endDate),
-      };
-    };
-    const normalizeDateRange = (start?: string, end?: string) => {
-      const s = toText(start);
-      const e = toText(end);
-      if (s && e) return `${s} - ${e}`;
-      return s || e || '';
-    };
-    const importedSummary = toText(importedData.summary || importedData.personalInfo?.summary);
-    const normalizeWorkItems = (items: any[] = []) =>
-      items.map((item, index) => {
-        const { startDate, endDate } = resolveDates(item);
-        const title = toText(item?.title || item?.company);
-        const subtitle = toText(item?.subtitle || item?.position);
-        return {
-          ...item,
-          id: typeof item?.id === 'number' ? item.id : Date.now() + index,
-          title,
-          subtitle,
-          startDate,
-          endDate,
-          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
-          company: toText(item?.company || title),
-          position: toText(item?.position || subtitle),
-          description: toText(item?.description),
-        };
-      });
-    const normalizeEducationItems = (items: any[] = []) =>
-      items.map((item, index) => {
-        const { startDate, endDate } = resolveDates(item);
-        const title = toText(item?.title || item?.school);
-        const subtitle = toText(item?.subtitle || item?.major);
-        return {
-          ...item,
-          id: typeof item?.id === 'number' ? item.id : Date.now() + 1000 + index,
-          title,
-          subtitle,
-          startDate,
-          endDate,
-          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
-          school: toText(item?.school || title),
-          major: toText(item?.major || subtitle),
-          degree: toText(item?.degree),
-          description: toText(item?.description),
-        };
-      });
-    const normalizeProjectItems = (items: any[] = []) =>
-      items.map((item, index) => {
-        const { startDate, endDate } = resolveDates(item);
-        return {
-          ...item,
-          id: typeof item?.id === 'number' ? item.id : Date.now() + 2000 + index,
-          title: toText(item?.title),
-          subtitle: toText(item?.subtitle || item?.role),
-          role: toText(item?.role || item?.subtitle),
-          startDate,
-          endDate,
-          date: normalizeDateRange(startDate, endDate) || toText(item?.date),
-          description: toText(item?.description),
-        };
-      });
-    const mergeUniqueItems = <T extends { id?: number }>(
-      existing: T[],
-      incoming: T[],
-      getKey: (item: T) => string,
-      mergeItem: (oldItem: T, newItem: T) => T
-    ) => {
-      const out = [...existing];
-      const keyToIndex = new Map<string, number>();
-      out.forEach((item, idx) => {
-        const key = getKey(item);
-        if (key) keyToIndex.set(key, idx);
-      });
-      incoming.forEach((item) => {
-        const key = getKey(item);
-        if (!key) {
-          out.push(item);
-          return;
-        }
-        const existingIndex = keyToIndex.get(key);
-        if (existingIndex === undefined) {
-          keyToIndex.set(key, out.length);
-          out.push(item);
-          return;
-        }
-        out[existingIndex] = mergeItem(out[existingIndex], item);
-      });
-      return out;
-    };
-    const toYearKey = (value: any) => {
-      const text = toText(value);
-      if (!text) return '';
-      const m = text.match(/\b(19|20)\d{2}\b/);
-      if (m) return m[0];
-      if (/至今|现在|present|current/i.test(text)) return 'present';
-      return toKeyText(text);
-    };
-    const getWorkKey = (item: any) => [
-      toKeyText(item?.company || item?.title),
-      toKeyText(item?.position || item?.subtitle),
-      toKeyText(item?.startDate),
-      toKeyText(item?.endDate),
-      toKeyText(item?.date),
-    ].join('|');
-    const getEduKey = (item: any) => [
-      toKeyText(item?.school || item?.title),
-      toKeyText(item?.major || item?.subtitle),
-      toYearKey(item?.startDate || item?.date),
-      toYearKey(item?.endDate || item?.date),
-    ].join('|');
-    const getProjectKey = (item: any) => [
-      toKeyText(item?.title),
-      toKeyText(item?.role || item?.subtitle),
-      toKeyText(item?.startDate),
-      toKeyText(item?.endDate),
-      toKeyText(item?.date),
-    ].join('|');
-    const mergeEntity = (oldItem: any, newItem: any) => ({
-      ...oldItem,
-      ...newItem,
-      id: oldItem?.id ?? newItem?.id,
-      title: oldItem?.title || newItem?.title || '',
-      subtitle: oldItem?.subtitle || newItem?.subtitle || '',
-      company: oldItem?.company || newItem?.company || '',
-      position: oldItem?.position || newItem?.position || '',
-      school: oldItem?.school || newItem?.school || '',
-      major: oldItem?.major || newItem?.major || '',
-      degree: oldItem?.degree || newItem?.degree || '',
-      role: oldItem?.role || newItem?.role || '',
-      startDate: oldItem?.startDate || newItem?.startDate || '',
-      endDate: oldItem?.endDate || newItem?.endDate || '',
-      date: oldItem?.date || newItem?.date || normalizeDateRange(oldItem?.startDate || newItem?.startDate, oldItem?.endDate || newItem?.endDate),
-      description: oldItem?.description || newItem?.description || '',
-    });
-
-    // 合并导入的数据到当前简历
-    const computeMergedData = (prev: ResumeData): ResumeData => {
-      const mergedData = { ...prev };
-
-      // 合并个人信息（保留已有数据的优先级）
-      if (importedData.personalInfo) {
-        mergedData.personalInfo = {
-          name: importedData.personalInfo.name || prev.personalInfo.name,
-          title: importedData.personalInfo.title || prev.personalInfo.title,
-          email: importedData.personalInfo.email || prev.personalInfo.email,
-          phone: importedData.personalInfo.phone || prev.personalInfo.phone,
-          avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
-          location: importedData.personalInfo.location || prev.personalInfo.location,
-          age: importedData.personalInfo.age || prev.personalInfo.age,
-          summary: importedSummary || prev.personalInfo.summary
-        };
-      }
-
-      // 合并工作经历（添加到现有列表）
-      if (importedData.workExps && importedData.workExps.length > 0) {
-        mergedData.workExps = mergeUniqueItems(
-          prev.workExps as any[],
-          normalizeWorkItems(importedData.workExps as any[]),
-          getWorkKey,
-          mergeEntity
-        );
-      }
-
-      // 合并教育经历（添加到现有列表）
-      if (importedData.educations && importedData.educations.length > 0) {
-        const normalizedIncomingEdu = normalizeEducationItems(importedData.educations as any[]);
-        const existingEdu = [...(prev.educations as any[])];
-        const eduKeyToIndex = new Map<string, number>();
-        existingEdu.forEach((item, idx) => {
-          const key = getEduKey(item);
-          if (key) eduKeyToIndex.set(key, idx);
-        });
-        normalizedIncomingEdu.forEach((item) => {
-          const key = getEduKey(item);
-          const existingIndex = key ? eduKeyToIndex.get(key) : undefined;
-          if (existingIndex === undefined) {
-            if (key) eduKeyToIndex.set(key, existingEdu.length);
-            existingEdu.push(item);
-            return;
-          }
-          const merged = mergeEntity(existingEdu[existingIndex], item);
-          // Keep existing year-only granularity if user already has no-month dates.
-          if (/^\d{4}$/.test(toText(existingEdu[existingIndex]?.startDate))) {
-            merged.startDate = toText(existingEdu[existingIndex]?.startDate);
-          }
-          if (/^\d{4}$/.test(toText(existingEdu[existingIndex]?.endDate))) {
-            merged.endDate = toText(existingEdu[existingIndex]?.endDate);
-          }
-          merged.date = toText(merged.date) || normalizeDateRange(merged.startDate, merged.endDate);
-          existingEdu[existingIndex] = merged;
-        });
-        mergedData.educations = existingEdu;
-      }
-
-      // 合并项目经历（添加到现有列表）
-      if (importedData.projects && importedData.projects.length > 0) {
-        mergedData.projects = mergeUniqueItems(
-          prev.projects as any[],
-          normalizeProjectItems(importedData.projects as any[]),
-          getProjectKey,
-          mergeEntity
-        );
-      }
-
-      // 合并技能（去重）
-      const importedSkills = toSkillList(importedData.skills);
-      // Always trust latest import result for skills to avoid stale/wrong tokens
-      // lingering from previous imports.
-      mergedData.skills = importedSkills;
-
-      // Merge summary (top-level)
-      if (importedSummary) {
-        mergedData.summary = importedSummary;
-      }
-
-      // Merge gender if provided
-      if (importedData.gender) {
-        mergedData.gender = importedData.gender;
-      }
-
-      return mergedData;
-    };
-
-    const finalData = computeMergedData(resumeData);
-    setResumeData(finalData);
-
-    if (importedSummary) {
-      setSummary(clampByLimit(importedSummary, SUMMARY_MAX_CHARS));
-    }
-
-    console.log('简历导入完成，触发保存');
-    triggerManualSave(finalData);
-
-    setTextResume('');
-    setTextError('');
-    setCurrentStep('personal');
-    setHasImportedResume(true);
-    setShowImportSuccess(true);
-  };
-
-  const handleTextImport = async () => {
-    if (!textResume.trim()) {
-      setTextError('请粘贴您的简历文本。');
-      return;
-    }
-
-    setIsProcessing(true);
-    setTextError('');
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 90000);
-    try {
-      const response = await fetch(buildApiUrl('/api/ai/parse-resume'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        signal: controller.signal,
-        body: JSON.stringify({
-          resumeText: textResume
-        })
-      });
-      window.clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || '简历解析失败');
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        handleResumeImport(result.data);
-      } else {
-        throw new Error('未获取到解析结果');
-      }
-    } catch (err: any) {
-      console.error('Resume parse failed:', err);
-      if (err?.name === 'AbortError') {
-        setTextError('解析超时，请稍后重试或改用 DOCX。');
-      } else {
-        setTextError(err.message || '简历解析失败，请稍后重试。');
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      setIsProcessing(false);
-    }
-  };
-
-  const handlePDFImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setIsPdfProcessing(true);
-    setPdfError('');
-
-    const controller = new AbortController();
-    const timeoutId = window.setTimeout(() => controller.abort(), 120000);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(buildApiUrl('/api/parse-pdf'), {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-      });
-      window.clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'PDF 解析失败');
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        handleResumeImport(result.data);
-      } else {
-        throw new Error('未获取到解析结果');
-      }
-    } catch (err: any) {
-      console.error('PDF parse failed:', err);
-      if (err?.name === 'AbortError') {
-        setPdfError('解析超时，请稍后重试，或先转 DOCX 再导入。');
-      } else {
-        setPdfError(err.message || 'PDF 解析失败，请稍后重试。');
-      }
-    } finally {
-      window.clearTimeout(timeoutId);
-      setIsPdfProcessing(false);
-      if (pdfInputRef.current) pdfInputRef.current.value = '';
-    }
-  };
-
-  const validatePersonalFormats = (data: ResumeData) => {
-    const errors: Record<string, string> = {};
-    const name = (data.personalInfo.name || '').trim();
-    const title = (data.personalInfo.title || '').trim();
-    const email = (data.personalInfo.email || '').trim();
-    const phone = (data.personalInfo.phone || '').trim();
-
-    if (name && /^\d+$/.test(name)) {
-      errors.name = '姓名格式不正确';
-    }
-    if (title && /^\d+$/.test(title)) {
-      errors.title = '求职意向格式不正确';
-    }
-    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      errors.email = '邮箱格式不正确';
-    }
-    if (phone && !/^\+?[\d\s\-()]{7,20}$/.test(phone)) {
-      errors.phone = '电话号码格式不正确';
-    }
-    return errors;
-  };
 
   const handleInfoChange = (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => {
     const personalLimit = field !== 'gender'
@@ -856,82 +420,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
         return next as ItemBySection[S];
       }),
     }));
-  };
-
-  // Check if section is completed
-  const isPersonalInfoComplete = () => {
-    const { personalInfo } = resumeData;
-    return Boolean(personalInfo.name && personalInfo.title && personalInfo.email && personalInfo.phone && resumeData.gender);
-  };
-
-  const isOngoingValue = (value?: string) => {
-    return (value || '').trim() === '至今';
-  };
-
-  const hasValidDateRange = (item: { startDate?: string; endDate?: string; date?: string }) => {
-    if (item?.date) return true;
-    const start = (item?.startDate || '').trim();
-    const end = (item?.endDate || '').trim();
-    if (!start) return false;
-    return Boolean(end) || isOngoingValue(end);
-  };
-
-  const isWorkExperienceComplete = () => {
-    return resumeData.workExps.length > 0 && resumeData.workExps.some(exp =>
-      Boolean(exp.title && exp.subtitle && hasValidDateRange(exp))
-    );
-  };
-
-  const isEducationComplete = () => {
-    return resumeData.educations.length > 0 && resumeData.educations.some(edu =>
-      Boolean(edu.title && edu.subtitle && hasValidDateRange(edu))
-    );
-  };
-
-  const isSkillsComplete = () => {
-    return resumeData.skills.length > 0;
-  };
-
-  const isProjectsComplete = () => {
-    // Projects are optional, only show check if user has added projects
-    return resumeData.projects.length > 0 && resumeData.projects.some(proj =>
-      Boolean(proj.title && proj.description && hasValidDateRange(proj))
-    );
-  };
-
-  const isSummaryComplete = () => {
-    return Boolean((summary || '').trim());
-  };
-
-  const isStepComplete = (step: WizardStep) => {
-    switch (step) {
-      case 'import':
-        return true;
-      case 'personal':
-        return isPersonalInfoComplete();
-      case 'work':
-        return isWorkExperienceComplete();
-      case 'education':
-        return isEducationComplete();
-      case 'projects':
-        return isProjectsComplete() || hasTouchedProjects;
-      case 'skills':
-        return isSkillsComplete();
-      case 'summary':
-        return isSummaryComplete();
-      default:
-        return false;
-    }
-  };
-
-  const isStepRequired = (step: WizardStep) => {
-    return step !== 'import' && step !== 'projects';
-  };
-
-  const isStepMissing = (step: WizardStep) => {
-    if (!hasImportedResume) return false;
-    if (!isStepRequired(step)) return false;
-    return !isStepComplete(step);
   };
 
   const handleAddSkill = () => {
@@ -1108,8 +596,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   };
 
   // --- Wizard Navigation ---
-  const currentStepIndex = WIZARD_STEPS.findIndex(s => s.key === currentStep);
-  const progress = ((currentStepIndex + 1) / WIZARD_STEPS.length) * 100;
   const isCurrentStepComplete = isStepComplete(currentStep);
 
   const handleNextStep = () => {
@@ -1151,7 +637,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   return (
     <div className="flex flex-col pb-12 bg-background-light dark:bg-background-dark min-h-screen animate-in slide-in-from-right duration-300">
-      <header className="sticky top-0 z-50 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-slate-200 dark:border-[#324d67] transition-colors duration-300">
+      <header className="sticky top-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 transition-colors duration-300">
         <div className="relative grid grid-cols-[auto,1fr,auto] items-center px-4 py-3">
           <BackButton
             onClick={() => {
@@ -1161,7 +647,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
                 handlePrevStep();
               }
             }}
-            className="-ml-2 hover:bg-slate-200 dark:hover:bg-white/5 text-slate-700 dark:text-white"
+            className="-ml-2"
           />
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
             <div className="text-center">

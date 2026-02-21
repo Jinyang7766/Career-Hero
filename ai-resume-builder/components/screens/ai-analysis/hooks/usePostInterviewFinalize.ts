@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { buildResumeTitle } from '../../../../src/resume-utils';
+import { normalizeTimelineFields } from '../../../../src/timeline-utils';
 import type { ResumeData } from '../../../../types';
 import { persistUserDossierToProfile } from '../dossier-persistence';
 
@@ -128,11 +129,12 @@ const fillMissingExperienceTimeline = (resume: any, primarySource: any, fallback
       const date = pickFilledTimelineValue(item.date, srcA.date, srcA.startDate && srcA.endDate ? `${srcA.startDate} - ${srcA.endDate}` : '', srcB.date, srcB.startDate && srcB.endDate ? `${srcB.startDate} - ${srcB.endDate}` : '');
       const startDate = pickFilledTimelineValue(item.startDate, srcA.startDate, srcB.startDate);
       const endDate = pickFilledTimelineValue(item.endDate, srcA.endDate, srcB.endDate);
+      const normalizedTimeline = normalizeTimelineFields({ date, startDate, endDate });
       return {
         ...item,
-        date,
-        startDate,
-        endDate,
+        date: normalizedTimeline.date,
+        startDate: normalizedTimeline.startDate,
+        endDate: normalizedTimeline.endDate,
       };
     });
   }
@@ -144,11 +146,16 @@ const fillMissingExperienceTimeline = (resume: any, primarySource: any, fallback
       if (!item || typeof item !== 'object') return item;
       const srcA = (sourceAList[index] && typeof sourceAList[index] === 'object') ? sourceAList[index] : {};
       const srcB = (sourceBList[index] && typeof sourceBList[index] === 'object') ? sourceBList[index] : {};
-      return {
-        ...item,
+      const normalizedTimeline = normalizeTimelineFields({
         date: pickFilledTimelineValue(item.date, srcA.date, srcB.date),
         startDate: pickFilledTimelineValue(item.startDate, srcA.startDate, srcB.startDate),
         endDate: pickFilledTimelineValue(item.endDate, srcA.endDate, srcB.endDate),
+      });
+      return {
+        ...item,
+        date: normalizedTimeline.date,
+        startDate: normalizedTimeline.startDate,
+        endDate: normalizedTimeline.endDate,
       };
     });
   }

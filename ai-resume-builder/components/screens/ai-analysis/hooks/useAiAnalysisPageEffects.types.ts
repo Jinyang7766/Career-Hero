@@ -1,0 +1,31 @@
+import type React from 'react';
+import type { AiAnalysisStep } from '../step-types';
+
+export type AiAnalysisPageEffectsParams = {
+  currentStep: AiAnalysisStep;
+  setCurrentStep: (step: AiAnalysisStep) => void;
+  setIsNavHidden?: (hidden: boolean) => void;
+  prevStepRef: React.MutableRefObject<AiAnalysisStep | null>;
+  setTargetCompany: (v: string) => void;
+  setInterviewPlan: React.Dispatch<React.SetStateAction<string[]>>;
+  interviewPlanLength: number;
+  isInterviewMode?: boolean;
+  resumeId: string | number | null | undefined;
+  jdText: string;
+  resumeLastJdText?: string;
+  makeJdKey: (jd: string) => string;
+  planAutoHealRef: React.MutableRefObject<string>;
+  setPlanFetchTrigger: React.Dispatch<React.SetStateAction<number>>;
+  planLoaderMountedRef: React.MutableRefObject<boolean>;
+  currentUserId?: string;
+  userAvatarUrl?: string;
+  setUserAvatar: (v: string) => void;
+  pathname: string;
+  forcedResumeSelectRef: React.MutableRefObject<boolean>;
+  setStepHistory: React.Dispatch<React.SetStateAction<AiAnalysisStep[]>>;
+  setSelectedResumeId: (v: string | number | null) => void;
+  sourceResumeIdRef: React.MutableRefObject<string | number | null>;
+  setOptimizedResumeId: (v: string | number | null) => void;
+  setAnalysisResumeId: (v: string | number | null) => void;
+};
+

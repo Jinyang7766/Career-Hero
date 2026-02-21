@@ -587,7 +587,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
       onClick={handleContainerClick}
       className="relative flex h-screen w-full flex-col mx-auto max-w-md bg-background-light dark:bg-background-dark shadow-2xl overflow-hidden animate-in slide-in-from-right duration-300"
     >
-      <header className="fixed top-0 left-0 right-0 z-40 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-md border-b border-slate-200/50 dark:border-white/5 mx-auto w-full max-w-md">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center justify-between h-14 px-4 relative">
           {isSelectionMode ? (
             <button

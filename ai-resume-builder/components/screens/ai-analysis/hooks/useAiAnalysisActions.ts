@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { View } from '../../../../types';
 import type { QuotaKind } from './useUsageQuota';
 import { USAGE_POINT_COST } from '../../../../src/points-config';
+import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   navigateToView: (view: View, options?: any) => void;
@@ -10,7 +11,7 @@ type Params = {
   resumeData?: any;
   jdText?: string;
   makeJdKey?: (text: string) => string;
-  consumeUsageQuota?: (kind: QuotaKind) => Promise<boolean>;
+  consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
   isInterviewMode?: boolean;
   currentStep?: string;
   onRetryAnalysisFromIntro?: () => void;
@@ -87,7 +88,12 @@ export const useAiAnalysisActions = ({
   const handleStartMicroInterview = useCallback(async () => {
     const hasStartedMicro = hasStartedMicroInterview();
     if (!isInterviewMode && !hasStartedMicro && consumeUsageQuota) {
-      const allowed = await consumeUsageQuota('micro_interview');
+      const normalizedInterviewType = String(getActiveInterviewType() || 'general').trim().toLowerCase() || 'general';
+      const normalizedInterviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase() || 'comprehensive';
+      const allowed = await consumeUsageQuota('micro_interview', {
+        scenario: normalizedInterviewType,
+        mode: normalizedInterviewMode,
+      });
       if (!allowed) return;
     }
     if (!isInterviewMode) {

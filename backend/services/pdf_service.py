@@ -401,6 +401,8 @@ def build_resume_context(resume_data):
     email = clean_text_for_pdf(personal_info.get('email', '') or 'email@example.com')
     phone = clean_text_for_pdf(personal_info.get('phone', '') or '+86 138 0000 0000')
     location = clean_text_for_pdf(personal_info.get('location', '') or '')
+    linkedin = clean_text_for_pdf(personal_info.get('linkedin', '') or '')
+    website = clean_text_for_pdf(personal_info.get('website', '') or '')
     avatar = normalize_avatar_data(personal_info.get('avatar', '') or '')
     avatar_initial = (name[:1] if name else '您')
 
@@ -461,10 +463,12 @@ def build_resume_context(resume_data):
         title_text = proj.get('title') or '未填写项目名称'
         subtitle_text = proj.get('role') or proj.get('subtitle') or '项目角色'
         date_text = normalize_date_range(proj.get('startDate', ''), proj.get('endDate', '')) or proj.get('date') or '时间不详'
+        link_text = proj.get('link') or ''
         projects.append({
             'title': clean_text_for_pdf(title_text),
             'subtitle': clean_text_for_pdf(subtitle_text),
             'date': clean_text_for_pdf(date_text),
+            'link': clean_text_for_pdf(link_text),
             'description': format_multiline(proj.get('description') or '未填写项目描述')
         })
 
@@ -519,6 +523,8 @@ def build_resume_context(resume_data):
         'email': email,
         'phone': phone,
         'location': location,
+        'linkedin': linkedin,
+        'website': website,
         'avatar': avatar,
         'avatar_initial': avatar_initial,
         'summary': summary,
@@ -800,6 +806,18 @@ def generate_resume_html(resume_data):
               <span>{{ email }}</span>
               <span class="sep">•</span>
               <span>{{ phone }}</span>
+              {% if location %}
+                <span class="sep">•</span>
+                <span>{{ location }}</span>
+              {% endif %}
+              {% if linkedin %}
+                <span class="sep">•</span>
+                <span>{{ linkedin }}</span>
+              {% endif %}
+              {% if website %}
+                <span class="sep">•</span>
+                <span>{{ website }}</span>
+              {% endif %}
             </div>
       {% if template_id != 'classic' %}
           </td>
@@ -856,6 +874,7 @@ def generate_resume_html(resume_data):
           <div class="item-date">{{ proj.date }}</div>
         </div>
         {% if proj.subtitle %}<div class="item-subtitle">{{ proj.subtitle }}</div>{% endif %}
+        {% if proj.link %}<div class="item-subtitle">{{ proj.link }}</div>{% endif %}
         {% if proj.description %}<div class="item-desc">{{ proj.description }}</div>{% endif %}
       </div>
       {% endfor %}

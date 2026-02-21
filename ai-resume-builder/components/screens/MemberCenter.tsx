@@ -193,7 +193,7 @@ const MemberCenter: React.FC = () => {
             />
 
             {/* Header */}
-            <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5 mx-auto w-full max-w-md">
+            <header className="fixed top-0 left-0 right-0 z-40 flex items-center justify-between px-4 h-14 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
                 <BackButton onClick={goBack} className="hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200" />
                 <h1 className="text-lg font-bold text-slate-900 dark:text-white">权益中心</h1>
                 <div className="w-10" /> {/* Spacer */}
