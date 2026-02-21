@@ -189,9 +189,9 @@ export const useInterviewEntryActions = ({
       navigateToView?.(View.AI_INTERVIEW, { replace: true });
       return;
     }
-    await handleRestartInterview();
+    // Final report "go interview" should only route to scene selection.
     navigateToStep?.('jd_input', true);
-  }, [isInterviewMode, currentUserId, resumeData, navigateToView, handleRestartInterview, navigateToStep]);
+  }, [isInterviewMode, currentUserId, resumeData, navigateToView, navigateToStep]);
 
   return {
     handleRestartInterview,

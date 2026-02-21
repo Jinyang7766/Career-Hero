@@ -57,7 +57,7 @@ export const useEditorSaveAndPreview = ({
         result = await DatabaseService.updateResume(String(latestData.id), {
           title,
           resume_data: latestData,
-        });
+        }, { touchUpdatedAt: true });
       } else {
         result = await DatabaseService.createResume(user.id, title, latestData);
       }

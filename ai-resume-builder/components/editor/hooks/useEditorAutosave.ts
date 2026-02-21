@@ -48,8 +48,7 @@ export const useEditorAutosave = ({
         setIsAutosaving(true);
         const saveResult = await DatabaseService.updateResume(String(currentData.id), {
           resume_data: currentData,
-          updated_at: new Date().toISOString()
-        });
+        }, { touchUpdatedAt: true });
         if (!saveResult?.success) {
           throw saveResult?.error || new Error('Auto-save failed');
         }
@@ -111,4 +110,3 @@ export const useEditorAutosave = ({
     };
   }, [resumeData, summary, editorDraftKey, hasMeaningfulContent, persistLocalDraft, draftSaveTimerRef, setLastSavedAt]);
 };
-

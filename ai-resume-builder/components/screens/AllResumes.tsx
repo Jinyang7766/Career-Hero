@@ -420,7 +420,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
       setIsUpdating(true);
       const result = await DatabaseService.updateResume(String(isRenamingId), {
         title: renameInputValue.trim()
-      });
+      }, { touchUpdatedAt: true });
 
       if (result.success) {
         if (setAllResumes) {

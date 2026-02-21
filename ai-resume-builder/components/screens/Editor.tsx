@@ -134,7 +134,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       const result = await DatabaseService.updateResume(String(data.id), {
         title: title,
         resume_data: data,
-      });
+      }, { touchUpdatedAt: true });
 
       if (result.success) {
         lastAutosavedRef.current = JSON.stringify(data);

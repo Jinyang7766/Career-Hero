@@ -40,7 +40,7 @@ export const usePreviewSectionOrder = ({ resumeData, setResumeData }: Params) =>
       try {
         await DatabaseService.updateResume(String((resumeData as any).id), {
           resume_data: nextData,
-        });
+        }, { touchUpdatedAt: false });
       } catch (error) {
         console.error('Failed to persist preview settings:', error);
       }
@@ -55,7 +55,7 @@ export const usePreviewSectionOrder = ({ resumeData, setResumeData }: Params) =>
       try {
         await DatabaseService.updateResume(String((resumeData as any).id), {
           resume_data: updatedData,
-        });
+        }, { touchUpdatedAt: false });
       } catch (error) {
         console.error('Failed to update template:', error);
       }
@@ -81,4 +81,3 @@ export const usePreviewSectionOrder = ({ resumeData, setResumeData }: Params) =>
     moveSection,
   };
 };
-
