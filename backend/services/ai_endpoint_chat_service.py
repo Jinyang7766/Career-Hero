@@ -57,7 +57,20 @@ def ai_chat_core(data, deps):
     if (not message) and (not has_audio):
         return {'error': '消息内容不能为空'}, 400
 
-    clean_message = message.replace('[INTERVIEW_MODE]', '').replace('[INTERVIEW_SUMMARY]', '').strip()
+    is_micro_mode = (mode == 'micro_interview') or ('[MICRO_INTERVIEW_MODE]' in str(message or ''))
+    clean_message = (
+        str(message or '')
+        .replace('[INTERVIEW_MODE]', '')
+        .replace('[INTERVIEW_SUMMARY]', '')
+        .replace('[MICRO_INTERVIEW_MODE]', '')
+        .strip()
+    )
+    # Frontend interview wrapper contains a long prompt body plus
+    # "候选人回答：...". We must extract the raw user answer first,
+    # otherwise low-information checks can be bypassed.
+    wrapped_answer_match = re.search(r'候选人回答[:：]\s*(.*)$', clean_message, flags=re.DOTALL)
+    if wrapped_answer_match:
+        clean_message = str(wrapped_answer_match.group(1) or '').strip()
 
     if mode == 'interview_plan':
         return generate_interview_plan_response(
@@ -289,6 +302,8 @@ def ai_chat_core(data, deps):
             clean_message = str(transcript).strip()
 
         if _is_low_information_answer(clean_message):
+            if is_micro_mode:
+                return {'response': "你的回答信息量不足。请补充这三点：你具体做了什么、怎么做的、结果数据是多少（可用区间或近似值）。"}, 200
             question = last_q or '请把你的回答说得更具体一些。'
             return {'response': f"你的回答信息量不足。请只补充当前问题中缺失的关键点（例如你的具体职责、行动细节、结果数据），无需整题重答。当前问题：{question}"}, 200
 
@@ -314,6 +329,14 @@ def ai_chat_core(data, deps):
             interview_summary_model = deps.get('GEMINI_INTERVIEW_SUMMARY_MODEL', deps.get('GEMINI_INTERVIEW_MODEL'))
             interview_chat_model = deps.get('GEMINI_INTERVIEW_MODEL')
             active_chat_model = interview_summary_model if mode == 'interview_summary' else interview_chat_model
+
+            def _sanitize_micro_reply(text: str) -> str:
+                value = str(text or '').replace('*', '').strip()
+                value = re.sub(r'(?:\n|^)\s*下一题[:：][\s\S]*$', '', value).strip()
+                value = re.sub(r'自我介绍时间为?\s*1分钟[。.]?', '', value).strip()
+                if re.search(r'(我是今天的面试官|下一题[:：]|请做.*自我介绍|重新进行自我介绍)', value):
+                    return "请先补充一条最能体现岗位匹配度的真实经历：你具体做了什么、怎么做、结果数据是多少？"
+                return value
 
             if mode == 'interview_summary':
                 prompt = f"""
@@ -351,6 +374,23 @@ def ai_chat_core(data, deps):
 职位描述：{job_description if job_description else '未提供'}
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
+"""
+            elif is_micro_mode:
+                prompt = f"""
+【严格角色】你是“微访谈补充助手”。
+目标：补齐岗位证据（背景、动作、结果、量化数据），用于最终诊断报告。
+规则：
+- 每轮先一句简短反馈，再提 1 个最关键追问。
+- 若回答空泛，继续追问，不要结束，不要进入下一题。
+- 仅当信息已足够支撑最终诊断时，输出“结束微访谈”。
+- 输出纯文本，不用 Markdown，不要出现“下一题：”。
+
+职位描述：{job_description if job_description else '未提供'}
+简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
+诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
+历史对话：{formatted_chat if formatted_chat else '微访谈刚开始'}
+候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
+请直接输出微访谈助手回复：
 """
             else:
                 persona_prompts = {
@@ -416,9 +456,13 @@ def ai_chat_core(data, deps):
                 raw_text = parsed.get('response') or parsed.get('text') or parsed.get('message') or parsed.get('reply') or raw_text
             raw_text = (raw_text or '').replace('*', '').strip()
 
-            text = raw_text if isinstance(raw_text, str) and raw_text.strip() else '感谢你的回答，我们继续下一题。'
+            text = raw_text if isinstance(raw_text, str) and raw_text.strip() else ('请补充一个关键细节（动作、方法或结果数据）。' if is_micro_mode else '感谢你的回答，我们继续下一题。')
             if mode == 'interview_summary':
                 text = normalize_summary_output(text)
+            if is_micro_mode:
+                text = _sanitize_micro_reply(text)
+                if not text:
+                    text = "请补充你在目标岗位最相关的一段真实经历：你的职责、关键动作和结果数据。"
             return {'response': text}, 200
         except Exception as ai_error:
             deps['logger'].error("AI 面试失败: %s", ai_error)

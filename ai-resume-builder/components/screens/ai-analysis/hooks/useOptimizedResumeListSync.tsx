@@ -8,22 +8,20 @@ import { deriveInterviewStageStatus } from '../interview-stage-status';
 type Params = {
   optimizedResumeId: string | number | null;
   resumeData: any;
-  currentStep: string;
   setAllResumes: (updater: (prev: any[]) => any[]) => void;
 };
 
 export const useOptimizedResumeListSync = ({
   optimizedResumeId,
   resumeData,
-  currentStep,
   setAllResumes,
 }: Params) => {
   const syncedOptimizedDigestRef = useRef<string>('');
   const toDisplayDate = (value: any) => {
     const raw = String(value || '').trim();
-    if (!raw) return new Date().toISOString();
+    if (!raw) return '';
     const date = new Date(raw);
-    if (Number.isNaN(date.getTime())) return new Date().toISOString();
+    if (Number.isNaN(date.getTime())) return '';
     const beijingTime = new Date(date.getTime() + (8 * 60 * 60 * 1000) + (date.getTimezoneOffset() * 60 * 1000));
     const year = beijingTime.getFullYear();
     const month = String(beijingTime.getMonth() + 1).padStart(2, '0');
@@ -89,7 +87,7 @@ export const useOptimizedResumeListSync = ({
         };
       });
     });
-  }, [resumeData, currentStep, setAllResumes]);
+  }, [resumeData, setAllResumes]);
 
   useEffect(() => {
     const targetId = String(optimizedResumeId || (resumeData as any)?.id || '').trim();
@@ -124,7 +122,6 @@ export const useOptimizedResumeListSync = ({
       String(Object.keys(localSessions || {}).length),
       localSessionDigest,
       localInterviewSessionDigest,
-      currentStep,
     ].join('|');
 
     if (syncedOptimizedDigestRef.current === localDigest) return;
@@ -140,8 +137,8 @@ export const useOptimizedResumeListSync = ({
           title: localResumeData.resumeTitle || '已诊断简历',
           score: localResumeData.score,
           has_dot: false,
-          updated_at: new Date().toISOString(),
-          created_at: new Date().toISOString(),
+          updated_at: String(localResumeData.updated_at || localResumeData.updatedAt || ''),
+          created_at: String(localResumeData.created_at || localResumeData.createdAt || ''),
         };
         rowData = localResumeData;
       } else {
@@ -282,9 +279,11 @@ export const useOptimizedResumeListSync = ({
         if (exists) {
           return list.map((r: any) => {
             if (String(r?.id) !== String(summaryItem.id)) return r;
+            const safeDate = summaryItem.date || String(r?.date || '');
             return {
               ...r,
               ...summaryItem,
+              date: safeDate,
               // Never downgrade/upgrade optimization flag accidentally when current row is not truly optimized.
               optimizationStatus: isActuallyOptimized ? 'optimized' : (r?.optimizationStatus || 'unoptimized'),
               analyzed: summaryItem.analyzed,
@@ -300,5 +299,5 @@ export const useOptimizedResumeListSync = ({
     return () => {
       cancelled = true;
     };
-  }, [optimizedResumeId, resumeData, currentStep, setAllResumes]);
+  }, [optimizedResumeId, resumeData, setAllResumes]);
 };

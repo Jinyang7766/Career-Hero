@@ -35,6 +35,6 @@ export const normalizeInterviewReplyText = (text: string) => {
 };
 
 export const shouldTreatAsFollowUpSignal = (text: string) =>
-  /回答(?:过短|不足|不完整|模糊|空泛|几乎为空)|信息量(?:不足|不够)|无法识别|请(?:针对该问题)?重新回答|请补充|请继续补充|追问[:：]/.test(
+  /回答(?:过短|不足|不完整|模糊|空泛|几乎为空)|信息量(?:不足|不够)|无法识别|无效内容|无法支持(?:面试)?评估|请(?:针对该问题)?重新回答|请先补充|请补充|请继续补充|当前问题[:：]|追问[:：]/.test(
     String(text || '')
   );

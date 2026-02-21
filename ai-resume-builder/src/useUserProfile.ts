@@ -76,6 +76,10 @@ const userCache = new Map<string, CacheItem>();
 // 缓存过期时间（10分钟）
 const CACHE_EXPIRY = 10 * 60 * 1000;
 const PROFILE_CACHE_KEY_PREFIX = 'user_profile_cache:';
+const PROFILE_REFRESH_THROTTLE_MS = 60 * 1000;
+
+const inflightProfileRequests = new Map<string, Promise<UserProfile | null>>();
+const lastProfileFetchAt = new Map<string, number>();
 
 // 缓存管理方法
 const cacheWithExpiry = {
@@ -193,7 +197,7 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
 
         console.log('Loading user profile for:', targetUserId);
 
-        // 3. 检查内存缓存（先用缓存快速展示，再后台刷新最新值）
+        // 3. 检查内存缓存（先用缓存快速展示）
         const cachedProfile = cacheWithExpiry.get(targetUserId);
         if (cachedProfile) {
           console.log('User profile loaded from cache:', cachedProfile);
@@ -218,14 +222,40 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
           // 不设置loading为false，继续加载完整信息
         }
 
-        // 5. 尝试从数据库获取完整用户信息（异步，不阻塞UI）
-        const profileResult = await DatabaseService.getUser(targetUserId);
+        // 5. 数据库刷新节流：缓存命中且最近刚刷新过时，直接复用缓存，避免高频 users?select 请求
+        const lastFetchAt = lastProfileFetchAt.get(targetUserId) || 0;
+        const shouldThrottleRefresh =
+          !!cachedProfile && (Date.now() - lastFetchAt) < PROFILE_REFRESH_THROTTLE_MS;
+        if (shouldThrottleRefresh) {
+          return;
+        }
 
-        if (profileResult.success && profileResult.data) {
-          console.log('User profile loaded from database:', profileResult.data);
-          setUserProfile(profileResult.data);
+        // 6. 同用户请求去重：多个页面并发读取时复用同一请求
+        let inflight = inflightProfileRequests.get(targetUserId);
+        if (!inflight) {
+          inflight = (async () => {
+            const profileResult = await DatabaseService.getUser(targetUserId);
+            if (profileResult.success && profileResult.data) {
+              return profileResult.data as UserProfile;
+            }
+            return null;
+          })();
+          inflightProfileRequests.set(targetUserId, inflight);
+        }
+
+        let profileData: UserProfile | null = null;
+        try {
+          profileData = await inflight;
+          lastProfileFetchAt.set(targetUserId, Date.now());
+        } finally {
+          inflightProfileRequests.delete(targetUserId);
+        }
+
+        if (profileData) {
+          console.log('User profile loaded from database:', profileData);
+          setUserProfile(profileData);
           // 缓存用户信息
-          cacheWithExpiry.set(targetUserId, profileResult.data);
+          cacheWithExpiry.set(targetUserId, profileData);
         }
       } catch (err) {
         console.error('Error loading user profile:', err);

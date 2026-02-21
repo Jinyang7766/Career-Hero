@@ -42,7 +42,6 @@ export const useAiAnalysisPassiveDataFlows = ({
   useOptimizedResumeListSync({
     optimizedResumeId,
     resumeData,
-    currentStep,
     setAllResumes,
   });
 
@@ -94,4 +93,3 @@ export const useAiAnalysisPassiveDataFlows = ({
     handleResumeSelect: handleResumeSelect as any,
   });
 };
-

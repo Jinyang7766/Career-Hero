@@ -3,29 +3,50 @@ import { recordResumeExportHistory } from '../../../../src/export-history';
 
 export const EXPORT_WATERMARK_TEXT = '本面试报告由Career Hero生成';
 
-const estimateDataUrlBytes = (dataUrl: string) => {
-  const base64 = String(dataUrl || '').split(',')[1] || '';
-  if (!base64) return 0;
-  const padding = (base64.match(/=*$/)?.[0].length || 0);
-  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding);
-};
-
-const downloadDataUrl = (dataUrl: string, filename: string) => {
+const downloadBlob = (blob: Blob, filename: string) => {
+  const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = dataUrl;
+  a.href = objectUrl;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
-  return estimateDataUrlBytes(dataUrl);
+  URL.revokeObjectURL(objectUrl);
+  return Number(blob.size || 0);
 };
 
-const downloadCanvasWithChunking = (canvas: HTMLCanvasElement, baseName: string) => {
+const canvasToPngBlob = (canvas: HTMLCanvasElement) =>
+  new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        reject(new Error('canvas_to_blob_failed'));
+        return;
+      }
+      resolve(blob);
+    }, 'image/png');
+  });
+
+const waitWithTimeout = async (task: Promise<any>, timeoutMs: number) => {
+  let timer: number | undefined;
+  try {
+    await Promise.race([
+      task,
+      new Promise((resolve) => {
+        timer = window.setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) window.clearTimeout(timer);
+  }
+};
+
+const downloadCanvasWithChunking = async (canvas: HTMLCanvasElement, baseName: string) => {
   const exported: Array<{ filename: string; size: number }> = [];
   const MAX_SAFE_HEIGHT = 14000;
   if (canvas.height <= MAX_SAFE_HEIGHT) {
     const filename = `${baseName}.png`;
-    const size = downloadDataUrl(canvas.toDataURL('image/png', 1.0), filename);
+    const blob = await canvasToPngBlob(canvas);
+    const size = downloadBlob(blob, filename);
     exported.push({ filename, size });
     return exported;
   }
@@ -41,7 +62,8 @@ const downloadCanvasWithChunking = (canvas: HTMLCanvasElement, baseName: string)
     if (!ctx) continue;
     ctx.drawImage(canvas, 0, y, canvas.width, h, 0, 0, piece.width, piece.height);
     const filename = `${baseName}-part${i + 1}.png`;
-    const size = downloadDataUrl(piece.toDataURL('image/png', 1.0), filename);
+    const blob = await canvasToPngBlob(piece);
+    const size = downloadBlob(blob, filename);
     exported.push({ filename, size });
   }
   return exported;
@@ -49,13 +71,17 @@ const downloadCanvasWithChunking = (canvas: HTMLCanvasElement, baseName: string)
 
 const waitForExportReady = async (node: HTMLElement) => {
   if ((document as any).fonts?.ready) {
-    try { await (document as any).fonts.ready; } catch {}
+    try {
+      await waitWithTimeout((document as any).fonts.ready, 1200);
+    } catch {}
   }
 
   const images = Array.from(node.querySelectorAll('img'));
   await Promise.all(images.map(async (img) => {
     try {
-      if ((img as any).decode) await (img as any).decode();
+      if ((img as any).decode) {
+        await waitWithTimeout((img as any).decode(), 1200);
+      }
     } catch {}
   }));
 
@@ -79,9 +105,12 @@ export const useInterviewReportExport = ({ reportRef, resumeData }: Params) => {
       const node = reportRef.current;
       await waitForExportReady(node);
 
-      const captureScale = 2;
       const captureWidth = Math.max(1, Math.round(node.scrollWidth || node.clientWidth));
       const captureHeight = Math.max(1, Math.round(node.scrollHeight || node.clientHeight));
+      const basePixelRatio = Number(window.devicePixelRatio || 1) > 1.5 ? 1.5 : Number(window.devicePixelRatio || 1);
+      const maxPixels = 9_000_000;
+      const rawScale = Math.sqrt(maxPixels / Math.max(1, captureWidth * captureHeight));
+      const captureScale = Math.max(1, Math.min(basePixelRatio || 1, rawScale));
       const viewportWidth = Math.max(1, Math.round(window.innerWidth || document.documentElement.clientWidth || captureWidth));
       const viewportHeight = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || captureHeight));
       const isIgnorableCssRuleError = (value: unknown) => {
@@ -112,7 +141,7 @@ export const useInterviewReportExport = ({ reportRef, resumeData }: Params) => {
         canvas = await withFilteredCssRuleLogs(() =>
           toCanvas(node, {
             pixelRatio: captureScale,
-            cacheBust: true,
+            cacheBust: false,
             backgroundColor: '#ffffff',
             width: captureWidth,
             height: captureHeight,
@@ -158,7 +187,7 @@ export const useInterviewReportExport = ({ reportRef, resumeData }: Params) => {
         });
       }
 
-      const exports = downloadCanvasWithChunking(canvas, `面试报告-${Date.now()}`);
+      const exports = await downloadCanvasWithChunking(canvas, `面试报告-${Date.now()}`);
       for (const item of exports) {
         await recordResumeExportHistory(resumeData as any, {
           filename: item.filename,

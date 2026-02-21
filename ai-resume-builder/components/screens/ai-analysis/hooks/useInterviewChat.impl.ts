@@ -483,9 +483,10 @@ export const useInterviewChat = ({
         ? splitNextQuestion(safeText)
         : { cleaned: safeText, next: '' };
       const aiSignalsFollowUp = isInterviewChat && shouldTreatAsFollowUpSignal(parsedReply.cleaned || safeText || '');
+      const aiSignalsFollowUpByRaw = isInterviewChat && shouldTreatAsFollowUpSignal(safeText || '');
       const shouldBlockNextQuestion = Boolean(
         isInterviewChat &&
-        (normalizedFollowUpDecision.shouldFollowUp || aiSignalsFollowUp)
+        (normalizedFollowUpDecision.shouldFollowUp || aiSignalsFollowUp || aiSignalsFollowUpByRaw)
       );
       const canEnterNextQuestion =
         !shouldBlockNextQuestion &&

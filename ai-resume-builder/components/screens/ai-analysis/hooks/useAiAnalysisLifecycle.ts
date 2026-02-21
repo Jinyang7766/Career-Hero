@@ -75,9 +75,10 @@ export const useAiAnalysisLifecycle = ({
   ]);
 
   useEffect(() => {
+    if (isInterviewMode) return;
     localStorage.setItem('ai_analysis_step', currentStep);
     if (currentStep !== 'resume_select') {
       localStorage.setItem('ai_analysis_has_activity', '1');
     }
-  }, [currentStep, selectedResumeId, resumeData]);
+  }, [currentStep, selectedResumeId, resumeData, isInterviewMode]);
 };
