@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
-import { DatabaseService } from '../../src/database-service';
-import { buildApiUrl } from '../../src/api-config';
-import { recordResumeExportHistory } from '../../src/export-history';
 import { formatTimeline } from '../../src/timeline-utils';
 import BottomNav from '../BottomNav';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
 import BackButton from '../shared/BackButton';
+import { usePreviewPdfExport } from './preview/hooks/usePreviewPdfExport';
+import { usePreviewSectionOrder, type MoveSectionDirection, type PreviewSectionKey } from './preview/hooks/usePreviewSectionOrder';
+import { usePreviewZoomPan } from './preview/hooks/usePreviewZoomPan';
 
 // --- Helper Functions ---
 
@@ -125,12 +125,6 @@ const resolveSkillsList = (raw: any): string[] => {
     .filter(Boolean);
 };
 
-const PREVIEW_SECTION_KEYS = ['summary', 'workExps', 'educations', 'projects', 'skills'] as const;
-type PreviewSectionKey = typeof PREVIEW_SECTION_KEYS[number];
-type MoveSectionDirection = -1 | 1;
-type PinchState = { startDistance: number; startScale: number } | null;
-type PanState = { startX: number; startY: number; originX: number; originY: number } | null;
-
 const PREVIEW_SECTION_LABELS: Record<PreviewSectionKey, string> = {
   summary: '个人简介',
   workExps: '工作经历',
@@ -139,14 +133,6 @@ const PREVIEW_SECTION_LABELS: Record<PreviewSectionKey, string> = {
   skills: '技能',
 };
 
-const getTouchDistance = (touches: React.TouchList): number => {
-  if (!touches || touches.length < 2) return 0;
-  const t1 = touches[0];
-  const t2 = touches[1];
-  const dx = t1.clientX - t2.clientX;
-  const dy = t1.clientY - t2.clientY;
-  return Math.sqrt(dx * dx + dy * dy);
-};
 
 const SectionOrderButtons: React.FC<{
   orderIndex: number;
@@ -179,21 +165,6 @@ const SectionOrderButtons: React.FC<{
   );
 };
 
-const normalizePreviewSectionOrder = (raw: any): PreviewSectionKey[] => {
-  const incoming = Array.isArray(raw) ? raw : [];
-  const seen = new Set<PreviewSectionKey>();
-  const ordered: PreviewSectionKey[] = [];
-  for (const item of incoming) {
-    const key = String(item || '').trim() as PreviewSectionKey;
-    if (!PREVIEW_SECTION_KEYS.includes(key) || seen.has(key)) continue;
-    seen.add(key);
-    ordered.push(key);
-  }
-  for (const key of PREVIEW_SECTION_KEYS) {
-    if (!seen.has(key)) ordered.push(key);
-  }
-  return ordered;
-};
 
 // --- Template Definitions ---
 
@@ -639,155 +610,24 @@ const MinimalTemplate: React.FC<{
 );
 
 
-const sanitizeData = (data: any): any => {
-  const fieldsToRemove = ['suggestions', 'metadata', 'status', 'optimizationStatus', 'interviewSessions', 'lastJdText', 'exportHistory', 'id'];
-  if (Array.isArray(data)) return data.map(item => sanitizeData(item));
-  if (typeof data === 'object' && data !== null) {
-    const sanitized: any = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (fieldsToRemove.includes(key)) continue;
-      sanitized[key] = sanitizeData(value);
-    }
-    return sanitized;
-  }
-  return data;
-};
-
-const buildExportFilename = (title?: string) => {
-  const rawTitle = (title || '').trim();
-  const cleaned = rawTitle.replace(/[\\/:*?"<>|]+/g, '').trim();
-  const base = cleaned || '简历';
-  return base.toLowerCase().endsWith('.pdf') ? base : `${base}.pdf`;
-};
-
 const Preview: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [previewScale, setPreviewScale] = useState(1);
-  const [pinchState, setPinchState] = useState<PinchState>(null);
-  const [previewOffset, setPreviewOffset] = useState({ x: 0, y: 0 });
-  const panStateRef = useRef<PanState>(null);
-  const previewCardRef = useRef<HTMLDivElement | null>(null);
   const isOptimized = resumeData?.optimizationStatus === 'optimized';
-  const isZoomed = previewScale > 1.02;
   const currentTemplateId = resumeData?.templateId || 'modern';
-  const sectionOrder = useMemo(
-    () => normalizePreviewSectionOrder(resumeData?.previewSectionOrder),
-    [resumeData?.previewSectionOrder]
-  );
-
-  const recordExportHistory = async (filename: string, size: number) => {
-    await recordResumeExportHistory(resumeData, {
-      filename: filename || buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name),
-      size,
-      type: 'PDF',
-    });
-  };
-
-  const handleExportPDF = async () => {
-    if (isGenerating || !resumeData) return;
-    setIsGenerating(true);
-
-    try {
-      const sanitizedResumeData = sanitizeData(resumeData);
-      const resumeTitle = resumeData?.resumeTitle || '';
-      const payload: Record<string, unknown> = {
-        resumeData: sanitizedResumeData,
-        jdText: resumeData?.optimizationStatus === 'optimized' ? (resumeData?.lastJdText || '') : '',
-        resumeTitle,
-        filename: resumeTitle
-      };
-      const response = await fetch(buildApiUrl('/api/export-pdf'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || 'PDF 生成失败');
-      }
-
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.style.display = 'none';
-      a.href = url;
-
-      const contentDisposition = response.headers.get('content-disposition');
-      let filename = buildExportFilename(resumeData?.resumeTitle);
-      if (contentDisposition) {
-        const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
-        if (filenameMatch) filename = filenameMatch[1];
-      } else {
-        filename = buildExportFilename(resumeData?.resumeTitle || resumeData?.personalInfo?.name);
-      }
-
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-
-      await recordExportHistory(filename, blob.size);
-      console.log('✅ PDF 导出成功');
-
-    } catch (error) {
-      console.error('❌ PDF 导出失败:', error);
-      alert(`PDF 导出失败: ${error instanceof Error ? error.message : '未知错误'}`);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const handleTemplateChange = async (templateId: string) => {
-    if (!resumeData || !setResumeData) return;
-
-    // Optimistic update
-    const updatedData = { ...resumeData, templateId };
-    setResumeData(updatedData);
-
-    // Save to database
-    if (resumeData.id) {
-      try {
-        await DatabaseService.updateResume(String(resumeData.id), {
-          resume_data: updatedData
-        });
-      } catch (error) {
-        console.error('Failed to update template:', error);
-      }
-    }
-  };
-
-  const persistResumeData = async (nextData: ResumeData) => {
-    if (!setResumeData) return;
-    setResumeData(nextData);
-    if (resumeData?.id) {
-      try {
-        await DatabaseService.updateResume(String(resumeData.id), {
-          resume_data: nextData
-        });
-      } catch (error) {
-        console.error('Failed to persist preview settings:', error);
-      }
-    }
-  };
-
-  const moveSection = async (index: number, direction: -1 | 1) => {
-    if (!resumeData) return;
-    const targetIndex = index + direction;
-    if (targetIndex < 0 || targetIndex >= sectionOrder.length) return;
-    const nextOrder = [...sectionOrder];
-    const [picked] = nextOrder.splice(index, 1);
-    nextOrder.splice(targetIndex, 0, picked);
-    await persistResumeData({
-      ...resumeData,
-      previewSectionOrder: nextOrder,
-    });
-  };
+  const { isGenerating, handleExportPDF } = usePreviewPdfExport({ resumeData });
+  const { sectionOrder, handleTemplateChange, moveSection } = usePreviewSectionOrder({ resumeData, setResumeData });
+  const {
+    previewScale,
+    previewOffset,
+    previewCardRef,
+    isZoomed,
+    handlePreviewTouchStart,
+    handlePreviewTouchMove,
+    handlePreviewTouchEnd,
+  } = usePreviewZoomPan();
 
   const renderTemplate = () => {
     if (!resumeData) return null;
@@ -801,80 +641,6 @@ const Preview: React.FC<ScreenProps> = () => {
       case 'modern':
       default:
         return <ModernTemplate data={resumeData} sectionOrder={sectionOrder} onMoveSection={(index, direction) => { void moveSection(index, direction); }} hideOrderButtons={isZoomed} />;
-    }
-  };
-
-  const clampOffset = (x: number, y: number, scale: number) => {
-    const card = previewCardRef.current;
-    if (!card || scale <= 1) return { x: 0, y: 0 };
-    const width = card.offsetWidth || 0;
-    const height = card.offsetHeight || 0;
-    const maxX = ((scale - 1) * width) / 2;
-    const maxY = ((scale - 1) * height) / 2;
-    return {
-      x: Math.max(-maxX, Math.min(maxX, x)),
-      y: Math.max(-maxY, Math.min(maxY, y)),
-    };
-  };
-
-  const handlePreviewTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length >= 2) {
-      const distance = getTouchDistance(event.touches);
-      if (!distance) return;
-      panStateRef.current = null;
-      setPinchState({ startDistance: distance, startScale: previewScale });
-      return;
-    }
-    if (event.touches.length === 1 && isZoomed && !pinchState) {
-      const touch = event.touches[0];
-      panStateRef.current = {
-        startX: touch.clientX,
-        startY: touch.clientY,
-        originX: previewOffset.x,
-        originY: previewOffset.y,
-      };
-    }
-  };
-
-  const handlePreviewTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length >= 2 && pinchState) {
-      const distance = getTouchDistance(event.touches);
-      if (!distance) return;
-      const ratio = distance / Math.max(1, pinchState.startDistance);
-      const next = Math.min(2.5, Math.max(1, pinchState.startScale * ratio));
-      setPreviewScale(next);
-      setPreviewOffset((prev) => clampOffset(prev.x, prev.y, next));
-      event.preventDefault();
-      return;
-    }
-    if (event.touches.length === 1 && isZoomed && panStateRef.current) {
-      const touch = event.touches[0];
-      const deltaX = touch.clientX - panStateRef.current.startX;
-      const deltaY = touch.clientY - panStateRef.current.startY;
-      const nextX = panStateRef.current.originX + deltaX;
-      const nextY = panStateRef.current.originY + deltaY;
-      setPreviewOffset(clampOffset(nextX, nextY, previewScale));
-      event.preventDefault();
-    }
-  };
-
-  const handlePreviewTouchEnd = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (event.touches.length >= 2) return;
-    if (event.touches.length === 1 && isZoomed) {
-      const touch = event.touches[0];
-      panStateRef.current = {
-        startX: touch.clientX,
-        startY: touch.clientY,
-        originX: previewOffset.x,
-        originY: previewOffset.y,
-      };
-    } else {
-      panStateRef.current = null;
-    }
-    setPinchState(null);
-    if (previewScale < 1.03) {
-      setPreviewScale(1);
-      setPreviewOffset({ x: 0, y: 0 });
     }
   };
 

@@ -24,44 +24,12 @@ import DeletionPending from './components/screens/DeletionPending';
 import MemberCenter from './components/screens/MemberCenter';
 import TermsOfService from './components/screens/TermsOfService';
 import PrivacyPolicy from './components/screens/PrivacyPolicy';
+import ScreenErrorBoundary from './components/ScreenErrorBoundary';
 import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from './src/diagnosis-progress';
 import { deriveInterviewStageStatus } from './components/screens/ai-analysis/interview-stage-status';
 import { makeJdKey, parseInterviewScopedKey } from './components/screens/ai-analysis/id-utils';
-
-class ScreenErrorBoundary extends React.Component<
-  { children: React.ReactNode; title?: string },
-  { hasError: boolean; message: string }
-> {
-  constructor(props: { children: React.ReactNode; title?: string }) {
-    super(props);
-    this.state = { hasError: false, message: '' };
-  }
-
-  static getDerivedStateFromError(error: any) {
-    return {
-      hasError: true,
-      message: String(error?.message || error || '未知错误'),
-    };
-  }
-
-  componentDidCatch(error: any, errorInfo: any) {
-    console.error('[ScreenErrorBoundary]', error, errorInfo);
-  }
-
-  render() {
-    if (!this.state.hasError) return this.props.children;
-    return (
-      <div className="flex min-h-screen items-center justify-center px-6">
-        <div className="w-full max-w-md rounded-2xl border border-rose-200 bg-rose-50 p-5 text-rose-700">
-          <div className="text-base font-bold">
-            {this.props.title || '页面加载失败'}
-          </div>
-          <div className="mt-2 text-sm break-all">{this.state.message}</div>
-        </div>
-      </div>
-    );
-  }
-}
+import { pathToView, viewToPath } from './src/app-routing';
+import { useThemeSync } from './src/hooks/useThemeSync';
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -85,36 +53,7 @@ function App() {
     return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   });
 
-  // Sync theme with HTML class and handle system preference
-  useEffect(() => {
-    const updateTheme = () => {
-      let activeTheme: 'light' | 'dark' = 'dark';
-
-      if (theme === 'system') {
-        activeTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-      } else {
-        activeTheme = theme;
-      }
-
-      setResolvedTheme(activeTheme);
-
-      if (activeTheme === 'dark') {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
-      localStorage.setItem('theme', theme);
-    };
-
-    updateTheme();
-
-    if (theme === 'system') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handler = () => updateTheme();
-      mediaQuery.addEventListener('change', handler);
-      return () => mediaQuery.removeEventListener('change', handler);
-    }
-  }, [theme]);
+  useThemeSync({ theme, setResolvedTheme });
 
   const setTheme = (newTheme: 'light' | 'dark' | 'system') => setThemeState(newTheme);
 
@@ -123,57 +62,6 @@ function App() {
   const navigationType = useNavigationType();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
   const routeHistoryRef = useRef<string[]>([]);
-
-  const viewToPath = (view: View) => {
-    switch (view) {
-      case View.LOGIN: return '/login';
-      case View.SIGNUP: return '/signup';
-      case View.FORGOT_PASSWORD: return '/forgot-password';
-      case View.DASHBOARD: return '/dashboard';
-      case View.ALL_RESUMES: return '/all-resumes';
-      case View.AI_ANALYSIS: return '/ai-analysis';
-      case View.PROFILE: return '/profile';
-      case View.EDITOR: return '/editor';
-      case View.PREVIEW: return '/preview';
-      case View.TEMPLATES: return '/templates';
-      case View.SETTINGS: return '/settings';
-      case View.ACCOUNT_SECURITY: return '/account-security';
-      case View.HELP: return '/help';
-      case View.HISTORY: return '/history';
-      case View.POINTS_HISTORY: return '/points-history';
-      case View.DELETION_PENDING: return '/deletion-pending';
-      case View.MEMBER_CENTER: return '/member-center';
-      case View.AI_INTERVIEW: return '/ai-interview';
-      case View.TERMS_OF_SERVICE: return '/terms-of-service';
-      case View.PRIVACY_POLICY: return '/privacy-policy';
-      default: return '/dashboard';
-    }
-  };
-
-  const pathToView = (pathname: string): View => {
-    const p = (pathname || '').toLowerCase();
-    if (p === '/' || p === '') return View.DASHBOARD;
-    if (p.startsWith('/ai-analysis')) return View.AI_ANALYSIS;
-    if (p.startsWith('/dashboard')) return View.DASHBOARD;
-    if (p.startsWith('/all-resumes')) return View.ALL_RESUMES;
-    if (p.startsWith('/profile')) return View.PROFILE;
-    if (p.startsWith('/editor')) return View.EDITOR;
-    if (p.startsWith('/preview')) return View.PREVIEW;
-    if (p.startsWith('/templates')) return View.TEMPLATES;
-    if (p.startsWith('/settings')) return View.SETTINGS;
-    if (p.startsWith('/account-security')) return View.ACCOUNT_SECURITY;
-    if (p.startsWith('/help')) return View.HELP;
-    if (p.startsWith('/history')) return View.HISTORY;
-    if (p.startsWith('/points-history')) return View.POINTS_HISTORY;
-    if (p.startsWith('/member-center')) return View.MEMBER_CENTER;
-    if (p.startsWith('/deletion-pending')) return View.DELETION_PENDING;
-    if (p.startsWith('/signup')) return View.SIGNUP;
-    if (p.startsWith('/forgot-password')) return View.FORGOT_PASSWORD;
-    if (p.startsWith('/ai-interview')) return View.AI_INTERVIEW;
-    if (p.startsWith('/terms-of-service')) return View.TERMS_OF_SERVICE;
-    if (p.startsWith('/privacy-policy')) return View.PRIVACY_POLICY;
-    return View.LOGIN;
-  };
 
   const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
   const currentRoute = useMemo(() => `${location.pathname}${location.search || ''}`, [location.pathname, location.search]);

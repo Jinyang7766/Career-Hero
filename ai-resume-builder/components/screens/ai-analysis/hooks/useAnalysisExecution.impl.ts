@@ -6,9 +6,9 @@ import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
 import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
-import { makeJdKey } from '../id-utils';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
+import { checkInterviewContinuationState, decideMicroInterviewNeeded } from '../analysis-execution-helpers';
 import type { AnalysisReport, Suggestion } from '../types';
 
 type QuotaKind =
@@ -203,47 +203,15 @@ export const useAnalysisExecution = ({
     }
     const normalizedInterviewType = String(interviewType || getActiveInterviewType() || 'general').trim().toLowerCase();
     const normalizedInterviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase();
-    const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
-    const interviewSessions = (resumeData as any)?.interviewSessions || {};
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
-    const isSessionModeMatchedForQuota = (session: any) => {
-      const mode = String(session?.interviewMode || '').trim().toLowerCase();
-      // Legacy session without mode marker: treat as matched for quota protection.
-      if (!mode) return true;
-      return mode === normalizedInterviewMode;
-    };
-    const isSessionTypeMatchedForQuota = (session: any) => {
-      const sessionType = String(session?.interviewType || '').trim().toLowerCase();
-      if (!sessionType) return true;
-      return sessionType === normalizedInterviewType;
-    };
-    const hasInterruptedSessionForJdKey = (jdKey: string) => {
-      const matchingStates = Object.values(analysisSessionByJd || {}).filter((session: any) => {
-        if (!session) return false;
-        const state = String(session?.state || '').toLowerCase();
-        if (state !== 'paused' && state !== 'interview_in_progress') return false;
-        const stateJdKey = String(session?.jdKey || '').trim() || makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
-        if (stateJdKey !== jdKey) return false;
-        if (!isSessionModeMatchedForQuota(session)) return false;
-        if (!isSessionTypeMatchedForQuota(session)) return false;
-        return true;
-      });
-      return matchingStates.length > 0;
-    };
-    const effectiveJdKey = makeJdKey(effectiveJdText);
-    const hasInterruptedOnEffectiveJd = !!effectiveJdText && hasInterruptedSessionForJdKey(effectiveJdKey);
-    const hasAnyInterruptedInterview = Object.values(analysisSessionByJd || {}).some((session: any) => {
-      if (!session) return false;
-      const state = String(session?.state || '').toLowerCase();
-      if (state !== 'paused' && state !== 'interview_in_progress') return false;
-      if (!isSessionModeMatchedForQuota(session)) return false;
-      if (!isSessionTypeMatchedForQuota(session)) return false;
-      return true;
+    const { effectiveJdText, isContinuingInterview } = checkInterviewContinuationState({
+      analysisSessionByJd,
+      jdText,
+      resumeData,
+      isInterviewMode,
+      normalizedInterviewMode,
+      normalizedInterviewType,
     });
-    const isContinuingInterview = Boolean(
-      isInterviewMode &&
-      (hasInterruptedOnEffectiveJd || hasAnyInterruptedInterview)
-    );
     if (isInterviewMode) {
       const confirmed = await confirmDialog(
         '开始面试前提醒：请预留一段完整时间参与本次面试，尽量不要中途退出或切换页面。确认现在进入面试吗？'
@@ -561,37 +529,15 @@ export const useAnalysisExecution = ({
         console.warn('Failed to persist report_ready session state:', stateErr);
       }
       markAnalysisCompleted();
-      const decideMicroInterviewNeeded = () => {
-        if (isInterviewMode) return true;
-
-        // Prefer backend explicit decision if provided.
-        const backendDecisionRaw =
-          (aiAnalysisResult as any)?.microInterviewNeeded ??
-          (aiAnalysisResult as any)?.needsMicroInterview ??
-          (aiAnalysisResult as any)?.followUpRequired;
-        if (typeof backendDecisionRaw === 'boolean') {
-          return backendDecisionRaw;
-        }
-
-        const pendingSuggestions = (appliedSuggestions || []).length;
-        const weaknessCount = (newReport.weaknesses || [])
-          .filter((w) => String(w || '').trim() && !/需要进一步优化/.test(String(w))).length;
-        const missingKeywordCount = (newReport.missingKeywords || [])
-          .filter((k) => String(k || '').trim()).length;
-        const summary = String(newReport.summary || '').toLowerCase();
-        const strongSummarySignal = /(非常完善|可直接投递|匹配度高|无明显短板|无明显问题)/.test(summary);
-
-        // Heuristic: very complete profile can skip micro-interview.
-        const looksComplete =
-          totalScore >= 92 &&
-          pendingSuggestions <= 1 &&
-          weaknessCount <= 1 &&
-          missingKeywordCount <= 2;
-
-        return !(looksComplete || strongSummarySignal);
-      };
-
-      const shouldEnterMicroInterview = decideMicroInterviewNeeded();
+      const shouldEnterMicroInterview = decideMicroInterviewNeeded({
+        isInterviewMode,
+        aiAnalysisResult,
+        totalScore,
+        appliedSuggestions,
+        weaknesses: newReport.weaknesses || [],
+        missingKeywords: newReport.missingKeywords || [],
+        summary: newReport.summary || '',
+      });
       if (shouldEnterMicroInterview) {
         try {
           await persistAnalysisSessionState('interview_in_progress', {

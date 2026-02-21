@@ -9,12 +9,11 @@ import {
   buildSummaryRequestBody
 } from '../chat-request-builders';
 import { persistUserDossierToProfile } from '../dossier-persistence';
-import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewType } from '../interview-plan-utils';
+import { useInterviewChatStorage } from './useInterviewChatStorage';
 import {
   buildFallbackInterviewSummary,
-  buildPendingReplyKey,
   buildTimingContextForSummary,
-  buildTimingStorageKey,
   countUserAnswers,
   findPendingQuestion,
   isUnusableInterviewSummary,
@@ -98,70 +97,24 @@ export const useInterviewChat = ({
   const activeQuestionMessageIdRef = useRef<string>('');
   const activeQuestionStartAtRef = useRef<number>(0);
   const answerTimingsRef = useRef<InterviewAnswerTiming[]>([]);
-  const getPendingReplyKey = () =>
-    buildPendingReplyKey({
-      currentUserId,
-      resumeId: (resumeData as any)?.id,
-      jdText,
-      lastJdText: (resumeData as any)?.lastJdText,
-      isInterviewMode,
-    });
-
-  const getTimingStorageKey = () =>
-    buildTimingStorageKey({
-      currentUserId,
-      resumeId: (resumeData as any)?.id,
-      jdText,
-      lastJdText: (resumeData as any)?.lastJdText,
-      isInterviewMode,
-      interviewType: getActiveInterviewType(),
-      interviewMode: getActiveInterviewMode(),
-    });
-
-  const persistTimingSnapshot = () => {
-    if (!isInterviewMode) return;
-    try {
-      localStorage.setItem(getTimingStorageKey(), JSON.stringify({
-        entries: answerTimingsRef.current,
-        activeQuestionMessageId: activeQuestionMessageIdRef.current || '',
-        activeQuestionStartedAt: activeQuestionStartAtRef.current || 0,
-      }));
-    } catch (err) {
-      console.warn('Failed to persist interview timing snapshot:', err);
-    }
-  };
-
-  const clearTimingSnapshot = () => {
-    answerTimingsRef.current = [];
-    activeQuestionMessageIdRef.current = '';
-    activeQuestionStartAtRef.current = 0;
-    setCurrentQuestionElapsedSec(0);
-    try {
-      localStorage.removeItem(getTimingStorageKey());
-    } catch { }
-  };
-
-  const setPendingReply = (payload: {
-    requestId: string;
-    text: string;
-    userMessageId: string;
-    createdAt: string;
-    replayCount?: number;
-  }) => {
-    try {
-      localStorage.setItem(getPendingReplyKey(), JSON.stringify(payload));
-      setHasPendingReply(true);
-    } catch (err) {
-      console.warn('Failed to persist pending chat reply marker:', err);
-    }
-  };
-
-  const clearPendingReply = () => {
-    try {
-      localStorage.removeItem(getPendingReplyKey());
-      setHasPendingReply(false);
-    } catch { }
-  };
+  const {
+    getPendingReplyKey,
+    getTimingStorageKey,
+    persistTimingSnapshot,
+    clearTimingSnapshot,
+    setPendingReply,
+    clearPendingReply,
+  } = useInterviewChatStorage({
+    currentUserId,
+    resumeData,
+    jdText,
+    isInterviewMode,
+    answerTimingsRef,
+    activeQuestionMessageIdRef,
+    activeQuestionStartAtRef,
+    setCurrentQuestionElapsedSec,
+    setHasPendingReply,
+  });
 
   const beginSending = () => {
     sendingCountRef.current += 1;

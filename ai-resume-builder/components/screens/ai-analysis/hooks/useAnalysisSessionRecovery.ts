@@ -44,8 +44,7 @@ export const useAnalysisSessionRecovery = ({
     const activeInterviewMode = getActiveInterviewMode();
 
     const jdKey = makeJdKey(effectiveJdText);
-    const marker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${activeInterviewMode}:${currentStep}`;
-    if (recoveredSessionKeyRef.current === marker) return;
+    const sceneMarker = `${String(resumeData.id || '')}:${jdKey}:${activeInterviewType}:${activeInterviewMode}`;
 
     const session = getAnalysisSession(effectiveJdText) as any;
     if (!session) return;
@@ -53,6 +52,8 @@ export const useAnalysisSessionRecovery = ({
     const status = String(session.state || '');
     const sessionStep = String(session.step || '').trim();
     const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType, activeInterviewMode);
+    const actionMarker = `${sceneMarker}:${String(status || '').toLowerCase()}:${String(sessionStep || '').toLowerCase()}:${hasInterviewMessages ? '1' : '0'}`;
+    if (recoveredSessionKeyRef.current === actionMarker) return;
     const completedStep = isInterviewMode ? 'interview_report' : 'comparison';
     const isOnCompletedFlow =
       currentStep === completedStep ||
@@ -66,7 +67,7 @@ export const useAnalysisSessionRecovery = ({
       if (!isOnCompletedFlow) {
         navigateToStep(completedStep, true);
       }
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
@@ -74,24 +75,28 @@ export const useAnalysisSessionRecovery = ({
       hasInterviewMessages &&
       (status === 'interview_in_progress' || status === 'paused')
     ) {
-      if (!jdText) setJdText(effectiveJdText);
+      if (!jdText && effectiveJdText && String(jdText || '').trim() !== effectiveJdText) {
+        setJdText(effectiveJdText);
+      }
       restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       if (currentStep !== 'chat') {
         openChat('internal', { skipRestore: true });
       }
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
     if (sessionStep === 'chat') {
-      if (!jdText) setJdText(effectiveJdText);
+      if (!jdText && effectiveJdText && String(jdText || '').trim() !== effectiveJdText) {
+        setJdText(effectiveJdText);
+      }
       // Always restore (or clear) chat history for the active scene before opening chat,
       // otherwise stale messages from previous mode can leak into current mode.
       restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
       if (currentStep !== 'chat') {
         openChat('internal', { skipRestore: true });
       }
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
@@ -101,7 +106,7 @@ export const useAnalysisSessionRecovery = ({
     ) {
       const normalizedStep = sessionStep === 'micro_intro' ? 'report' : sessionStep;
       navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', true);
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
@@ -111,7 +116,7 @@ export const useAnalysisSessionRecovery = ({
       (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'report')
     ) {
       navigateToStep('report', true);
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
@@ -121,7 +126,7 @@ export const useAnalysisSessionRecovery = ({
       (resumeData.analysisSnapshot || loadLastAnalysis())
     ) {
       navigateToStep('report', true);
-      recoveredSessionKeyRef.current = marker;
+      recoveredSessionKeyRef.current = actionMarker;
       return;
     }
 
