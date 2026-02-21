@@ -638,13 +638,13 @@ export const useAnalysisExecution = ({
     refundUsageQuota,
   ]);
 
-  const handleStartAnalysisClick = useCallback((interviewType?: string) => {
+  const handleStartAnalysisClick = useCallback(async (interviewType?: string) => {
     const hasJd = !!jdText.trim();
     if (!hasJd) {
       setShowJdEmptyModal(true);
       return;
     }
-    void startAnalysis(interviewType);
+    await startAnalysis(interviewType);
   }, [jdText, setShowJdEmptyModal, startAnalysis]);
 
   return {

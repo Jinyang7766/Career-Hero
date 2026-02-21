@@ -273,10 +273,33 @@ export const splitImprovementItems = (raw: string): string[] => {
 };
 
 export const parseTrainingPlanGroups = (raw: string): TrainingWeek[] => {
+  const splitLineByDayMarkers = (line: string): string[] => {
+    const source = String(line || '').trim();
+    if (!source) return [];
+    const re = /(Day\s*\d+|第?\s*\d+\s*天)\s*[：:]?/giu;
+    const matches = Array.from(source.matchAll(re));
+    if (!matches.length) return [source];
+
+    const parts: string[] = [];
+    const firstIdx = Number(matches[0].index || 0);
+    if (firstIdx > 0) {
+      const prefix = source.slice(0, firstIdx).trim();
+      if (prefix) parts.push(prefix);
+    }
+    for (let i = 0; i < matches.length; i += 1) {
+      const start = Number(matches[i].index || 0);
+      const end = i + 1 < matches.length ? Number(matches[i + 1].index || source.length) : source.length;
+      const seg = source.slice(start, end).trim();
+      if (seg) parts.push(seg);
+    }
+    return parts;
+  };
+
   const lines = String(raw || '')
     .split('\n')
     .map((x) => String(x || '').trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap(splitLineByDayMarkers);
   if (!lines.length) return [];
 
   const result: TrainingWeek[] = [];
@@ -371,10 +394,16 @@ export const parseImprovementTriplet = (text: string) => {
   const source = String(text || '').trim();
   if (!source) return { problem: '', improve: '', practice: '', fallback: '' };
 
+  const cleanTripletField = (value: string) =>
+    String(value || '')
+      .replace(/^[\s|｜、，,;；:：\-]+/u, '')
+      .replace(/[\s|｜、，,;；:：\-]+$/u, '')
+      .trim();
+
   const readField = (name: string) => {
     const re = new RegExp(`${name}\\s*[：:]\\s*([\\s\\S]*?)(?=(?:问题|改进|练习)\\s*[：:]|$)`, 'u');
     const m = source.match(re);
-    return String(m?.[1] || '').trim();
+    return cleanTripletField(String(m?.[1] || ''));
   };
   const problem = readField('问题');
   const improve = readField('改进');
@@ -383,6 +412,5 @@ export const parseImprovementTriplet = (text: string) => {
   if (problem || improve || practice) {
     return { problem, improve, practice, fallback: '' };
   }
-  return { problem: '', improve: '', practice: '', fallback: source };
+  return { problem: '', improve: '', practice: '', fallback: cleanTripletField(source) };
 };
-

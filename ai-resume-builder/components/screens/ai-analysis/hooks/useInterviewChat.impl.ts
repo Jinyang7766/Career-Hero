@@ -546,11 +546,10 @@ export const useInterviewChat = ({
         /abort(ed)?/i.test(errMsg);
       const isSuppressedAbort = isAbortError && suppressedAbortKeysRef.current.has(requestKey);
       if (isAbortError) {
-        if (isSuppressedAbort) {
-          clearPendingReply();
-        }
+        clearPendingReply();
         return;
       }
+      clearPendingReply();
       if (isEndCommand) {
         if (!isInterviewMode) {
           // End-micro-interview is a local completion path; do not block UI on persistence hiccups.

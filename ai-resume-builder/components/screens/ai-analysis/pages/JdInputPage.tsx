@@ -27,12 +27,12 @@ export type JdInputPageProps = {
   onScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
 
   onBack: () => void;
-  onStart: (interviewType?: string) => void;
+  onStart: (interviewType?: string) => Promise<void> | void;
   onViewReport?: () => void;
 
   showJdEmptyModal: boolean;
   setShowJdEmptyModal: (v: boolean) => void;
-  startAnalysis: (interviewType?: string) => void;
+  startAnalysis: (interviewType?: string) => Promise<void> | void;
   onRestartCompletedInterviewScene?: () => Promise<void> | void;
   isInterviewMode?: boolean;
 };
@@ -96,6 +96,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       return '';
     }
   });
+  const [isStarting, setIsStarting] = React.useState(false);
   const resetInterviewSceneInputs = React.useCallback(() => {
     setInterviewFocus('');
     setTargetCompany('');
@@ -315,7 +316,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       : resumeReadState.message;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in slide-in-from-right duration-300">
+    <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
       <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2" />
@@ -480,13 +481,18 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
         </div>
 
         <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 flex gap-3 mt-2">
-          {isInterviewMode && shouldShowViewReport && (
+          {isInterviewMode && (
             <button
               onClick={() => {
+                if (!shouldShowViewReport) return;
                 persistInterviewSceneConfig();
                 onViewReport?.();
               }}
-              className="flex-1 py-3 rounded-xl border border-primary/30 text-primary text-sm font-bold hover:bg-primary/5 active:scale-[0.98] transition-all bg-white/95 dark:bg-background-dark/95 backdrop-blur-sm"
+              disabled={!shouldShowViewReport}
+              className={`flex-1 py-3 rounded-xl border text-sm font-bold transition-colors backdrop-blur-sm ${shouldShowViewReport
+                  ? 'border-primary/30 text-primary hover:bg-primary/5 active:scale-[0.98] bg-white/95 dark:bg-background-dark/95'
+                  : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 bg-slate-100/80 dark:bg-white/5 cursor-not-allowed'
+                }`}
               type="button"
             >
               查看报告
@@ -494,24 +500,38 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
           )}
           <button
             onClick={async () => {
-              persistInterviewSceneConfig();
-              if (isInterviewMode && shouldShowViewReport && !shouldShowContinueInterview) {
-                const confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
-                if (!confirmed) return;
-                await onRestartCompletedInterviewScene?.();
-                resetInterviewSceneInputs();
+              if (isStarting) return;
+              setIsStarting(true);
+              try {
+                persistInterviewSceneConfig();
+                if (isInterviewMode && shouldShowViewReport && !shouldShowContinueInterview) {
+                  const confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
+                  if (!confirmed) return;
+                  await onRestartCompletedInterviewScene?.();
+                  resetInterviewSceneInputs();
+                }
+                const shouldBypassJdEmptyPrompt = Boolean(isInterviewMode && shouldShowContinueInterview);
+                if (shouldBypassJdEmptyPrompt) {
+                  await startAnalysis(interviewType);
+                  return;
+                }
+                await onStart(isInterviewMode ? interviewType : undefined);
+              } finally {
+                setIsStarting(false);
               }
-              const shouldBypassJdEmptyPrompt = Boolean(isInterviewMode && shouldShowContinueInterview);
-              if (shouldBypassJdEmptyPrompt) {
-                void startAnalysis(interviewType);
-                return;
-              }
-              onStart(isInterviewMode ? interviewType : undefined);
             }}
-            className={`${isInterviewMode && shouldShowViewReport ? 'flex-1' : 'w-full'} py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all`}
+            disabled={isStarting}
+            className={`${isInterviewMode ? 'flex-1' : 'w-full'} py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2`}
             type="button"
           >
-            {startButtonLabel}
+            {isStarting ? (
+              <>
+                <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <span>{shouldShowContinueInterview ? '正在进入...' : '开始中...'}</span>
+              </>
+            ) : (
+              startButtonLabel
+            )}
           </button>
         </div>
 
@@ -533,12 +553,22 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               </div>
               <div className="p-6 pt-0 flex flex-col gap-3">
                 <button
-                  onClick={() => {
-                    setShowJdEmptyModal(false);
-                    startAnalysis(isInterviewMode ? interviewType : undefined);
+                  onClick={async () => {
+                    if (isStarting) return;
+                    setIsStarting(true);
+                    try {
+                      setShowJdEmptyModal(false);
+                      await startAnalysis(isInterviewMode ? interviewType : undefined);
+                    } finally {
+                      setIsStarting(false);
+                    }
                   }}
-                  className="w-full h-12 rounded-2xl bg-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-500/25 hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center"
+                  disabled={isStarting}
+                  className="w-full h-12 rounded-2xl bg-amber-500 text-white text-sm font-bold shadow-lg shadow-amber-500/25 hover:bg-amber-600 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
+                  {isStarting ? (
+                    <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  ) : null}
                   {isInterviewMode ? '坚持进入面试' : '坚持继续诊断'}
                 </button>
                 <button

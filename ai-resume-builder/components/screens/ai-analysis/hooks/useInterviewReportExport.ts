@@ -84,24 +84,47 @@ export const useInterviewReportExport = ({ reportRef, resumeData }: Params) => {
       const captureHeight = Math.max(1, Math.round(node.scrollHeight || node.clientHeight));
       const viewportWidth = Math.max(1, Math.round(window.innerWidth || document.documentElement.clientWidth || captureWidth));
       const viewportHeight = Math.max(1, Math.round(window.innerHeight || document.documentElement.clientHeight || captureHeight));
+      const isIgnorableCssRuleError = (value: unknown) => {
+        const text = String(value || '');
+        return (
+          text.includes('cssRules') &&
+          (text.includes('Failed to read') || text.includes('SecurityError'))
+        );
+      };
+
+      const withFilteredCssRuleLogs = async <T,>(task: () => Promise<T>) => {
+        const originalError = console.error;
+        console.error = (...args: any[]) => {
+          if (args.some((arg) => isIgnorableCssRuleError(arg))) return;
+          originalError(...args);
+        };
+        try {
+          return await task();
+        } finally {
+          console.error = originalError;
+        }
+      };
+
       let canvas: HTMLCanvasElement;
       try {
         const mod: any = await import('html-to-image');
         const toCanvas = mod?.toCanvas;
-        canvas = await toCanvas(node, {
-          pixelRatio: captureScale,
-          cacheBust: true,
-          backgroundColor: '#ffffff',
-          width: captureWidth,
-          height: captureHeight,
-          canvasWidth: Math.round(captureWidth * captureScale),
-          canvasHeight: Math.round(captureHeight * captureScale),
-          style: {
-            width: `${captureWidth}px`,
-            height: `${captureHeight}px`,
-            transform: 'none',
-          },
-        });
+        canvas = await withFilteredCssRuleLogs(() =>
+          toCanvas(node, {
+            pixelRatio: captureScale,
+            cacheBust: true,
+            backgroundColor: '#ffffff',
+            width: captureWidth,
+            height: captureHeight,
+            canvasWidth: Math.round(captureWidth * captureScale),
+            canvasHeight: Math.round(captureHeight * captureScale),
+            style: {
+              width: `${captureWidth}px`,
+              height: `${captureHeight}px`,
+              transform: 'none',
+            },
+          })
+        );
       } catch (primaryError) {
         console.warn('html-to-image export failed, fallback to html2canvas:', primaryError);
         const mod: any = await import('html2canvas');
@@ -156,4 +179,3 @@ export const useInterviewReportExport = ({ reportRef, resumeData }: Params) => {
     handleSaveImage,
   };
 };
-

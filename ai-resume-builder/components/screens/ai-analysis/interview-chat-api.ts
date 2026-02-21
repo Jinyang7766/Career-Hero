@@ -23,7 +23,7 @@ export const streamInterviewResponse = async ({
 }) => {
   const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
   const directEndpoint = buildApiUrl('/api/ai/chat');
-  const FIRST_CHUNK_TIMEOUT_MS = 25000;
+  const FIRST_CHUNK_TIMEOUT_MS = 8000;
   const TOTAL_STREAM_TIMEOUT_MS = 120000;
   const perf = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
     ? performance
@@ -148,58 +148,132 @@ export const streamInterviewResponse = async ({
       return lf < crlf ? { idx: lf, len: 2 } : { idx: crlf, len: 4 };
     };
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (firstEventAt === null) {
-        firstEventAt = perf ? perf.now() : Date.now();
-        if (firstChunkTimer) {
-          clearTimeout(firstChunkTimer);
-          firstChunkTimer = null;
-        }
+    const markFirstRealEvent = () => {
+      if (firstChunkTimer) {
+        clearTimeout(firstChunkTimer);
+        firstChunkTimer = null;
       }
-      buffer += decoder.decode(value, { stream: true });
+    };
 
-      let { idx: boundary, len: boundaryLen } = findBoundary(buffer);
-      while (boundary !== -1) {
-        const rawEvent = buffer.slice(0, boundary);
-        buffer = buffer.slice(boundary + boundaryLen);
-        ({ idx: boundary, len: boundaryLen } = findBoundary(buffer));
+    const processRawEvent = (rawEvent: string) => {
+      const lines = rawEvent
+        .split(/\r?\n/)
+        .map((line) => line.trim());
+      const dataLines = lines.filter((line) => line.startsWith('data:'));
+      if (!dataLines.length) return;
+      const dataRaw = dataLines.map((line) => line.slice(5).trim()).join('');
+      if (!dataRaw) return;
 
-        const lines = rawEvent.split('\n').map(line => line.trim());
-        const dataLines = lines.filter(line => line.startsWith('data:'));
-        if (!dataLines.length) continue;
-        const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
-        if (!dataRaw) continue;
+      let payload: any;
+      try {
+        payload = JSON.parse(dataRaw);
+      } catch (parseError) {
+        console.warn('Failed to parse SSE payload:', parseError, dataRaw);
+        return;
+      }
 
-        let payload: any;
-        try {
-          payload = JSON.parse(dataRaw);
-        } catch (parseError) {
-          console.warn('Failed to parse SSE payload:', parseError, dataRaw);
-          continue;
+      try {
+        const type = String(payload?.type || '');
+        if (type === 'chunk') {
+          const delta = String(payload?.delta || '');
+          if (!delta) return;
+          markFirstRealEvent();
+          hasRealChunk = true;
+          chunkCount += 1;
+          streamedText += delta;
+          setStreamingText(streamedText);
+        } else if (type === 'done') {
+          markFirstRealEvent();
+          doneText = String(payload?.text || '').trim();
+        } else if (type === 'error') {
+          markFirstRealEvent();
+          streamErrorMessage = String(payload?.message || '流式面试失败');
         }
+      } catch (eventError) {
+        console.warn('Failed to handle SSE payload:', eventError);
+      }
+    };
 
-        try {
-          const type = String(payload?.type || '');
-          if (type === 'chunk') {
-            const delta = String(payload?.delta || '');
-            if (!delta) continue;
-            hasRealChunk = true;
-            chunkCount += 1;
-            streamedText += delta;
-            setStreamingText(streamedText);
-          } else if (type === 'done') {
-            doneText = String(payload?.text || '').trim();
-          } else if (type === 'error') {
-            streamErrorMessage = String(payload?.message || '流式面试失败');
-            break;
+    try {
+      let gotRealEvent = false;
+      while (true) {
+        const readOnce = () => reader.read();
+        const readWithFirstEventTimeout = async () => {
+          if (gotRealEvent) return readOnce();
+          let timeoutId: ReturnType<typeof setTimeout> | null = null;
+          try {
+            const result = await Promise.race([
+              readOnce(),
+              new Promise<{ done: true; value?: undefined }>((resolve) => {
+                timeoutId = setTimeout(() => {
+                  timedOut = true;
+                  try {
+                    reader.cancel('sse_first_real_event_timeout');
+                  } catch {
+                    // ignore reader cancel failure
+                  }
+                  resolve({ done: true, value: undefined });
+                }, FIRST_CHUNK_TIMEOUT_MS);
+              }),
+            ]);
+            return result;
+          } finally {
+            if (timeoutId) clearTimeout(timeoutId);
           }
-        } catch (eventError) {
-          console.warn('Failed to handle SSE payload:', eventError);
+        };
+
+        const { done, value } = await readWithFirstEventTimeout();
+        if (done) break;
+        if (firstEventAt === null) {
+          firstEventAt = perf ? perf.now() : Date.now();
+        }
+        buffer += decoder.decode(value, { stream: true });
+
+        let { idx: boundary, len: boundaryLen } = findBoundary(buffer);
+        while (boundary !== -1) {
+          const rawEvent = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + boundaryLen);
+          ({ idx: boundary, len: boundaryLen } = findBoundary(buffer));
+          processRawEvent(rawEvent);
+          if (hasRealChunk || doneText || streamErrorMessage) {
+            gotRealEvent = true;
+          }
+          if (streamErrorMessage) break;
+        }
+        if (streamErrorMessage) break;
+      }
+
+      // Some gateways may drop trailing event delimiters; process leftover payload once.
+      const trailing = buffer.trim();
+      if (!streamErrorMessage && trailing) {
+        processRawEvent(trailing);
+      }
+    } catch (streamReadErr: any) {
+      const errName = String(streamReadErr?.name || '');
+      const errMsg = String(streamReadErr?.message || '');
+      const isAbort = errName === 'AbortError' || /abort(ed)?/i.test(errName) || /abort(ed)?/i.test(errMsg);
+      const shouldFallbackToDirect = timedOut || (isAbort && !signal?.aborted);
+      if (!shouldFallbackToDirect) throw streamReadErr;
+
+      const fallbackResponse = await fetch(directEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token.trim()}`,
+          'X-Client-Trace-Id': traceId,
+        },
+        signal,
+        body: JSON.stringify(requestBody),
+      });
+      if (fallbackResponse.ok) {
+        const fallbackData = await fallbackResponse.json().catch(() => ({} as any));
+        const fallbackText = String(fallbackData?.response || '').trim();
+        if (fallbackText) {
+          setStreamingText(fallbackText);
+          return fallbackText;
         }
       }
-      if (streamErrorMessage) break;
+      throw streamReadErr;
     }
 
     if (streamErrorMessage) {
