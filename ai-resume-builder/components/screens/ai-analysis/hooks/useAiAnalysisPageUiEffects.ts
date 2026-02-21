@@ -38,11 +38,13 @@ export const useAiAnalysisPageUiEffects = ({
   }, [setIsNavHidden]);
 
   useEffect(() => {
-    if (currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
+    // Keep interview scene fields stable when returning to JD input,
+    // otherwise scene matching cannot detect "continue interview".
+    if (!isInterviewMode && currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
       setTargetCompany('');
     }
     prevStepRef.current = currentStep;
-  }, [currentStep, prevStepRef, setTargetCompany]);
+  }, [currentStep, isInterviewMode, prevStepRef, setTargetCompany]);
 
   useEffect(() => {
     planLoaderMountedRef.current = true;

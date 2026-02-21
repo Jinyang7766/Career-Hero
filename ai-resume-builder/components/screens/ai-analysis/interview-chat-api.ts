@@ -22,6 +22,9 @@ export const streamInterviewResponse = async ({
   setStreamingText: (text: string) => void;
 }) => {
   const streamEndpoint = buildApiUrl('/api/ai/chat/stream');
+  const directEndpoint = buildApiUrl('/api/ai/chat');
+  const FIRST_CHUNK_TIMEOUT_MS = 25000;
+  const TOTAL_STREAM_TIMEOUT_MS = 120000;
   const perf = (typeof performance !== 'undefined' && performance && typeof performance.now === 'function')
     ? performance
     : null;
@@ -31,155 +34,222 @@ export const streamInterviewResponse = async ({
   let streamedText = '';
   let doneText = '';
   let hasRealChunk = false;
+  let timedOut = false;
 
-  const response = await fetch(streamEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token.trim()}`,
-      'X-Client-Trace-Id': traceId,
-    },
-    signal,
-    body: JSON.stringify(requestBody)
-  });
+  const streamController = new AbortController();
+  const externalAbortHandler = () => streamController.abort('external_abort');
+  if (signal) {
+    if (signal.aborted) {
+      streamController.abort('external_abort');
+    } else {
+      signal.addEventListener('abort', externalAbortHandler, { once: true });
+    }
+  }
+  let firstChunkTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    timedOut = true;
+    streamController.abort('sse_first_chunk_timeout');
+  }, FIRST_CHUNK_TIMEOUT_MS);
+  let totalTimer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
+    timedOut = true;
+    streamController.abort('sse_total_timeout');
+  }, TOTAL_STREAM_TIMEOUT_MS);
+
+  const clearTimers = () => {
+    if (firstChunkTimer) {
+      clearTimeout(firstChunkTimer);
+      firstChunkTimer = null;
+    }
+    if (totalTimer) {
+      clearTimeout(totalTimer);
+      totalTimer = null;
+    }
+    if (signal) {
+      signal.removeEventListener('abort', externalAbortHandler);
+    }
+  };
+
+  let response: Response;
+  try {
+    response = await fetch(streamEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+        'X-Client-Trace-Id': traceId,
+      },
+      signal: streamController.signal,
+      body: JSON.stringify(requestBody)
+    });
+  } catch (fetchErr: any) {
+    clearTimers();
+    if (signal?.aborted && !timedOut) throw fetchErr;
+    const fallback = await fetch(directEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+        'X-Client-Trace-Id': traceId,
+      },
+      signal,
+      body: JSON.stringify(requestBody),
+    });
+    if (!fallback.ok) {
+      const fallbackErr = await fallback.json().catch(() => ({} as any));
+      throw new Error(String(fallbackErr?.error || 'Backend API failed'));
+    }
+    const fallbackData = await fallback.json().catch(() => ({} as any));
+    const fallbackText = String(fallbackData?.response || '').trim();
+    if (!fallbackText) throw new Error('empty_ai_response_json');
+    setStreamingText(fallbackText);
+    return fallbackText;
+  }
 
   if (!response.ok) {
+    clearTimers();
     const errorData = await response.json().catch(() => ({}));
     throw new Error((errorData as any).error || 'Backend API failed');
   }
 
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('text/event-stream')) {
-    const result = await response.json().catch(() => ({} as any));
-    const fallbackText = String(result?.response || '').trim();
-    const finishedAt = perf ? perf.now() : Date.now();
-    const totalMs = Math.max(0, finishedAt - startedAt);
-    console.info('[InterviewLatency]', {
-      traceId,
-      mode: 'json_fallback',
-      totalMs: Number(totalMs.toFixed(1)),
-      hasText: !!fallbackText,
-    });
-    if (!fallbackText) {
-      throw new Error('empty_ai_response_json');
-    }
-    return fallbackText;
-  }
-
-  if (!response.body) {
-    throw new Error('流式响应不可用');
-  }
-
-  let chunkCount = 0;
-  let streamErrorMessage = '';
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder('utf-8');
-  let buffer = '';
-
-  const findBoundary = (text: string) => {
-    const lf = text.indexOf('\n\n');
-    const crlf = text.indexOf('\r\n\r\n');
-    if (lf === -1 && crlf === -1) return { idx: -1, len: 0 };
-    if (lf === -1) return { idx: crlf, len: 4 };
-    if (crlf === -1) return { idx: lf, len: 2 };
-    return lf < crlf ? { idx: lf, len: 2 } : { idx: crlf, len: 4 };
-  };
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (firstEventAt === null) {
-      firstEventAt = perf ? perf.now() : Date.now();
-    }
-    buffer += decoder.decode(value, { stream: true });
-
-    let { idx: boundary, len: boundaryLen } = findBoundary(buffer);
-    while (boundary !== -1) {
-      const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + boundaryLen);
-      ({ idx: boundary, len: boundaryLen } = findBoundary(buffer));
-
-      const lines = rawEvent.split('\n').map(line => line.trim());
-      const dataLines = lines.filter(line => line.startsWith('data:'));
-      if (!dataLines.length) continue;
-      const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
-      if (!dataRaw) continue;
-
-      let payload: any;
-      try {
-        payload = JSON.parse(dataRaw);
-      } catch (parseError) {
-        console.warn('Failed to parse SSE payload:', parseError, dataRaw);
-        continue;
+  try {
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      const result = await response.json().catch(() => ({} as any));
+      const fallbackText = String(result?.response || '').trim();
+      const finishedAt = perf ? perf.now() : Date.now();
+      const totalMs = Math.max(0, finishedAt - startedAt);
+      console.info('[InterviewLatency]', {
+        traceId,
+        mode: 'json_fallback',
+        totalMs: Number(totalMs.toFixed(1)),
+        hasText: !!fallbackText,
+      });
+      if (!fallbackText) {
+        throw new Error('empty_ai_response_json');
       }
-
-      try {
-        const type = String(payload?.type || '');
-        if (type === 'chunk') {
-          const delta = String(payload?.delta || '');
-          if (!delta) continue;
-          hasRealChunk = true;
-          chunkCount += 1;
-          streamedText += delta;
-          setStreamingText(streamedText);
-        } else if (type === 'done') {
-          doneText = String(payload?.text || '').trim();
-        } else if (type === 'error') {
-          streamErrorMessage = String(payload?.message || '流式面试失败');
-          break;
-        }
-      } catch (eventError) {
-        console.warn('Failed to handle SSE payload:', eventError);
-      }
-    }
-    if (streamErrorMessage) break;
-  }
-
-  if (streamErrorMessage) {
-    throw new Error(streamErrorMessage);
-  }
-
-  const finalText = (doneText || streamedText || '').trim();
-  if (finalText && finalText !== streamedText) {
-    setStreamingText(finalText);
-  }
-  const finishedAt = perf ? perf.now() : Date.now();
-  const totalMs = Math.max(0, finishedAt - startedAt);
-  const firstEventMs = firstEventAt === null ? -1 : Math.max(0, firstEventAt - startedAt);
-  console.info('[InterviewLatency]', {
-    traceId,
-    mode: 'sse',
-    firstEventMs: Number(firstEventMs.toFixed(1)),
-    totalMs: Number(totalMs.toFixed(1)),
-    chunkCount,
-    hasDoneText: !!doneText,
-    hasRealChunk,
-    finalLen: finalText.length,
-    streamingMessageId,
-  });
-  if (finalText) return finalText;
-
-  // Resilience fallback: some gateways/proxies may strip SSE chunks.
-  const fallbackResponse = await fetch(buildApiUrl('/api/ai/chat'), {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token.trim()}`,
-      'X-Client-Trace-Id': traceId,
-    },
-    signal,
-    body: JSON.stringify(requestBody),
-  });
-  if (fallbackResponse.ok) {
-    const fallbackData = await fallbackResponse.json().catch(() => ({} as any));
-    const fallbackText = String(fallbackData?.response || '').trim();
-    if (fallbackText) {
-      setStreamingText(fallbackText);
       return fallbackText;
     }
-  }
 
-  throw new Error('empty_ai_response_stream');
+    if (!response.body) {
+      throw new Error('流式响应不可用');
+    }
+
+    let chunkCount = 0;
+    let streamErrorMessage = '';
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    const findBoundary = (text: string) => {
+      const lf = text.indexOf('\n\n');
+      const crlf = text.indexOf('\r\n\r\n');
+      if (lf === -1 && crlf === -1) return { idx: -1, len: 0 };
+      if (lf === -1) return { idx: crlf, len: 4 };
+      if (crlf === -1) return { idx: lf, len: 2 };
+      return lf < crlf ? { idx: lf, len: 2 } : { idx: crlf, len: 4 };
+    };
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (firstEventAt === null) {
+        firstEventAt = perf ? perf.now() : Date.now();
+        if (firstChunkTimer) {
+          clearTimeout(firstChunkTimer);
+          firstChunkTimer = null;
+        }
+      }
+      buffer += decoder.decode(value, { stream: true });
+
+      let { idx: boundary, len: boundaryLen } = findBoundary(buffer);
+      while (boundary !== -1) {
+        const rawEvent = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + boundaryLen);
+        ({ idx: boundary, len: boundaryLen } = findBoundary(buffer));
+
+        const lines = rawEvent.split('\n').map(line => line.trim());
+        const dataLines = lines.filter(line => line.startsWith('data:'));
+        if (!dataLines.length) continue;
+        const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
+        if (!dataRaw) continue;
+
+        let payload: any;
+        try {
+          payload = JSON.parse(dataRaw);
+        } catch (parseError) {
+          console.warn('Failed to parse SSE payload:', parseError, dataRaw);
+          continue;
+        }
+
+        try {
+          const type = String(payload?.type || '');
+          if (type === 'chunk') {
+            const delta = String(payload?.delta || '');
+            if (!delta) continue;
+            hasRealChunk = true;
+            chunkCount += 1;
+            streamedText += delta;
+            setStreamingText(streamedText);
+          } else if (type === 'done') {
+            doneText = String(payload?.text || '').trim();
+          } else if (type === 'error') {
+            streamErrorMessage = String(payload?.message || '流式面试失败');
+            break;
+          }
+        } catch (eventError) {
+          console.warn('Failed to handle SSE payload:', eventError);
+        }
+      }
+      if (streamErrorMessage) break;
+    }
+
+    if (streamErrorMessage) {
+      throw new Error(streamErrorMessage);
+    }
+
+    const finalText = (doneText || streamedText || '').trim();
+    if (finalText && finalText !== streamedText) {
+      setStreamingText(finalText);
+    }
+    const finishedAt = perf ? perf.now() : Date.now();
+    const totalMs = Math.max(0, finishedAt - startedAt);
+    const firstEventMs = firstEventAt === null ? -1 : Math.max(0, firstEventAt - startedAt);
+    console.info('[InterviewLatency]', {
+      traceId,
+      mode: 'sse',
+      firstEventMs: Number(firstEventMs.toFixed(1)),
+      totalMs: Number(totalMs.toFixed(1)),
+      chunkCount,
+      hasDoneText: !!doneText,
+      hasRealChunk,
+      finalLen: finalText.length,
+      streamingMessageId,
+    });
+    if (finalText) return finalText;
+
+    // Resilience fallback: some gateways/proxies may strip SSE chunks.
+    const fallbackResponse = await fetch(directEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+        'X-Client-Trace-Id': traceId,
+      },
+      signal,
+      body: JSON.stringify(requestBody),
+    });
+    if (fallbackResponse.ok) {
+      const fallbackData = await fallbackResponse.json().catch(() => ({} as any));
+      const fallbackText = String(fallbackData?.response || '').trim();
+      if (fallbackText) {
+        setStreamingText(fallbackText);
+        return fallbackText;
+      }
+    }
+
+    throw new Error('empty_ai_response_stream');
+  } finally {
+    clearTimers();
+  }
 };
 
 export const generateInterviewSummary = async ({

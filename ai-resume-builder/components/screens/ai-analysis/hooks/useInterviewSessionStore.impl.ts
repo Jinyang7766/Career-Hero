@@ -539,7 +539,11 @@ export const useInterviewSessionStore = ({
       // (same resume + same JD + same type + same mode), regardless of scene hash.
       Object.entries(updatedSessions).forEach(([key, session]: [string, any]) => {
         const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-        if (chatMode !== 'interview') return;
+        // Legacy session rows may not have chatMode. In interview mode, treat missing as interview-compatible.
+        if (chatMode && chatMode !== 'interview') return;
+        const sessionResumeId = String(session?.resumeId || '').trim();
+        const resumeMatched = !sessionResumeId || sessionResumeId === currentResumeId;
+        if (!resumeMatched) return;
         const sessionJdKey =
           String(session?.jdKey || '').trim() ||
           makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
@@ -548,9 +552,6 @@ export const useInterviewSessionStore = ({
         const sessionMode = normalizeInterviewMode(session?.interviewMode || parseInterviewScopedKey(String(key || '')).interviewMode || '');
         if (sessionType !== interviewType) return;
         if (sessionMode !== interviewMode) return;
-        const sessionResumeId = String(session?.resumeId || '').trim();
-        const resumeMatched = !sessionResumeId || sessionResumeId === currentResumeId;
-        if (!resumeMatched) return;
         delete updatedSessions[key];
       });
     }
@@ -587,7 +588,13 @@ export const useInterviewSessionStore = ({
     Object.entries(byJd).forEach(([key, session]: [string, any]) => {
       if (!session) return;
       const entryChatMode = String(session?.chatMode || '').trim().toLowerCase();
-      if (entryChatMode !== expectedChatMode) return;
+      // Legacy analysisSession entries may not carry chatMode.
+      // In interview mode, these legacy rows can still lock JD input and must be cleared.
+      if (isInterviewMode) {
+        if (entryChatMode && entryChatMode !== 'interview') return;
+      } else {
+        if (entryChatMode !== expectedChatMode) return;
+      }
       const parsed = parseInterviewScopedKey(String(key || ''));
       const entryType = normalizeInterviewType(session?.interviewType || parsed.interviewType || '');
       const entryMode = normalizeInterviewMode(session?.interviewMode || parsed.interviewMode || '');
@@ -595,6 +602,9 @@ export const useInterviewSessionStore = ({
       if (entryJdKey !== jdKey) return;
       if (entryType !== interviewType) return;
       if (entryMode !== interviewMode) return;
+      const entryResumeId = String(session?.resumeId || '').trim();
+      const currentResumeId = String((currentResumeData as any)?.id || '').trim();
+      if (entryResumeId && currentResumeId && entryResumeId !== currentResumeId) return;
       delete byJd[key];
     });
 

@@ -2,7 +2,6 @@
 from dotenv import load_dotenv
 load_dotenv()  # 加载 .env 文件
 from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
 import os
 # Clear proxy env vars before importing supabase to avoid proxy kw mismatch in some versions
 for _key in ['HTTP_PROXY', 'HTTPS_PROXY', 'ALL_PROXY', 'http_proxy', 'https_proxy', 'all_proxy']:
@@ -83,56 +82,6 @@ _deletion_sweep_state = {'lock': threading.Lock(), 'last_at': 0.0}
 # Debug: Log environment variable keys (NOT values) to verify injection
 env_keys = list(os.environ.keys())
 logger.info(f"Detected environment variable keys: {', '.join([k for k in env_keys if not k.startswith('_')])}")
-
-# CORS configuration
-CORS(app, 
-     resources={
-         r"/api/*": {
-             "origins": "*",
-             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "X-Requested-With", "X-Client-Trace-Id"]
-         }
-     },
-     supports_credentials=False
-)
-
-@app.before_request
-def handle_options_request():
-    # Anti-crawler guard (skip OPTIONS/static/non-API based on config)
-    allowed, body, status, extra_headers = anti_bot_guard.check(
-        path=request.path,
-        method=request.method,
-        headers=request.headers,
-        remote_addr=_extract_client_ip(),
-    )
-    if not allowed:
-        response = jsonify(body or {'error': '请求被拒绝'})
-        response.status_code = status
-        for k, v in (extra_headers or {}).items():
-            response.headers[k] = v
-        return response
-
-    # Opportunistic low-frequency sweep for expired deletion requests.
-    # This keeps cleanup running even without external cron.
-    if AUTO_DELETION_SWEEP_ENABLED and request.path.startswith('/api/'):
-        # Avoid recursion for manual sweep endpoint.
-        if not request.path.startswith('/api/internal/sweep-expired-deletions'):
-            try:
-                run_expired_deletion_sweep(force=False, limit=200)
-            except Exception as sweep_err:
-                logger.warning(f"background deletion sweep failed: {sweep_err}")
-
-
-@app.after_request
-def apply_cors_headers(response):
-    """
-    Ensure CORS headers are present on actual responses as well (not only OPTIONS),
-    otherwise browser may show `Failed to fetch` even when backend returns 200.
-    """
-    response.headers['Access-Control-Allow-Origin'] = '*'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization,X-Requested-With,X-Client-Trace-Id'
-    response.headers['Access-Control-Allow-Methods'] = 'GET,POST,PUT,DELETE,OPTIONS'
-    return response
 
 # Supabase configuration
 SUPABASE_URL = os.getenv('SUPABASE_URL', 'your-supabase-url')
@@ -261,6 +210,7 @@ try:
         normalize_resume_id as normalize_resume_id_service,
         find_existing_optimized_resume as find_existing_optimized_resume_service,
     )
+    from services.flask_http_hooks import configure_flask_http_hooks
     from services.supabase_init_service import init_supabase_client
 except ImportError:
     from backend.services.model_config_service import (
@@ -276,6 +226,7 @@ except ImportError:
         normalize_resume_id as normalize_resume_id_service,
         find_existing_optimized_resume as find_existing_optimized_resume_service,
     )
+    from backend.services.flask_http_hooks import configure_flask_http_hooks
     from backend.services.supabase_init_service import init_supabase_client
 
 
@@ -484,6 +435,15 @@ def run_expired_deletion_sweep(force: bool = False, limit: int = 200):
         logger=logger,
         is_missing_deletion_column_error_fn=_is_missing_deletion_column_error,
     )
+
+
+configure_flask_http_hooks(
+    app=app,
+    anti_bot_guard=anti_bot_guard,
+    extract_client_ip=_extract_client_ip,
+    auto_deletion_sweep_enabled=AUTO_DELETION_SWEEP_ENABLED,
+    run_expired_deletion_sweep=run_expired_deletion_sweep,
+)
 
 try:
     from services.rag_service import (

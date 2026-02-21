@@ -31,10 +31,10 @@ const isInterviewSceneSession = (
 
   // Legacy entries without chatMode: infer by step + matching interview chat session.
   const step = String(session?.step || '').trim().toLowerCase();
-  if (step === 'final_report' || step === 'comparison' || step === 'report' || step === 'micro_intro') {
+  if (step === 'comparison' || step === 'report' || step === 'micro_intro') {
     return false;
   }
-  if (step === 'interview_report') return true;
+  if (step === 'interview_report' || step === 'final_report') return true;
 
   if (step !== 'chat') return false;
 
@@ -65,52 +65,29 @@ const applyCurrent = (arr: StageStatus[], idx: number) => {
   if (arr[idx] !== 'done') arr[idx] = 'current';
 };
 
-const hasPlanForScene = ({
-  resumeId,
-  jdKey,
-  interviewType,
-  interviewMode,
-}: {
-  resumeId: string;
-  jdKey: string;
-  interviewType: string;
-  interviewMode: string;
-}) => {
-  if (typeof localStorage === 'undefined') return false;
-  if (!resumeId || !jdKey || !interviewType || !interviewMode) return false;
-  try {
-    const prefixes = [
-      `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`,
-      `ai_interview_plan_`,
-    ];
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const key = String(localStorage.key(i) || '');
-      if (!key.startsWith(prefixes[1])) continue;
-      const isLegacy = key.startsWith(prefixes[0]);
-      const containsScene = key.includes(`_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`) ||
-        key.includes(`_${jdKey}_${interviewType}_${interviewMode}_`);
-      if (!isLegacy && !containsScene) continue;
-      const raw = localStorage.getItem(key);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      const q = Array.isArray(parsed?.questions) ? parsed.questions : [];
-      if (q.length > 0) return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
-};
-
 export const deriveInterviewStageStatus = (rowData: any) => {
   const analysisSessionByJd = rowData?.analysisSessionByJd || {};
   const interviewSessions = rowData?.interviewSessions || {};
-  const resumeId = String(rowData?.id || '').trim();
   const stageStatus: StageStatus[] = ['todo', 'todo', 'todo'];
   const byMode: { simple: StageStatus[]; comprehensive: StageStatus[] } = {
     simple: ['todo', 'todo', 'todo'],
     comprehensive: ['todo', 'todo', 'todo'],
   };
+  const completedSceneKeys = new Set<string>();
+
+  Object.entries(analysisSessionByJd || {}).forEach(([key, session]: [string, any]) => {
+    if (!isInterviewSceneSession(key, session, interviewSessions)) return;
+    const parsed = parseInterviewScopedKey(String(key || ''));
+    const interviewType = normalizeType(session?.interviewType || parsed.interviewType || '');
+    if (!interviewType) return;
+    const interviewMode = normalizeMode(session?.interviewMode || parsed.interviewMode || '') || 'comprehensive';
+    const jdKey = String(session?.jdKey || parsed.jdKey || '').trim();
+    const state = String(session?.state || '').trim().toLowerCase();
+    const step = String(session?.step || '').trim().toLowerCase();
+    const isDone = state === 'interview_done' && (step === 'interview_report' || step === 'final_report');
+    if (!isDone) return;
+    completedSceneKeys.add(`${jdKey}__${interviewType}__${interviewMode}`);
+  });
 
   Object.entries(analysisSessionByJd || {}).forEach(([key, session]: [string, any]) => {
     if (!isInterviewSceneSession(key, session, interviewSessions)) return;
@@ -122,21 +99,16 @@ export const deriveInterviewStageStatus = (rowData: any) => {
     const interviewMode = normalizeMode(session?.interviewMode || parsed.interviewMode || '') || 'comprehensive';
     const step = String(session?.step || '').trim().toLowerCase();
     const state = String(session?.state || '').trim().toLowerCase();
-    const jdKey = String(session?.jdKey || parsed.jdKey || '').trim();
+    const jdKey = String(session?.jdKey || parsed.jdKey || '').trim() || String(parsed.jdKey || '').trim();
+    const sceneKey = `${jdKey}__${interviewType}__${interviewMode}`;
 
-    if (step === 'interview_report') {
+    if (state === 'interview_done' && (step === 'interview_report' || step === 'final_report')) {
       applyDone(stageStatus, idx);
       applyDone(byMode[interviewMode], idx);
       return;
     }
 
-    if (state === 'interview_in_progress' || state === 'paused' || step === 'chat') {
-      applyCurrent(stageStatus, idx);
-      applyCurrent(byMode[interviewMode], idx);
-      return;
-    }
-
-    if (hasPlanForScene({ resumeId, jdKey, interviewType, interviewMode })) {
+    if ((state === 'interview_in_progress' || state === 'paused') && !completedSceneKeys.has(sceneKey)) {
       applyCurrent(stageStatus, idx);
       applyCurrent(byMode[interviewMode], idx);
     }
@@ -152,6 +124,9 @@ export const deriveInterviewStageStatus = (rowData: any) => {
     const idx = getTypeIndex(interviewType);
     if (idx === -1) return;
     const interviewMode = normalizeMode(session?.interviewMode || parsed.interviewMode || '') || 'comprehensive';
+    const jdKey = String(session?.jdKey || parsed.jdKey || '').trim();
+    const sceneKey = `${jdKey}__${interviewType}__${interviewMode}`;
+    if (completedSceneKeys.has(sceneKey)) return;
     applyCurrent(stageStatus, idx);
     applyCurrent(byMode[interviewMode], idx);
   });

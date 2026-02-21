@@ -96,6 +96,15 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       return '';
     }
   });
+  const resetInterviewSceneInputs = React.useCallback(() => {
+    setInterviewFocus('');
+    setTargetCompany('');
+    setJdText('');
+  }, [
+    setJdText,
+    setInterviewFocus,
+    setTargetCompany,
+  ]);
 
   React.useEffect(() => {
     if (!isInterviewMode) return;
@@ -132,7 +141,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
   const isSessionMatchedForCurrentScene = React.useCallback((session: any) => {
     if (!session) return false;
-    const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+    const effectiveJdText = String(jdText || '').trim();
     const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
     const sessionJdKey =
       String(session?.jdKey || '').trim() ||
@@ -142,7 +151,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     const normalizedMode = String(interviewMode || 'comprehensive').trim().toLowerCase();
     const normalizedType = String(interviewType || 'general').trim().toLowerCase();
     const normalizedFocus = normalizeSceneText(interviewFocus);
-    const normalizedTargetCompany = normalizeSceneText(targetCompany || resumeData?.targetCompany || '');
+    const normalizedTargetCompany = normalizeSceneText(targetCompany || '');
     const normalizedResumeId = String((resumeData as any)?.id || '').trim();
 
     const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
@@ -490,6 +499,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                 const confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
                 if (!confirmed) return;
                 await onRestartCompletedInterviewScene?.();
+                resetInterviewSceneInputs();
               }
               const shouldBypassJdEmptyPrompt = Boolean(isInterviewMode && shouldShowContinueInterview);
               if (shouldBypassJdEmptyPrompt) {

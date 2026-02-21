@@ -35,7 +35,7 @@ export const useAnalysisStepCheckpoint = ({
 
   useEffect(() => {
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
-    if (!effectiveJdText) return;
+    if (!effectiveJdText && !isInterviewMode) return;
     if (currentStep === 'resume_select') return;
 
     const map: Record<

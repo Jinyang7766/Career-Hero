@@ -1,14 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, ScreenProps, ResumeData, WorkExperience, Education, Project } from '../../types';
+import { View, ScreenProps, ResumeData } from '../../types';
 import { DatabaseService } from '../../src/database-service';
-import { supabase } from '../../src/supabase-client';
-import { toSkillList, mergeSkills } from '../../src/skill-utils';
-import { buildResumeTitle } from '../../src/resume-utils';
+import { toSkillList } from '../../src/skill-utils';
 import {
-  PERSONAL_FIELD_LIMITS,
-  WORK_FIELD_LIMITS,
-  EDUCATION_FIELD_LIMITS,
-  PROJECT_FIELD_LIMITS,
   SKILL_MAX_CHARS,
   SUMMARY_MAX_CHARS,
   clampByLimit,
@@ -20,10 +14,21 @@ import EducationStep from '../editor/steps/EducationStep';
 import ProjectsStep from '../editor/steps/ProjectsStep';
 import SkillsStep from '../editor/steps/SkillsStep';
 import SummaryStep from '../editor/steps/SummaryStep';
+import {
+  addResumeSectionItem,
+  addResumeSkills,
+  clearResumeAllData,
+  clearResumeCurrentStep,
+  removeResumeSectionItem,
+  removeResumeSkillByIndex,
+  updateResumePersonalField,
+  updateResumeSectionItem,
+} from '../editor/editor-actions';
 import { useEditorAutosave } from '../editor/hooks/useEditorAutosave';
 import { useEditorDataNormalization } from '../editor/hooks/useEditorDataNormalization';
 import { useEditorDraftPersistence } from '../editor/hooks/useEditorDraftPersistence';
 import { useEditorImportFlow } from '../editor/hooks/useEditorImportFlow';
+import { useEditorSaveAndPreview } from '../editor/hooks/useEditorSaveAndPreview';
 import { useEditorValidation } from '../editor/hooks/useEditorValidation';
 import { useEditorWizardState } from '../editor/hooks/useEditorWizardState';
 // Popup import removed; inline import UI only
@@ -194,31 +199,13 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   // --- Handlers ---
 
   const handleInfoChange = (field: keyof ResumeData['personalInfo'] | 'gender', value: string) => {
-    const personalLimit = field !== 'gender'
-      ? (PERSONAL_FIELD_LIMITS as Record<string, number>)[field]
-      : undefined;
-    const nextValue = typeof personalLimit === 'number' ? clampByLimit(value, personalLimit) : value;
-
-    if (field === 'gender') {
-      setResumeData(prev => ({
-        ...prev,
-        gender: nextValue
-      }));
-    } else {
-      setResumeData(prev => ({
-        ...prev,
-        personalInfo: { ...prev.personalInfo, [field]: nextValue }
-      }));
-    }
+    const nextResumeData = updateResumePersonalField(resumeData, field, value);
+    setResumeData(nextResumeData);
     if (validationStep === 'personal') {
       setFormatErrors(prev => {
         const next = { ...prev };
         if (field !== 'gender') {
-          const updated: ResumeData = {
-            ...resumeData,
-            personalInfo: { ...resumeData.personalInfo, [field]: nextValue }
-          };
-          return validatePersonalFormats(updated);
+          return validatePersonalFormats(nextResumeData);
         }
         return next;
       });
@@ -226,65 +213,14 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   };
 
   const addItem = (section: 'workExps' | 'educations' | 'projects') => {
-    setResumeData(prev => ({
-      ...prev,
-      [section]: [
-        ...prev[section],
-        { id: Date.now(), title: '', subtitle: '', date: '', description: '' }
-      ]
-    }));
+    setResumeData(addResumeSectionItem(resumeData, section));
   };
 
   const removeItem = (section: 'workExps' | 'educations' | 'projects', id: number) => {
-    setResumeData(prev => ({
-      ...prev,
-      [section]: prev[section].filter(item => item.id !== id)
-    }));
+    setResumeData(removeResumeSectionItem(resumeData, section, id));
   };
-
-  type EditableSection = 'workExps' | 'educations' | 'projects';
-  type ItemBySection = { workExps: WorkExperience; educations: Education; projects: Project };
-
-  // Helper for updating fields in array items
-  const updateItem = <S extends EditableSection>(section: S, id: number, field: keyof ItemBySection[S], value: string) => {
-    const limitMap =
-      section === 'workExps'
-        ? WORK_FIELD_LIMITS
-        : section === 'educations'
-          ? EDUCATION_FIELD_LIMITS
-          : PROJECT_FIELD_LIMITS;
-    const key = String(field);
-    const fieldLimit = (limitMap as Record<string, number>)[key];
-    const nextValue = typeof fieldLimit === 'number' ? clampByLimit(value, fieldLimit) : value;
-
-    setResumeData(prev => ({
-      ...prev,
-      [section]: (prev[section] as Array<ItemBySection[S]>).map(item => {
-        if (item.id !== id) return item;
-
-        const next: any = { ...item, [field]: nextValue };
-
-        // Keep alias fields in sync so preview/export (which may read company/school)
-        // always reflect latest editor input.
-        if (section === 'workExps') {
-          if (field === 'title') next.company = nextValue;
-          if (field === 'subtitle') next.position = nextValue;
-        } else if (section === 'educations') {
-          if (field === 'title') next.school = nextValue;
-          if (field === 'subtitle') next.major = nextValue;
-        } else if (section === 'projects') {
-          if (field === 'subtitle') next.role = nextValue;
-        }
-
-        if (field === 'startDate' || field === 'endDate') {
-          const s = String(next.startDate || '').trim();
-          const e = String(next.endDate || '').trim();
-          next.date = (s && e) ? `${s} - ${e}` : (s || e || '');
-        }
-
-        return next as ItemBySection[S];
-      }),
-    }));
+  const updateItem = (section: 'workExps' | 'educations' | 'projects', id: number, field: any, value: string) => {
+    setResumeData(updateResumeSectionItem(resumeData, section as any, id, field, value));
   };
 
   const handleAddSkill = () => {
@@ -293,113 +229,26 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       setNewSkill('');
       return;
     }
-    setResumeData(prev => ({
-      ...prev,
-      skills: mergeSkills(prev.skills, tokens)
-    }));
+    setResumeData(addResumeSkills(resumeData, tokens));
     setNewSkill('');
   };
 
-  const handleSaveAndPreview = async () => {
-    setIsSaving(true);
-    setIsAutosaving(true);
-    try {
-      const latestData: ResumeData = {
-        ...resumeData,
-        summary: summary ?? resumeData?.summary ?? '',
-      };
-      console.log('Saving resume with data:', latestData);
-
-      // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-
-      if (userError || !user) {
-        console.error('User not authenticated:', userError);
-        alert('请先登录');
-        return;
-      }
-
-      console.log('Current user:', user);
-
-      let result;
-      const title = buildResumeTitle(
-        latestData.resumeTitle,
-        latestData,
-        latestData.lastJdText || '',
-        true,
-        latestData.targetCompany
-      );
-
-      // Check if we're updating an existing resume or creating a new one
-      if (latestData.id) {
-        // Update existing resume
-        console.log('Updating existing resume:', latestData.id);
-        result = await DatabaseService.updateResume(String(latestData.id), {
-          title: title,
-          resume_data: latestData,
-        });
-      } else {
-        // Create new resume
-        console.log('Creating new resume for user:', user.id);
-        result = await DatabaseService.createResume(user.id, title, latestData);
-      }
-
-      console.log('Save result:', result);
-
-      if (result.success) {
-        const savedId = latestData.id || result.data?.id;
-        const savedData: ResumeData = {
-          ...latestData,
-          ...(savedId ? { id: savedId } : {}),
-          resumeTitle: title,
-        };
-        // Avoid transient jump back to "personal" when id changes during save->preview flow.
-        suppressStepResetOnNextIdChangeRef.current = true;
-        setResumeData(savedData);
-
-        // Reload resumes to get the latest list
-        if (loadUserResumes) {
-          await loadUserResumes();
-        }
-
-        const now = new Date();
-        const timeLabel = now.toLocaleTimeString('zh-CN', {
-          hour: '2-digit',
-          minute: '2-digit'
-        });
-        setLastSavedAt(timeLabel);
-        lastAutosavedRef.current = JSON.stringify(savedData);
-        try {
-          localStorage.removeItem(editorDraftKey);
-        } catch {
-          // ignore local draft cleanup errors
-        }
-
-        console.log('Resume saved successfully, navigating to preview');
-        // Navigate to preview
-        navigateToView(View.PREVIEW);
-      } else {
-        console.error('Failed to save resume:', result.error);
-        alert(`保存失败: ${result.error?.message || '请重试'}`);
-      }
-    } catch (error) {
-      console.error('Error saving resume:', {
-        error: error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : 'No stack trace'
-      });
-      alert('保存失败，请检查网络连接');
-    } finally {
-      setIsSaving(false);
-      setIsAutosaving(false);
-    }
-  };
+  const handleSaveAndPreview = useEditorSaveAndPreview({
+    resumeData,
+    summary,
+    setIsSaving,
+    setIsAutosaving,
+    setResumeData,
+    loadUserResumes,
+    setLastSavedAt,
+    lastAutosavedRef,
+    editorDraftKey,
+    navigateToView,
+    suppressStepResetOnNextIdChangeRef,
+  });
 
   const handleRemoveSkill = (index: number) => {
-    setResumeData(prev => ({
-      ...prev,
-      skills: prev.skills.filter((_, i) => i !== index)
-    }));
+    setResumeData(removeResumeSkillByIndex(resumeData, index));
   };
 
   const applyResumeAndPersist = (nextData: ResumeData) => {
@@ -410,48 +259,15 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
 
   const handleClearCurrentStep = () => {
     setShowClearPageConfirm(false);
-    const next = { ...resumeData };
-    switch (currentStep) {
-      case 'personal':
-        next.personalInfo = {
-          name: '', title: '', email: '', phone: '', avatar: '', location: '', age: '', summary: resumeData.personalInfo.summary
-        };
-        next.gender = '';
-        break;
-      case 'work':
-        next.workExps = [];
-        break;
-      case 'education':
-        next.educations = [];
-        break;
-      case 'projects':
-        next.projects = [];
-        setHasTouchedProjects(false);
-        break;
-      case 'skills':
-        next.skills = [];
-        setNewSkill('');
-        break;
-      case 'summary':
-        next.summary = '';
-        setSummary('');
-        break;
-    }
+    const next = clearResumeCurrentStep(resumeData, currentStep);
+    if (currentStep === 'projects') setHasTouchedProjects(false);
+    if (currentStep === 'skills') setNewSkill('');
+    if (currentStep === 'summary') setSummary('');
     applyResumeAndPersist(next);
   };
 
   const handleClearAllData = () => {
-    const clearedData: ResumeData = {
-      id: resumeData.id,
-      resumeTitle: resumeData.resumeTitle,
-      personalInfo: { name: '', title: '', email: '', phone: '' },
-      workExps: [],
-      educations: [],
-      projects: [],
-      skills: [],
-      summary: '',
-      gender: '',
-    };
+    const clearedData: ResumeData = clearResumeAllData(resumeData);
     applyResumeAndPersist(clearedData);
     setSummary('');
     setHasTouchedProjects(false);

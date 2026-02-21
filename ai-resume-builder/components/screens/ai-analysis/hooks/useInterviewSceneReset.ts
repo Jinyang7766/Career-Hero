@@ -2,8 +2,8 @@ import React from 'react';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
-  clearInterviewSession: () => Promise<void>;
-  clearInterviewSceneState: () => Promise<void>;
+  clearInterviewSession: (overrideJdText?: string, overrideInterviewType?: string, overrideInterviewMode?: string) => Promise<void>;
+  clearInterviewSceneState: (overrideJdText?: string, overrideInterviewType?: string, overrideInterviewMode?: string) => Promise<void>;
   setPostInterviewSummary: (value: string) => void;
   setChatMessages: (messages: any[]) => void;
   setChatInitialized: (value: boolean) => void;
@@ -29,13 +29,16 @@ export const useInterviewSceneReset = ({
   setPlanFetchTrigger,
 }: Params) => {
   return React.useCallback(async () => {
+    const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
+    const interviewType = String(getActiveInterviewType() || '').trim().toLowerCase();
+    const interviewMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
     try {
-      await clearInterviewSession();
+      await clearInterviewSession(effectiveJdText, interviewType, interviewMode);
     } catch (err) {
       console.warn('Failed to clear interview chat history before restart:', err);
     }
     try {
-      await clearInterviewSceneState();
+      await clearInterviewSceneState(effectiveJdText, interviewType, interviewMode);
     } catch (err) {
       console.warn('Failed to clear interview report state before restart:', err);
     }
@@ -45,10 +48,7 @@ export const useInterviewSceneReset = ({
 
     try {
       const resumeId = String((resumeData as any)?.id || '').trim();
-      const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
       const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
-      const interviewType = String(getActiveInterviewType() || '').trim().toLowerCase();
-      const interviewMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
       const userKey = String(currentUserId || '').trim();
       if (resumeId && jdKey && interviewType && interviewMode) {
         const userScopedPrefix = userKey
@@ -96,4 +96,3 @@ export const useInterviewSceneReset = ({
     setPostInterviewSummary,
   ]);
 };
-
