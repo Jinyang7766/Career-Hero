@@ -37,6 +37,7 @@ export const streamInterviewResponse = async ({
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token.trim()}`,
+      'X-Client-Trace-Id': traceId,
     },
     signal,
     body: JSON.stringify(requestBody)
@@ -70,9 +71,19 @@ export const streamInterviewResponse = async ({
   }
 
   let chunkCount = 0;
+  let streamErrorMessage = '';
   const reader = response.body.getReader();
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
+
+  const findBoundary = (text: string) => {
+    const lf = text.indexOf('\n\n');
+    const crlf = text.indexOf('\r\n\r\n');
+    if (lf === -1 && crlf === -1) return { idx: -1, len: 0 };
+    if (lf === -1) return { idx: crlf, len: 4 };
+    if (crlf === -1) return { idx: lf, len: 2 };
+    return lf < crlf ? { idx: lf, len: 2 } : { idx: crlf, len: 4 };
+  };
 
   while (true) {
     const { done, value } = await reader.read();
@@ -82,11 +93,11 @@ export const streamInterviewResponse = async ({
     }
     buffer += decoder.decode(value, { stream: true });
 
-    let boundary = buffer.indexOf('\n\n');
+    let { idx: boundary, len: boundaryLen } = findBoundary(buffer);
     while (boundary !== -1) {
       const rawEvent = buffer.slice(0, boundary);
-      buffer = buffer.slice(boundary + 2);
-      boundary = buffer.indexOf('\n\n');
+      buffer = buffer.slice(boundary + boundaryLen);
+      ({ idx: boundary, len: boundaryLen } = findBoundary(buffer));
 
       const lines = rawEvent.split('\n').map(line => line.trim());
       const dataLines = lines.filter(line => line.startsWith('data:'));
@@ -94,8 +105,15 @@ export const streamInterviewResponse = async ({
       const dataRaw = dataLines.map(line => line.slice(5).trim()).join('');
       if (!dataRaw) continue;
 
+      let payload: any;
       try {
-        const payload = JSON.parse(dataRaw);
+        payload = JSON.parse(dataRaw);
+      } catch (parseError) {
+        console.warn('Failed to parse SSE payload:', parseError, dataRaw);
+        continue;
+      }
+
+      try {
         const type = String(payload?.type || '');
         if (type === 'chunk') {
           const delta = String(payload?.delta || '');
@@ -107,12 +125,18 @@ export const streamInterviewResponse = async ({
         } else if (type === 'done') {
           doneText = String(payload?.text || '').trim();
         } else if (type === 'error') {
-          throw new Error(String(payload?.message || '流式面试失败'));
+          streamErrorMessage = String(payload?.message || '流式面试失败');
+          break;
         }
-      } catch (parseError) {
-        console.warn('Failed to parse SSE payload:', parseError);
+      } catch (eventError) {
+        console.warn('Failed to handle SSE payload:', eventError);
       }
     }
+    if (streamErrorMessage) break;
+  }
+
+  if (streamErrorMessage) {
+    throw new Error(streamErrorMessage);
   }
 
   const finalText = (doneText || streamedText || '').trim();
@@ -134,6 +158,27 @@ export const streamInterviewResponse = async ({
     streamingMessageId,
   });
   if (finalText) return finalText;
+
+  // Resilience fallback: some gateways/proxies may strip SSE chunks.
+  const fallbackResponse = await fetch(buildApiUrl('/api/ai/chat'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token.trim()}`,
+      'X-Client-Trace-Id': traceId,
+    },
+    signal,
+    body: JSON.stringify(requestBody),
+  });
+  if (fallbackResponse.ok) {
+    const fallbackData = await fallbackResponse.json().catch(() => ({} as any));
+    const fallbackText = String(fallbackData?.response || '').trim();
+    if (fallbackText) {
+      setStreamingText(fallbackText);
+      return fallbackText;
+    }
+  }
+
   throw new Error('empty_ai_response_stream');
 };
 
@@ -193,4 +238,3 @@ export const generateInterviewSummary = async ({
   const unmaskedText = masker.unmaskText(result?.response || '');
   return String(unmaskedText || '').trim();
 };
-

@@ -9,6 +9,7 @@ import {
 import { persistUserDossierToProfile } from '../dossier-persistence';
 import { getActiveInterviewType } from '../interview-plan-utils';
 import { generateInterviewSummary, streamInterviewResponse } from '../interview-chat-api';
+import { upsertStreamingModelMessage } from '../interview-chat-message-state';
 import { normalizeInterviewReplyText, shouldTreatAsFollowUpSignal } from '../interview-chat-text';
 import { useInterviewChatStorage } from './useInterviewChatStorage';
 import {
@@ -463,18 +464,11 @@ export const useInterviewChat = ({
         signal: requestAbortController.signal,
         buildApiUrl,
         setStreamingText: (text: string) => {
-          setChatMessages(prev => {
-            const has = prev.some(msg => msg.id === streamId);
-            if (!has) {
-              const next = [...prev, { id: streamId, role: 'model' as const, text }];
-              chatMessagesRef.current = next as ChatMessage[];
-              return next;
-            }
-            const next = prev.map(msg => (
-              msg.id === streamId ? { ...msg, text } : msg
-            ));
-            chatMessagesRef.current = next as ChatMessage[];
-            return next;
+          upsertStreamingModelMessage({
+            setChatMessages,
+            chatMessagesRef,
+            streamId,
+            text,
           });
         },
       }));
