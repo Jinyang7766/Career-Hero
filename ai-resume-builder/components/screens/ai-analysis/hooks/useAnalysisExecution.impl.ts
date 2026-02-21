@@ -5,7 +5,6 @@ import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mapper
 import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
 import { runRealAnalysis } from '../analysis-api';
-import { getTargetCompanyAutofillMinConfidence } from '../analysis-config';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 import { checkInterviewContinuationState, decideMicroInterviewNeeded } from '../analysis-execution-helpers';
@@ -412,26 +411,11 @@ export const useAnalysisExecution = ({
       };
 
       const totalScore = resolveDisplayScore(aiAnalysisResult.score || 0, newReport.scoreBreakdown);
-      const extractedTargetCompany = String(aiAnalysisResult.targetCompany || '').trim();
-      const extractedTargetCompanyConfidence = Math.max(
-        0,
-        Math.min(1, Number(aiAnalysisResult.targetCompanyConfidence || 0))
-      );
-      const autofillMinConfidence = getTargetCompanyAutofillMinConfidence();
-      const shouldAutofillTargetCompany = Boolean(
-        !targetCompany &&
-        extractedTargetCompany &&
-        extractedTargetCompanyConfidence >= autofillMinConfidence
-      );
       const effectiveTargetCompany = String(
         targetCompany ||
-        (shouldAutofillTargetCompany ? extractedTargetCompany : '') ||
         resumeData.targetCompany ||
         ''
       ).trim();
-      if (shouldAutofillTargetCompany && effectiveTargetCompany) {
-        setTargetCompany(effectiveTargetCompany);
-      }
       setOriginalScore(totalScore);
       setScore(totalScore);
       const appliedSuggestions = consolidateSkillSuggestions(newSuggestions);
@@ -474,7 +458,7 @@ export const useAnalysisExecution = ({
         updatedAt: new Date().toISOString(),
         jdText: jdText || resumeData.lastJdText || '',
         targetCompany: effectiveTargetCompany,
-        targetCompanyConfidence: extractedTargetCompanyConfidence,
+        targetCompanyConfidence: 0,
         analysisReportId: resolvedAnalysisReportId || undefined,
         optimizedResumeId: resolvedOptimizedResumeId || undefined,
       };
