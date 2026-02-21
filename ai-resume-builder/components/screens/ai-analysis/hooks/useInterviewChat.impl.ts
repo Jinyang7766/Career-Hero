@@ -97,6 +97,17 @@ export const useInterviewChat = ({
   const activeQuestionMessageIdRef = useRef<string>('');
   const activeQuestionStartAtRef = useRef<number>(0);
   const answerTimingsRef = useRef<InterviewAnswerTiming[]>([]);
+  const reverseQaActiveRef = useRef(false);
+  const reverseQaAskedCountRef = useRef(0);
+  const reverseQaPendingEvaluationRef = useRef(false);
+  const REVERSE_QA_MAX = 3;
+  const isNoMoreQuestionSignal = (raw: string) =>
+    /(没有(了)?|没(有)?问题了|无(问题|疑问)|不用了|结束|就这样|没了)/i.test(String(raw || '').trim());
+  const resetReverseQaState = () => {
+    reverseQaActiveRef.current = false;
+    reverseQaAskedCountRef.current = 0;
+    reverseQaPendingEvaluationRef.current = false;
+  };
   const {
     getPendingReplyKey,
     getTimingStorageKey,
@@ -264,6 +275,7 @@ export const useInterviewChat = ({
             }
           }
           interviewEndedRef.current = true;
+          resetReverseQaState();
           clearTimingSnapshot();
           return;
         }
@@ -323,6 +335,7 @@ export const useInterviewChat = ({
           }
         }
         interviewEndedRef.current = true;
+        resetReverseQaState();
         clearTimingSnapshot();
         return;
       }
@@ -387,8 +400,33 @@ export const useInterviewChat = ({
       const normalizedFollowUpDecision = isClosingPhase
         ? { shouldFollowUp: false, hint: '' }
         : followUpDecision;
+      const reverseQaJustActivated = isInterviewChat && isClosingPhase && !reverseQaActiveRef.current;
+      if (reverseQaJustActivated) {
+        reverseQaActiveRef.current = true;
+        reverseQaAskedCountRef.current = 0;
+        reverseQaPendingEvaluationRef.current = false;
+      }
+      const inReverseQa = isInterviewChat && reverseQaActiveRef.current;
+      const reverseQaUserDone = inReverseQa && hasText && isNoMoreQuestionSignal(textToSend);
+      let reverseQaMode: 'none' | 'announce' | 'evaluate' | 'force_end' = 'none';
+      let reverseQaQuestionNo = 0;
+      if (inReverseQa) {
+        if (reverseQaUserDone) {
+          reverseQaMode = 'force_end';
+        } else if (reverseQaJustActivated) {
+          reverseQaMode = 'announce';
+        } else {
+          reverseQaAskedCountRef.current += 1;
+          reverseQaQuestionNo = reverseQaAskedCountRef.current;
+          reverseQaPendingEvaluationRef.current = true;
+          reverseQaMode = reverseQaQuestionNo > REVERSE_QA_MAX ? 'force_end' : 'evaluate';
+        }
+      } else {
+        reverseQaPendingEvaluationRef.current = false;
+      }
       const strictNextQuestion = (
         isInterviewChat &&
+        !inReverseQa &&
         !normalizedFollowUpDecision.shouldFollowUp &&
         Array.isArray(interviewPlan) &&
         interviewPlan.length > answeredCountAtThisTurn
@@ -418,6 +456,9 @@ export const useInterviewChat = ({
         forcedNextQuestion: strictNextQuestion,
         shouldEnterClosing: isClosingPhase && !strictNextQuestion,
         skipCurrentQuestion: isSkipCurrentQuestion,
+        reverseQaMode,
+        reverseQaQuestionNo,
+        reverseQaMaxQuestions: REVERSE_QA_MAX,
       });
 
       const maskedMessage = masker.maskText(interviewWrapped);
@@ -536,6 +577,14 @@ export const useInterviewChat = ({
       } catch (stateErr) {
         console.warn('Failed to refresh interview_in_progress state:', stateErr);
       }
+      if (inReverseQa && reverseQaPendingEvaluationRef.current) {
+        reverseQaPendingEvaluationRef.current = false;
+        if (reverseQaAskedCountRef.current >= REVERSE_QA_MAX) {
+          const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
+          await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
+          return;
+        }
+      }
 
     } catch (error) {
       console.error('API failed:', error);
@@ -566,6 +615,7 @@ export const useInterviewChat = ({
             }
           }
           interviewEndedRef.current = true;
+          resetReverseQaState();
           return;
         }
         onInterviewReportFailed?.();
@@ -678,11 +728,13 @@ export const useInterviewChat = ({
 
   useEffect(() => {
     if (!isInterviewMode) {
+      resetReverseQaState();
       clearTimingSnapshot();
       return;
     }
     if (currentStep !== 'chat') {
       setCurrentQuestionElapsedSec(0);
+      resetReverseQaState();
     }
   }, [isInterviewMode, currentStep]);
 

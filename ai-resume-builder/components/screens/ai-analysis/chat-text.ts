@@ -46,8 +46,28 @@ export const splitNextQuestion = (text: string) => {
 };
 
 export const isAffirmative = (text: string) => {
-  const t = text.trim().toLowerCase();
-  return ['好', '好的', '可以', '继续', '继续吧', '开始', '开始吧', '行', '嗯', 'ok', 'yes'].some((k) => t === k || t.includes(k));
+  const t = String(text || '').trim().toLowerCase();
+  if (!t) return false;
+  // Only treat explicit start/continue commands as affirmative.
+  // Avoid false positives like "你好" which contains "好".
+  const exactMatches = new Set([
+    '好',
+    '好的',
+    '可以',
+    '继续',
+    '继续吧',
+    '开始',
+    '开始吧',
+    '行',
+    '嗯',
+    'ok',
+    'yes',
+    '准备好了',
+    '我准备好了',
+    '准备就绪',
+  ]);
+  if (exactMatches.has(t)) return true;
+  return /^(可以开始|我们开始|开始面试|进入面试|继续面试)$/i.test(t);
 };
 
 export const isEndInterviewCommand = (text: string) => {

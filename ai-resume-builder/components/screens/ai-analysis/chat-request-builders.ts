@@ -44,6 +44,9 @@ export const buildInterviewWrappedMessage = ({
   forcedNextQuestion,
   shouldEnterClosing,
   skipCurrentQuestion,
+  reverseQaMode,
+  reverseQaQuestionNo,
+  reverseQaMaxQuestions = 3,
 }: {
   isInterviewChat: boolean;
   isMicroInterview?: boolean;
@@ -58,6 +61,9 @@ export const buildInterviewWrappedMessage = ({
   forcedNextQuestion?: string;
   shouldEnterClosing?: boolean;
   skipCurrentQuestion?: boolean;
+  reverseQaMode?: 'none' | 'announce' | 'evaluate' | 'force_end';
+  reverseQaQuestionNo?: number;
+  reverseQaMaxQuestions?: number;
 }) => {
   if (!isInterviewChat) {
     if (!isMicroInterview) return hasText ? textToSend : (hasAudio ? '（语音）' : '');
@@ -71,9 +77,8 @@ export const buildInterviewWrappedMessage = ({
 
 候选人回答：${cleanTextForWrap}`;
   }
-  if (isStartPhase && isAffirmative(cleanTextForWrap)) {
-    return `[INTERVIEW_MODE]\n【面试开始：候选人已准备好。请先让候选人做自我介绍，并提醒：自我介绍时间为1分钟。随后进入正常面试提问。】`;
-  }
+  // Startup command flow removed: first user message is always treated as
+  // an answer to the warmup question rather than a "start interview" command.
   const deepDiveRule = shouldFollowUp
     ? `【当前回答信息不足（${followUpHint || '细节不够具体'}）。本轮必须先追问1个最关键澄清问题（数据/动作/结果三选一优先），不要切换到下一题。追问行必须以“追问：”开头。若你已列出“请补充的要点”，不要再重复原题或另起一句“请重新回答：...”，改为一句简短引导（如“请围绕上述要点补充作答”）。】`
     : `【若候选人回答模糊、缺少可验证细节，先进行1-2轮追问（优先追问数据、动作、影响），补齐后再进入下一题。】`;
@@ -86,7 +91,20 @@ export const buildInterviewWrappedMessage = ({
   const closingRule = shouldEnterClosing
     ? `【收尾阶段：题库问题已完成。本轮不要进入新题。请先询问候选人“是否还有想补充或提问的内容”。若候选人明确表示“没有/无疑问/结束”，请仅输出“结束面试”（不要附加其他内容）。】`
     : '';
-  return `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。输出为纯文本，不要使用任何 Markdown 标记，尤其不要出现 * 号。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.提问动作。${deepDiveRule}${strictPlanRule}${skipRule}${closingRule} 若进入下一题，则下一题必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。】\n\n候选人回答：${cleanTextForWrap}`;
+  const reverseQaRule = (() => {
+    if (reverseQaMode === 'announce') {
+      return `【反问环节开始：请明确告知候选人“你现在最多可以反问${reverseQaMaxQuestions}个问题”。本轮不要回答业务问题，也不要出下一题。】`;
+    }
+    if (reverseQaMode === 'evaluate') {
+      const n = Math.max(1, Number(reverseQaQuestionNo || 1));
+      return `【当前处于反问环节（第${n}/${reverseQaMaxQuestions}个）。你只能评价候选人反问质量，不回答问题本身。输出三部分：1) 质量等级（高/中/低）；2) 评价理由（聚焦岗位相关性、信息增益、决策价值）；3) 改写建议（给出更优反问示例）。禁止提供该问题的业务答案。禁止进入下一题。】`;
+    }
+    if (reverseQaMode === 'force_end') {
+      return `【反问环节结束：请仅输出“结束面试”（不要附加任何其他内容）。】`;
+    }
+    return '';
+  })();
+  return `[INTERVIEW_MODE]\n【面试官角色保持：请仅进行模拟面试流程。回复请自然流畅，不要使用“点评”、“提问”等标签。输出为纯文本，不要使用任何 Markdown 标记，尤其不要出现 * 号。内容需包含：1.对回答的简短反馈；2.改进建议（如有）；3.参考回复；4.提问动作。${deepDiveRule}${strictPlanRule}${skipRule}${closingRule}${reverseQaRule} 若进入下一题，则下一题必须另起一行，以“下一题：”开头输出（不要把下一题放进参考回复里）。】\n\n候选人回答：${cleanTextForWrap}`;
 };
 
 export const buildSummaryRequestBody = ({
