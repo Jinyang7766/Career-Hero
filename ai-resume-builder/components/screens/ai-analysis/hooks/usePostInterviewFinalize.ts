@@ -367,7 +367,10 @@ export const usePostInterviewFinalize = ({
     }
     delete payload.id;
 
-    const saveResult = await DatabaseService.createResume(currentUserId, newTitle, payload);
+    const saveResult = await DatabaseService.createResume(currentUserId, newTitle, payload, {
+      optimizedDuplicateStrategy: 'overwrite',
+      touchUpdatedAtOnOptimizedOverwrite: true,
+    });
     if (!saveResult.success || !saveResult.data) {
       showToast('保存优化简历失败，请重试', 'error');
       return;

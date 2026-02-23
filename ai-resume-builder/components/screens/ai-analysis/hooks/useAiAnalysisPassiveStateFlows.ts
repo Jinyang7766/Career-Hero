@@ -34,6 +34,7 @@ export const useAiAnalysisPassiveStateFlows = ({
   navigateToStep,
   loadLastAnalysis,
   recoveredSessionKeyRef,
+  interviewEntryConfirmPendingRef,
   report,
   applyAnalysisSnapshot,
   setTargetCompany,
@@ -86,6 +87,7 @@ export const useAiAnalysisPassiveStateFlows = ({
     loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
     isInterviewMode,
+    interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
   });
 
   useReportSnapshotRestore({
@@ -111,4 +113,3 @@ export const useAiAnalysisPassiveStateFlows = ({
     cancelInFlightAnalysis,
   });
 };
-

@@ -1,0 +1,686 @@
+# WORKLOG
+
+Purpose: keep a step-by-step, bug-traceable engineering log for this repository.
+
+## Entry Format
+
+Use one block per executed step:
+
+```
+## [YYYY-MM-DD HH:mm] Step Title
+- Agent: [A | B-FE | B-BE | C | D]
+- Goal:
+- Changes:
+  - file/path: short change summary
+- Commands:
+  - command 1
+  - command 2
+- Verification:
+  - result summary
+- Risks/Notes:
+  - pending item or follow-up
+```
+
+---
+
+## [2026-02-23 20:10] Project Backup Created
+- Agent: D
+- Goal:
+  - create a restorable snapshot before further changes.
+- Changes:
+  - no repository file changes.
+- Commands:
+  - `robocopy g:\AI_project\Career-Hero g:\AI_project\backups\Career-Hero_20260223_201040 /E /R:1 /W:1 ...`
+  - verification count command on backup directory.
+- Verification:
+  - backup path: `g:\AI_project\backups\Career-Hero_20260223_201040`
+  - files: `23689`, dirs: `2094`
+  - robocopy exit code: `1` (successful copy with files copied).
+- Risks/Notes:
+  - none.
+
+## [2026-02-23 20:2x] Frontend Initial Chunk Split (Lazy Loading)
+- Agent: B-FE
+- Goal:
+  - reduce large initial bundle and improve first-load performance.
+- Changes:
+  - `ai-resume-builder/App.tsx`: converted page imports to `React.lazy`, added `Suspense` and `ScreenFallback`.
+- Commands:
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - before: main chunk around `929.45 kB` (gzip `263.08 kB`)
+  - after: main chunk around `366.72 kB` (gzip `107.45 kB`)
+  - chunking warning (>500kB main chunk) resolved.
+- Risks/Notes:
+  - further split can target heavy AI/export-related chunks.
+
+## [2026-02-23 20:36-20:37] Standard Test Entry Added (Frontend + Backend)
+- Agent: B-FE + B-BE + C
+- Goal:
+  - provide one standard command to run both frontend and backend tests.
+- Changes:
+  - `package.json`: added `test`, `test:frontend`, `test:backend`.
+  - `ai-resume-builder/package.json`: added `vitest` scripts and dependency.
+  - `ai-resume-builder/src/__tests__/app-routing.test.ts`: frontend sample test.
+  - `backend/tests/test_auth_user_service.py`: backend sample service-level test.
+  - `backend/requirements-dev.txt`: added `pytest`.
+  - `README.md`: documented standard test commands.
+- Commands:
+  - `npm install --workspace ai-resume-builder`
+  - `npm test`
+- Verification:
+  - frontend tests: `3 passed`
+  - backend tests: `1 passed`
+  - unified entry command works.
+- Risks/Notes:
+  - backend API-level integration tests still need import-path stabilization in app bootstrap.
+
+## [2026-02-23 20:4x] Worklog Mechanism Enabled
+- Agent: A
+- Goal:
+  - enforce per-step operational traceability for future bug investigation.
+- Changes:
+  - `WORKLOG.md`: created standard template and backfilled key executed steps.
+- Commands:
+  - file creation and structured append.
+- Verification:
+  - `WORKLOG.md` exists at repository root and includes replayable command/result history.
+- Risks/Notes:
+  - timestamps marked as `20:2x/20:4x` are approximate where exact second was not captured in terminal output.
+
+## [2026-02-23 20:54] Production Smoke Check (Vercel + Railway)
+- Agent: C + D
+- Goal:
+  - verify deployed frontend/backend availability and cross-origin behavior in read-only mode.
+- Changes:
+  - `WORKLOG.md`: appended production verification results.
+- Commands:
+  - `Invoke-WebRequest https://career-hero-ai-resume-builder.vercel.app/`
+  - `Invoke-WebRequest https://career-hero-backend-production-a634.up.railway.app/api/templates`
+  - `Invoke-WebRequest -Method OPTIONS https://career-hero-backend-production-a634.up.railway.app/api/templates` with `Origin: https://career-hero-ai-resume-builder.vercel.app`
+  - `curl.exe -I https://career-hero-ai-resume-builder.vercel.app/`
+  - `curl.exe -L --max-time 25 -o NUL -w "HTTP=%{http_code} TLS=%{ssl_verify_result} IP=%{remote_ip}" https://career-hero-ai-resume-builder.vercel.app/`
+- Verification:
+  - backend templates API: `200`, JSON returned.
+  - backend CORS preflight: `200`, `Access-Control-Allow-Origin: *`.
+  - frontend Vercel via `curl`: `200`, TLS verify result `0` (valid), server `Vercel`.
+  - PowerShell `Invoke-WebRequest` to frontend reported SSL handshake error, but `curl` confirmed endpoint is healthy.
+- Risks/Notes:
+  - current backend CORS is wildcard (`*`); functional but broader than strict production allowlist.
+
+## [2026-02-23 21:13] Per-Step Regression Pipeline Added (Local + Online)
+- Agent: A + B-FE + B-BE + C + D
+- Goal:
+  - enforce "run local + online checks on every step" as a repeatable workflow.
+- Changes:
+  - `scripts/test-local.ps1`: local test wrapper (`npm test`).
+  - `scripts/test-online.ps1`: online smoke checks (frontend health, backend templates, CORS preflight, UI login via Playwright CLI).
+  - `scripts/test-step.ps1`: orchestrates local then online checks in one command.
+  - `README.md`: added regression usage docs.
+- Commands:
+  - `npm test`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl https://career-hero-ai-resume-builder.vercel.app/ -BackendUrl https://career-hero-backend-production-a634.up.railway.app -Email *** -Password ***`
+  - `npx --yes --package @playwright/cli playwright-cli close-all`
+- Verification:
+  - local tests passed (`frontend: 3 passed`, `backend: 1 passed`).
+  - online smoke passed (frontend `200`, backend `/api/templates` `200`, CORS preflight passed).
+  - UI login smoke passed and profile page showed authenticated account email.
+- Risks/Notes:
+  - credentials were provided by user for testing and are used only at runtime.
+  - direct backend `/api/auth/login` probe returned `500` during ad-hoc check; frontend UI login still succeeded in browser flow.
+
+## [2026-02-23 21:19] Created Skill: step-test-worklog
+- Agent: A
+- Goal:
+  - package "sub-agent orchestration + per-step tests + work logging" into a reusable Codex skill.
+- Changes:
+  - `C:/Users/sunshine/.codex/skills/step-test-worklog/SKILL.md`: added workflow, role routing, test gates, credential policy, and failure policy.
+  - `C:/Users/sunshine/.codex/skills/step-test-worklog/references/worklog-template.md`: added reusable WORKLOG entry template.
+- Commands:
+  - `python .../skill-creator/scripts/init_skill.py step-test-worklog --path C:/Users/sunshine/.codex/skills --resources scripts,references --interface ...`
+  - `python .../skill-creator/scripts/quick_validate.py C:/Users/sunshine/.codex/skills/step-test-worklog`
+- Verification:
+  - skill scaffold created successfully.
+  - validation result: `Skill is valid!`
+- Risks/Notes:
+  - new skills are picked up after Codex restart/reload.
+
+## [2026-02-23 21:22] Post-Change Test Gate (Skill Creation Step)
+- Agent: C + D
+- Goal:
+  - satisfy per-step requirement: run local + online checks after the skill creation change.
+- Changes:
+  - no additional code changes; verification-only step.
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl https://career-hero-ai-resume-builder.vercel.app/ -BackendUrl https://career-hero-backend-production-a634.up.railway.app -Email *** -Password ***`
+- Verification:
+  - local tests passed (`frontend: 3 passed`, `backend: 1 passed`).
+  - online smoke passed (frontend health, backend templates, CORS preflight, UI login).
+  - pending changed file set checked path-by-path: all reported `backup:True`.
+- Risks/Notes:
+  - cleaned transient `.playwright-cli` artifacts after run.
+
+## [2026-02-23 21:31] Enforced Default Step-Test-Worklog Policy In Project Rules
+- Agent: A + C + D
+- Goal:
+  - make sub-agent orchestration + per-step tests + WORKLOG logging mandatory by default, even in new windows.
+- Changes:
+  - `AGENT_RULES.md`: added mandatory `Default Execution Mode` section for all code tasks.
+  - `backup/AGENT_RULES.md`: created backup before editing (per project backup protocol).
+  - `backup/WORKLOG.md`: created backup before updating worklog.
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl https://career-hero-ai-resume-builder.vercel.app/ -BackendUrl https://career-hero-backend-production-a634.up.railway.app`
+- Verification:
+  - local tests passed (`frontend: 3 passed`, `backend: 1 passed`).
+  - online smoke passed (frontend health, backend templates, CORS preflight, UI login).
+- Risks/Notes:
+  - if future deployment URLs change, update `AGENT_RULES.md` gate command accordingly.
+  - cleaned transient `.playwright-cli` artifacts after verification.
+
+## [2026-02-23 21:35] Remediation: Backfilled Backup Protocol For Pending Changes
+- Agent: A
+- Goal:
+  - remediate missed backup-protocol compliance concern by ensuring all currently pending changed files have `backup/[relative_path]` copies.
+- Changes:
+  - refreshed backup copies for all current modified/untracked files under `backup/`.
+  - verified backup existence for each pending path.
+- Commands:
+  - backup refresh for `git diff --name-only` + `git ls-files --others --exclude-standard`.
+  - path-by-path verification (`<path> => backup:True`).
+- Verification:
+  - `BACKUP_REFRESHED_FILES=13`
+  - all pending paths reported `backup:True`.
+- Risks/Notes:
+  - earlier steps before strict enforcement were not consistently compliant; this step closes the gap for the current pending file set.
+
+## [2026-02-23 21:37] Post-Remediation Gate Verification
+- Agent: C + D
+- Goal:
+  - verify enforcement after remediation by running full local+online gate.
+- Changes:
+  - verification-only step.
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl https://career-hero-ai-resume-builder.vercel.app/ -BackendUrl https://career-hero-backend-production-a634.up.railway.app`
+- Verification:
+  - local tests passed (`frontend: 3 passed`, `backend: 1 passed`).
+  - online smoke passed (frontend health, backend templates, CORS preflight, UI login).
+- Risks/Notes:
+  - cleaned transient `.playwright-cli` artifacts after run.
+
+## [2026-02-23 22:03] Full Feature Test Sweep (Local + Production)
+- Agent: B-FE + B-BE + C + D
+- Goal:
+  - run broad feature coverage across local automated flows and production runtime flows.
+- Changes:
+  - verification-only step; no code changes.
+  - `backup/WORKLOG.md` refreshed before logging.
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `python scripts/e2e_full_flow.py`
+  - `python scripts/e2e_interview_multiround.py`
+  - `python scripts/e2e_interview_scene_suite.py`
+  - production API probe scripts (requests-based, browser-like headers)
+  - Playwright production UI flows (`/dashboard`, `/profile`, `/all-resumes`, `/ai-analysis`, `/ai-interview`, `/editor`, `/settings`, `/help`, `/history`, `/points-history`)
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl https://career-hero-ai-resume-builder.vercel.app/ -BackendUrl https://career-hero-backend-production-a634.up.railway.app`
+  - `npx --yes --package @playwright/cli playwright-cli close-all`
+- Verification:
+  - local baseline test: PASS (`frontend: 3 passed`, `backend: 1 passed`).
+  - local E2E scripts: PASS (`e2e_full_flow`, `e2e_interview_multiround`, `e2e_interview_scene_suite`).
+  - production UI route coverage: PASS on all tested routes and key interactions (`dashboard->ai-analysis`, `dashboard->ai-interview`, `profile->settings`).
+  - standard gate `scripts/test-step.ps1`: PASS (local + online smoke + UI login).
+  - production API probe finding:
+    - `GET /api/templates`: PASS.
+    - direct `POST /api/auth/login`: unstable (`403` when bot UA blocked, `500` even with browser-like UA in direct script), while browser UI login flow still PASS.
+- Risks/Notes:
+  - console warnings/errors observed in Playwright runs:
+    - repeated warning: `cdn.tailwindcss.com should not be used in production`.
+    - intermittent `TypeError: Failed to fetch` from frontend bundle during route sweeps.
+  - cleaned transient `.playwright-cli` artifacts after run.
+
+## [2026-02-23 23:29] Real User Flow Validation (Production Browser) + Gate Recheck
+- Agent: C + D
+- Goal:
+  - answer whether a real user end-to-end flow was actually simulated by running a browser-driven production chain with the test account.
+- Changes:
+  - verification-focused step.
+  - added execution helper artifact: `output/playwright/run_real_flow_online.ps1`.
+  - refreshed `backup/WORKLOG.md` before logging.
+- Commands:
+  - production real-user flow (Playwright CLI scripted):
+    - login (`/login`)
+    - enter interview route and scene setup (`/ai-interview`)
+    - start interview (confirm modal)
+    - submit one round answer
+    - end interview and wait `面试深度反馈`
+    - screenshot capture: `output/playwright/real-flow-online-final.png`
+  - gate command:
+    - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - production real-user flow: PASS.
+    - checkpoints passed: `登录 -> AI面试设置 -> 开始面试(确认) -> 一轮问答 -> 结束面试 -> 面试深度反馈`.
+    - evidence screenshot exists: `output/playwright/real-flow-online-final.png`.
+  - standard gate: PASS.
+    - local tests: `frontend 3 passed`, `backend 1 passed`.
+    - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - production flow path depends on account historical state (e.g., existing analyzed resume / interview session), so route entry may vary while final checkpoint remains the same.
+  - cleaned transient Playwright session artifacts after completion where applicable.
+
+## [2026-02-24 00:11] End-to-End + AI Speed/Quality Evaluation (Local + Production)
+- Agent: A + B-FE + B-BE + C + D
+- Goal:
+  - execute full-chain verification and evaluate AI response speed, response quality, diagnosis quality, and resume annotation/optimization quality.
+- Changes:
+  - verification/evaluation artifacts added:
+    - `output/quality_probe_local.py`
+    - `output/quality_probe_local_report.json`
+    - `output/online_api_quality_probe.py`
+    - `output/online_api_quality_probe_report.json`
+    - `output/online_diagnosis_annotation_probe.json`
+    - `output/online_quality_probe.ps1` (experimental browser probe helper)
+  - `backup/WORKLOG.md` refreshed before logging.
+- Commands:
+  - baseline full-chain + regressions:
+    - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+    - `python scripts/e2e_full_flow.py`
+    - `python scripts/e2e_interview_multiround.py`
+    - `python scripts/e2e_interview_scene_suite.py`
+    - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - local AI quality probe:
+    - `python output/quality_probe_local.py`
+  - production API AI quality probe (Supabase token + Railway API):
+    - `python output/online_api_quality_probe.py`
+  - production UI annotation snapshot probe:
+    - Playwright CLI run-code capture, output `output/online_diagnosis_annotation_probe.json`
+  - final gate recheck:
+    - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - full-chain scripts: PASS (`e2e_full_flow`, `e2e_interview_multiround`, `e2e_interview_scene_suite`).
+  - standard gate: PASS (local tests + online smoke + UI login).
+  - local AI speed metrics (`output/quality_probe_local_report.json`):
+    - analyze: `15762.94ms`
+    - generate_resume: `26447.33ms`
+    - interview_plan: `14097.47ms`
+    - interview_reply: `9814.32ms`
+    - interview_summary: `10861.57ms`
+  - production API AI speed metrics (`output/online_api_quality_probe_report.json`):
+    - analyze: `14819.99ms`
+    - generate_resume: `27044.27ms`
+    - interview_plan: `16169.18ms`
+    - interview_reply: `6679.94ms`
+    - interview_summary: `7966.69ms`
+  - production UI annotation quality sample (`output/online_diagnosis_annotation_probe.json`):
+    - annotation note blocks found: `3`
+    - inline note keyword present (`edit_note`) and section-level `诊断建议` present.
+- Risks/Notes:
+  - key quality issue observed both local and production API probes:
+    - analyze returns `suggestions: []` (`count=0`, `actionable_rate=0`), causing annotation-ready suggestion rate `0.0` in API-level evaluation.
+  - diagnosis summary text quality is coherent, but output structure lacks actionable suggestion objects in current probe runs.
+  - interview summary endpoint returned `0/100` with “对话记录为空” despite provided chat history in probe payload, indicating potential summary context-ingestion defect or strict session-state dependency.
+  - production UI has rich annotation text for existing historical resume data, which is inconsistent with API probe’s empty suggestion list and should be investigated for path/state divergence.
+## [2026-02-24 01:28] Fix: Prevent Intro Flash-Then-Clear On Interview Resume
+- Agent: B-FE + C + D
+- Goal:
+  - fix intermittent UX issue where continuing interview shows intro briefly, then chat is cleared.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`: in `sessionStep === 'chat'` branch, restore chat history only when opening chat from non-chat step or when persisted interview messages exist; skip clear-type restore while already in chat with no persisted history.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - this is a targeted race-condition mitigation in recovery flow; if future changes alter intro injection timing, re-check chat recovery/introduction interplay.
+## [2026-02-24 01:31] Fix: Stop Interview History Leakage Across Scenes/Modes
+- Agent: A + B-FE + C + D
+- Goal:
+  - fix issue where entering interview restores unrelated historical chat from different interview scene/mode.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`:
+    - tightened fallback matching in `resolveInterviewSession` to require `chatMode + interviewType + interviewMode` before fallback can be considered.
+    - removed relaxed latest-fallback for interview mode (`isInterviewMode`), so interview restore no longer degrades to cross-scene latest session.
+    - kept strict scene fallback (`resumeId + targetCompany + interviewFocus`) for interview mode as final restore path.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (first run failed at online CORS preflight with transient EOF)
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (re-run)
+- Verification:
+  - final step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed on re-run.
+- Risks/Notes:
+  - interview restore is now intentionally strict; legacy interview sessions lacking complete scene metadata may no longer auto-restore unless they match strict keys.
+  - if needed, add a one-time migration to enrich legacy session records with scene fields.
+## [2026-02-24 01:41] Fix: Keep Pre-Interview Reminder Before Auto-Recovery Chat Jump
+- Agent: A + B-FE + C + D
+- Goal:
+  - ensure the "start interview" reminder always resolves before any auto-recovery navigation can jump into chat.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageState.ts`:
+    - added `interviewEntryConfirmPendingRef` shared guard ref.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`:
+    - wrapped pre-interview `confirmDialog` with pending flag (`true` before await, `false` in finally).
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`:
+    - short-circuit recovery when interview confirm is pending to prevent early `openChat`.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveFlows.types.ts`:
+    - added `interviewEntryConfirmPendingRef` to passive-flow params.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveStateFlows.ts`:
+    - passed confirm-pending ref into `useAnalysisSessionRecovery`.
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`:
+    - threaded `interviewEntryConfirmPendingRef` into execution and passive recovery hooks.
+  - `backup/ai-resume-builder/components/screens/AiAnalysis.tsx`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageState.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveFlows.types.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveStateFlows.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - backup copy commands for each changed file to `backup/[relative_path]`.
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - this guard only blocks recovery while the pre-interview reminder is pending; it does not alter existing recovery behavior after confirm/cancel resolves.
+## [2026-02-24 01:46] Fix: Intro Auto-Heal When First Greeting Line Is Missing
+- Agent: A + B-FE + C + D
+- Goal:
+  - fix chat intro case where only one opening line appears (question shown but greeting/summary line missing).
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts`:
+    - added `resolveUserName()` helper and reused it for intro generation.
+    - added intro scaffold self-heal effect: when chat currently contains only intro-template messages (`ai-summary` / `ai-ask`) but one line is missing/empty, rebuild both lines deterministically.
+    - this covers legacy/partial restored intro records and prevents single-line opening in interview entry.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts backup/ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (first run failed at frontend health check with transient EOF)
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (re-run)
+- Verification:
+  - final step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed on re-run.
+- Risks/Notes:
+  - self-heal is intentionally scoped to "intro-only" message stacks, so it should not mutate normal in-progress interviews.
+## [2026-02-24 01:52] Fix: Prevent Report Auto-Jump While Start-Interview Confirm Is Pending
+- Agent: A + B-FE + C + D
+- Goal:
+  - fix issue where clicking "开始面试" could jump to report page first and then show confirm popup.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`:
+    - added `interviewEntryConfirmPendingRef` prop.
+    - wrapped "已结束报告后重开面试" confirm dialog with pending lock (`true` before await, `false` in finally).
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`:
+    - added and forwarded `interviewEntryConfirmPendingRef` to `JdInputPage`.
+  - `ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`:
+    - exposed `interviewEntryConfirmPendingRef` in render props.
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`:
+    - passed `interviewEntryConfirmPendingRef` into render-props builder payload for `JdInputPage` flow.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/AiAnalysis.tsx`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - backup copy commands for each changed file to `backup/[relative_path]`.
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (run#1 failed with transient backend EOF)
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (run#2 failed with transient CORS EOF)
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (run#3 passed)
+- Verification:
+  - final step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed on final re-run.
+- Risks/Notes:
+  - online smoke showed intermittent network EOF during retries; final run succeeded, indicating external transport instability rather than deterministic code failure.
+## [2026-02-24 01:55] Fix: Disable Auto-Recovery Entry While Configuring Interview Scene
+- Agent: A + B-FE + C + D
+- Goal:
+  - stop auto-entering interview/chat when user only switches scene options (e.g., selecting 复试/HR/mode) on `jd_input` before clicking start/continue.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`:
+    - added guard: when `isInterviewMode && currentStep === 'jd_input'`, skip recovery auto-navigation.
+    - this prevents implicit `openChat` / report jumps during scene setup.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - in interview mode, recovery-driven auto navigation is now intentionally disabled on `jd_input`; entry is explicit via start/continue actions only.
+## [2026-02-24 01:57] Fix: Align Interview Progress Display With Actual Answered State
+- Agent: A + B-FE + C + D
+- Goal:
+  - resolve inconsistency where progress UI looked completed while report action remained unavailable.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx`:
+    - added `answeredCountClamped` for safe answered-count display.
+    - progress ratio now uses `answeredCountClamped / interviewTotalCount`.
+    - replaced top label from "current-question style" (`answered+1`) to explicit answered metric: `已答 X / Y`.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx backup/ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - this change is display-layer only; interview completion/report availability rules are unchanged.
+## [2026-02-24 02:03] Fix: Resume-Select Interview Progress Should Follow Latest Scene State
+- Agent: A + B-FE + C + D
+- Goal:
+  - rollback mistaken interview-question progress display edit in `ChatPage`.
+  - fix resume-select interview progress mismatch where simple/general showed completed while current scene `查看报告` remained disabled.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx`:
+    - restored from backup to undo previous mistaken display-only change (no net diff retained).
+  - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`:
+    - refactored stage derivation to use scene-aware keys including `jdKey + type + mode + resumeId + targetCompany + interviewFocus`.
+    - changed status aggregation from "any historical done wins forever" to "latest candidate by updatedAt wins" per stage/mode.
+    - interview stage candidates now merge analysis-session and interview-session signals with scene-level completion shielding.
+    - tie-break now prefers `current` over `done` when timestamps are equal, avoiding stale done over-lighting.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item backup/ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx ai-resume-builder/components/screens/ai-analysis/ChatPage.tsx -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (run#1 failed: missing `CAREER_HERO_TEST_EMAIL/CAREER_HERO_TEST_PASSWORD` env)
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (run#2 passed)
+- Verification:
+  - final step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login passed.
+- Risks/Notes:
+  - this fix intentionally makes resume-list interview progress reflect latest scene activity rather than preserving historical done as dominant state.
+  - if product expectation is cumulative historical completion (instead of latest-state semantics), this rule may need UX confirmation.
+## [2026-02-24 02:08] Fix: Tighten Interview Progress Classification For Legacy/Unscoped Sessions
+- Agent: A + B-FE + C + D
+- Goal:
+  - address remaining mismatch where interview progress could still show `done` while current scene report action stayed disabled.
+  - prevent non-interview or weakly-scoped legacy sessions from being classified as interview-completed stages.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`:
+    - removed permissive typed parsing fallback for plain keys; now type/mode/jd resolution prefers explicit session fields or explicit scoped key segments only.
+    - added strict legacy gating helper `hasMatchingInterviewChatSession(...)`.
+    - `isInterviewSceneSession(...)` now requires explicit interview identity or a real matching interview chat session before accepting `final_report/interview_report/chat` legacy records.
+    - this blocks accidental `done` lighting from unrelated/legacy entries lacking clear interview identity.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`: backup refreshed before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts -Force`
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - stricter classification may hide very old interview records that were saved without interview identity fields and without matching interview chat traces.
+  - this is intentional to avoid false-positive `done` states on resume selection progress.
+## [2026-02-24 02:13] Policy Fix: Resume `updated_at` Only Moves On User Edit/Import/Save-Optimized
+- Agent: A + B-FE + C + D
+- Goal:
+  - stop non-user background AI binding flows from repeatedly changing resume `updated_at`.
+  - enforce that timestamp bumps only happen on user-intended actions: import/edit/save optimized resume.
+- Changes:
+  - `ai-resume-builder/src/database-service.ts`:
+    - added create options: `optimizedDuplicateStrategy` (`reuse` | `overwrite`) and `touchUpdatedAtOnOptimizedOverwrite`.
+    - changed `createResume(...)` optimized-duplicate behavior:
+      - default `reuse` now returns existing optimized resume directly (no overwrite, no timestamp touch).
+      - only `overwrite + touchUpdatedAtOnOptimizedOverwrite: true` updates `updated_at`.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts`:
+    - internal analysis binding path now calls `createResume(..., { optimizedDuplicateStrategy: 'reuse' })`.
+    - avoids silent overwrite/timestamp movement during background ensure-binding flows.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts`:
+    - user "保存优化简历" path now explicitly calls
+      `createResume(..., { optimizedDuplicateStrategy: 'overwrite', touchUpdatedAtOnOptimizedOverwrite: true })`.
+    - preserves expected user-driven save behavior and timestamp update.
+  - `backup/ai-resume-builder/src/database-service.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts`: backup created before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts`: backup created before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - backup copy commands to `backup/[relative_path]`.
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - optimized resume dedupe now defaults to reusing existing row without overwriting; if future workflow expects implicit overwrite on duplicate create, it must opt in explicitly with overwrite options.
+## [2026-02-24 02:17] Fix: Resume-Select Progress False `done` In 初试+简单 (Legacy `__micro` Key Misclassified)
+- Agent: A + B-FE + C + D
+- Goal:
+  - fix issue where resume-selection interview progress could show `已完成` incorrectly in `初试 + 简单模式`.
+- Root Cause:
+  - legacy analysis-session rows without explicit `chatMode` but with key suffix `__micro` were being treated as interview scene rows.
+  - this happened because interview identity was inferred from key segments (`general/simple`) without excluding `micro` suffix.
+  - result: historical micro/final states could light `simple/general` interview stage as `done`.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`:
+    - `parseScopedParts(...)` now extracts `chatModeSuffix` from key tail (`interview` / `micro`).
+    - `isInterviewSceneSession(...)` now hard-excludes keys with `chatModeSuffix === 'micro'`.
+    - `hasMatchingInterviewChatSession(...)` also hard-excludes `micro`-suffixed state keys.
+    - this prevents micro legacy sessions from contaminating interview progress derivation.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`: backup refreshed before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - backup copy command to `backup/[relative_path]`.
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - this change intentionally ignores `__micro`-scoped legacy entries when computing interview progress.
+  - interview progress now strictly derives from interview records only.
+## [2026-02-24 02:21] Fix: Bottom-Nav AI诊断 Always Lands On Resume Select (Block Auto-Recovery Race)
+- Agent: A + B-FE + C + D
+- Goal:
+  - clicking bottom-nav `AI诊断` should always land on `resume_select`, and must not auto-jump to nested pages (report/chat/final_report) on entry.
+- Root Cause:
+  - race condition between force-resume-select UI effect and session recovery effect.
+  - in some render cycles, recovery still ran before force flag was effectively observed, causing auto navigation into subpages.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`:
+    - added robust force detection via storage key (`ai_analysis_force_resume_select` / `ai_interview_force_resume_select`) in addition to in-memory ref flag.
+    - when force flag is active, recovery now returns early (no auto-open/auto-jump).
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`:
+    - do not remove force key immediately on entry.
+    - consume/remove force key only after leaving `resume_select` step.
+    - keeps force flag visible long enough to reliably block recovery during entry transition.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`: backup refreshed before edit.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`: backup refreshed before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - backup copy commands to `backup/[relative_path]`.
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - force key is now intentionally retained until leaving `resume_select`; this is by design to guarantee deterministic entry behavior.
+## [2026-02-24 02:29] Fix: Resume-Select 初试+简单 Progress Uses Active Scene Baseline (JD+Company+Resume)
+- Agent: A + B-FE + C + D
+- Goal:
+  - resolve remaining false `已完成` light in resume-selection progress (not aligned with current scene `查看报告` gray state) for `初试 + 简单`.
+- Root Cause:
+  - interview stage derivation still aggregated cross-scene historical records under same type/mode.
+  - `JdInput` report-button gating is scene-scoped (JD/company/type/mode/focus), but list progress lacked baseline scene filtering, so historical scenes could light done/current incorrectly.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`:
+    - imported `makeJdKey` and added `resolveSessionJdKey(...)` fallback.
+    - introduced active scene baseline from row data:
+      - `activeJdKey = makeJdKey(lastJdText || '__no_jd__')`
+      - `activeTargetCompany = normalizeSceneText(targetCompany)`
+      - `fallbackResumeId` consistency check.
+    - added `isSceneBaselineMatched(...)` and applied it to both loops:
+      - `analysisSessionByJd` derivation
+      - `interviewSessions` derivation
+    - only sessions matching active baseline contribute to stage candidates.
+  - `backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`: backup refreshed before edit.
+  - `backup/WORKLOG.md`: backup refreshed before logging.
+- Commands:
+  - `Copy-Item ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts -Force`
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login all passed.
+- Risks/Notes:
+  - progress derivation now favors active resume scene baseline (JD/company/resume) and intentionally de-emphasizes historical cross-scene completion in list progress.
+  - if future product wants cumulative historical progress in resume list, this baseline filter should be made configurable by UX intent.
+## [2026-02-24 02:33] Validation: Frontend Production Build Check After Progress Fix
+- Agent: C + D
+- Goal:
+  - verify no compile/bundle regression after scene-baseline progress fix.
+- Commands:
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - build passed successfully (`vite build`).
+  - generated chunk output normal; no TS/runtime build error.
+- Risks/Notes:
+  - none.
+## [2026-02-24 02:35] Enhancement: Include Interview Focus In Resume-Select Progress Baseline
+- Agent: A + B-FE + C + D
+- Goal:
+  - include `interviewFocus` in interview progress scene matching to further prevent cross-scene leakage.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`:
+    - added `activeInterviewFocus` baseline from `rowData.interviewFocus`.
+    - `isSceneBaselineMatched(...)` now enforces focus equality when baseline focus exists.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`:
+    - persist top-level `resume_data.interviewFocus` when writing interview session state.
+    - persist top-level `resume_data.interviewFocus` when writing interview chat sessions.
+    - clear top-level `resume_data.interviewFocus` when clearing interview scene state in interview mode.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisResetActions.ts`:
+    - reset flow now clears `interviewFocus` together with `lastJdText/targetCompany`.
+  - `ai-resume-builder/types.ts`:
+    - added optional `interviewFocus?: string` to `ResumeData`.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisResetActions.ts`
+    - `backup/ai-resume-builder/types.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login passed.
+- Risks/Notes:
+  - focus baseline matching activates only when top-level `resume_data.interviewFocus` is non-empty; legacy records without this field continue to rely on JD/company/resume baseline.

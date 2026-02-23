@@ -30,6 +30,19 @@ export const useChatIntroMessages = ({
   jdText,
 }: Params) => {
   const askTimerRef = useRef<number | null>(null);
+  const hasText = (value: any) => String(value ?? '').trim().length > 0;
+  const resolveUserName = () => {
+    if (!resumeData?.personalInfo?.name) return '';
+    const fullName = String(resumeData.personalInfo.name || '').trim();
+    if (!fullName) return '';
+    if (fullName.includes(' ')) {
+      return fullName.split(' ').pop() || fullName;
+    }
+    if (fullName.length >= 2) {
+      return fullName.slice(-2);
+    }
+    return fullName;
+  };
   const normalizeSceneText = (value: any) =>
     String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
   const hasPersistedHistory = () => {
@@ -139,19 +152,7 @@ export const useChatIntroMessages = ({
     chatIntroScheduledRef.current = true;
     setChatInitialized(true);
 
-    let userName = '';
-    if (resumeData?.personalInfo?.name) {
-      const fullName = resumeData.personalInfo.name;
-      if (fullName.includes(' ')) {
-        userName = fullName.split(' ').pop() || fullName;
-      } else if (fullName.length >= 2) {
-        userName = fullName.slice(-2);
-      } else {
-        userName = fullName;
-      }
-    }
-
-    const intro = buildIntroTexts(userName);
+    const intro = buildIntroTexts(resolveUserName());
     const summaryMessage: ChatMessage = {
       id: 'ai-summary',
       role: 'model',
@@ -173,4 +174,28 @@ export const useChatIntroMessages = ({
       askTimerRef.current = null;
     }, 900);
   }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, resumeData?.interviewSessions, resumeData?.lastJdText, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+
+  useEffect(() => {
+    if (currentStep !== 'chat') return;
+    const messages = Array.isArray(chatMessagesRef.current) ? chatMessagesRef.current : [];
+    if (!messages.length) return;
+    const introOnly = messages.every((m) => {
+      const id = String((m as any)?.id || '').trim();
+      return (m as any)?.role === 'model' && (id === 'ai-summary' || id === 'ai-ask');
+    });
+    if (!introOnly) return;
+    const hasValidSummary = messages.some((m) => String((m as any)?.id || '').trim() === 'ai-summary' && hasText((m as any)?.text));
+    const hasValidAsk = messages.some((m) => String((m as any)?.id || '').trim() === 'ai-ask' && hasText((m as any)?.text));
+    if (hasValidSummary && hasValidAsk) return;
+
+    const intro = buildIntroTexts(resolveUserName());
+    const repaired: ChatMessage[] = [
+      { id: 'ai-summary', role: 'model', text: intro.summary },
+      { id: 'ai-ask', role: 'model', text: intro.ask },
+    ];
+    setChatMessages(repaired);
+    if (!chatInitialized) {
+      setChatInitialized(true);
+    }
+  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

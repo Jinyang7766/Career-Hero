@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { Suspense, useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { View, ResumeData, ResumeSummary } from './types';
 import { DatabaseService } from './src/database-service';
 import { supabase } from './src/supabase-client';
@@ -6,24 +6,6 @@ import { useLocation, useNavigate, useNavigationType } from 'react-router-dom';
 import { AppProvider } from './src/app-context';
 import { createEmptyResumeData, selectCompleteness, useAppStore } from './src/app-store';
 import BottomNav from './components/BottomNav';
-import Dashboard from './components/screens/Dashboard';
-import Profile from './components/screens/Profile';
-import Preview from './components/screens/Preview';
-import Editor from './components/screens/Editor';
-import Settings from './components/screens/Settings';
-import AccountSecurity from './components/screens/AccountSecurity';
-import Help from './components/screens/Help';
-import History from './components/screens/History';
-import PointsHistory from './components/screens/PointsHistory';
-import AllResumes from './components/screens/AllResumes';
-import AiAnalysis from './components/screens/AiAnalysis';
-import Login from './components/screens/Login';
-import Signup from './components/screens/Signup';
-import ForgotPassword from './components/screens/ForgotPassword';
-import DeletionPending from './components/screens/DeletionPending';
-import MemberCenter from './components/screens/MemberCenter';
-import TermsOfService from './components/screens/TermsOfService';
-import PrivacyPolicy from './components/screens/PrivacyPolicy';
 import ScreenErrorBoundary from './components/ScreenErrorBoundary';
 import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from './src/diagnosis-progress';
 import { deriveInterviewStageStatus } from './components/screens/ai-analysis/interview-stage-status';
@@ -33,6 +15,34 @@ import { useAppDialogs } from './src/hooks/useAppDialogs';
 import { useRouteHistoryStack } from './src/hooks/useRouteHistoryStack';
 import { useScrollResetOnRoute } from './src/hooks/useScrollResetOnRoute';
 import { useThemeSync } from './src/hooks/useThemeSync';
+
+const Dashboard = React.lazy(() => import('./components/screens/Dashboard'));
+const Profile = React.lazy(() => import('./components/screens/Profile'));
+const Preview = React.lazy(() => import('./components/screens/Preview'));
+const Editor = React.lazy(() => import('./components/screens/Editor'));
+const Settings = React.lazy(() => import('./components/screens/Settings'));
+const AccountSecurity = React.lazy(() => import('./components/screens/AccountSecurity'));
+const Help = React.lazy(() => import('./components/screens/Help'));
+const History = React.lazy(() => import('./components/screens/History'));
+const PointsHistory = React.lazy(() => import('./components/screens/PointsHistory'));
+const AllResumes = React.lazy(() => import('./components/screens/AllResumes'));
+const AiAnalysis = React.lazy(() => import('./components/screens/AiAnalysis'));
+const Login = React.lazy(() => import('./components/screens/Login'));
+const Signup = React.lazy(() => import('./components/screens/Signup'));
+const ForgotPassword = React.lazy(() => import('./components/screens/ForgotPassword'));
+const DeletionPending = React.lazy(() => import('./components/screens/DeletionPending'));
+const MemberCenter = React.lazy(() => import('./components/screens/MemberCenter'));
+const TermsOfService = React.lazy(() => import('./components/screens/TermsOfService'));
+const PrivacyPolicy = React.lazy(() => import('./components/screens/PrivacyPolicy'));
+
+const ScreenFallback: React.FC<{ label?: string }> = ({ label = '页面加载中...' }) => (
+  <div className="flex items-center justify-center min-h-screen">
+    <div className="flex flex-col items-center gap-3">
+      <div className="size-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      <span className="text-sm text-slate-400 font-medium">{label}</span>
+    </div>
+  </div>
+);
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -543,14 +553,7 @@ function App() {
   const renderView = () => {
     // Show loading state while auth is being checked to prevent flash of login page
     if (!authChecked) {
-      return (
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="flex flex-col items-center gap-3">
-            <div className="size-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-sm text-slate-400 font-medium">加载中...</span>
-          </div>
-        </div>
-      );
+      return <ScreenFallback label="加载中..." />;
     }
 
     switch (currentView) {
@@ -740,7 +743,9 @@ function App() {
       <div ref={appContainerRef} className={`min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white max-w-md mx-auto shadow-2xl overflow-hidden relative`}>
         <ToastOverlay />
         <ConfirmModal />
-        {renderView()}
+        <Suspense fallback={<ScreenFallback />}>
+          {renderView()}
+        </Suspense>
         {showBottomNav && <BottomNav />}
       </div>
     </AppProvider>

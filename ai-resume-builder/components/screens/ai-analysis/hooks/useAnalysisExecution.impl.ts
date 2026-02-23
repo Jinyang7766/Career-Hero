@@ -66,6 +66,7 @@ type Params = {
   openChat: (source: 'internal' | 'preview') => void;
   consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
   refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
+  interviewEntryConfirmPendingRef?: { current: boolean };
 };
 
 export const useAnalysisExecution = ({
@@ -106,6 +107,7 @@ export const useAnalysisExecution = ({
   openChat,
   consumeUsageQuota,
   refundUsageQuota,
+  interviewEntryConfirmPendingRef,
 }: Params) => {
   const CACHE_BYPASS_ONCE_KEY = 'ai_analysis_bypass_cache_once';
   const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
@@ -212,9 +214,19 @@ export const useAnalysisExecution = ({
       normalizedInterviewType,
     });
     if (isInterviewMode) {
-      const confirmed = await confirmDialog(
-        '开始面试前提醒：请预留一段完整时间参与本次面试，尽量不要中途退出或切换页面。确认现在进入面试吗？'
-      );
+      if (interviewEntryConfirmPendingRef) {
+        interviewEntryConfirmPendingRef.current = true;
+      }
+      let confirmed = false;
+      try {
+        confirmed = await confirmDialog(
+          '开始面试前提醒：请预留一段完整时间参与本次面试，尽量不要中途退出或切换页面。确认现在进入面试吗？'
+        );
+      } finally {
+        if (interviewEntryConfirmPendingRef) {
+          interviewEntryConfirmPendingRef.current = false;
+        }
+      }
       if (!confirmed) return;
     }
 
@@ -620,6 +632,7 @@ export const useAnalysisExecution = ({
     isInterviewMode,
     consumeUsageQuota,
     refundUsageQuota,
+    interviewEntryConfirmPendingRef,
   ]);
 
   const handleStartAnalysisClick = useCallback(async (interviewType?: string) => {

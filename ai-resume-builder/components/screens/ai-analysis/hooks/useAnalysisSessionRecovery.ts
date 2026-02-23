@@ -17,6 +17,7 @@ type Params = {
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
   isInterviewMode?: boolean;
+  interviewEntryConfirmPendingRef?: { current: boolean };
 };
 
 export const useAnalysisSessionRecovery = ({
@@ -34,11 +35,28 @@ export const useAnalysisSessionRecovery = ({
   loadLastAnalysis,
   recoveredSessionKeyRef,
   isInterviewMode,
+  interviewEntryConfirmPendingRef,
 }: Params) => {
   useEffect(() => {
     if (!resumeData) return;
     if (currentStep === 'analyzing') return;
-    if (forcedResumeSelect && currentStep === 'resume_select') return;
+    const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
+    let forceResumeSelectActive = forcedResumeSelect;
+    try {
+      if (localStorage.getItem(forceKey) === '1') {
+        forceResumeSelectActive = true;
+      }
+    } catch {
+      // ignore storage failures
+    }
+    // Navigation entry from bottom nav should always land on resume_select first.
+    if (forceResumeSelectActive) return;
+    if (isInterviewMode && interviewEntryConfirmPendingRef?.current) return;
+    if (isInterviewMode && currentStep === 'jd_input') {
+      // Scene setup page should never auto-enter chat/report.
+      // Entry must be explicit via "开始面试/继续面试".
+      return;
+    }
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
     const activeInterviewType = getActiveInterviewType();
@@ -101,9 +119,12 @@ export const useAnalysisSessionRecovery = ({
       if (!jdText && effectiveJdText && String(jdText || '').trim() !== effectiveJdText) {
         setJdText(effectiveJdText);
       }
-      // Always restore (or clear) chat history for the active scene before opening chat,
-      // otherwise stale messages from previous mode can leak into current mode.
-      restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
+      // Restore before opening chat to avoid stale cross-scene content.
+      // When already in chat and no persisted messages are available, skip restore to
+      // avoid clearing freshly injected intro messages in the same render cycle.
+      if (currentStep !== 'chat' || hasInterviewMessages) {
+        restoreInterviewSession(effectiveJdText, activeInterviewType, activeInterviewMode);
+      }
       if (currentStep !== 'chat') {
         pushRuntimeTrace('ai_analysis.recovery', 'open_chat_from_session_step', {
           from: currentStep,
@@ -174,5 +195,6 @@ export const useAnalysisSessionRecovery = ({
     forcedResumeSelect,
     recoveredSessionKeyRef,
     isInterviewMode,
+    interviewEntryConfirmPendingRef,
   ]);
 };

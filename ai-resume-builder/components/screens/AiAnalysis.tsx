@@ -116,6 +116,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setChatInitialized,
     recoveredSessionKeyRef,
     chatIntroScheduledRef,
+    interviewEntryConfirmPendingRef,
     playingAudioId,
     setPlayingAudioId,
     audioPlayerRef,
@@ -377,6 +378,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     openChat,
     consumeUsageQuota,
     refundUsageQuota,
+    interviewEntryConfirmPendingRef,
   });
 
   
@@ -453,6 +455,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigateToStep: navigateToStep as any,
     loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
+    interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
     optimizedResumeId,
     setAllResumes,
     targetCompany,
@@ -651,6 +654,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setShowJdEmptyModal,
     startAnalysis,
     onRestartCompletedInterviewScene: handleRestartCompletedInterviewScene,
+    interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
     hasJdInput: () => jdText.length > 0,
     score,
     originalScore,

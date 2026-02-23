@@ -31,6 +31,7 @@ export type AiAnalysisPassiveFlowsParams = {
   navigateToStep: (...args: any[]) => any;
   loadLastAnalysis: (...args: any[]) => any;
   recoveredSessionKeyRef: React.MutableRefObject<string>;
+  interviewEntryConfirmPendingRef?: React.MutableRefObject<boolean>;
 
   optimizedResumeId: string | number | null;
   setAllResumes: (v: any) => void;
@@ -61,4 +62,3 @@ export type AiAnalysisPassiveFlowsParams = {
   setForceReportEntry: (v: boolean) => void;
   handleResumeSelect: (...args: any[]) => any;
 };
-

@@ -35,6 +35,7 @@ export type JdInputPageProps = {
   startAnalysis: (interviewType?: string) => Promise<void> | void;
   onRestartCompletedInterviewScene?: () => Promise<void> | void;
   isInterviewMode?: boolean;
+  interviewEntryConfirmPendingRef?: React.MutableRefObject<boolean>;
 };
 
 const JdInputPage: React.FC<JdInputPageProps> = ({
@@ -57,6 +58,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   startAnalysis,
   onRestartCompletedInterviewScene,
   isInterviewMode,
+  interviewEntryConfirmPendingRef,
 }) => {
   const currentUser = useAppContext((s) => s.currentUser);
   const currentUserId = String(currentUser?.id || '').trim();
@@ -505,7 +507,17 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               try {
                 persistInterviewSceneConfig();
                 if (isInterviewMode && shouldShowViewReport && !shouldShowContinueInterview) {
-                  const confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
+                  if (interviewEntryConfirmPendingRef) {
+                    interviewEntryConfirmPendingRef.current = true;
+                  }
+                  let confirmed = false;
+                  try {
+                    confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
+                  } finally {
+                    if (interviewEntryConfirmPendingRef) {
+                      interviewEntryConfirmPendingRef.current = false;
+                    }
+                  }
                   if (!confirmed) return;
                   await onRestartCompletedInterviewScene?.();
                   resetInterviewSceneInputs();

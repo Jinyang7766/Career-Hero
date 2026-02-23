@@ -45,6 +45,7 @@ type Params = {
   setShowJdEmptyModal: (v: boolean) => void;
   startAnalysis: (interviewType?: string) => void | Promise<void>;
   onRestartCompletedInterviewScene?: () => Promise<void> | void;
+  interviewEntryConfirmPendingRef?: React.MutableRefObject<boolean>;
   hasJdInput: () => boolean;
   score: number;
   originalScore: number;
@@ -166,6 +167,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         startAnalysis={p.startAnalysis}
         onRestartCompletedInterviewScene={p.onRestartCompletedInterviewScene}
         isInterviewMode={p.isInterviewMode}
+        interviewEntryConfirmPendingRef={p.interviewEntryConfirmPendingRef}
       />
     );
   }

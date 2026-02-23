@@ -82,6 +82,36 @@ cd backend && pip install -r requirements.txt && python app.py
 cd ai-resume-builder && npm install && npm run dev
 ```
 
+### 4. 运行标准测试入口
+```bash
+# 一次运行前后端测试
+npm test
+
+# 仅前端
+npm run test:frontend
+
+# 仅后端（首次建议先安装开发测试依赖）
+pip install -r backend/requirements-dev.txt
+npm run test:backend
+```
+
+### 5. 每步回归测试（本地 + 线上）
+```powershell
+# 建议先设置测试账号环境变量（避免命令行明文）
+$env:CAREER_HERO_TEST_EMAIL="your-test-email@example.com"
+$env:CAREER_HERO_TEST_PASSWORD="your-test-password"
+
+# 每一步改动后执行（本地测试 + 线上烟测 + UI登录）
+pwsh -File scripts/test-step.ps1 `
+  -FrontendUrl "https://your-frontend.vercel.app/" `
+  -BackendUrl "https://your-backend.up.railway.app"
+
+# 如需仅跑线上：
+pwsh -File scripts/test-online.ps1 `
+  -FrontendUrl "https://your-frontend.vercel.app/" `
+  -BackendUrl "https://your-backend.up.railway.app"
+```
+
 ---
 
 ## 📝 更新日志

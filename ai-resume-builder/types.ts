@@ -97,6 +97,7 @@ export interface ResumeData {
   analysisReportId?: string;
   lastJdText?: string;
   targetCompany?: string;
+  interviewFocus?: string;
   analysisBindings?: Record<string, {
     analysisReportId: string;
     optimizedResumeId?: string | number | null;

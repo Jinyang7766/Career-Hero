@@ -38,6 +38,7 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   setShowJdEmptyModal: p.setShowJdEmptyModal,
   startAnalysis: p.startAnalysis,
   onRestartCompletedInterviewScene: p.onRestartCompletedInterviewScene,
+  interviewEntryConfirmPendingRef: p.interviewEntryConfirmPendingRef,
   hasJdInput: p.hasJdInput,
   score: p.score,
   originalScore: p.originalScore,

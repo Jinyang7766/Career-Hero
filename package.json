@@ -8,7 +8,10 @@
   },
   "scripts": {
     "build": "cd ai-resume-builder && npm install && npm run build",
-    "dev": "cd ai-resume-builder && npm run dev"
+    "dev": "cd ai-resume-builder && npm run dev",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "npm --prefix ai-resume-builder run -s test",
+    "test:backend": "python -m pytest backend/tests -q"
   },
   "workspaces": [
     "ai-resume-builder"

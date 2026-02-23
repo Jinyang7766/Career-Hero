@@ -111,13 +111,25 @@ export const useInterviewSessionStore = ({
         const matchByData = dataJdKey && dataJdKey === legacyJdKey;
         const matchByLegacyKey = String(key || '').trim() === legacyJdKey;
         if (!(matchByKey || matchByData || matchByLegacyKey)) return null;
-        return data;
+        return {
+          session: data,
+          parsed,
+        };
       })
-      .filter(Boolean) as any[];
-    const modeMatchedFallback = fallbackCandidates.filter((session: any) => {
-      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-      return chatMode === expectedChatMode;
-    });
+      .filter(Boolean) as Array<{ session: any; parsed: ReturnType<typeof parseInterviewScopedKey> }>;
+    const modeMatchedFallback = fallbackCandidates
+      .filter((entry) => {
+        const session = entry.session;
+        const parsed = entry.parsed;
+        const sessionChatMode = String(session?.chatMode || '').trim().toLowerCase();
+        if (sessionChatMode !== expectedChatMode) return false;
+        const sessionType = normalizeInterviewType(session?.interviewType || parsed.interviewType || '');
+        if (sessionType !== interviewType) return false;
+        const sessionMode = normalizeInterviewMode(session?.interviewMode || parsed.interviewMode || '');
+        if (sessionMode !== interviewMode) return false;
+        return true;
+      })
+      .map((entry) => entry.session);
     const latestFallback = modeMatchedFallback.reduce((acc: any, curr: any) => {
       const accAt = Date.parse(String(acc?.updatedAt || ''));
       const currAt = Date.parse(String(curr?.updatedAt || ''));
@@ -180,13 +192,14 @@ export const useInterviewSessionStore = ({
       if (!Number.isFinite(currAt)) return acc;
       return currAt > accAt ? curr : acc;
     }, null);
+    const relaxedLatestFallback = isInterviewMode ? null : latestFallback;
     return {
       interviewType,
       interviewMode,
       typedModeKey,
       typedKey,
       legacyJdKey,
-      session: typedModeMatched || typedMatched || legacyMatched || strictLatestFallback || latestFallback || null,
+      session: typedModeMatched || typedMatched || legacyMatched || strictLatestFallback || relaxedLatestFallback || null,
     };
   };
 
@@ -337,6 +350,7 @@ export const useInterviewSessionStore = ({
       },
       lastJdText: sessionJdText || currentResumeData.lastJdText || '',
       targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      interviewFocus: getCurrentInterviewFocus() || (currentResumeData as any).interviewFocus || '',
     };
 
     resumeDataRef.current = updatedResumeData as ResumeData;
@@ -465,6 +479,7 @@ export const useInterviewSessionStore = ({
       interviewSessions: updatedSessions,
       lastJdText: sessionJdText,
       targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      interviewFocus: getCurrentInterviewFocus() || (currentResumeData as any).interviewFocus || '',
     };
 
     resumeDataRef.current = updatedResumeData as ResumeData;
@@ -611,6 +626,7 @@ export const useInterviewSessionStore = ({
     const updatedResumeData = {
       ...currentResumeData,
       analysisSessionByJd: byJd,
+      interviewFocus: isInterviewMode ? '' : ((currentResumeData as any).interviewFocus || ''),
     };
     resumeDataRef.current = updatedResumeData as ResumeData;
     if (setResumeData) {

@@ -1,5 +1,10 @@
 import { supabase } from './supabase-client';
 
+type CreateResumeOptions = {
+  optimizedDuplicateStrategy?: 'reuse' | 'overwrite';
+  touchUpdatedAtOnOptimizedOverwrite?: boolean;
+};
+
 export class DatabaseService {
   private static normalizeResumeId(id: any) {
     return String(id ?? '').trim();
@@ -139,7 +144,12 @@ export class DatabaseService {
   }
 
   // 创建简历记录
-  static async createResume(userId: string, title: string, resumeData: any) {
+  static async createResume(
+    userId: string,
+    title: string,
+    resumeData: any,
+    options?: CreateResumeOptions
+  ) {
     try {
       console.log('=== DatabaseService.createResume 调试信息 ===');
       console.log('Creating resume:', { userId, title });
@@ -176,13 +186,24 @@ export class DatabaseService {
           return { success: false, error: existing.error, data: null };
         }
         if (existing.data?.id) {
+          const strategy = options?.optimizedDuplicateStrategy || 'reuse';
+          if (strategy === 'reuse') {
+            return { success: true, data: existing.data };
+          }
+          const touchUpdatedAt = options?.touchUpdatedAtOnOptimizedOverwrite === true;
+          const overwritePayload = touchUpdatedAt
+            ? {
+                title,
+                resume_data: resumeData,
+                updated_at: new Date().toISOString(),
+              }
+            : {
+                title,
+                resume_data: resumeData,
+              };
           const { data: updated, error: updateError } = await supabase
             .from('resumes')
-            .update({
-              title,
-              resume_data: resumeData,
-              updated_at: new Date().toISOString()
-            })
+            .update(overwritePayload)
             .eq('id', existing.data.id)
             .select()
             .maybeSingle();

@@ -89,6 +89,7 @@ export const useAiAnalysisPageState = () => {
   const [chatInitialized, setChatInitialized] = useState(false);
   const recoveredSessionKeyRef = useRef<string>('');
   const chatIntroScheduledRef = useRef(false);
+  const interviewEntryConfirmPendingRef = useRef(false);
 
   const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -148,6 +149,7 @@ export const useAiAnalysisPageState = () => {
     setChatInitialized,
     recoveredSessionKeyRef,
     chatIntroScheduledRef,
+    interviewEntryConfirmPendingRef,
     playingAudioId,
     setPlayingAudioId,
     audioPlayerRef,

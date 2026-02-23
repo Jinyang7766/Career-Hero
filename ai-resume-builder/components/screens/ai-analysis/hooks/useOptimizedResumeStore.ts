@@ -157,6 +157,8 @@ export const useOptimizedResumeStore = ({
         optimizationJdKey: jdKey,
         lastJdText: jdText || baseResumeData.lastJdText || '',
         targetCompany: targetCompany || baseResumeData.targetCompany || ''
+      }, {
+        optimizedDuplicateStrategy: 'reuse',
       });
 
       if (!createResult.success || !createResult.data?.id) {

@@ -75,7 +75,6 @@ export const useAiAnalysisPageUiEffects = ({
     if (path !== expectedPath) return;
     if (localStorage.getItem(forceKey) !== '1') return;
 
-    localStorage.removeItem(forceKey);
     forcedResumeSelectRef.current = true;
     setStepHistory([]);
     setSelectedResumeId(null);
@@ -98,6 +97,12 @@ export const useAiAnalysisPageUiEffects = ({
   useEffect(() => {
     if (currentStep !== 'resume_select') {
       forcedResumeSelectRef.current = false;
+      const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
+      try {
+        localStorage.removeItem(forceKey);
+      } catch {
+        // ignore storage failures
+      }
     }
-  }, [currentStep, forcedResumeSelectRef]);
+  }, [currentStep, forcedResumeSelectRef, isInterviewMode]);
 };

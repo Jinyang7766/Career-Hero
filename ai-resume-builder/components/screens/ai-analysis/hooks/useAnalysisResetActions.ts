@@ -245,6 +245,7 @@ export const useAnalysisResetActions = ({
         score: 0,
         lastJdText: '',
         targetCompany: '',
+        interviewFocus: '',
       };
 
       const preservedUpdatedAt = String((fetched.data as any)?.updated_at || '').trim();
