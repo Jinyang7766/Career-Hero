@@ -1,4 +1,6 @@
 def parse_resume_core(data, deps):
+    if not isinstance(data, dict):
+        return {'error': '请求体必须为 JSON 对象'}, 400
     resume_text = data.get('resumeText', '')
     if not isinstance(resume_text, str):
         return {'error': '简历文本必须为字符串'}, 400

@@ -18,7 +18,7 @@
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.93.3",
     "html-to-image": "^1.11.13",
-    "html2pdf.js": "^0.10.1",
+    "html2canvas": "^1.4.1",
     "pdfjs-dist": "^5.4.530",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -29,10 +29,10 @@
     "@types/node": "^20.11.24",
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
-    "@vitejs/plugin-react": "^4.2.1",
+    "@vitejs/plugin-react": "^5.0.2",
     "typescript": "^5.2.2",
-    "vite": "^5.2.0",
-    "vitest": "^1.6.1"
+    "vite": "^7.3.1",
+    "vitest": "^4.0.18"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "^4.57.1"

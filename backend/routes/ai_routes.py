@@ -1,6 +1,13 @@
 from flask import request, jsonify, Response, stream_with_context
 
 
+def get_json_payload(req):
+    data = req.get_json(silent=True)
+    if data is None:
+        return {}
+    return data
+
+
 def register_ai_routes(app, deps):
     token_required = deps['token_required']
 
@@ -56,7 +63,7 @@ def register_ai_routes(app, deps):
         """使用 AI 解析简历文本"""
         try:
             body, status = parse_resume_core(
-                request.get_json() or {},
+                get_json_payload(request),
                 {'parse_resume_text_with_ai': parse_resume_text_with_ai},
             )
             return jsonify(body), status

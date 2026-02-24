@@ -1,4 +1,67 @@
+from flask import Flask, request
+
+from backend.routes.ai_routes import get_json_payload
 from backend.services.parse_endpoint_service import parse_resume_core
+
+
+def test_get_json_payload_preserves_list_payload():
+    app = Flask(__name__)
+    with app.test_request_context(
+        '/api/ai/parse-resume',
+        method='POST',
+        data='[]',
+        content_type='application/json',
+    ):
+        assert get_json_payload(request) == []
+
+
+def test_get_json_payload_preserves_scalar_payload():
+    app = Flask(__name__)
+    with app.test_request_context(
+        '/api/ai/parse-resume',
+        method='POST',
+        data='"abc"',
+        content_type='application/json',
+    ):
+        assert get_json_payload(request) == 'abc'
+
+
+def test_get_json_payload_falls_back_to_empty_dict_for_invalid_json():
+    app = Flask(__name__)
+    with app.test_request_context(
+        '/api/ai/parse-resume',
+        method='POST',
+        data='{"invalid":',
+        content_type='application/json',
+    ):
+        assert get_json_payload(request) == {}
+
+
+def test_parse_resume_core_rejects_non_object_payload():
+    body, status = parse_resume_core(
+        'not-an-object',
+        {'parse_resume_text_with_ai': lambda _: {'ok': True}},
+    )
+    assert status == 400
+    assert body.get('error') == '请求体必须为 JSON 对象'
+
+
+def test_parse_resume_core_rejects_numeric_payload():
+    body, status = parse_resume_core(
+        123,
+        {'parse_resume_text_with_ai': lambda _: {'ok': True}},
+    )
+    assert status == 400
+    assert body.get('error') == '请求体必须为 JSON 对象'
+
+
+def test_parse_resume_core_rejects_list_payload():
+    body, status = parse_resume_core(
+        [],
+        {'parse_resume_text_with_ai': lambda _: {'ok': True}},
+    )
+    assert status == 400
+    assert body.get('error') == '请求体必须为 JSON 对象'
 
 
 def test_parse_resume_core_rejects_empty_text():
