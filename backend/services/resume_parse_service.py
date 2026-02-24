@@ -22,6 +22,7 @@ from .resume_parse_postprocess import (
     normalize_parsed_resume_result as normalize_parsed_resume_result_core,
     is_missing_resume_core_fields as is_missing_resume_core_fields_core,
     fill_skills_if_missing as fill_skills_if_missing_core,
+    fill_profile_meta_if_missing as fill_profile_meta_if_missing_core,
     compact_text_for_match as compact_text_for_match_core,
     filter_unverifiable_entities as filter_unverifiable_entities_core,
 )
@@ -269,6 +270,10 @@ def _normalize_parsed_resume_result(ai_result):
 def _fill_skills_if_missing(parsed_data, resume_text):
     return fill_skills_if_missing_core(parsed_data, resume_text, logger_obj=logger)
 
+
+def _fill_profile_meta_if_missing(parsed_data, resume_text):
+    return fill_profile_meta_if_missing_core(parsed_data, resume_text, logger_obj=logger)
+
 def _repair_missing_core_fields_with_ai(resume_text, parsed_data):
     """Second-pass extraction for core fields when first-pass misses key info."""
     if not gemini_client:
@@ -493,6 +498,7 @@ def parse_resume_text_with_ai(resume_text):
         parsed_data = _repair_missing_core_fields_with_ai(resume_text, parsed_data)
     parsed_data = _filter_unverifiable_entities(parsed_data, resume_text)
     parsed_data = _fill_skills_if_missing(parsed_data, resume_text)
+    parsed_data = _fill_profile_meta_if_missing(parsed_data, resume_text)
 
     logger.info("Resume parsed successfully with AI")
     return parsed_data

@@ -308,7 +308,33 @@ def extract_skills_from_resume_text(resume_text):
 
     in_skill_block = False
     in_cert_block = False
-    split_items_re = re.compile(r'[，,、;；|/]+|\t+|\s{2,}')
+    split_items_re = re.compile(r'[，,、;；|]+|\t+|\s{2,}')
+
+    def _split_skill_items(payload):
+        if not payload:
+            return []
+        base_parts = [p.strip() for p in split_items_re.split(str(payload)) if p and str(p).strip()]
+        out = []
+        for part in base_parts:
+            token = str(part).strip()
+            if not token:
+                continue
+            if '/' in token or '／' in token:
+                sub_tokens = [s.strip() for s in re.split(r'[\/／]+', token) if s and s.strip()]
+                idx = 0
+                while idx < len(sub_tokens):
+                    current = sub_tokens[idx]
+                    next_token = sub_tokens[idx + 1] if idx + 1 < len(sub_tokens) else ''
+                    # Preserve A/B style skill tokens while still splitting normal slash lists.
+                    if re.fullmatch(r'(?i)a', current) and next_token and re.match(r'(?i)^b(?:$|[^a-z0-9].*)', next_token):
+                        out.append(f"A/{next_token}")
+                        idx += 2
+                        continue
+                    out.append(current)
+                    idx += 1
+                continue
+            out.append(token)
+        return out
     for ln in lines:
         compact_ln = re.sub(r'\s+', '', ln)
 
@@ -320,7 +346,7 @@ def extract_skills_from_resume_text(resume_text):
             if not inline_payload and ('：' in ln or ':' in ln):
                 inline_payload = re.split(r'[:：]', ln, maxsplit=1)[1].strip()
             if inline_payload:
-                parts = [p.strip() for p in split_items_re.split(inline_payload) if p.strip()]
+                parts = _split_skill_items(inline_payload)
                 collected.extend(parts)
             continue
 
@@ -332,7 +358,7 @@ def extract_skills_from_resume_text(resume_text):
             if not inline_payload and ('：' in ln or ':' in ln):
                 inline_payload = re.split(r'[:：]', ln, maxsplit=1)[1].strip()
             if inline_payload:
-                parts = [p.strip() for p in split_items_re.split(inline_payload) if p.strip()]
+                parts = _split_skill_items(inline_payload)
                 cert_collected.extend(parts)
             continue
 
@@ -342,12 +368,12 @@ def extract_skills_from_resume_text(resume_text):
             continue
 
         if in_skill_block:
-            parts = [p.strip() for p in split_items_re.split(ln) if p.strip()]
+            parts = _split_skill_items(ln)
             collected.extend(parts)
             continue
 
         if in_cert_block:
-            parts = [p.strip() for p in split_items_re.split(ln) if p.strip()]
+            parts = _split_skill_items(ln)
             cert_collected.extend(parts)
 
     collected.extend(cert_collected)
@@ -408,6 +434,30 @@ def extract_skills_from_resume_text(resume_text):
 
 
 def fill_skills_if_missing(parsed_data, resume_text, logger_obj=None):
+    def _remove_ab_fragments(tokens):
+        if not tokens:
+            return []
+        ab_suffixes = set()
+        for raw in tokens:
+            token = str(raw or '').strip()
+            m = re.match(r'(?i)^A\s*[\/／]\s*(B.*)$', token)
+            if m:
+                ab_suffixes.add(m.group(1).strip().lower())
+        if not ab_suffixes:
+            return [str(t or '').strip() for t in tokens if str(t or '').strip()]
+
+        cleaned = []
+        for raw in tokens:
+            token = str(raw or '').strip()
+            if not token:
+                continue
+            if re.fullmatch(r'(?i)A', token):
+                continue
+            if token.lower() in ab_suffixes:
+                continue
+            cleaned.append(token)
+        return cleaned
+
     strict_skills = extract_skills_from_resume_text(resume_text)
     existing_skills = _normalize_skill_candidates(parsed_data.get('skills') or [])
     if strict_skills:
@@ -422,9 +472,9 @@ def fill_skills_if_missing(parsed_data, resume_text, logger_obj=None):
                 continue
             seen.add(k)
             merged.append(v)
-        parsed_data['skills'] = merged
+        parsed_data['skills'] = _remove_ab_fragments(merged)
     else:
-        parsed_data['skills'] = existing_skills
+        parsed_data['skills'] = _remove_ab_fragments(existing_skills)
 
     if logger_obj:
         if strict_skills and parsed_data.get('skills'):
@@ -439,6 +489,83 @@ def fill_skills_if_missing(parsed_data, resume_text, logger_obj=None):
             )
         else:
             logger_obj.info("No skills recognized from resume text or parser output.")
+    return parsed_data
+
+
+def fill_profile_meta_if_missing(parsed_data, resume_text, logger_obj=None):
+    text = str(resume_text or '').strip()
+    if not text:
+        return parsed_data
+
+    personal = parsed_data.get('personalInfo') or {}
+    current_age = str(personal.get('age') or '').strip()
+    current_gender = str(parsed_data.get('gender') or '').strip().lower()
+
+    def _normalize_gender(value):
+        raw = str(value or '').strip().lower()
+        if not raw:
+            return ''
+        if raw in ('男', '男性', 'male', 'm', 'man', 'boy', '先生', '♂'):
+            return 'male'
+        if raw in ('女', '女性', 'female', 'f', 'woman', 'girl', '女士', '♀'):
+            return 'female'
+        if ('男' in raw and '女' not in raw) or re.search(r'\bmale\b', raw):
+            return 'male'
+        if ('女' in raw and '男' not in raw) or re.search(r'\bfemale\b', raw):
+            return 'female'
+        return ''
+
+    def _normalize_age(value):
+        raw = str(value or '').strip()
+        if not raw:
+            return ''
+        compact = re.sub(r'\s+', '', raw)
+        compact = re.sub(r'(周?岁|years?old|yrs?)', '', compact, flags=re.IGNORECASE)
+        m = re.search(r'(?<!\d)(\d{1,3})(?!\d)', compact)
+        if m:
+            age_num = int(m.group(1))
+            if 12 <= age_num <= 80:
+                return str(age_num)
+        return ''
+
+    extracted_gender = ''
+    extracted_age = ''
+
+    lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if str(ln).strip()]
+    probe_blob = '\n'.join(lines[:20]) if lines else text
+
+    gender_match = re.search(r'性别\s*[:：]?\s*(男|女|男性|女性|male|female)', probe_blob, flags=re.IGNORECASE)
+    if gender_match:
+        extracted_gender = _normalize_gender(gender_match.group(1))
+    else:
+        gender_token_match = re.search(r'(?<![\w\u4e00-\u9fa5])(男|女)(?![\w\u4e00-\u9fa5])', probe_blob)
+        if gender_token_match:
+            extracted_gender = _normalize_gender(gender_token_match.group(1))
+
+    age_match = re.search(r'年龄\s*[:：]?\s*(\d{1,3})', probe_blob)
+    if age_match:
+        extracted_age = _normalize_age(age_match.group(1))
+    else:
+        age_token_match = re.search(r'(?<!\d)(\d{1,3})\s*岁(?!\d)', probe_blob)
+        if age_token_match:
+            extracted_age = _normalize_age(age_token_match.group(1))
+
+    changed = False
+    if not current_gender and extracted_gender:
+        parsed_data['gender'] = extracted_gender
+        changed = True
+    if not current_age and extracted_age:
+        personal['age'] = extracted_age
+        parsed_data['personalInfo'] = personal
+        changed = True
+
+    if logger_obj:
+        logger_obj.info(
+            "Profile meta fallback extraction: gender=%s age=%s changed=%s",
+            parsed_data.get('gender') or '',
+            (parsed_data.get('personalInfo') or {}).get('age') or '',
+            changed
+        )
     return parsed_data
 
 

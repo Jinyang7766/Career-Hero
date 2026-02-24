@@ -61,10 +61,26 @@ const stripCategoryPrefix = (raw: string) => {
 };
 
 const splitSlashToken = (input: string) => {
-  const s = input.trim();
-  if (!s.includes('/')) return [s];
-  if (/^[A-Za-z]\s*\/\s*[A-Za-z]/.test(s)) return [s.replace(/\s*\/\s*/g, '/')];
-  return s.split('/').map((v) => v.trim()).filter(Boolean);
+  const s = stripEdge(stripCategoryPrefix(input));
+  if (!s) return [];
+  if (!s.includes('/') && !s.includes('／')) return [s];
+
+  const parts = s.split(/[\/／]+/).map((v) => stripEdge(v)).filter(Boolean);
+  const out: string[] = [];
+
+  for (let i = 0; i < parts.length; i += 1) {
+    const curr = parts[i];
+    const next = parts[i + 1];
+    // Preserve A/B style skills (A/B测试, A/B Test), but still split normal slash-separated lists.
+    if (/^a$/i.test(curr) && next && /^b(?:$|[^a-z0-9].*)/i.test(next)) {
+      out.push(`A/${next}`);
+      i += 1;
+      continue;
+    }
+    out.push(curr);
+  }
+
+  return out;
 };
 
 const normalizeCertificate = (token: string) => {
@@ -136,6 +152,24 @@ const canonicalKey = (token: string) => {
   if (t === 'LLM') return 'cat:llm';
   if (CERT_RE.test(t)) return `cat:cert:${normalizeCertificate(t).toLowerCase()}`;
   return t.toLowerCase().replace(/[\s，,；;（()）\[\]【】"'`]+/g, '');
+};
+
+const removeAbFragments = (tokens: string[]): string[] => {
+  if (!Array.isArray(tokens) || tokens.length === 0) return [];
+  const abSuffixes = new Set<string>();
+  tokens.forEach((raw) => {
+    const t = stripEdge(raw);
+    const m = t.match(/^A\s*[\/／]\s*(B.*)$/i);
+    if (m && m[1]) abSuffixes.add(stripEdge(m[1]).toLowerCase());
+  });
+  if (abSuffixes.size === 0) return tokens.map((x) => stripEdge(x)).filter(Boolean);
+  return tokens
+    .map((x) => stripEdge(x))
+    .filter(Boolean)
+    .filter((token) => {
+      if (/^A$/i.test(token)) return false;
+      return !abSuffixes.has(token.toLowerCase());
+    });
 };
 
 const SKILL_OBJECT_KEYS = [
@@ -221,7 +255,7 @@ export const toSkillList = (value: any): string[] => {
     seen.add(key);
     out.push(token);
   });
-  return out;
+  return removeAbFragments(out);
 };
 
 export const toSkillListForImport = (value: any): string[] => {
@@ -256,7 +290,7 @@ export const toSkillListForImport = (value: any): string[] => {
     seen.add(key);
     out.push(token);
   });
-  return out.slice(0, 40);
+  return removeAbFragments(out).slice(0, 40);
 };
 
 export const mergeSkills = (existing: any, incoming: any) => {

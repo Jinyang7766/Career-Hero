@@ -752,3 +752,74 @@ Use one block per executed step:
   - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
 - Risks/Notes:
   - 若 AI 原文中不存在明确年龄/性别信息，导入仍会保持为空，这是预期行为（不凭空补全）。
+
+## [2026-02-24 21:13] Re-test: 真实简历文本端到端复测“导入 -> 编辑页性别/年龄”
+- Agent: C + B-BE
+- Goal:
+  - 按用户要求，使用真实简历文本重跑“导入 -> 编辑页检查性别/年龄”端到端流程，确认修复是否真实生效。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/resume_parse_postprocess.py`
+    - 验证映射：`fill_profile_meta_if_missing(...)` 在解析缺失时从原文兜底提取 `gender/age`。
+  - `backend/services/resume_parse_service.py`
+    - 验证映射：`parse_resume_text_with_ai(...)` 末尾调用 profile-meta 兜底逻辑，确保 API 输出包含性别/年龄。
+- Commands:
+  - `Get-CimInstance Win32_Process ...` / `Get-NetTCPConnection -LocalPort 5000`
+  - `Stop-Process -Id 11176,14236 -Force`
+  - `Start-Process python app.py -WorkingDirectory g:\\AI_project\\Career-Hero\\backend`
+  - `python (requests) -> POST http://127.0.0.1:5000/api/ai/parse-resume`（同一份真实简历文本，带浏览器 UA/Origin）
+  - `python (Playwright) -> login -> dashboard 点击"新建简历" -> editor 导入文本 -> 检查性别/年龄`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - API 定向复测：PASS
+    - 返回 `data.gender = "male"`
+    - 返回 `data.personalInfo.age = "28"`
+  - 端到端复测（导入 -> 编辑页）：PASS
+    - 编辑页读取 `gender select value = "male"`
+    - 编辑页读取 `age input value = "28"`
+    - 证据截图：`output/playwright/e2e-import-gender-age-rerun.png`
+  - 本地基线测试：PASS
+    - frontend: `3 passed`
+    - backend: `1 passed`
+- Risks/Notes:
+  - 本次链路已通过同一份真实文本完成 API + UI 端到端闭环验证；若后续出现“不同简历格式未命中”案例，建议追加该样本做回归集。
+
+## [2026-02-24 21:26] Bugfix + Re-test: 技能栏多场景识别与导入端到端验证
+- Agent: B-BE + B-FE + C
+- Goal:
+  - 按用户要求补做“技能栏”同等级验证，确保在不同输入场景下都能正确识别并落地到编辑页。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/resume_parse_postprocess.py`
+    - 验证映射：技能分词兼容 `Python/SQL/A/B测试`；保留 `A/B测试`，并清理碎片 `A`、`B测试`。
+  - `backend/tests/test_resume_parse_postprocess_skills.py`
+    - 验证映射：后端技能提取/合并的多场景单测（显式技能区、证书区、无技能区回退、AB 碎片清理）。
+  - `ai-resume-builder/src/skill-utils.ts`
+    - 验证映射：导入技能解析与后端对齐，支持 `A/B` 技能保留并清理 AB 碎片。
+  - `ai-resume-builder/src/__tests__/skill-utils-import.test.ts`
+    - 验证映射：前端导入技能解析多场景单测（嵌套结构、斜杠分隔、证书与 LLM 归一化、AB 碎片清理）。
+- Changes:
+  - 后端：
+    - `extract_skills_from_resume_text` 新增 slash 分词规则：普通斜杠拆分，`A/B*` 保留为单技能。
+    - `fill_skills_if_missing` 新增 `_remove_ab_fragments`，当存在 `A/B*` 时去掉 `A` 与对应 `B*` 碎片。
+  - 前端：
+    - `splitSlashToken` 改为先去前缀再按斜杠分词，保留 `A/B*`。
+    - 新增 `removeAbFragments`，导入技能输出去除 AB 碎片。
+- Commands:
+  - `python -m pytest backend/tests/test_resume_parse_postprocess_skills.py -q`
+  - `npm --prefix ai-resume-builder run -s test -- skill-utils-import.test.ts`
+  - `python (requests) -> POST http://127.0.0.1:5000/api/ai/parse-resume`（两组技能样本）
+  - `python (Playwright) -> login -> 新建简历 -> 导入文本 -> 跳转专业技能步骤 -> 读取技能标签`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 后端单测：PASS（`5 passed`）。
+  - 前端单测：PASS（`4 passed`）。
+  - API 样本复测：PASS
+    - `["Python","SQL","A/B测试","PowerBI","PMP","CET-6"]`
+    - `["Python","SQL","Tableau","A/B测试"]`
+    - 均无 `A`/`B测试` 碎片。
+  - 端到端导入复测：PASS
+    - 编辑页技能标签：`["CET-6","PMP认证","PowerBI","A/B测试","SQL","Python"]`
+    - 无 `A`/`B测试` 碎片。
+    - 证据截图：`output/playwright/e2e-import-skills-rerun.png`
+  - 本地基线测试：PASS（frontend `7 passed`，backend `6 passed`）。
+- Risks/Notes:
+  - 当前 AB 规则按 `A/B*` 清洗；如未来出现其他带斜杠成对技能（例如 `B/C`）需按同样模式扩展。
