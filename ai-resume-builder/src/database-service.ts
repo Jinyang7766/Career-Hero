@@ -19,6 +19,24 @@ export class DatabaseService {
     return String(id ?? '').trim();
   }
 
+  private static stripLocationFromResumeData(resumeData: any) {
+    return resumeData;
+  }
+
+  private static sanitizeResumeRecord(record: any) {
+    if (!record || typeof record !== 'object') return record;
+    if (!record.resume_data || typeof record.resume_data !== 'object') return record;
+    return {
+      ...record,
+      resume_data: DatabaseService.stripLocationFromResumeData(record.resume_data),
+    };
+  }
+
+  private static sanitizeResumeRecords(records: any[] | null | undefined) {
+    if (!Array.isArray(records)) return [];
+    return records.map((record) => DatabaseService.sanitizeResumeRecord(record));
+  }
+
   private static isNoRowsError(error: any) {
     const code = String(error?.code || '').trim().toUpperCase();
     const msg = String(error?.message || '').toLowerCase();
@@ -55,7 +73,7 @@ export class DatabaseService {
     }
 
     if (!filtered.error) {
-      return { success: true, data: filtered.data, error: null as any };
+      return { success: true, data: DatabaseService.sanitizeResumeRecord(filtered.data), error: null as any };
     }
 
     // Fallback for environments where JSON path filter is unavailable.
@@ -77,7 +95,7 @@ export class DatabaseService {
       return status === 'optimized' && fromId === normalizedOriginalId && jdMatches;
     }) || null;
 
-    return { success: true, data: hit, error: null as any };
+    return { success: true, data: DatabaseService.sanitizeResumeRecord(hit), error: null as any };
   }
 
   // 创建用户记录
@@ -128,9 +146,10 @@ export class DatabaseService {
         return { success: false, error: new Error('简历数据为空'), data: null };
       }
 
-      const optimizationStatus = String(resumeData?.optimizationStatus || '').trim().toLowerCase();
-      const optimizedFromId = DatabaseService.normalizeResumeId(resumeData?.optimizedFromId);
-      const optimizationJdKey = String(resumeData?.optimizationJdKey ?? '').trim();
+      const sanitizedResumeData = DatabaseService.stripLocationFromResumeData(resumeData);
+      const optimizationStatus = String(sanitizedResumeData?.optimizationStatus || '').trim().toLowerCase();
+      const optimizedFromId = DatabaseService.normalizeResumeId(sanitizedResumeData?.optimizedFromId);
+      const optimizationJdKey = String(sanitizedResumeData?.optimizationJdKey ?? '').trim();
       if (optimizationStatus === 'optimized' && optimizedFromId) {
         const existing = await DatabaseService.findExistingOptimizedResume(userId, optimizedFromId, optimizationJdKey);
         if (!existing.success) {
@@ -146,12 +165,12 @@ export class DatabaseService {
           const overwritePayload = touchUpdatedAt
             ? {
                 title,
-                resume_data: resumeData,
+                resume_data: sanitizedResumeData,
                 updated_at: new Date().toISOString(),
               }
             : {
                 title,
-                resume_data: resumeData,
+                resume_data: sanitizedResumeData,
               };
           const { data: updated, error: updateError } = await supabase
             .from('resumes')
@@ -173,7 +192,7 @@ export class DatabaseService {
         .insert({
           user_id: userId,
           title: title,
-          resume_data: resumeData,
+          resume_data: sanitizedResumeData,
           score: 0,
           has_dot: false,
           created_at: new Date().toISOString(),
@@ -205,13 +224,13 @@ export class DatabaseService {
           .limit(1)
           .maybeSingle();
         if (!fallback.error && fallback.data) {
-          return { success: true, data: fallback.data };
+          return { success: true, data: DatabaseService.sanitizeResumeRecord(fallback.data) };
         }
         return { success: false, error: { code: 'RESUME_CREATE_EMPTY', message: '创建后未返回简历数据' }, data: null };
       }
 
       console.log('✅ Resume created successfully:', data);
-      return { success: true, data };
+      return { success: true, data: DatabaseService.sanitizeResumeRecord(data) };
     } catch (err) {
       console.error('❌ Database operation failed:', err);
       return { success: false, error: err, data: null };
@@ -256,7 +275,7 @@ export class DatabaseService {
         })) || []
       });
 
-      return { success: true, data: data || [] };
+      return { success: true, data: DatabaseService.sanitizeResumeRecords(data) };
     } catch (err) {
       console.error('❌ Database operation failed:', err);
       return { success: false, error: err, data: [] };
@@ -292,7 +311,7 @@ export class DatabaseService {
         return { success: false, error, data: [] as any[] };
       }
 
-      const normalized = (data || []).map((row: any) => {
+      const normalized = DatabaseService.sanitizeResumeRecords(data).map((row: any) => {
         if (row && row.exportHistory !== undefined) return row;
         return { ...row, exportHistory: row?.resume_data?.exportHistory || [] };
       });
@@ -324,7 +343,7 @@ export class DatabaseService {
         return { success: false, error: null, data: null };
       }
 
-      return { success: true, data };
+      return { success: true, data: DatabaseService.sanitizeResumeRecord(data) };
     } catch (err) {
       console.error('Database operation failed:', err);
       return { success: false, error: err, data: null };
@@ -339,9 +358,13 @@ export class DatabaseService {
   ) {
     try {
       const touchUpdatedAt = options?.touchUpdatedAt !== false;
+      const nextUpdates = updates && typeof updates === 'object' ? { ...updates } : updates;
+      if (nextUpdates?.resume_data && typeof nextUpdates.resume_data === 'object') {
+        nextUpdates.resume_data = DatabaseService.stripLocationFromResumeData(nextUpdates.resume_data);
+      }
       const payload = touchUpdatedAt
-        ? { ...updates, updated_at: new Date().toISOString() }
-        : { ...updates };
+        ? { ...nextUpdates, updated_at: new Date().toISOString() }
+        : { ...nextUpdates };
       const { data, error } = await supabase
         .from('resumes')
         .update(payload)
@@ -363,7 +386,7 @@ export class DatabaseService {
         return { success: false, error: notFoundError, data: null };
       }
 
-      return { success: true, data };
+      return { success: true, data: DatabaseService.sanitizeResumeRecord(data) };
     } catch (err) {
       console.error('Database operation failed:', err);
       return { success: false, error: err, data: null };

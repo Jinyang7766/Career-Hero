@@ -77,6 +77,19 @@ const resolveExplicitGenderLabel = (value: any): string => {
   return '';
 };
 
+const resolvePersonalMetaItems = (data: ResumeData): string[] => {
+  const personal = data?.personalInfo || {};
+  const genderAge = [resolveExplicitGenderLabel((data as any)?.gender), personal?.age ? `${personal.age}岁` : '']
+    .filter(Boolean)
+    .join(' · ');
+  const location = String(personal?.location || '').trim();
+  const email = String(personal?.email || '').trim() || 'email@example.com';
+  const phone = String(personal?.phone || '').trim() || '+86 138 0000 0000';
+  const linkedin = String(personal?.linkedin || '').trim();
+  const website = String(personal?.website || '').trim();
+  return [genderAge, location, email, phone, linkedin, website].filter(Boolean);
+};
+
 const resolveSkillsList = (raw: any): string[] => {
   if (Array.isArray(raw)) {
     return raw.map((item) => String(item || '').trim()).filter(Boolean);
@@ -147,15 +160,12 @@ const ModernTemplate: React.FC<{
         <h1 className="text-xl font-bold text-gray-900" style={{ fontSize: '18px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
         <p className="text-sm text-gray-600" style={{ fontSize: '14px', color: '#666' }}>{resolveJobTitle(data)}</p>
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
-          {(resolveExplicitGenderLabel(data?.gender) || data?.personalInfo?.age) && (
-            <>
-              <span>{[resolveExplicitGenderLabel(data?.gender), data.personalInfo.age ? `${data.personalInfo.age}岁` : ''].filter(Boolean).join(' · ')}</span>
-              <span>•</span>
-            </>
-          )}
-          <span>{data?.personalInfo?.email || 'email@example.com'}</span>
-          <span>•</span>
-          <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+          {resolvePersonalMetaItems(data).map((item, idx, arr) => (
+            <React.Fragment key={`${item}-${idx}`}>
+              <span>{item}</span>
+              {idx < arr.length - 1 ? <span>•</span> : null}
+            </React.Fragment>
+          ))}
         </div>
       </div>
     </div>
@@ -181,9 +191,9 @@ const ModernTemplate: React.FC<{
             </div>
             {data.workExps.map((exp: any) => (
               <div key={exp.id} className="mb-2 no-break">
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(exp)}</span>
-                  <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(exp) || '工作时间'}</span>
+                <div className="flex items-start gap-3 mb-1">
+                  <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(exp)}</span>
+                  <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(exp) || '工作时间'}</span>
                 </div>
                 <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(exp) || '职位'}</p>
                 <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{exp.description || '工作描述'}</p>
@@ -200,9 +210,9 @@ const ModernTemplate: React.FC<{
               <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
             </div>
             {data.educations.map((edu: any) => (
-              <div key={edu.id} className="flex justify-between items-baseline mb-1 no-break">
-                <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(edu)}</span>
-                <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(edu) || '教育时间'}</span>
+              <div key={edu.id} className="flex items-start gap-3 mb-1 no-break">
+                <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(edu)}</span>
+                <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(edu) || '教育时间'}</span>
               </div>
             ))}
             <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{resolveExperienceSubtitle(data.educations[0])}</p>
@@ -218,9 +228,9 @@ const ModernTemplate: React.FC<{
             </div>
             {data.projects.map((proj: any) => (
               <div key={proj.id} className="mb-2 no-break">
-                <div className="flex justify-between items-baseline mb-1">
-                  <span className="text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(proj)}</span>
-                  <span className="text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(proj) || '项目时间'}</span>
+                <div className="flex items-start gap-3 mb-1">
+                  <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(proj)}</span>
+                  <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(proj) || '项目时间'}</span>
                 </div>
                 <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
                 <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{proj.description || '项目描述'}</p>
@@ -255,9 +265,13 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
       </div>
       <h1 className="text-2xl font-bold text-black uppercase tracking-wider mb-2">{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-base text-gray-800 font-serif italic mb-2">{resolveJobTitle(data)}</p>
-      <div className="flex justify-center gap-4 text-xs text-gray-600">
-        <span>{data?.personalInfo?.email || 'email@example.com'}</span>
-        <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+      <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+        {resolvePersonalMetaItems(data).map((item, idx, arr) => (
+          <React.Fragment key={`${item}-${idx}`}>
+            <span>{item}</span>
+            {idx < arr.length - 1 ? <span className="text-gray-400">•</span> : null}
+          </React.Fragment>
+        ))}
       </div>
     </div>
     {sectionOrder.map((section, orderIndex) => {
@@ -278,9 +292,9 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
           </div>
           {data.workExps.map((exp: any) => (
             <div key={exp.id} className="mb-4 no-break pl-2">
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-bold text-black">{resolveExperienceTitle(exp)}</span>
-                <span className="text-xs text-gray-600 italic">{formatDateRange(exp) || '工作时间'}</span>
+              <div className="flex items-start gap-3 mb-1">
+                <span className="flex-1 min-w-0 break-words text-sm font-bold text-black">{resolveExperienceTitle(exp)}</span>
+                <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(exp) || '工作时间'}</span>
               </div>
               <p className="text-xs font-bold text-gray-800 mb-1">{resolveExperienceSubtitle(exp) || '职位'}</p>
               <p className="text-xs text-gray-700 leading-relaxed text-justify">{exp.description || '工作描述'}</p>
@@ -295,12 +309,12 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
             <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
           </div>
           {data.educations.map((edu: any) => (
-            <div key={edu.id} className="flex justify-between items-baseline mb-2 no-break pl-2">
-              <div>
-                <span className="text-sm font-bold text-black block">{resolveExperienceTitle(edu)}</span>
+            <div key={edu.id} className="flex items-start gap-3 mb-2 no-break pl-2">
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-bold text-black block break-words">{resolveExperienceTitle(edu)}</span>
                 <span className="text-xs text-gray-800">{resolveExperienceSubtitle(edu)}</span>
               </div>
-              <span className="text-xs text-gray-600 italic">{formatDateRange(edu) || '教育时间'}</span>
+              <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(edu) || '教育时间'}</span>
             </div>
           ))}
         </div>
@@ -313,9 +327,9 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
           </div>
           {data.projects.map((proj: any) => (
             <div key={proj.id} className="mb-4 no-break pl-2">
-              <div className="flex justify-between items-baseline mb-1">
-                <span className="text-sm font-bold text-black">{resolveExperienceTitle(proj)}</span>
-                <span className="text-xs text-gray-600 italic">{formatDateRange(proj) || '项目时间'}</span>
+              <div className="flex items-start gap-3 mb-1">
+                <span className="flex-1 min-w-0 break-words text-sm font-bold text-black">{resolveExperienceTitle(proj)}</span>
+                <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(proj) || '项目时间'}</span>
               </div>
               <p className="text-xs font-bold text-gray-800 mb-1">{resolveExperienceSubtitle(proj) || '项目角色'}</p>
               <p className="text-xs text-gray-700 leading-relaxed text-justify">{proj.description || '项目描述'}</p>
@@ -350,8 +364,9 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
       <h1 className="text-4xl font-black text-black tracking-tight mb-2">{data?.personalInfo?.name || '姓名'}</h1>
       <p className="text-lg text-gray-500 font-light mb-4">{resolveJobTitle(data)}</p>
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono">
-        <span>{data?.personalInfo?.email || 'email@example.com'}</span>
-        <span>{data?.personalInfo?.phone || '+86 138 0000 0000'}</span>
+        {resolvePersonalMetaItems(data).map((item, idx) => (
+          <span key={`${item}-${idx}`}>{item}</span>
+        ))}
       </div>
     </div>
     <div className="flex flex-col gap-8">
@@ -359,8 +374,8 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         if (section === 'summary' && resolveSummaryText(data)) {
           return (
             <section key={section} className="mb-6 no-break">
-              <div className="flex items-center justify-between mb-2">
-                <h3 className="text-[10px] font-bold text-gray-400 uppercase tracking-[2px]">个人总结</h3>
+              <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
+                <h3 className="text-sm font-bold text-black uppercase tracking-widest">个人总结</h3>
                 <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
               </div>
               <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resolveSummaryText(data)}</p>
@@ -377,9 +392,9 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               <div className="space-y-6">
                 {data.workExps.map((exp: any) => (
                   <div key={exp.id}>
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h4 className="font-bold text-black">{resolveExperienceTitle(exp)}</h4>
-                      <span className="text-sm text-gray-600 font-mono">{formatDateRange(exp)}</span>
+                    <div className="flex items-start gap-3 mb-1">
+                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(exp)}</h4>
+                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(exp)}</span>
                     </div>
                     <p className="text-sm text-gray-700 mb-2 font-medium italic">{resolveExperienceSubtitle(exp)}</p>
                     <p className="text-sm text-gray-800 leading-relaxed text-justify">{exp.description}</p>
@@ -399,9 +414,9 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               <div className="space-y-4">
                 {data.educations.map((edu: any) => (
                   <div key={edu.id}>
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h4 className="font-bold text-black">{resolveExperienceTitle(edu)}</h4>
-                      <span className="text-sm text-gray-600 font-mono">{formatDateRange(edu)}</span>
+                    <div className="flex items-start gap-3 mb-1">
+                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(edu)}</h4>
+                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(edu)}</span>
                     </div>
                     <p className="text-sm text-gray-700 italic">{resolveExperienceSubtitle(edu)}</p>
                   </div>
@@ -420,9 +435,9 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               <div className="space-y-6">
                 {data.projects.map((proj: any) => (
                   <div key={proj.id}>
-                    <div className="flex justify-between items-baseline mb-1">
-                      <h4 className="font-bold text-black">{resolveExperienceTitle(proj)}</h4>
-                      <span className="text-sm text-gray-600 font-mono">{formatDateRange(proj)}</span>
+                    <div className="flex items-start gap-3 mb-1">
+                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(proj)}</h4>
+                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(proj)}</span>
                     </div>
                     <p className="text-sm text-gray-700 mb-2 font-medium italic">{resolveExperienceSubtitle(proj)}</p>
                     <p className="text-sm text-gray-800 leading-relaxed text-justify">{proj.description}</p>
@@ -476,4 +491,3 @@ export const renderPreviewTemplate = ({
       return <ModernTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} />;
   }
 };
-

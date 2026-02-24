@@ -208,8 +208,10 @@ export const useEditorImportFlow = ({
           title: importedData.personalInfo.title || prev.personalInfo.title,
           email: importedData.personalInfo.email || prev.personalInfo.email,
           phone: importedData.personalInfo.phone || prev.personalInfo.phone,
-          avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           location: importedData.personalInfo.location || prev.personalInfo.location,
+          linkedin: importedData.personalInfo.linkedin || prev.personalInfo.linkedin,
+          website: importedData.personalInfo.website || prev.personalInfo.website,
+          avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           age: importedData.personalInfo.age || prev.personalInfo.age,
           summary: importedSummary || prev.personalInfo.summary
         };

@@ -26,4 +26,5 @@ except ImportError:
     from backend.app_monolith import app, PORT
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=PORT)
+    # Keep local dev server stable for long-running requests (e.g. PDF export via Playwright).
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)

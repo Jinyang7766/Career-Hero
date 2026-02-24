@@ -99,4 +99,3 @@ export const usePreviewPdfExport = ({ resumeData }: Params) => {
     handleExportPDF,
   };
 };
-

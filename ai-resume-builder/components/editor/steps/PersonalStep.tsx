@@ -186,6 +186,43 @@ const PersonalStep: React.FC<PersonalStepProps> = ({ resumeData, isComplete, onI
             )}
           </div>
         </div>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">所在城市</label>
+            <input
+              className="w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary text-slate-900 dark:text-white shadow-sm"
+              type="text"
+              value={resumeData.personalInfo.location || ''}
+              onChange={(e) => onInfoChange('location', e.target.value)}
+              maxLength={PERSONAL_FIELD_LIMITS.location}
+              placeholder="如：上海"
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">LinkedIn</label>
+            <input
+              className="w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary text-slate-900 dark:text-white shadow-sm"
+              type="text"
+              value={resumeData.personalInfo.linkedin || ''}
+              onChange={(e) => onInfoChange('linkedin', e.target.value)}
+              maxLength={PERSONAL_FIELD_LIMITS.linkedin}
+              placeholder="linkedin.com/in/..."
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">个人网址</label>
+          <input
+            className="w-full rounded-lg bg-white dark:bg-[#111a22] border px-4 py-3 outline-none transition-all focus:ring-2 border-slate-300 dark:border-[#324d67] focus:ring-primary/50 focus:border-primary text-slate-900 dark:text-white shadow-sm"
+            type="text"
+            value={resumeData.personalInfo.website || ''}
+            onChange={(e) => onInfoChange('website', e.target.value)}
+            maxLength={PERSONAL_FIELD_LIMITS.website}
+            placeholder="https://your-portfolio.com"
+          />
+        </div>
       </div>
     </div>
   </details>

@@ -96,7 +96,7 @@ export const clearResumeCurrentStep = (
   switch (currentStep) {
     case 'personal':
       next.personalInfo = {
-        name: '', title: '', email: '', phone: '', avatar: '', location: '', age: '', summary: resumeData.personalInfo.summary
+        name: '', title: '', email: '', phone: '', location: '', linkedin: '', website: '', avatar: '', age: '', summary: resumeData.personalInfo.summary
       };
       next.gender = '';
       break;
@@ -122,7 +122,7 @@ export const clearResumeCurrentStep = (
 export const clearResumeAllData = (resumeData: ResumeData): ResumeData => ({
   id: resumeData.id,
   resumeTitle: resumeData.resumeTitle,
-  personalInfo: { name: '', title: '', email: '', phone: '' },
+  personalInfo: { name: '', title: '', email: '', phone: '', location: '', linkedin: '', website: '' },
   workExps: [],
   educations: [],
   projects: [],
@@ -130,4 +130,3 @@ export const clearResumeAllData = (resumeData: ResumeData): ResumeData => ({
   summary: '',
   gender: '',
 });
-

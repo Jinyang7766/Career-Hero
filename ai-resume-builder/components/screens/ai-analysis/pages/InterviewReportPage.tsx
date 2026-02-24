@@ -38,6 +38,65 @@ const getScoreDotClass = (score: number) => {
   return 'bg-orange-500';
 };
 
+const normalizeTextKey = (input: string) =>
+  String(input || '')
+    .replace(/[“”"'`（）()【】\[\]\s，,。！？!?；;：:、\-—]/g, '')
+    .toLowerCase()
+    .trim();
+
+const dedupeRepeatedSentences = (input: string) => {
+  const source = String(input || '').replace(/\s+/g, ' ').trim();
+  if (!source) return '';
+  const sentences = source
+    .split(/(?<=[。！？!?；;])/u)
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+  if (sentences.length <= 1) return source;
+
+  const kept: string[] = [];
+  const seen = new Set<string>();
+  for (const sentence of sentences) {
+    const key = normalizeTextKey(sentence);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    kept.push(sentence);
+  }
+  return kept.join('').trim();
+};
+
+const isPlaceholderHighlight = (input: string) => {
+  const key = normalizeTextKey(input);
+  if (!key) return true;
+  return new Set([
+    '无',
+    '暂无',
+    '暂无亮点',
+    '暂无明显亮点',
+    '无明显亮点',
+    '无表现亮点',
+    'none',
+    'na',
+    'n/a',
+    '未提及',
+    '未提供',
+  ]).has(key);
+};
+
+const sanitizeHighlightItems = (items: string[]) => {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of items || []) {
+    const deduped = dedupeRepeatedSentences(raw);
+    const text = String(deduped || '').trim();
+    if (!text || isPlaceholderHighlight(text)) continue;
+    const key = normalizeTextKey(text);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(text);
+  }
+  return result;
+};
+
 const ReportIcon: React.FC<{ name: ReportIconName; className?: string }> = ({ name, className = 'size-5' }) => {
   const common = `shrink-0 ${className}`;
   if (name === 'analytics') {
@@ -129,7 +188,10 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
     () => parseScoreFromText(String(summary || '').trim()),
     [summary]
   );
-  const highlightItems = React.useMemo(() => splitModuleItems(parsedSections.highlights), [parsedSections.highlights]);
+  const highlightItems = React.useMemo(
+    () => sanitizeHighlightItems(splitModuleItems(parsedSections.highlights)),
+    [parsedSections.highlights]
+  );
   const improvementItems = React.useMemo(() => {
     const fromSummary = splitImprovementItems(parsedSections.improvements);
     if (fromSummary.length > 0) return fromSummary;

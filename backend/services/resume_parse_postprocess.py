@@ -372,4 +372,3 @@ def filter_unverifiable_entities(parsed_data, resume_text):
     parsed_data['workExps'] = work_exps
     parsed_data['educations'] = educations
     return parsed_data
-

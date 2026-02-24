@@ -1174,3 +1174,209 @@ Use one block per executed step:
   - online smoke (无界面模式): frontend health, backend templates, CORS preflight passed.
 - Risks/Notes:
   - 本地仍可见与该问题并行的既有控制台告警（如 favicon 404 / 路由 future flags）；不影响本次行为断言。
+## [2026-02-24 14:43] Fix: 本地 PDF 导出失败（Flask 热重载中断请求）
+- Agent: A + B-BE + C + D
+- Goal:
+  - 修复本地 `POST /api/export-pdf` 失败（前端提示导出失败）。
+- Root Cause:
+  - 本地后端以 Flask dev reloader 模式运行，导出 PDF（Playwright）期间触发文件监控重载，导致进行中的 HTTP 连接被中断。
+  - 证据见错误日志：`Detected change in ... playwright ... reloading`（历史日志文件）。
+- Changes:
+  - `backend/app.py`:
+    - `app.run(...)` 改为 `debug=False, use_reloader=False`。
+  - `backend/app_monolith.py`:
+    - `app.run(...)` 改为 `debug=False, use_reloader=False`。
+  - backups refreshed:
+    - `backup/backend/app.py`
+    - `backup/backend/app_monolith.py`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `Invoke-WebRequest http://localhost:5000/api/templates`
+  - `Invoke-WebRequest POST http://localhost:5000/api/export-pdf`（最小 payload）
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - 本地导出接口恢复：`/api/export-pdf` 返回 `200`，`Content-Type=application/pdf`，`X-PDF-Export-Patch=pdf-export-dev`，响应长度非 0（实测 7280 bytes）。
+  - 本地日志确认无 reloader 重启，导出链路完整执行并返回 `200`。
+  - step gate 通过：local tests 全绿（frontend 3/3, backend 1/1）+ online smoke 全绿。
+- Risks/Notes:
+  - 该修复作用于 `python backend/app.py` / `python backend/app_monolith.py` 本地运行入口；生产环境如由 WSGI 托管不受影响。
+## [2026-02-24 15:00] Refactor: 全链路移除 personalInfo.location 字段（导出/解析/存储/诊断）
+- Agent: A + B-FE + B-BE + C + D
+- Goal:
+  - 按需求删除简历 `personalInfo.location` 字段，避免在导出与诊断等流程继续出现。
+- Changes:
+  - Frontend data model & editor:
+    - `ai-resume-builder/types.ts`: 删除 `PersonalInfo.location` 类型定义。
+    - `ai-resume-builder/src/app-store.ts`: 默认简历数据移除 `location`，并在 `setResumeData` 统一剥离残留 `location`。
+    - `ai-resume-builder/src/editor-field-limits.ts`: 删除 `location` 限制。
+    - `ai-resume-builder/components/editor/editor-actions.ts`: 清空个人信息时不再写 `location`。
+    - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`: 导入合并时不再回填 `location`。
+  - Frontend runtime + API payload guard:
+    - `ai-resume-builder/src/database-service.ts`: 读写 `resume_data` 统一清理 `personalInfo.location`（create/get/list/update）。
+    - `ai-resume-builder/components/screens/ai-analysis/analysis-api.ts`: 发送分析请求前剥离 `location`。
+    - `ai-resume-builder/components/screens/preview/hooks/usePreviewPdfExport.ts`: 导出 payload 清理字段新增 `location`。
+    - `ai-resume-builder/components/screens/ai-analysis/suggestion-helpers.ts`: 个人信息字段推断中移除 `location`。
+  - Backend sanitization / parse / generation / export:
+    - `backend/services/payload_sanitizer.py`: `clean_resume_payload` 不再保留 `personalInfo.location`。
+    - `backend/services/resume_parse_postprocess.py`: 解析结果不再产出 `location`。
+    - `backend/services/resume_parse_service.py`: 解析提示词 JSON 模板移除 `location`。
+    - `backend/services/resume_generation_service.py`: 优化生成链路移除/清理 `location`（包含提示词约束与最终输出兜底剥离）。
+    - `backend/services/pdf_service.py`: PDF 上下文与模板头部移除 `location` 展示。
+- Backups:
+  - `backup/ai-resume-builder/types.ts`
+  - `backup/ai-resume-builder/src/app-store.ts`
+  - `backup/ai-resume-builder/src/editor-field-limits.ts`
+  - `backup/ai-resume-builder/src/database-service.ts`
+  - `backup/ai-resume-builder/components/editor/editor-actions.ts`
+  - `backup/ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+  - `backup/ai-resume-builder/components/screens/ai-analysis/analysis-api.ts`
+  - `backup/ai-resume-builder/components/screens/ai-analysis/suggestion-helpers.ts`
+  - `backup/ai-resume-builder/components/screens/preview/hooks/usePreviewPdfExport.ts`
+  - `backup/backend/services/payload_sanitizer.py`
+  - `backup/backend/services/pdf_service.py`
+  - `backup/backend/services/resume_parse_postprocess.py`
+  - `backup/backend/services/resume_parse_service.py`
+  - `backup/backend/services/resume_generation_service.py`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+  - `npm --prefix ai-resume-builder run -s build`
+  - `Invoke-WebRequest POST http://localhost:5000/api/export-pdf`（本地导出回归）
+  - Python 快速校验：`clean_resume_payload` / `normalize_parsed_resume_result` 均不再输出 `location`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿。
+  - 前端生产构建成功（Vite build passed）。
+  - 本地导出 PDF 成功：`/api/export-pdf` 返回 `200` + `application/pdf`。
+  - 后端关键函数验证：清洗与解析结果 `personalInfo` 中不再包含 `location`。
+- Risks/Notes:
+  - 旧历史数据中若仍存 `location`，本次已在前端 store/database-service 与导出/分析入口做剥离，避免继续在主流程传播。
+## [2026-02-24 15:00] Fix: 面试报告“表现亮点”去重，避免出现“无。无。”
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复面试报告页亮点文本重复（如 `无。无。`）的问题，保证不重复出现占位内容。
+- Root Cause:
+  - `InterviewReportPage` 直接渲染 `splitModuleItems(parsedSections.highlights)` 结果，未对重复句与占位文本（无/暂无）做过滤。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/InterviewReportPage.tsx`:
+    - 新增 `normalizeTextKey`：文本归一化用于判重。
+    - 新增 `dedupeRepeatedSentences`：单条亮点内部句子去重（`无。无。` -> `无。`）。
+    - 新增 `isPlaceholderHighlight`：识别占位亮点（`无` / `暂无` / `无明显亮点` 等）。
+    - 新增 `sanitizeHighlightItems`：列表级去重 + 占位过滤。
+    - `highlightItems` 改为走 `sanitizeHighlightItems(...)`。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/ai-analysis/pages/InterviewReportPage.tsx`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿。
+- Risks/Notes:
+  - 若 AI 确实未产出有效亮点，亮点模块会被隐藏（不再展示“无”类占位条目）。
+## [2026-02-24 15:02] Fix: 预览页时间列右对齐，长公司名不再挤压时间
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复预览页工作/教育/项目模块中，时间显示被长公司名挤压换行、未稳定靠右的问题。
+- Root Cause:
+  - 标题与时间使用同一行 `justify-between`，但未给时间列保留固定宽度；长标题会挤压时间区域，导致时间折行或错位。
+- Changes:
+  - `ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`:
+    - Modern / Classic / Minimal 三套模板中，工作经历、教育背景、项目经历的标题行统一改为“左内容 + 右时间列”布局。
+    - 左侧标题区域：`flex-1 min-w-0 break-words`，允许合理换行。
+    - 右侧时间区域：`shrink-0 + min-w[...] + text-right + whitespace-nowrap`，确保始终靠右且不被挤压。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿。
+- Risks/Notes:
+  - 此改动仅影响预览页面排版，不改动后端 PDF 模板；若你希望 PDF 导出也采用相同列宽策略，可在下一步同步到 `backend/services/pdf_service.py`。
+## [2026-02-24 15:04] Fix: 简约白黑模板“个人总结”标题样式对齐
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复 `简约白黑` 预览模板中“个人总结”标题样式与其它标题（工作经历/教育背景/项目经历）不一致的问题。
+- Root Cause:
+  - `MinimalTemplate` 的 summary 区块标题使用了单独的小号灰字样式，未复用该模板统一的 section 标题风格。
+- Changes:
+  - `ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`:
+    - `summary` 区块标题容器改为 `border-b border-black pb-2 mb-4`。
+    - 标题文本改为 `text-sm font-bold text-black uppercase tracking-widest`，与同模板其它模块一致。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿。
+- Risks/Notes:
+  - 本次仅调整样式，不改动数据与交互逻辑。
+## [2026-02-24 15:06] Fix: 经典/简约白黑模板头部补齐个人信息字段展示
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复 `经典` 与 `简约白黑` 模板头部仅显示邮箱/电话，导致其它个人信息字段不出现的问题。
+- Root Cause:
+  - `PreviewTemplates.tsx` 中 ClassicTemplate / MinimalTemplate 头部硬编码仅渲染 email + phone。
+- Changes:
+  - `ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`:
+    - 新增 `resolvePersonalMetaItems(data)`：统一组装头部个人信息项（性别+年龄、邮箱、电话、linkedin、website）。
+    - `ClassicTemplate` 头部改为按该列表渲染（自动分隔点）。
+    - `MinimalTemplate` 头部改为按该列表逐行渲染。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿。
+- Risks/Notes:
+  - 本次仅影响预览模板头部信息展示，不改变简历数据结构与保存逻辑。
+## [2026-02-24 15:21] Restore: location/linkedin/website 改为可选字段（编辑/预览/导出按需显示）
+- Agent: A + B-FE + B-BE + C + D
+- Goal:
+  - 按最新需求撤销 `location` 强清洗，并将 `location/linkedin/website` 作为可选个人信息字段：
+  - 编辑页可填写；预览与导出仅在有值时显示；空值不显示。
+- Changes:
+  - 前端数据与编辑流程（已落地）：
+    - `ai-resume-builder/src/app-store.ts`：保留 personalInfo 三字段默认值，取消 location 实质剥离（函数为 no-op）。
+    - `ai-resume-builder/src/database-service.ts`：读写 resume_data 的清洗流程保留，但 location 剥离为 no-op。
+    - `ai-resume-builder/components/editor/steps/PersonalStep.tsx`：新增“所在城市（可选）/LinkedIn（可选）/个人网址（可选）”输入项。
+    - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`：导入时合并三字段。
+    - `ai-resume-builder/components/editor/editor-actions.ts`：清空当前步骤/全量清空时包含三字段。
+    - `ai-resume-builder/components/screens/preview/PreviewTemplates.tsx`：三套模板头部统一按动态 personal meta 渲染，空值不展示。
+    - `ai-resume-builder/components/screens/preview/hooks/usePreviewPdfExport.ts`：导出 payload 不再移除 location。
+  - 后端清洗与导出链路（当前代码状态已生效）：
+    - `backend/services/payload_sanitizer.py`：保留 `location/linkedin/website` 清洗入库。
+    - `backend/services/pdf_service.py`：模板仅在字段有值时展示。
+    - `backend/services/resume_parse_service.py` + `backend/services/resume_parse_postprocess.py`：解析链路可提取/输出 location。
+- Backups:
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - `npm --prefix ai-resume-builder run -s build`
+  - `Invoke-WebRequest POST http://localhost:5000/api/export-pdf`（包含 location/linkedin/website 的本地导出探测）
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
+  - 前端构建通过（Vite build passed）。
+  - 本地 PDF 导出接口返回 `200`（payload 含 location/linkedin/website）。
+  - 全局检索确认：无 location 强制删除路径；预览/导出模板均为“有值显示、空值隐藏”。
+- Risks/Notes:
+  - 当前仍保留 `stripLocationFromResumeData` 兼容函数名，但实现为 no-op；后续可做一次命名清理，避免误解。
+## [2026-02-24 15:23] UI Text: 去掉个人信息新字段标签中的“（可选）”
+- Agent: B-FE + C + D
+- Goal:
+  - 按最新确认，保留 location/linkedin/website 字段本身，但移除编辑页标签中的“（可选）”文案。
+- Changes:
+  - i-resume-builder/components/editor/steps/PersonalStep.tsx:
+    - 所在城市（可选） -> 所在城市
+    - LinkedIn（可选） -> LinkedIn
+    - 个人网址（可选） -> 个人网址
+- Backups:
+  - ackup/ai-resume-builder/components/editor/steps/PersonalStep.tsx
+  - ackup/WORKLOG.md
+- Commands:
+  - pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
+- Risks/Notes:
+  - 仅为文案层改动，不影响字段是否显示的业务逻辑；字段仍是“可不填、空值不展示”。

@@ -31,6 +31,8 @@ export const createEmptyResumeData = (): ResumeData => ({
   exportHistory: undefined,
 });
 
+const stripLocationFromResumeData = (resumeData: ResumeData): ResumeData => resumeData;
+
 type ResumeUpdater = ResumeData | ((prev: ResumeData) => ResumeData);
 type ResumeListUpdater = ResumeSummary[] | ((prev: ResumeSummary[]) => ResumeSummary[]);
 
@@ -49,9 +51,10 @@ export const useAppStore = create<AppStoreState>((set) => ({
   allResumes: [],
   isNavHidden: false,
   setResumeData: (next) =>
-    set((state) => ({
-      resumeData: typeof next === 'function' ? (next as (prev: ResumeData) => ResumeData)(state.resumeData) : next,
-    })),
+    set((state) => {
+      const resolved = typeof next === 'function' ? (next as (prev: ResumeData) => ResumeData)(state.resumeData) : next;
+      return { resumeData: stripLocationFromResumeData(resolved) };
+    }),
   setAllResumes: (next) =>
     set((state) => ({
       allResumes: typeof next === 'function' ? (next as (prev: ResumeSummary[]) => ResumeSummary[])(state.allResumes) : next,

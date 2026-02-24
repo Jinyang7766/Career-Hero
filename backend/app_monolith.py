@@ -947,5 +947,5 @@ register_ai_routes(
 )
 
 if __name__ == '__main__':
-    # 使用配置的端口
-    app.run(host='0.0.0.0', port=PORT)
+    # 使用配置的端口。关闭 reloader，避免导出 PDF 过程中被文件监控重启打断。
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
