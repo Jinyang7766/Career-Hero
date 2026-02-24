@@ -29,6 +29,137 @@ Use one block per executed step:
 - Fast lookup index: WORKLOG_INDEX.md.
 
 ---
+## [2026-02-25 00:38] Deep Debug修复: 面试启动去阻塞（持久化超时不再卡住进入聊天）
+- Agent: A + B-FE + C
+- Goal:
+  - 修复“开始面试后偶发长时间卡在启动/加载中”的前端时序问题，避免 `persistAnalysisSessionState` 慢写入阻塞 `openChat`。
+- Root Cause:
+  - 面试入口路径中先 `await persistAnalysisSessionState('interview_in_progress')` 再 `openChat('internal')`。
+  - `persistAnalysisSessionState` 内部会 `await DatabaseService.updateResume(...)`；当 DB 写入慢/卡住时，聊天页被阻塞，表现为启动不稳定。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/src/session-persist-guard.ts`
+    - 验证映射：新增通用持久化守卫，支持超时继续（`timed_out`）与失败兜底（`failed`），保证调用方不被阻塞。
+  - `ai-resume-builder/components/screens/ai-analysis/interview-entry-checkpoint.ts`
+    - 验证映射：抽取“后台持久化 checkpoint + 立即 openChat”入口函数，统一面试启动行为。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - 验证映射：面试模式入口与面试交接路径切到 `openChatWithInterviewCheckpoint`，不再等待持久化完成。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisActions.ts`
+    - 验证映射：微访谈入口同样改为后台持久化，不阻塞聊天打开。
+  - `ai-resume-builder/src/__tests__/session-persist-guard.test.ts`
+    - 验证映射：覆盖 `skipped/completed/failed/timed_out` 四种状态。
+  - `ai-resume-builder/src/__tests__/interview-entry-checkpoint.test.ts`
+    - 验证映射：验证“即使持久化慢，也会立即打开聊天页”。
+- Commands:
+  - `npm --prefix ai-resume-builder run -s test -- src/__tests__/session-persist-guard.test.ts src/__tests__/interview-entry-checkpoint.test.ts`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - 定向单测：PASS（`6 passed`）
+    - 明确覆盖“持久化慢于超时阈值时返回 `timed_out` 且不抛错”。
+    - 明确覆盖“入口函数立即调用 `openChat`，不等待 persist resolve”。
+  - 本地基线：PASS（frontend `13 passed`，backend `16 passed`）
+  - 前端构建：PASS
+- Risks/Notes:
+  - 本步为前端时序修复，已做模块级行为验证；未在本步追加线上账号驱动的完整 UI 端到端复测（无新增线上账号参数输入）。
+
+## [2026-02-25 00:22] Deep Debug续跑: 前端 Playwright 全链路复测（报告->面试）与异常分流
+- Agent: A + B-FE + C + D
+- Goal:
+  - 按“真实浏览器”复测线上前端关键路径：登录 -> AI诊断列表 -> 最终诊断报告 -> 去模拟面试 -> 面试页可用性。
+- Findings:
+  - 在当前线上数据下，AI诊断列表首条简历为“已完成诊断”，点击后会直接进入“最终诊断报告”，不会进入“添加职位描述”。
+  - 面试设置页点击“开始面试（50积分）”后存在确认弹窗分支（需点“确定”）；若脚本未处理该分支会卡在设置页。
+  - 面试启动存在时序波动：同一路径下有时快速进入“在线+输入框”，有时长时间停留“加载中...”（无 console error）。
+- Commands:
+  - `npx --yes --package @playwright/cli playwright-cli ... run-code`（多轮分步复测）
+  - `playwright-cli snapshot` + `playwright-cli click <ref>`（定位真实页面节点与分支）
+  - 失败样例：
+    - `Invoke-RestMethod POST https://career-hero-backend-production-a634.up.railway.app/api/auth/register` -> `500 服务器内部错误`
+    - `playwright run-code` 等待 `text=添加职位描述` 超时（因为当前路径实际直达“最终诊断报告”）
+    - `playwright run-code` 等待 `text=在线` 超时（面试启动时序波动）
+- Verification:
+  - 路径节点确认（快照证据）：
+    - AI诊断列表：`.playwright-cli/page-2026-02-24T16-01-10-321Z.yml`
+    - 点击后直达最终诊断报告：`.playwright-cli/page-2026-02-24T16-01-15-890Z.yml`
+    - 面试设置页（含“开始面试（50积分）”）：`.playwright-cli/page-2026-02-24T16-08-01-431Z.yml`
+    - 开始面试后确认弹窗：`.playwright-cli/page-2026-02-24T16-08-58-980Z.yml`
+    - 进入在线面试页（20s 与 60s 快照）：
+      - `.playwright-cli/page-2026-02-24T16-16-44-851Z.yml`
+      - `.playwright-cli/page-2026-02-24T16-17-26-400Z.yml`
+  - 可视化截图证据：
+    - `output/playwright/deep-debug-interview-online-20260225-002148.png`
+- Risks/Notes:
+  - UI 端“开始面试 -> 在线面试”存在间歇性时序不稳定，需后续针对前端 loading 状态与启动握手流程做专项排查。
+
+## [2026-02-24 23:38] Deep Debug续跑: 修正 parse-resume 路由 JSON 归一化误判
+- Agent: A + B-BE + C + D
+- Goal:
+  - 继续收口 `/api/ai/parse-resume` 的边界行为，确保 `[]` 等非对象 JSON 在路由层不会被吞并成 `{}`，错误语义一致。
+- Root Cause:
+  - 路由使用 `request.get_json() or {}`，导致空数组 `[]` 被当作 falsy 值改写为 `{}`，进而落到“简历文本不能为空”而不是“请求体必须为 JSON 对象”。
+- Changes:
+  - `backend/routes/ai_routes.py`
+    - 新增 `get_json_payload(req)`，使用 `req.get_json(silent=True)` 保留原始 JSON 类型，仅在解析失败/无 JSON 时回退 `{}`。
+    - `/api/ai/parse-resume` 改为使用该函数，不再使用 `request.get_json() or {}`。
+  - `backend/tests/test_parse_endpoint_service.py`
+    - 新增 3 个 payload 归一化测试：
+      - list payload 保持 `[]`
+      - scalar payload 保持原值
+      - invalid JSON 回退 `{}`
+- Backups:
+  - `backup/backend/routes/ai_routes.py`
+  - `backup/backend/tests/test_parse_endpoint_service.py`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `python -m pytest backend/tests/test_parse_endpoint_service.py -q`
+  - `python - <<...>>`（`workdir=g:\AI_project\Career-Hero\backend`，Flask test client 调 `/api/ai/parse-resume` 多 payload 验证）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向单测通过：`9 passed`。
+  - 路由级定向流通过：
+    - `"abc"` -> `400` / `请求体必须为 JSON 对象`
+    - `123` -> `400` / `请求体必须为 JSON 对象`
+    - `[]` -> `400` / `请求体必须为 JSON 对象`
+    - `{}` -> `400` / `简历文本不能为空`
+    - `{"resumeText": None}` -> `400` / `简历文本必须为字符串`
+    - `{"resumeText":"有效简历文本"}` -> `200`
+  - 本地基线通过：frontend `7 passed`，backend `16 passed`。
+- Risks/Notes:
+  - 接口级定向流中的有效文本会触发外部 AI 调用，结果受模型服务响应影响；当前以 HTTP 状态码与错误语义作为回归基线。
+
+## [2026-02-24 23:31] Deep Debug续跑: 修复 parse-resume 非对象 JSON 触发 500
+- Agent: A + B-BE + C + D
+- Goal:
+  - 修复 `/api/ai/parse-resume` 在请求体为 JSON 标量（如 `"abc"`、`123`）时返回 500 的问题，并补齐回归验证。
+- Root Cause:
+  - `parse_resume_core` 直接对 `data` 调用 `.get(...)`，当 `data` 不是 `dict` 时抛异常，路由兜底成 500。
+- Changes:
+  - `backend/services/parse_endpoint_service.py`
+    - 新增顶层类型守卫：`data` 非 `dict` 时直接返回 `400` + `请求体必须为 JSON 对象`。
+  - `backend/tests/test_parse_endpoint_service.py`
+    - 新增 3 个用例，覆盖字符串/数字/数组 payload，确保均返回 `400`。
+- Backups:
+  - `backup/backend/services/parse_endpoint_service.py`
+  - `backup/backend/tests/test_parse_endpoint_service.py`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `python -m pytest backend/tests/test_parse_endpoint_service.py -q`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - 失败复现（路径问题）:
+    - `python - <<...>>`（`workdir=g:\AI_project\Career-Hero`，`from backend.app_monolith import app` 触发 `ModuleNotFoundError: services`）
+  - 修复后接口级定向验证:
+    - `python - <<...>>`（`workdir=g:\AI_project\Career-Hero\backend`，`from app_monolith import app`）
+- Verification:
+  - 定向单测：`backend/tests/test_parse_endpoint_service.py` 通过（`6 passed`）。
+  - 本地基线：`scripts/test-local.ps1 -SkipInstall` 通过（frontend `7 passed`，backend `13 passed`）。
+  - 接口级定向流：
+    - payload=`"abc"` -> `400`（`请求体必须为 JSON 对象`）
+    - payload=`123` -> `400`（`请求体必须为 JSON 对象`）
+    - payload=`[]` -> `400`
+    - payload=`{}` -> `400`
+- Risks/Notes:
+  - 当前路由层仍使用 `request.get_json() or {}`，因此空数组在路由层会被归一为 `{}`；状态码正确（400），但错误文案为“简历文本不能为空”。如需统一为“请求体必须为 JSON 对象”，建议后续在路由层保留原始 JSON 类型再传入 core。
+
 ## [2026-02-24 16:19] Fix: AI诊断/AI面试页眉在桌面端宽度与主容器一致
 - Agent: A + B-FE + C + D
 - Goal:

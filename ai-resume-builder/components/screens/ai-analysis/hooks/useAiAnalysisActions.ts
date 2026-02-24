@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { View } from '../../../../types';
 import type { QuotaKind } from './useUsageQuota';
 import { USAGE_POINT_COST } from '../../../../src/points-config';
+import { openChatWithInterviewCheckpoint } from '../interview-entry-checkpoint';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
@@ -98,17 +99,21 @@ export const useAiAnalysisActions = ({
     }
     if (!isInterviewMode) {
       startedMicroLocallyRef.current = true;
-      try {
-        const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
-        await persistAnalysisSessionState?.('interview_in_progress', {
+      const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+      openChatWithInterviewCheckpoint({
+        persist: persistAnalysisSessionState,
+        patch: {
           jdText: effectiveJdText,
           targetCompany: String(resumeData?.targetCompany || '').trim(),
           step: 'micro_intro',
           force: true,
-        });
-      } catch (stateErr) {
-        console.warn('Failed to persist micro interview start checkpoint:', stateErr);
-      }
+        },
+        openChat,
+        source: 'internal',
+        timeoutMs: 1600,
+        label: 'micro interview start checkpoint',
+      });
+      return;
     }
     openChat('internal');
   }, [consumeUsageQuota, hasStartedMicroInterview, isInterviewMode, jdText, openChat, persistAnalysisSessionState, resumeData?.lastJdText, resumeData?.targetCompany]);

@@ -3,6 +3,7 @@ import { runRealAnalysisRequest } from '../analysis-execution-runner';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 import { checkInterviewContinuationState, decideMicroInterviewNeeded } from '../analysis-execution-helpers';
+import { openChatWithInterviewCheckpoint } from '../interview-entry-checkpoint';
 import type { AnalysisReport, Suggestion } from '../types';
 import { buildAnalysisResultSnapshot } from './analysis-execution-result';
 
@@ -221,17 +222,19 @@ export const useAnalysisExecution = ({
     // the diagnosis pipeline UI.
     if (isInterviewMode) {
       const effectiveJd = (jdText || resumeData?.lastJdText || '').trim();
-      try {
-        await persistAnalysisSessionState('interview_in_progress', {
+      openChatWithInterviewCheckpoint({
+        persist: persistAnalysisSessionState,
+        patch: {
           jdText: effectiveJd,
           targetCompany: targetCompany || resumeData?.targetCompany || '',
           step: 'chat',
           force: true,
-        });
-      } catch (stateErr) {
-        console.warn('Failed to persist interview_in_progress state:', stateErr);
-      }
-      openChat('internal');
+        },
+        openChat,
+        source: 'internal',
+        timeoutMs: 1600,
+        label: 'interview_in_progress state',
+      });
       return;
     }
 
@@ -244,17 +247,19 @@ export const useAnalysisExecution = ({
 
     if (hasReusableInterviewContext) {
       const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
-      try {
-        await persistAnalysisSessionState('interview_in_progress', {
+      openChatWithInterviewCheckpoint({
+        persist: persistAnalysisSessionState,
+        patch: {
           jdText: effectiveJdText,
           targetCompany: targetCompany || resumeData.targetCompany || '',
           step: 'chat',
           force: true,
-        });
-      } catch (stateErr) {
-        console.warn('Failed to persist interview_in_progress state:', stateErr);
-      }
-      openChat('internal');
+        },
+        openChat,
+        source: 'internal',
+        timeoutMs: 1600,
+        label: 'reused interview_in_progress state',
+      });
       return;
     }
 
@@ -406,20 +411,33 @@ export const useAnalysisExecution = ({
         summary: newReport.summary || '',
       });
       if (shouldEnterMicroInterview) {
-        try {
-          await persistAnalysisSessionState('interview_in_progress', {
-            jdText: jdText || resumeData.lastJdText || '',
-            targetCompany: effectiveTargetCompany,
-            score: totalScore,
-            step: 'chat',
-            force: true,
-          });
-        } catch (stateErr) {
-          console.warn('Failed to persist interview_in_progress session state:', stateErr);
-        }
         if (isInterviewMode) {
-          openChat('internal');
+          openChatWithInterviewCheckpoint({
+            persist: persistAnalysisSessionState,
+            patch: {
+              jdText: jdText || resumeData.lastJdText || '',
+              targetCompany: effectiveTargetCompany,
+              score: totalScore,
+              step: 'chat',
+              force: true,
+            },
+            openChat,
+            source: 'internal',
+            timeoutMs: 1600,
+            label: 'interview handoff state',
+          });
         } else {
+          try {
+            await persistAnalysisSessionState('interview_in_progress', {
+              jdText: jdText || resumeData.lastJdText || '',
+              targetCompany: effectiveTargetCompany,
+              score: totalScore,
+              step: 'chat',
+              force: true,
+            });
+          } catch (stateErr) {
+            console.warn('Failed to persist interview_in_progress session state:', stateErr);
+          }
           navigateToStep('report');
         }
       } else {
