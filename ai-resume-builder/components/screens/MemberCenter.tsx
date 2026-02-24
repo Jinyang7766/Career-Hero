@@ -223,8 +223,8 @@ const MemberCenter: React.FC = () => {
                                         {(() => {
                                             const tagStyle = getMembershipTagStyle(userSub.tier);
                                             return (
-                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${tagStyle.className}`}>
-                                                    <span className="material-symbols-outlined text-[12px] leading-none">{tagStyle.icon}</span>
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[clamp(8px,2.5vw,10px)] font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${tagStyle.className}`}>
+                                                    <span className="material-symbols-outlined text-[clamp(10px,3vw,12px)] leading-none shrink-0">{tagStyle.icon}</span>
                                                     <span className="tracking-wide">{userSub.tier === MembershipTier.FREE ? '免费版' : tagStyle.label}</span>
                                                 </div>
                                             );
