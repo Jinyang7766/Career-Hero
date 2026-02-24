@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import type { ResumeData } from '../../../types';
 import { buildApiUrl } from '../../../src/api-config';
-import { toSkillList } from '../../../src/skill-utils';
+import { toSkillListForImport } from '../../../src/skill-utils';
 import { SUMMARY_MAX_CHARS, clampByLimit } from '../../../src/editor-field-limits';
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
@@ -73,6 +73,9 @@ export const useEditorImportFlow = ({
       return s || e || '';
     };
     const importedSummary = toText(importedData.summary || importedData.personalInfo?.summary);
+    const normalizedImportedSummary = importedSummary
+      ? clampByLimit(importedSummary, SUMMARY_MAX_CHARS)
+      : '';
     const normalizeWorkItems = (items: any[] = []) =>
       items.map((item, index) => {
         const { startDate, endDate } = resolveDates(item);
@@ -213,7 +216,7 @@ export const useEditorImportFlow = ({
           website: importedData.personalInfo.website || prev.personalInfo.website,
           avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           age: importedData.personalInfo.age || prev.personalInfo.age,
-          summary: importedSummary || prev.personalInfo.summary
+          summary: normalizedImportedSummary || prev.personalInfo.summary
         };
       }
 
@@ -264,11 +267,15 @@ export const useEditorImportFlow = ({
         );
       }
 
-      const importedSkills = toSkillList(importedData.skills);
-      mergedData.skills = importedSkills;
+      const importedSkills = toSkillListForImport(importedData.skills);
+      if (importedSkills.length > 0) {
+        mergedData.skills = importedSkills;
+      } else {
+        mergedData.skills = Array.isArray(prev.skills) ? prev.skills : [];
+      }
 
-      if (importedSummary) {
-        mergedData.summary = importedSummary;
+      if (normalizedImportedSummary) {
+        mergedData.summary = normalizedImportedSummary;
       }
 
       if (importedData.gender) {
@@ -281,8 +288,8 @@ export const useEditorImportFlow = ({
     const finalData = computeMergedData(resumeData);
     setResumeData(finalData);
 
-    if (importedSummary) {
-      setSummary(clampByLimit(importedSummary, SUMMARY_MAX_CHARS));
+    if (normalizedImportedSummary) {
+      setSummary(normalizedImportedSummary);
     }
 
     console.log('简历导入完成，触发保存');

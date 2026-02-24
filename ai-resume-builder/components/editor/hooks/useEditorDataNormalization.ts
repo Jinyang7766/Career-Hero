@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ResumeData } from '../../../types';
-import { toSkillList } from '../../../src/skill-utils';
+import { toSkillListForImport } from '../../../src/skill-utils';
 
 export const useEditorDataNormalization = ({
   resumeData,
@@ -77,10 +77,9 @@ export const useEditorDataNormalization = ({
       workExps: (prev.workExps || []).map(normalizeWork),
       educations: (prev.educations || []).map(normalizeEdu),
       projects: (prev.projects || []).map(normalizeProjects),
-      skills: toSkillList(prev.skills),
+      skills: toSkillListForImport(prev.skills),
     }));
 
     lastNormalizedResumeIdRef.current = resumeData.id;
   }, [resumeData?.id, setResumeData]);
 };
-

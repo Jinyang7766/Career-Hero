@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ResumeData } from '../types';
 import { buildApiUrl } from '../src/api-config';
-import { toSkillList } from '../src/skill-utils';
+import { toSkillListForImport } from '../src/skill-utils';
 
 interface ResumeImportDialogProps {
   isOpen: boolean;
@@ -53,7 +53,7 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
         // Normalize skills consistently with AI suggestion logic.
         onImport({
           ...result.data,
-          skills: toSkillList(result.data?.skills)
+          skills: toSkillListForImport(result.data?.skills)
         });
         handleClose();
       } else {
@@ -92,7 +92,7 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
       if (result.success && result.data) {
         onImport({
           ...result.data,
-          skills: toSkillList(result.data?.skills)
+          skills: toSkillListForImport(result.data?.skills)
         });
         handleClose();
       } else {

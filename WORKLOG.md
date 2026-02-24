@@ -576,3 +576,110 @@ Use one block per executed step:
     - `title_and_modified_layout_unchanged: PASS`
 - Risks/Notes:
   - 本次验证为本地自动化校验；未执行真实设备手工视觉回归，如需我可继续补一轮移动端截图对比验证。
+
+## [2026-02-24 19:57] Bugfix: 导入后个人总结反复刷新（Editor 草稿恢复/summary 同步稳定化）
+- Agent: B-FE + C
+- Goal:
+  - 修复“导入简历后个人总结不断刷新”的问题，避免导入后的 summary 在本地状态与 store 之间重复抖动/覆盖。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/components/screens/Editor.tsx`
+    - 验证映射：草稿恢复回调稳定化，避免 `useEditorDraftPersistence` 恢复 effect 因回调引用变化被反复触发。
+  - `ai-resume-builder/components/editor/hooks/useEditorDraftPersistence.ts`
+    - 验证映射：
+      - “有内容”判定覆盖 `personalInfo.summary`；
+      - summary 双向同步采用统一截断值比较，并增加 no-op guard，避免无意义 setState。
+  - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+    - 验证映射：导入 summary 先统一归一化（`clamp`）再写入 `personalInfo.summary` / `summary` / `setSummary`，避免导入后出现长度不一致的来回同步。
+- Changes:
+  - `Editor.tsx`:
+    - 新增 `handleDraftRestored`（`useCallback`）并传给 `useEditorDraftPersistence`。
+  - `useEditorDraftPersistence.ts`:
+    - `hasMeaningfulContent` 增加 `(p.summary || '').trim()`。
+    - summary 同步逻辑改为“clamp 后比较”，并在 `setResumeData` 内增加 `prevSummary === localSummary` 的 no-op 保护。
+  - `useEditorImportFlow.ts`:
+    - 增加 `normalizedImportedSummary`；导入后的个人总结统一使用该值写入，保持一致性。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/Editor.tsx`
+  - `backup/ai-resume-builder/components/editor/hooks/useEditorDraftPersistence.ts`
+  - `backup/ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+  - PowerShell 定向断言（Editor 回调稳定 / Draft summary 判定与同步 / Import summary 归一化）
+- Verification:
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：PASS（`vite build` 成功，含 `Editor` 打包产物）。
+  - 模块专项断言：PASS
+    - `editor_onDraftRestored_is_stable_callback: PASS`
+    - `draft_meaningful_content_includes_personal_summary: PASS`
+    - `draft_summary_sync_uses_clamped_compare_and_noop_guard: PASS`
+    - `import_flow_uses_normalized_imported_summary: PASS`
+- Risks/Notes:
+  - 本次为代码级稳定化修复；若仍有刷新感知，建议补一次真实导入场景（PDF/DOCX + 长 summary）的手工 UI 回归录屏以定位是否存在浏览器层面重排问题。
+
+## [2026-02-24 20:04] Bugfix: 导入简历技能识别为空（后端技能保留 + 前端导入宽松解析）
+- Agent: B-FE + B-BE + C
+- Goal:
+  - 修复“导入简历后技能一个都没有识别”的问题，避免技能字段在解析与导入链路中被过度过滤或被空值覆盖。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/resume_parse_postprocess.py`
+    - 验证映射：
+      - 解析结果中的对象型技能（如 `{name: 'Python'}`）可被归一化为字符串；
+      - `strict_skills` 为空时不再强制清空，回退到 parser 输出技能；
+      - 扩展技能标题匹配与通用硬技能判定，降低“全空”概率。
+  - `backend/services/resume_parse_service.py`
+    - 验证映射：放宽 prompt 的技能来源约束，允许在无技能标题块时提取明确技术名词。
+  - `ai-resume-builder/src/skill-utils.ts`
+    - 验证映射：新增导入专用技能解析 `toSkillListForImport`，支持数组/对象/混合结构并保留非硬技能词。
+  - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+    - 验证映射：导入使用 `toSkillListForImport`；当导入技能为空时不覆盖已有技能。
+  - `ai-resume-builder/components/ResumeImportDialog.tsx`
+    - 验证映射：文本/PDF 导入均使用导入专用技能解析。
+  - `ai-resume-builder/components/editor/hooks/useEditorDataNormalization.ts`
+    - 验证映射：数据归一化改为导入专用技能解析，避免后续把已导入技能再次过滤掉。
+- Changes:
+  - 后端：
+    - 新增 `_normalize_skill_candidates` 统一处理字符串/数组/对象技能输入。
+    - `fill_skills_if_missing` 改为：有 strict 技能则合并，无 strict 时回退 parser 技能，不再“空覆盖”。
+    - 放宽技能标题识别范围（新增 `核心能力/专业能力/技术栈/技能清单/个人技能` 等）。
+    - 技能筛选增加通用技术词兜底规则（英文技术 token 或简短中文技能词）。
+    - prompt 规则从“只能来自技能区块”调整为“优先技能区块，缺失时可从明确技术名词提取，禁止凭空生成”。
+  - 前端：
+    - 新增并接入 `toSkillListForImport`（导入链路专用）。
+    - 导入流程中仅在识别到技能时覆盖 `mergedData.skills`；否则保留原技能列表。
+- Backups:
+  - `backup/backend/services/resume_parse_postprocess.py`
+  - `backup/backend/services/resume_parse_service.py`
+  - `backup/ai-resume-builder/src/skill-utils.ts`
+  - `backup/ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+- Commands:
+  - `python -c "from backend.services.resume_parse_postprocess import normalize_parsed_resume_result, fill_skills_if_missing; ..."`
+  - `npx --yes tsx -e "import { toSkillListForImport } from './ai-resume-builder/src/skill-utils.ts'; ..."`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - 定向技能断言：PASS
+    - `normalized_skills= ['Python', '沟通协作', 'SQL']`
+    - `import_skills= SQL|项目管理|沟通协作|Python`
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：PASS（`vite build` 成功，含 `Editor` 及导入相关产物）。
+- Risks/Notes:
+  - 导入专用解析会保留更多“软技能”词，属于有意放宽；若后续希望继续偏硬技能，可在 UI 层增加“软/硬技能分组展示”而非导入期丢弃。
+
+## [2026-02-24 20:08] Include Existing UI Delta: DashboardProgressModule 时间戳展示移除（按用户指令并入本次提交）
+- Agent: B-FE + C
+- Goal:
+  - 按用户选择“2”将 `DashboardProgressModule.tsx` 现有改动并入本次提交后推送。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/components/screens/DashboardProgressModule.tsx`
+    - 验证映射：最近进展模块仅移除“时间戳文本”，其余布局与交互不变。
+- Changes:
+  - 移除“最近进展”标签右侧 `formatTime(resume.date)` 文本渲染。
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：PASS（`vite build` 成功，含 `Dashboard` 产物）。
+- Risks/Notes:
+  - 该改动是 UI 文案显示删减，不涉及数据写入逻辑。

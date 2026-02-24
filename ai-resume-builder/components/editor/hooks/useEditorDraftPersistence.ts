@@ -33,6 +33,7 @@ export const useEditorDraftPersistence = ({
       (p.title || '').trim() ||
       (p.email || '').trim() ||
       (p.phone || '').trim() ||
+      (p.summary || '').trim() ||
       (data.summary || '').trim() ||
       (data.skills || []).length > 0 ||
       (data.workExps || []).length > 0 ||
@@ -58,14 +59,22 @@ export const useEditorDraftPersistence = ({
   };
 
   useEffect(() => {
-    if (summary !== resumeData?.summary) {
-      setResumeData(prev => ({ ...prev, summary }));
+    const localSummary = clampByLimit(summary || '', SUMMARY_MAX_CHARS);
+    const storeSummary = clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS);
+    if (localSummary !== storeSummary) {
+      setResumeData((prev) => {
+        const prevSummary = clampByLimit(prev?.summary || '', SUMMARY_MAX_CHARS);
+        if (prevSummary === localSummary) return prev;
+        return { ...prev, summary: localSummary };
+      });
     }
   }, [summary, resumeData?.summary, setResumeData]);
 
   useEffect(() => {
-    if (typeof resumeData?.summary === 'string' && resumeData.summary !== summary) {
-      setSummary(clampByLimit(resumeData.summary, SUMMARY_MAX_CHARS));
+    const storeSummary = clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS);
+    const localSummary = clampByLimit(summary || '', SUMMARY_MAX_CHARS);
+    if (storeSummary !== localSummary) {
+      setSummary(storeSummary);
     }
   }, [resumeData?.summary, summary, setSummary]);
 

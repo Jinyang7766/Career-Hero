@@ -138,13 +138,65 @@ const canonicalKey = (token: string) => {
   return t.toLowerCase().replace(/[\s，,；;（()）\[\]【】"'`]+/g, '');
 };
 
+const SKILL_OBJECT_KEYS = [
+  'skill',
+  'name',
+  'title',
+  'label',
+  'value',
+  'keyword',
+  'technology',
+  'tech',
+  'skills',
+  '技能',
+  '名称',
+  '关键词',
+  '证书'
+];
+
+const collectSkillAtoms = (value: any): string[] => {
+  const out: string[] = [];
+  const stack: any[] = [value];
+
+  const pushText = (raw: any) => {
+    const text = String(raw ?? '').trim();
+    if (!text) return;
+    text
+      .split(/[\n,，;；、]+/)
+      .map((v) => v.trim())
+      .filter(Boolean)
+      .forEach((v) => out.push(v));
+  };
+
+  while (stack.length > 0) {
+    const curr = stack.pop();
+    if (curr == null) continue;
+    if (Array.isArray(curr)) {
+      for (const item of curr) stack.push(item);
+      continue;
+    }
+    if (typeof curr === 'object') {
+      let pushedPreferred = false;
+      for (const key of SKILL_OBJECT_KEYS) {
+        if (Object.prototype.hasOwnProperty.call(curr, key)) {
+          stack.push((curr as any)[key]);
+          pushedPreferred = true;
+        }
+      }
+      if (!pushedPreferred) {
+        for (const v of Object.values(curr)) {
+          if (typeof v === 'string' || typeof v === 'number') stack.push(v);
+        }
+      }
+      continue;
+    }
+    pushText(curr);
+  }
+  return out;
+};
+
 export const toSkillList = (value: any): string[] => {
-  const rawList = Array.isArray(value)
-    ? value
-    : String(value ?? '')
-        .split(/[\n,，;；、]+/)
-        .map((v) => v.trim())
-        .filter(Boolean);
+  const rawList = collectSkillAtoms(value);
 
   const expanded = rawList.flatMap((item: any) => {
     const s = String(item ?? '').trim();
@@ -170,6 +222,41 @@ export const toSkillList = (value: any): string[] => {
     out.push(token);
   });
   return out;
+};
+
+export const toSkillListForImport = (value: any): string[] => {
+  const rawList = collectSkillAtoms(value);
+  const expanded = rawList.flatMap((item: any) => {
+    const s = String(item ?? '').trim();
+    if (!s) return [];
+    return s
+      .split(/[|｜]+/)
+      .map((x) => x.trim())
+      .filter(Boolean)
+      .flatMap(splitSlashToken);
+  });
+
+  const cleaned = expanded
+    .map((raw) => {
+      let token = stripCategoryPrefix(raw);
+      if (!token) return '';
+      if (LLM_RE.test(token)) return 'LLM';
+      if (CERT_RE.test(token)) return normalizeCertificate(token);
+      token = stripEdge(token);
+      if (!token || token.length < 2) return '';
+      return token.slice(0, 30);
+    })
+    .filter(Boolean);
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  cleaned.forEach((token) => {
+    const key = canonicalKey(token);
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    out.push(token);
+  });
+  return out.slice(0, 40);
 };
 
 export const mergeSkills = (existing: any, incoming: any) => {

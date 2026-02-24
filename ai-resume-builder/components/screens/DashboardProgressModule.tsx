@@ -56,9 +56,6 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-white/20 backdrop-blur-md text-white border border-white/20 uppercase tracking-[0.1em] shadow-sm">
                                 最近进展
                             </span>
-                            <span className="text-[10px] text-white/50 font-bold tracking-tight">
-                                {formatTime(resume.date)}
-                            </span>
                         </div>
                         <h3 className="text-xl font-black text-white tracking-tight leading-tight whitespace-nowrap overflow-hidden text-ellipsis">{resume.title}</h3>
                     </div>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import { toSkillList } from '../../src/skill-utils';
@@ -82,6 +82,11 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     setShowImportSuccess,
     suppressStepResetOnNextIdChangeRef,
   } = useEditorWizardState(resumeData);
+  const handleDraftRestored = useCallback(() => {
+    setHasImportedResume(true);
+    setCurrentStep('personal');
+  }, [setCurrentStep, setHasImportedResume]);
+
   const {
     editorDraftKey,
     hasMeaningfulContent,
@@ -92,10 +97,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     summary,
     setSummary,
     setResumeData,
-    onDraftRestored: () => {
-      setHasImportedResume(true);
-      setCurrentStep('personal');
-    },
+    onDraftRestored: handleDraftRestored,
   });
   const {
     validatePersonalFormats,

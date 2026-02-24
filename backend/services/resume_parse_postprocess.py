@@ -3,6 +3,53 @@ import json
 import re
 
 
+def _normalize_skill_candidates(value):
+    def _iter_values(raw):
+        if raw is None:
+            return
+        if isinstance(raw, (list, tuple, set)):
+            for item in raw:
+                yield from _iter_values(item)
+            return
+        if isinstance(raw, dict):
+            preferred_keys = [
+                'skill', 'name', 'title', 'label', 'value', 'keyword', 'technology', 'tech',
+                '技能', '名称', '关键词', '证书'
+            ]
+            yielded = False
+            for key in preferred_keys:
+                if key in raw:
+                    yielded = True
+                    yield from _iter_values(raw.get(key))
+            if not yielded:
+                for v in raw.values():
+                    if isinstance(v, (str, int, float)):
+                        yield from _iter_values(v)
+            return
+        if isinstance(raw, (int, float)):
+            text = str(raw).strip()
+            if text:
+                yield text
+            return
+        text = str(raw).strip()
+        if text:
+            yield text
+
+    out = []
+    seen = set()
+    for chunk in _iter_values(value):
+        for token in re.split(r"[，,、/\n;；|]+", str(chunk).strip()):
+            v = str(token).strip()
+            if not v:
+                continue
+            key = re.sub(r"[\s，,；;:：|/\\]+", "", v).lower()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            out.append(v)
+    return out
+
+
 def parse_json_object_from_text(response_text):
     if not response_text:
         return None
@@ -52,10 +99,9 @@ def normalize_parsed_resume_result(ai_result):
         or []
     )
     projects = ai_result.get('projects') or ai_result.get('projectExperience') or ai_result.get('项目经历') or []
-    skills = ai_result.get('skills') or ai_result.get('skillSet') or ai_result.get('技能') or []
-
-    if isinstance(skills, str):
-        skills = [s.strip() for s in re.split(r"[，,、/\n]", skills) if s.strip()]
+    skills = _normalize_skill_candidates(
+        ai_result.get('skills') or ai_result.get('skillSet') or ai_result.get('技能') or []
+    )
 
     def _pick(d, keys, default=''):
         if not isinstance(d, dict):
@@ -201,7 +247,7 @@ def extract_skills_from_resume_text(resume_text):
     cert_collected = []
 
     skill_heading_inline_re = re.compile(
-        r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能)\s*[:：]?\s*(.*)$',
+        r'^(专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能|技术栈|技术能力|核心能力|专业能力|技能清单|个人技能)\s*[:：]?\s*(.*)$',
         re.IGNORECASE
     )
     cert_heading_inline_re = re.compile(
@@ -295,7 +341,11 @@ def extract_skills_from_resume_text(resume_text):
             continue
         if len(v) > 40 or len(v) < 2:
             continue
-        if not (strong_skill_re.search(v) or cert_re.search(v)):
+        looks_like_general_hard_skill = bool(
+            re.fullmatch(r'[A-Za-z][A-Za-z0-9.+#/\-\s]{1,20}', v)
+            or re.fullmatch(r'[\u4e00-\u9fa5]{2,8}', v)
+        )
+        if not (strong_skill_re.search(v) or cert_re.search(v) or looks_like_general_hard_skill):
             continue
         if re.search(r'(全链路|策略|流程|方案|运营|沟通|协同|策划|看板|内容|直播间|私域|社群)', v):
             continue
@@ -311,12 +361,36 @@ def extract_skills_from_resume_text(resume_text):
 
 def fill_skills_if_missing(parsed_data, resume_text, logger_obj=None):
     strict_skills = extract_skills_from_resume_text(resume_text)
-    parsed_data['skills'] = strict_skills
+    existing_skills = _normalize_skill_candidates(parsed_data.get('skills') or [])
+    if strict_skills:
+        merged = []
+        seen = set()
+        for item in strict_skills + existing_skills:
+            v = str(item or '').strip()
+            if not v:
+                continue
+            k = v.lower()
+            if k in seen:
+                continue
+            seen.add(k)
+            merged.append(v)
+        parsed_data['skills'] = merged
+    else:
+        parsed_data['skills'] = existing_skills
+
     if logger_obj:
-        if strict_skills:
-            logger_obj.info("Skills extracted from explicit skill/certificate sections, count=%s", len(strict_skills))
+        if strict_skills and parsed_data.get('skills'):
+            logger_obj.info(
+                "Skills extracted from explicit sections and merged with parser output, count=%s",
+                len(parsed_data.get('skills') or [])
+            )
+        elif parsed_data.get('skills'):
+            logger_obj.info(
+                "No explicit skill section found; fallback to parser-provided skills, count=%s",
+                len(parsed_data.get('skills') or [])
+            )
         else:
-            logger_obj.info("No explicit skill/certificate sections found; skills left empty by design.")
+            logger_obj.info("No skills recognized from resume text or parser output.")
     return parsed_data
 
 
