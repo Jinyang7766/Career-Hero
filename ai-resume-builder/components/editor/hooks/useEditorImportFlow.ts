@@ -8,6 +8,7 @@ import {
   pickFirstNonEmptySummary,
   resolveImportedSummaryText,
 } from '../../../src/editor-summary-sync';
+import { resolveImportedProfileMeta } from '../../../src/imported-profile-normalizer';
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
 
@@ -211,6 +212,7 @@ export const useEditorImportFlow = ({
     const computeMergedData = (prev: ResumeData): ResumeData => {
       const mergedData = { ...prev };
       const previousSummary = pickFirstNonEmptySummary(prev.summary, prev.personalInfo?.summary);
+      const importedProfile = resolveImportedProfileMeta(importedData as any);
 
       if (importedData.personalInfo) {
         mergedData.personalInfo = {
@@ -222,8 +224,14 @@ export const useEditorImportFlow = ({
           linkedin: importedData.personalInfo.linkedin || prev.personalInfo.linkedin,
           website: importedData.personalInfo.website || prev.personalInfo.website,
           avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
-          age: importedData.personalInfo.age || prev.personalInfo.age,
+          age: importedProfile.age || importedData.personalInfo.age || prev.personalInfo.age,
           summary: normalizedImportedSummary || pickFirstNonEmptySummary(prev.personalInfo.summary, prev.summary),
+        };
+      }
+      if (importedProfile.age && !importedData.personalInfo) {
+        mergedData.personalInfo = {
+          ...(mergedData.personalInfo || prev.personalInfo),
+          age: importedProfile.age,
         };
       }
 
@@ -294,8 +302,8 @@ export const useEditorImportFlow = ({
         summary: normalizedFinalSummary,
       };
 
-      if (importedData.gender) {
-        mergedData.gender = importedData.gender;
+      if (importedProfile.gender) {
+        mergedData.gender = importedProfile.gender;
       }
 
       return mergedData;

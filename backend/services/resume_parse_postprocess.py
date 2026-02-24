@@ -110,7 +110,44 @@ def normalize_parsed_resume_result(ai_result):
             v = d.get(k)
             if isinstance(v, str) and v.strip():
                 return v.strip()
+            if isinstance(v, (int, float)):
+                vv = str(v).strip()
+                if vv:
+                    return vv
         return default
+
+    def _normalize_gender(value):
+        raw = str(value or '').strip().lower()
+        if not raw:
+            return ''
+        raw = re.sub(r'^(?:性别|gender|sex)\s*[:：]?\s*', '', raw).strip()
+        if not raw:
+            return ''
+        male_tokens = {'男', '男性', 'male', 'm', 'man', 'boy', '先生', '♂'}
+        female_tokens = {'女', '女性', 'female', 'f', 'woman', 'girl', '女士', '♀'}
+        if raw in male_tokens:
+            return 'male'
+        if raw in female_tokens:
+            return 'female'
+        if ('男' in raw and '女' not in raw) or re.search(r'\bmale\b', raw):
+            return 'male'
+        if ('女' in raw and '男' not in raw) or re.search(r'\bfemale\b', raw):
+            return 'female'
+        return ''
+
+    def _normalize_age(value):
+        raw = str(value or '').strip()
+        if not raw:
+            return ''
+        compact = re.sub(r'\s+', '', raw)
+        compact = re.sub(r'(周?岁|years?old|yrs?)', '', compact, flags=re.IGNORECASE)
+        if not compact:
+            return ''
+        # Prefer a short explicit age token and avoid treating birth year as age.
+        m = re.search(r'(?<!\d)(\d{1,3})(?!\d)', compact)
+        if m and not re.search(r'\d{4}', compact):
+            return m.group(1)
+        return compact[:10]
 
     def _ensure_list(value):
         if isinstance(value, list):
@@ -219,6 +256,15 @@ def normalize_parsed_resume_result(ai_result):
             'description': _pick(item, ['description', 'content', 'summary', '职责', '项目内容', '项目描述']),
         })
 
+    normalized_gender = _normalize_gender(
+        _pick(personal, ['gender', 'sex', '性别'])
+        or _pick(ai_result, ['gender', 'sex', '性别'])
+    )
+    normalized_age = _normalize_age(
+        _pick(personal, ['age', '年龄', '岁数'])
+        or _pick(ai_result, ['age', '年龄', '岁数'])
+    )
+
     return {
         'personalInfo': {
             'name': _pick(personal, ['name', '姓名']) or '',
@@ -226,15 +272,17 @@ def normalize_parsed_resume_result(ai_result):
             'email': _pick(personal, ['email', '邮箱']) or '',
             'phone': _pick(personal, ['phone', 'mobile', '手机号', '电话']) or '',
             'location': _pick(personal, ['location', 'city', '地址', '所在地']) or '',
+            'age': normalized_age,
             'summary': (
                 _pick(personal, ['summary', 'profile', 'selfIntro', '自我评价', '个人总结', '个人简介'])
                 or (ai_result.get('summary', '') if isinstance(ai_result.get('summary', ''), str) else '')
-            )
+            ),
         },
         'workExps': normalized_work,
         'educations': normalized_edu,
         'projects': normalized_proj,
-        'skills': skills if isinstance(skills, list) else []
+        'skills': skills if isinstance(skills, list) else [],
+        'gender': normalized_gender,
     }
 
 

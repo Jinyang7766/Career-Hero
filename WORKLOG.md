@@ -716,3 +716,39 @@ Use one block per executed step:
   - 前端构建：FAIL（Vite HTML inline proxy 报错，`index.html?html-proxy&inline-css` 模块匹配失败；需后续单独排查构建链路）。
 - Risks/Notes:
   - 本次已补上针对该问题的定向功能验证，但仍建议在真实“导入文本/PDF -> 进入个人总结步骤”场景再做一次可视化回归，以确认端到端体验无抖动。
+
+## [2026-02-24 20:38] Bugfix: 导入简历年龄/性别未正确填入（后端字段保留 + 前端导入标准化）
+- Agent: B-FE + B-BE + C
+- Goal:
+  - 修复导入简历后“年龄、性别没有正确带入编辑器”的问题，确保解析结果保留字段并在前端映射为编辑器可识别格式。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/resume_parse_postprocess.py`
+    - 验证映射：标准化输出保留 `personalInfo.age` 与根级 `gender`，并规范化性别（`男/女/male/female` -> `male/female`）、年龄（`28岁` -> `28`）。
+  - `backend/services/resume_parse_service.py`
+    - 验证映射：AI 提示词输出结构补充 `gender`，并强调提取性别与年龄，提升首轮解析命中率。
+  - `ai-resume-builder/src/imported-profile-normalizer.ts`
+    - 验证映射：新增前端导入字段标准化工具，统一处理多形态输入（根级 / personalInfo、中文键名、英文键名）。
+  - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+    - 验证映射：导入时统一调用 profile 标准化，年龄从多来源回填到 `personalInfo.age`，性别回填到根级 `gender`。
+- Changes:
+  - 后端：
+    - 在 `normalize_parsed_resume_result` 中增加 `_normalize_gender`、`_normalize_age`。
+    - 输出结构新增并稳定填充：
+      - `personalInfo.age`
+      - `gender`（根级，值统一为 `male/female` 或空）
+  - 前端：
+    - 新增 `src/imported-profile-normalizer.ts`：
+      - `normalizeImportedGenderValue`
+      - `normalizeImportedAgeValue`
+      - `resolveImportedProfileMeta`
+    - `useEditorImportFlow` 接入上述工具并兼容导入数据中的多种字段形态。
+- Commands:
+  - `python -c "from backend.services.resume_parse_postprocess import normalize_parsed_resume_result; ..."`
+  - `npx --yes tsx -e "import { resolveImportedProfileMeta } from './ai-resume-builder/src/imported-profile-normalizer.ts'; ..."`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向后端字段断言：PASS（`resume_parse_profile_meta_check: PASS`）。
+  - 定向前端字段断言：PASS（`imported_profile_normalizer_check: PASS`）。
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+- Risks/Notes:
+  - 若 AI 原文中不存在明确年龄/性别信息，导入仍会保持为空，这是预期行为（不凭空补全）。
