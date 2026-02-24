@@ -54,7 +54,6 @@ const MemberCenter: React.FC = () => {
         return MembershipTier.FREE;
     };
 
-    // Sync with database profile state
     const userSub = {
         tier: normalizeMembershipTier(
             (userProfile as any)?.membership_tier ||
@@ -64,6 +63,22 @@ const MemberCenter: React.FC = () => {
         autoRenew: false,
         pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
     };
+
+    const isLoggedIn = !!currentUser?.id;
+    const pointsDisplay = isLoggedIn ? String(userSub.pointsRemaining ?? '--') : '--';
+    const pointsNumberStyle = useMemo(() => {
+        const digits = pointsDisplay.replace(/\D/g, '').length;
+        const fontSize =
+            digits <= 4 ? 24 :
+                digits <= 6 ? 22 :
+                    digits <= 8 ? 20 :
+                        digits <= 10 ? 18 :
+                            16;
+        return {
+            fontSize: `${fontSize}px`,
+            letterSpacing: digits >= 9 ? '-0.02em' : '0',
+        } as const;
+    }, [pointsDisplay]);
 
     const tiers = [
         {
@@ -200,8 +215,8 @@ const MemberCenter: React.FC = () => {
                 <div className="w-10" /> {/* Spacer */}
             </header>
 
-            <main className="flex-1 p-5 pt-[calc(3.5rem+1.25rem)] space-y-8">
-                {/* User Info Card - Unified with Profile page style */}
+            <main className="flex-1 p-4 pt-[calc(3.5rem+1rem)] flex flex-col gap-4">
+                {/* User Info Card - Exactly consistent with Profile page */}
                 <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 relative overflow-hidden">
                     <div className="p-4">
                         <div className="flex items-center gap-4 relative z-10">
@@ -222,32 +237,32 @@ const MemberCenter: React.FC = () => {
                                     <div className="mt-1">
                                         {(() => {
                                             const tagStyle = getMembershipTagStyle(userSub.tier);
+                                            const displayLabel = isLoggedIn ? tagStyle.label : '访客';
                                             return (
-                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[clamp(8px,2.5vw,10px)] font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${tagStyle.className}`}>
+                                                <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[clamp(8px,2.5vw,10px)] font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${tagStyle.className}`}>
                                                     <span className="material-symbols-outlined text-[clamp(10px,3vw,12px)] leading-none shrink-0">{tagStyle.icon}</span>
-                                                    <span className="tracking-wide">{userSub.tier === MembershipTier.FREE ? '免费版' : tagStyle.label}</span>
+                                                    <span className="tracking-wide">{displayLabel}</span>
                                                 </div>
                                             );
                                         })()}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-2 min-w-0">
-                                    {userSub.tier !== MembershipTier.FREE ? (
-                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
-                                            积分永久有效
-                                        </span>
-                                    ) : (
-                                        <span className="text-[11px] text-slate-400 dark:text-slate-500 truncate font-medium">
-                                            {displayEmail}
-                                        </span>
-                                    )}
-                                </div>
+                                {displayEmail && (
+                                    <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate font-medium">
+                                        {displayEmail}
+                                    </p>
+                                )}
                             </div>
 
                             {/* Remaining Points Box */}
-                            <div className="shrink-0 flex flex-col items-center justify-center min-w-[64px] h-16 px-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner">
+                            <div className="shrink-0 flex flex-col items-center justify-center w-[124px] h-16 px-2 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner overflow-hidden">
                                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight mb-1 whitespace-nowrap">剩余积分</span>
-                                <span className="text-xl font-black text-primary dark:text-blue-400 leading-none">{userSub.pointsRemaining}</span>
+                                <span
+                                    className="w-full text-center font-black text-primary dark:text-blue-400 leading-none tabular-nums whitespace-nowrap"
+                                    style={pointsNumberStyle}
+                                >
+                                    {pointsDisplay}
+                                </span>
                             </div>
                         </div>
                     </div>
