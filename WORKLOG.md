@@ -885,3 +885,48 @@ Use one block per executed step:
   - 本地基线测试：PASS（frontend `7 passed`，backend `7 passed`）。
 - Risks/Notes:
   - 回退模式为“精准优先”策略，若后续需要覆盖更多小众技术词，可在 `embedded_patterns` 中按样本持续扩展。
+
+## [2026-02-24 23:20] Deep Debug: 全链路排查 + parse-resume 输入校验修复
+- Agent: A + B-BE + C
+- Goal:
+  - 执行应用级深度 debug，覆盖构建、前后端测试、后端端到端脚本、前端真实路径运行时错误采集。
+  - 修复排查中发现的高优先级接口错误：`/api/ai/parse-resume` 对空/无效输入返回 500。
+- Findings:
+  - 发现 1 个接口层 bug：
+    - `parse_resume_core` 未做输入校验，`resumeText` 为空/缺失/非字符串会触发异常并被路由统一包装成 500。
+    - 影响：前端或第三方调用方遇到无效输入时无法得到可恢复的 4xx 错误。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/parse_endpoint_service.py`
+    - 验证映射：为 `parse_resume_core` 增加输入校验：
+      - 非字符串 -> `400 简历文本必须为字符串`
+      - 空字符串/缺失 -> `400 简历文本不能为空`
+  - `backend/tests/test_parse_endpoint_service.py`
+    - 验证映射：新增单测覆盖空值、非字符串、有效输入三种路径。
+- Commands:
+  - 基线与构建：
+    - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+    - `npm --prefix ai-resume-builder run -s build`
+  - 后端端到端：
+    - `python scripts/e2e_full_flow.py`
+    - `python scripts/e2e_interview_scene_suite.py`
+  - 前端运行时排查：
+    - `python (Playwright) -> login -> 新建简历 -> 导入 -> 编辑页`（采集 `console.error/pageerror/requestfailed`）
+  - 输入校验复测：
+    - `python (requests) -> POST /api/ai/parse-resume`（空/缺失/None/有效文本）
+- Verification:
+  - Deep debug 主链路：PASS
+    - local tests: frontend `7 passed`, backend `7 passed`（修复后为 backend `10 passed`）
+    - build: PASS
+    - `e2e_full_flow.py`: PASS
+    - `e2e_interview_scene_suite.py`: PASS（general/hr/technical）
+    - 前端运行时错误采集：`console_error=0`, `page_error=0`, `request_failed=0`
+    - 证据截图：`output/playwright/deep-debug-smoke.png`
+  - 修复项复测：PASS
+    - 修复前：空/缺失/非字符串 `resumeText` 均返回 `500`
+    - 修复后：
+      - `{"resumeText": ""}` -> `400 {"error":"简历文本不能为空"}`
+      - `{}` -> `400 {"error":"简历文本不能为空"}`
+      - `{"resumeText": null}` -> `400 {"error":"简历文本必须为字符串"}`
+      - 有效文本 -> `200`
+- Risks/Notes:
+  - 本次未处理用户指定忽略文件：`PRODUCT_REQUIREMENTS_DOCUMENT.md`（保持不变）。

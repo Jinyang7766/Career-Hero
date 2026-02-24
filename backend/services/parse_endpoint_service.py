@@ -1,5 +1,9 @@
 def parse_resume_core(data, deps):
     resume_text = data.get('resumeText', '')
+    if not isinstance(resume_text, str):
+        return {'error': '简历文本必须为字符串'}, 400
+    if not resume_text.strip():
+        return {'error': '简历文本不能为空'}, 400
     parsed_data = deps['parse_resume_text_with_ai'](resume_text)
     return {'success': True, 'data': parsed_data}, 200
 
