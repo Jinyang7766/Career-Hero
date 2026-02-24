@@ -476,8 +476,8 @@ const Profile: React.FC<ScreenProps> = () => {
                       const displayLabel = isLoggedIn ? tagStyle.label : '访客';
 
                       return (
-                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all duration-300 ${tagStyle.className}`}>
-                          <span className="material-symbols-outlined text-[12px] leading-none">{tagStyle.icon}</span>
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[clamp(8px,2.5vw,10px)] font-bold transition-all duration-300 whitespace-nowrap overflow-hidden ${tagStyle.className}`}>
+                          <span className="material-symbols-outlined text-[clamp(10px,3vw,12px)] leading-none shrink-0">{tagStyle.icon}</span>
                           <span className="tracking-wide">{displayLabel}</span>
                         </div>
                       );
@@ -525,26 +525,24 @@ const Profile: React.FC<ScreenProps> = () => {
               {/* Texture Layer */}
               <div className="absolute inset-0 opacity-[0.03] bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] mix-blend-overlay"></div>
 
-              <div className="relative z-10 flex items-center justify-between gap-4">
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-nowrap">
-                    <div className={`size-8 rounded-full shrink-0 flex items-center justify-center backdrop-blur-sm border ${userSub.tier === MembershipTier.FREE
-                      ? 'bg-primary/10 border-primary/10'
-                      : 'bg-white/10 border-white/10'
-                      }`}>
-                      <span className={`material-symbols-outlined text-[18px] ${style.iconColor}`}>{style.icon}</span>
-                    </div>
-                    <h3 className={`${style.titleColor} text-[clamp(14px,3.8vw,16px)] font-black tracking-tight whitespace-nowrap`}>
-                      {style.title}
-                    </h3>
+              <div className="relative z-10 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <div className={`size-8 rounded-full shrink-0 flex items-center justify-center backdrop-blur-sm border ${userSub.tier === MembershipTier.FREE
+                    ? 'bg-primary/10 border-primary/10'
+                    : 'bg-white/10 border-white/10'
+                    }`}>
+                    <span className={`material-symbols-outlined text-[18px] ${style.iconColor}`}>{style.icon}</span>
                   </div>
+                  <h3 className={`${style.titleColor} text-[clamp(12px,3.8vw,15px)] font-black tracking-tight whitespace-nowrap overflow-hidden text-ellipsis`}>
+                    {style.title}
+                  </h3>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
-                  <div className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] font-black transition-all group-hover:px-5 ${style.btnStyle}`}>
+                  <div className={`whitespace-nowrap px-3 py-1.5 rounded-xl text-[10px] font-black transition-all group-hover:px-4 ${style.btnStyle}`}>
                     {userSub.tier === MembershipTier.FREE ? '立即升级' : '查看权益'}
                   </div>
-                  <span className="material-symbols-outlined text-white/40 text-[18px] group-hover:translate-x-1 transition-transform">chevron_right</span>
+                  <span className="material-symbols-outlined text-white/40 text-[16px] group-hover:translate-x-1 transition-transform shrink-0">chevron_right</span>
                 </div>
               </div>
             </div>
