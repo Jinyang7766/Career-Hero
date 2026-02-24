@@ -8,6 +8,7 @@ import { DatabaseService } from '../../src/database-service';
 import {
   getMembershipTierStyle,
   normalizeMembershipTier,
+  getMembershipTagStyle,
 } from './profile/profile-membership-style';
 
 
@@ -261,10 +262,10 @@ const Profile: React.FC<ScreenProps> = () => {
     const digits = pointsDisplay.replace(/\D/g, '').length;
     const fontSize =
       digits <= 4 ? 24 :
-      digits <= 6 ? 22 :
-      digits <= 8 ? 20 :
-      digits <= 10 ? 18 :
-      16;
+        digits <= 6 ? 22 :
+          digits <= 8 ? 20 :
+            digits <= 10 ? 18 :
+              16;
     return {
       fontSize: `${fontSize}px`,
       letterSpacing: digits >= 9 ? '-0.02em' : '0',
@@ -469,16 +470,18 @@ const Profile: React.FC<ScreenProps> = () => {
                     {isLoggedIn ? (displayName || ' ') : '未登录'}
                   </h2>
                   <div className="mt-1">
-                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black border border-current opacity-90 uppercase tracking-tight ${isLoggedIn ? (
-                      userSub.tier === MembershipTier.STARTER ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' :
-                        userSub.tier === MembershipTier.PLUS ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
-                          userSub.tier === MembershipTier.PRO ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' :
-                            userSub.tier === MembershipTier.ULTRA ? 'bg-slate-800 dark:bg-slate-900 text-amber-400' :
-                              'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    ) : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                      }`}>
-                      {isLoggedIn ? (userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier) : '访客'}
-                    </span>
+                    {(() => {
+                      const tagTier = isLoggedIn ? userSub.tier : MembershipTier.FREE;
+                      const tagStyle = getMembershipTagStyle(tagTier);
+                      const displayLabel = isLoggedIn ? tagStyle.label : '访客';
+
+                      return (
+                        <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg border text-[10px] font-bold transition-all duration-300 ${tagStyle.className}`}>
+                          <span className="material-symbols-outlined text-[12px] leading-none">{tagStyle.icon}</span>
+                          <span className="tracking-wide">{displayLabel}</span>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 {isLoggedIn ? displayEmail && (
@@ -524,21 +527,21 @@ const Profile: React.FC<ScreenProps> = () => {
 
               <div className="relative z-10 flex items-center justify-between gap-4">
                 <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <div className={`size-8 rounded-full flex items-center justify-center backdrop-blur-sm border ${userSub.tier === MembershipTier.FREE
-                        ? 'bg-primary/10 border-primary/10'
-                        : 'bg-white/10 border-white/10'
+                  <div className="flex items-center gap-2 flex-nowrap">
+                    <div className={`size-8 rounded-full shrink-0 flex items-center justify-center backdrop-blur-sm border ${userSub.tier === MembershipTier.FREE
+                      ? 'bg-primary/10 border-primary/10'
+                      : 'bg-white/10 border-white/10'
                       }`}>
                       <span className={`material-symbols-outlined text-[18px] ${style.iconColor}`}>{style.icon}</span>
                     </div>
-                    <h3 className={`${style.titleColor} text-[16px] font-black tracking-tight`}>
+                    <h3 className={`${style.titleColor} text-[clamp(14px,3.8vw,16px)] font-black tracking-tight whitespace-nowrap`}>
                       {style.title}
                     </h3>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className={`shrink-0 px-4 py-2 rounded-xl text-[11px] font-black transition-all group-hover:px-5 ${style.btnStyle}`}>
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className={`whitespace-nowrap px-4 py-2 rounded-xl text-[11px] font-black transition-all group-hover:px-5 ${style.btnStyle}`}>
                     {userSub.tier === MembershipTier.FREE ? '立即升级' : '查看权益'}
                   </div>
                   <span className="material-symbols-outlined text-white/40 text-[18px] group-hover:translate-x-1 transition-transform">chevron_right</span>

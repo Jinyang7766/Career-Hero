@@ -5,6 +5,7 @@ import { ReferralModal } from '../ReferralModal';
 import { useUserProfile } from '../../src/useUserProfile';
 import { ADDON_POINT_PACKAGES, PLAN_MONTHLY_POINTS, REFERRAL_BONUS_POINTS } from '../../src/points-config';
 import BackButton from '../shared/BackButton';
+import { getMembershipTagStyle } from './profile/profile-membership-style';
 
 const MemberCenter: React.FC = () => {
     const { goBack, navigateToView, currentUser } = useAppContext();
@@ -219,9 +220,15 @@ const MemberCenter: React.FC = () => {
                                         {displayName}
                                     </h2>
                                     <div className="mt-1">
-                                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black ${tierStyle.iconBg} ${tierStyle.iconColor} border border-current opacity-90 uppercase tracking-tight`}>
-                                            {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
-                                        </span>
+                                        {(() => {
+                                            const tagStyle = getMembershipTagStyle(userSub.tier);
+                                            return (
+                                                <div className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border text-[10px] font-bold ${tagStyle.className}`}>
+                                                    <span className="material-symbols-outlined text-[12px] leading-none">{tagStyle.icon}</span>
+                                                    <span className="tracking-wide">{userSub.tier === MembershipTier.FREE ? '免费版' : tagStyle.label}</span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2 min-w-0">

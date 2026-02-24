@@ -75,3 +75,38 @@ export const getMembershipTierStyle = (tier: MembershipTier, isDarkMode: boolean
       };
   }
 };
+
+export const getMembershipTagStyle = (tier: MembershipTier) => {
+  switch (tier) {
+    case MembershipTier.STARTER:
+      return {
+        label: 'Starter 体验',
+        icon: 'rocket_launch',
+        className: 'bg-slate-100/80 text-slate-600 border-slate-200/50 dark:bg-slate-800/80 dark:text-slate-400 dark:border-slate-700/50',
+      };
+    case MembershipTier.PLUS:
+      return {
+        label: 'Plus 会员',
+        icon: 'verified',
+        className: 'bg-blue-50/80 text-blue-600 border-blue-100/50 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-800/50 shadow-sm shadow-blue-500/5',
+      };
+    case MembershipTier.PRO:
+      return {
+        label: 'Pro 专家',
+        icon: 'workspace_premium',
+        className: 'bg-indigo-50/80 text-indigo-600 border-indigo-100/50 dark:bg-indigo-900/40 dark:text-indigo-300 dark:border-indigo-800/50 shadow-sm shadow-indigo-500/5',
+      };
+    case MembershipTier.ULTRA:
+      return {
+        label: 'Ultra 旗舰',
+        icon: 'diamond',
+        className: 'bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-amber-400 border-amber-500/40 shadow-md shadow-amber-900/30',
+      };
+    default:
+      return {
+        label: '免费版',
+        icon: 'person',
+        className: 'bg-slate-50/80 text-slate-500 border-slate-200 dark:bg-slate-800/30 dark:text-slate-500 dark:border-slate-700/50',
+      };
+  }
+};
