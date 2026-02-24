@@ -3,6 +3,61 @@ import json
 import re
 
 
+_SKILL_SPLIT_RE = re.compile(r'[，,、;；|]+|\t+|\s{2,}')
+
+
+def _split_skill_items(payload):
+    if not payload:
+        return []
+    base_parts = [p.strip() for p in _SKILL_SPLIT_RE.split(str(payload)) if p and str(p).strip()]
+    out = []
+    for part in base_parts:
+        token = str(part).strip()
+        if not token:
+            continue
+        if '/' in token or '／' in token:
+            sub_tokens = [s.strip() for s in re.split(r'[\/／]+', token) if s and s.strip()]
+            idx = 0
+            while idx < len(sub_tokens):
+                current = sub_tokens[idx]
+                next_token = sub_tokens[idx + 1] if idx + 1 < len(sub_tokens) else ''
+                # Preserve A/B style skill tokens while still splitting normal slash lists.
+                if re.fullmatch(r'(?i)a', current) and next_token and re.match(r'(?i)^b(?:$|[^a-z0-9].*)', next_token):
+                    out.append(f"A/{next_token}")
+                    idx += 2
+                    continue
+                out.append(current)
+                idx += 1
+            continue
+        out.append(token)
+    return out
+
+
+def _remove_ab_fragments(tokens):
+    if not tokens:
+        return []
+    ab_suffixes = set()
+    for raw in tokens:
+        token = str(raw or '').strip()
+        m = re.match(r'(?i)^A\s*[\/／]\s*(B.*)$', token)
+        if m:
+            ab_suffixes.add(m.group(1).strip().lower())
+    if not ab_suffixes:
+        return [str(t or '').strip() for t in tokens if str(t or '').strip()]
+
+    cleaned = []
+    for raw in tokens:
+        token = str(raw or '').strip()
+        if not token:
+            continue
+        if re.fullmatch(r'(?i)A', token):
+            continue
+        if token.lower() in ab_suffixes:
+            continue
+        cleaned.append(token)
+    return cleaned
+
+
 def _normalize_skill_candidates(value):
     def _iter_values(raw):
         if raw is None:
@@ -38,7 +93,10 @@ def _normalize_skill_candidates(value):
     out = []
     seen = set()
     for chunk in _iter_values(value):
-        for token in re.split(r"[，,、/\n;；|]+", str(chunk).strip()):
+        chunk_text = str(chunk).strip()
+        if not chunk_text:
+            continue
+        for token in _split_skill_items(chunk_text):
             v = str(token).strip()
             if not v:
                 continue
@@ -286,10 +344,59 @@ def normalize_parsed_resume_result(ai_result):
     }
 
 
-def extract_skills_from_resume_text(resume_text):
+def _filter_skill_candidates(collected, *, limit=25, allow_general_hard_skill=True):
+    noise = {
+        '技能', '专业技能', '核心技能', '工作经历', '教育经历', '项目经历',
+        '电商', '数据', '运营', '分析', '平台', '工具', '技术', '能力',
+        '天猫', '京东', '钉钉'
+    }
+    cert_re = re.compile(
+        r'(证书|认证|资格证|执业证|从业资格|等级证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格|'
+        r'CET[-\s]?[46]|TEM[-\s]?[48]|IELTS|TOEFL|N2|N1|大学英语[四六]级|英语[四六]级|普通话[一二三]级(?:甲等|乙等)?|'
+        r'计算机(?:等级)?[一二三四]级|全国计算机等级考试|NCRE)',
+        re.IGNORECASE
+    )
+    strong_skill_re = re.compile(
+        r'^(Python|Java|JavaScript|TypeScript|SQL|Excel|Tableau|PowerBI|SPSS|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring|SAP|ERP|WMS|GA4|SEO|SEM|A/B测试|A/B Test|SCRM|CRM|LLM|生意参谋|京东商智|万相台|直通车|引力魔方|千川|巨量引擎|数据建模|数据可视化|机器学习|深度学习)$',
+        re.IGNORECASE
+    )
+
+    result = []
+    seen = set()
+    for item in collected:
+        v = re.sub(r'\s+', ' ', str(item)).strip('：:;；,，|/ ').strip()
+        v = re.sub(r'^[\-•·\*\u2022]+\s*', '', v).strip()
+        if re.search(r'(?i)^power\s*bi$', v):
+            v = 'PowerBI'
+        if re.search(r'(?i)^A\s*[\/／]\s*B(?:\s*Test(?:ing)?|测试)$', v):
+            v = 'A/B测试'
+        if not v or v in noise:
+            continue
+        if len(v) > 40 or len(v) < 2:
+            continue
+        looks_like_general_hard_skill = bool(
+            re.fullmatch(r'[A-Za-z][A-Za-z0-9.+#/\-\s]{1,20}', v)
+            or re.fullmatch(r'[\u4e00-\u9fa5]{2,8}', v)
+        )
+        if not (strong_skill_re.search(v) or cert_re.search(v) or (allow_general_hard_skill and looks_like_general_hard_skill)):
+            continue
+        if re.search(r'(全链路|策略|流程|方案|运营|沟通|协同|策划|看板|内容|直播间|私域|社群)', v):
+            continue
+        key = v.lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        result.append(v)
+        if len(result) >= limit:
+            break
+
+    return _remove_ab_fragments(result)
+
+
+def _extract_skills_from_skill_sections(resume_text):
     text = (resume_text or '').strip()
     if not text:
-        return []
+        return [], False
     lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if ln and ln.strip()]
     collected = []
     cert_collected = []
@@ -305,41 +412,16 @@ def extract_skills_from_resume_text(resume_text):
     next_section_re = re.compile(
         r'^(工作经历|项目经历|教育经历|教育背景|个人总结|自我评价|荣誉|语言能力|兴趣爱好|联系方式)\s*[:：]?$'
     )
+    has_explicit_skill_section = False
 
     in_skill_block = False
     in_cert_block = False
-    split_items_re = re.compile(r'[，,、;；|]+|\t+|\s{2,}')
-
-    def _split_skill_items(payload):
-        if not payload:
-            return []
-        base_parts = [p.strip() for p in split_items_re.split(str(payload)) if p and str(p).strip()]
-        out = []
-        for part in base_parts:
-            token = str(part).strip()
-            if not token:
-                continue
-            if '/' in token or '／' in token:
-                sub_tokens = [s.strip() for s in re.split(r'[\/／]+', token) if s and s.strip()]
-                idx = 0
-                while idx < len(sub_tokens):
-                    current = sub_tokens[idx]
-                    next_token = sub_tokens[idx + 1] if idx + 1 < len(sub_tokens) else ''
-                    # Preserve A/B style skill tokens while still splitting normal slash lists.
-                    if re.fullmatch(r'(?i)a', current) and next_token and re.match(r'(?i)^b(?:$|[^a-z0-9].*)', next_token):
-                        out.append(f"A/{next_token}")
-                        idx += 2
-                        continue
-                    out.append(current)
-                    idx += 1
-                continue
-            out.append(token)
-        return out
     for ln in lines:
         compact_ln = re.sub(r'\s+', '', ln)
 
         skill_m = skill_heading_inline_re.match(ln) or skill_heading_inline_re.match(compact_ln)
         if skill_m:
+            has_explicit_skill_section = True
             in_skill_block = True
             in_cert_block = False
             inline_payload = (skill_m.group(2) or '').strip()
@@ -391,95 +473,115 @@ def extract_skills_from_resume_text(resume_text):
             if v:
                 collected.append(v)
 
-    noise = {
-        '技能', '专业技能', '核心技能', '工作经历', '教育经历', '项目经历',
-        '电商', '数据', '运营', '分析', '平台', '工具', '技术', '能力',
-        '天猫', '京东', '钉钉'
-    }
-    cert_re = re.compile(
-        r'(证书|认证|资格证|执业证|从业资格|等级证|PMP|CFA|FRM|CPA|ACCA|CISP|CISSP|软考|教师资格证|法律职业资格|'
-        r'CET[-\s]?[46]|TEM[-\s]?[48]|IELTS|TOEFL|N2|N1|大学英语[四六]级|英语[四六]级|普通话[一二三]级(?:甲等|乙等)?|'
-        r'计算机(?:等级)?[一二三四]级|全国计算机等级考试|NCRE)',
+    return _filter_skill_candidates(collected, allow_general_hard_skill=True), has_explicit_skill_section
+
+
+def extract_skills_from_work_project_text(resume_text):
+    text = (resume_text or '').strip()
+    if not text:
+        return []
+    lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if ln and ln.strip()]
+    if not lines:
+        return []
+
+    work_project_heading_re = re.compile(
+        r'^(工作经历|工作经验|项目经历|项目经验|实践经历|实习经历)\s*[:：]?$',
         re.IGNORECASE
     )
-    strong_skill_re = re.compile(
-        r'^(Python|Java|JavaScript|TypeScript|SQL|Excel|Tableau|PowerBI|SPSS|Linux|Git|Docker|Kubernetes|React|Vue|Node\.?js|Flask|Django|Spring|SAP|ERP|WMS|GA4|SEO|SEM|A/B测试|A/B Test|SCRM|CRM|LLM|生意参谋|京东商智|万相台|直通车|引力魔方|千川|巨量引擎|数据建模|数据可视化|机器学习|深度学习)$',
+    end_section_re = re.compile(
+        r'^(教育经历|教育背景|个人总结|自我评价|荣誉|语言能力|兴趣爱好|联系方式|'
+        r'专业技能|核心技能|技能特长|技能标签|技能|掌握技能|IT技能|工具技能|技术栈|技术能力|核心能力|专业能力|技能清单|个人技能|'
+        r'证书|资格证书|专业证书|职业资格|资质证书)\s*[:：]?$',
         re.IGNORECASE
     )
-    result = []
-    seen = set()
-    for item in collected:
-        v = re.sub(r'\s+', ' ', str(item)).strip('：:;；,，|/ ').strip()
-        v = re.sub(r'^[\-•·\*\u2022]+\s*', '', v).strip()
-        if not v or v in noise:
+
+    in_scope = False
+    scoped_lines = []
+    for ln in lines:
+        compact_ln = re.sub(r'\s+', '', ln)
+        if work_project_heading_re.match(ln) or work_project_heading_re.match(compact_ln):
+            in_scope = True
             continue
-        if len(v) > 40 or len(v) < 2:
+        if in_scope and (end_section_re.match(ln) or end_section_re.match(compact_ln)):
+            in_scope = False
             continue
-        looks_like_general_hard_skill = bool(
-            re.fullmatch(r'[A-Za-z][A-Za-z0-9.+#/\-\s]{1,20}', v)
-            or re.fullmatch(r'[\u4e00-\u9fa5]{2,8}', v)
-        )
-        if not (strong_skill_re.search(v) or cert_re.search(v) or looks_like_general_hard_skill):
-            continue
-        if re.search(r'(全链路|策略|流程|方案|运营|沟通|协同|策划|看板|内容|直播间|私域|社群)', v):
-            continue
-        key = v.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        result.append(v)
-        if len(result) >= 25:
-            break
-    return result
+        if in_scope:
+            scoped_lines.append(ln)
+
+    if not scoped_lines:
+        return []
+
+    collected = []
+    for ln in scoped_lines:
+        collected.extend(_split_skill_items(ln))
+
+    scoped_text = '\n'.join(scoped_lines)
+    embedded_patterns = [
+        (r'(?i)\bA\s*[\/／]\s*B(?:\s*Test(?:ing)?|测试)\b', 'A/B测试'),
+        (r'(?i)\bPower\s*BI\b', 'PowerBI'),
+        (r'(?i)\bTableau\b', 'Tableau'),
+        (r'(?i)\bPython\b', 'Python'),
+        (r'(?i)\bSQL\b', 'SQL'),
+        (r'(?i)\bExcel\b', 'Excel'),
+        (r'(?i)\bSPSS\b', 'SPSS'),
+        (r'(?i)\bReact\b', 'React'),
+        (r'(?i)\bVue\b', 'Vue'),
+        (r'(?i)\bNode\.?js\b', 'Node.js'),
+        (r'(?i)\bDocker\b', 'Docker'),
+        (r'(?i)\bKubernetes\b', 'Kubernetes'),
+        (r'(?i)\bLinux\b', 'Linux'),
+        (r'(?i)\bGA4\b', 'GA4'),
+        (r'(?i)\bSEO\b', 'SEO'),
+        (r'(?i)\bSEM\b', 'SEM'),
+        (r'(?i)\bSCRM\b', 'SCRM'),
+        (r'(?i)\bCRM\b', 'CRM'),
+        (r'数据建模', '数据建模'),
+        (r'数据可视化', '数据可视化'),
+        (r'机器学习', '机器学习'),
+        (r'深度学习', '深度学习'),
+        (r'生意参谋', '生意参谋'),
+        (r'京东商智', '京东商智'),
+        (r'万相台', '万相台'),
+        (r'直通车', '直通车'),
+        (r'引力魔方', '引力魔方'),
+        (r'千川', '千川'),
+        (r'巨量引擎', '巨量引擎'),
+    ]
+    for pattern, canonical in embedded_patterns:
+        if re.search(pattern, scoped_text, flags=re.IGNORECASE):
+            collected.append(canonical)
+
+    return _filter_skill_candidates(collected, allow_general_hard_skill=False)
+
+
+def extract_skills_from_resume_text(resume_text):
+    skills, _ = _extract_skills_from_skill_sections(resume_text)
+    return skills
 
 
 def fill_skills_if_missing(parsed_data, resume_text, logger_obj=None):
-    def _remove_ab_fragments(tokens):
-        if not tokens:
-            return []
-        ab_suffixes = set()
-        for raw in tokens:
-            token = str(raw or '').strip()
-            m = re.match(r'(?i)^A\s*[\/／]\s*(B.*)$', token)
-            if m:
-                ab_suffixes.add(m.group(1).strip().lower())
-        if not ab_suffixes:
-            return [str(t or '').strip() for t in tokens if str(t or '').strip()]
-
-        cleaned = []
-        for raw in tokens:
-            token = str(raw or '').strip()
-            if not token:
-                continue
-            if re.fullmatch(r'(?i)A', token):
-                continue
-            if token.lower() in ab_suffixes:
-                continue
-            cleaned.append(token)
-        return cleaned
-
-    strict_skills = extract_skills_from_resume_text(resume_text)
+    section_skills, has_explicit_skill_section = _extract_skills_from_skill_sections(resume_text)
+    work_project_skills = extract_skills_from_work_project_text(resume_text) if not has_explicit_skill_section else []
     existing_skills = _normalize_skill_candidates(parsed_data.get('skills') or [])
-    if strict_skills:
-        merged = []
-        seen = set()
-        for item in strict_skills + existing_skills:
-            v = str(item or '').strip()
-            if not v:
-                continue
-            k = v.lower()
-            if k in seen:
-                continue
-            seen.add(k)
-            merged.append(v)
-        parsed_data['skills'] = _remove_ab_fragments(merged)
+
+    if has_explicit_skill_section and section_skills:
+        # Explicit skill sections take priority; do not mix parser/work/project inferred skills.
+        parsed_data['skills'] = _remove_ab_fragments(section_skills)
+    elif work_project_skills:
+        # No explicit skill section: extract from work/project sections first.
+        parsed_data['skills'] = _remove_ab_fragments(work_project_skills)
     else:
         parsed_data['skills'] = _remove_ab_fragments(existing_skills)
 
     if logger_obj:
-        if strict_skills and parsed_data.get('skills'):
+        if has_explicit_skill_section and parsed_data.get('skills'):
             logger_obj.info(
-                "Skills extracted from explicit sections and merged with parser output, count=%s",
+                "Skills extracted from explicit skill sections only, count=%s",
+                len(parsed_data.get('skills') or [])
+            )
+        elif work_project_skills and parsed_data.get('skills'):
+            logger_obj.info(
+                "No explicit skill section found; extracted skills from work/project sections, count=%s",
                 len(parsed_data.get('skills') or [])
             )
         elif parsed_data.get('skills'):

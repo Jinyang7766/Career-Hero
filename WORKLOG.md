@@ -823,3 +823,65 @@ Use one block per executed step:
   - 本地基线测试：PASS（frontend `7 passed`，backend `6 passed`）。
 - Risks/Notes:
   - 当前 AB 规则按 `A/B*` 清洗；如未来出现其他带斜杠成对技能（例如 `B/C`）需按同样模式扩展。
+
+## [2026-02-24 21:41] UX Fix: 编辑页工作内容/项目描述改为自适应高度（去内滚动）
+- Agent: B-FE + C
+- Goal:
+  - 修复编辑页“工作内容/项目描述”输入框在长文本下出现内部滚动条的问题，改为随内容自动增高。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/components/editor/AutoGrowTextarea.tsx`
+    - 验证映射：新增可复用自增高 textarea，输入时按 `scrollHeight` 重算高度并固定 `overflowY=hidden`。
+  - `ai-resume-builder/components/editor/steps/WorkStep.tsx`
+    - 验证映射：工作内容输入框切换到 `AutoGrowTextarea`，支持长文本无内滚动。
+  - `ai-resume-builder/components/editor/steps/ProjectsStep.tsx`
+    - 验证映射：项目描述输入框切换到 `AutoGrowTextarea`，支持长文本无内滚动。
+- Changes:
+  - 新增 `AutoGrowTextarea` 组件，封装：
+    - `useLayoutEffect` 基于 `value` 自动重算高度；
+    - `onInput` 实时重算；
+    - 强制 `overflowY: hidden`。
+  - 工作/项目描述从原生 `textarea` 替换为 `AutoGrowTextarea`，保留原样式与字符上限。
+- Commands:
+  - `python (Playwright) -> login -> 新建简历 -> 导入文本 -> 工作内容/项目描述填充超长文本 -> 读取 textarea metrics`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向 UI 流程：PASS
+    - `work`: `overflowY=hidden`, `delta(scrollHeight-clientHeight)=2`, `noInternalScroll=true`
+    - `project`: `overflowY=hidden`, `delta=2`, `noInternalScroll=true`
+    - 证据截图：`output/playwright/e2e-editor-autogrow-desc.png`
+  - 本地基线测试：PASS（frontend `7 passed`，backend `6 passed`）。
+- Risks/Notes:
+  - 浏览器渲染取整会出现 1-3px 的 `scrollHeight-clientHeight` 差值（边框/像素舍入），当前按无滚动判定为正常。
+
+## [2026-02-24 21:50] Bugfix + Real Sample Re-test: 技能提取优先级与工作/项目回退修正
+- Agent: B-BE + C
+- Goal:
+  - 满足规则：存在“技能大项”时仅提取技能大项字段；仅在无技能大项时才从工作经历/项目经历回退提取。
+  - 修复回退链路中 `A/B Test` 被拆成碎片（`A`、`B测试`）的问题。
+- Scope (Changed modules mapped to checks):
+  - `backend/services/resume_parse_postprocess.py`
+    - 验证映射：
+      - 新增技能分词公共函数，保留 `A/B*` 组合词。
+      - 新增“技能大项提取”与“工作/项目回退提取”分层逻辑。
+      - `fill_skills_if_missing` 调整为：
+        - 有技能大项：仅用技能大项结果，不混入 parser/work/project 推断。
+        - 无技能大项：优先使用工作/项目回退提取；为空再回退 parser 技能。
+      - 回退模式收紧过滤，避免把“负责广告投放分析”这类句子片段误识别为技能。
+  - `backend/tests/test_resume_parse_postprocess_skills.py`
+    - 验证映射：补充“显式技能优先不混入”与“无技能大项时从工作/项目提取且无 AB 碎片”用例。
+- Commands:
+  - `python -m pytest backend/tests/test_resume_parse_postprocess_skills.py -q`
+  - `python (requests) -> POST http://127.0.0.1:5000/api/ai/parse-resume`（两组真实样本）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 后端定向单测：PASS（`6 passed`）。
+  - 真实样本 API 复测：PASS
+    - 样本 A（有技能大项 + 工作/项目含 React/Node）：
+      - 返回 `["Python","SQL","A/B测试","PowerBI","PMP","CET-6"]`
+      - 不包含 `React`/`Node.js`，符合“技能大项优先”。
+    - 样本 B（无技能大项，仅工作/项目描述）：
+      - 返回 `["A/B测试","PowerBI","Tableau","Python","SQL"]`
+      - 无 `A`/`B测试` 碎片，且无句子噪声词。
+  - 本地基线测试：PASS（frontend `7 passed`，backend `7 passed`）。
+- Risks/Notes:
+  - 回退模式为“精准优先”策略，若后续需要覆盖更多小众技术词，可在 `embedded_patterns` 中按样本持续扩展。

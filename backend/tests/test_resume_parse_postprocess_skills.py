@@ -45,15 +45,17 @@ def test_fill_skills_falls_back_to_existing_parser_skills_when_no_skill_block():
     assert filled["skills"] == ["Python", "PowerBI", "SQL"]
 
 
-def test_fill_skills_merges_strict_and_existing_without_duplicates():
-    parsed_data = {"skills": ["SQL", "PowerBI"]}
+def test_fill_skills_prioritizes_explicit_skill_section_without_merging_parser_skills():
+    parsed_data = {"skills": ["SQL", "PowerBI", "React"]}
     resume_text = """
 赵敏
 专业技能：Python、SQL
+工作经历：
+负责使用 React 维护后台
 """
     filled = fill_skills_if_missing(parsed_data, resume_text)
 
-    assert filled["skills"] == ["Python", "SQL", "PowerBI"]
+    assert filled["skills"] == ["Python", "SQL"]
 
 
 def test_fill_skills_removes_ab_fragments_when_ab_skill_exists():
@@ -65,5 +67,23 @@ def test_fill_skills_removes_ab_fragments_when_ab_skill_exists():
     filled = fill_skills_if_missing(parsed_data, resume_text)
 
     assert "A/B测试" in filled["skills"]
+    assert "A" not in filled["skills"]
+    assert "B测试" not in filled["skills"]
+
+
+def test_fill_skills_extracts_from_work_project_when_no_explicit_skill_section():
+    parsed_data = {"skills": ["A", "B测试", "Python", "SQL"]}
+    resume_text = """
+李雷
+工作经历：
+负责广告投放分析，通过 A/B Testing 持续优化素材并提升 ROI。
+项目经历：
+使用 Python 和 SQL 构建分析看板。
+"""
+    filled = fill_skills_if_missing(parsed_data, resume_text)
+
+    assert "A/B测试" in filled["skills"]
+    assert "Python" in filled["skills"]
+    assert "SQL" in filled["skills"]
     assert "A" not in filled["skills"]
     assert "B测试" not in filled["skills"]

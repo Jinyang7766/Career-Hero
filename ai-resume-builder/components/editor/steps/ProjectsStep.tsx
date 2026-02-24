@@ -1,6 +1,7 @@
 import React from 'react';
 import { ResumeData, ExperienceItem } from '../../../types';
 import { PROJECT_FIELD_LIMITS } from '../../../src/editor-field-limits';
+import AutoGrowTextarea from '../AutoGrowTextarea';
 
 type ProjectsStepProps = {
   resumeData: ResumeData;
@@ -90,14 +91,14 @@ const ProjectsStep: React.FC<ProjectsStepProps> = ({ resumeData, isComplete, wiz
                   <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">项目描述</label>
                   <span className="text-xs text-slate-400">{descLen}/{PROJECT_FIELD_LIMITS.description}</span>
                 </div>
-                <textarea
+                <AutoGrowTextarea
                   className="w-full rounded-lg bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed shadow-sm"
                   placeholder="描述项目细节及您的贡献..."
-                  rows={3}
+                  minRows={3}
                   value={proj.description}
                   onChange={(e) => onUpdate(proj.id, 'description', e.target.value)}
                   maxLength={PROJECT_FIELD_LIMITS.description}
-                ></textarea>
+                />
               </div>
             </div>
           </div>

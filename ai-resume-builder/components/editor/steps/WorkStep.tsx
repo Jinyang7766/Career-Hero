@@ -1,6 +1,7 @@
 import React from 'react';
 import { ResumeData, ExperienceItem } from '../../../types';
 import { WORK_FIELD_LIMITS } from '../../../src/editor-field-limits';
+import AutoGrowTextarea from '../AutoGrowTextarea';
 
 type WorkStepProps = {
   resumeData: ResumeData;
@@ -108,14 +109,14 @@ const WorkStep: React.FC<WorkStepProps> = ({ resumeData, isComplete, wizardMode,
                   <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">工作内容（可选）</label>
                   <span className="text-xs text-slate-400">{descLen}/{WORK_FIELD_LIMITS.description}</span>
                 </div>
-                <textarea
+                <AutoGrowTextarea
                   className="w-full rounded-lg bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] text-slate-900 dark:text-white px-4 py-3 placeholder:text-slate-400 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none transition-all leading-relaxed shadow-sm"
                   placeholder="描述您的主要职责和业绩成就..."
-                  rows={4}
+                  minRows={4}
                   value={exp.description}
                   onChange={(e) => onUpdate(exp.id, 'description', e.target.value)}
                   maxLength={WORK_FIELD_LIMITS.description}
-                ></textarea>
+                />
               </div>
             </div>
           </div>
