@@ -12,8 +12,6 @@ import traceback
 import logging
 import requests
 import threading
-import hashlib
-from types import SimpleNamespace
 import google.genai as genai
 
 app = Flask(__name__)
@@ -212,6 +210,13 @@ try:
     )
     from services.flask_http_hooks import configure_flask_http_hooks
     from services.supabase_init_service import init_supabase_client
+    from services.analysis_router_service import (
+        stable_percent_bucket as stable_percent_bucket_service,
+        should_route_analysis_to_deepseek as should_route_analysis_to_deepseek_service,
+        deepseek_generate_json as deepseek_generate_json_service,
+        analysis_generate_content_resilient as analysis_generate_content_resilient_service,
+        can_run_analysis_ai as can_run_analysis_ai_service,
+    )
 except ImportError:
     from backend.services.model_config_service import (
         get_ocr_model_candidates as get_ocr_model_candidates_service,
@@ -228,6 +233,13 @@ except ImportError:
     )
     from backend.services.flask_http_hooks import configure_flask_http_hooks
     from backend.services.supabase_init_service import init_supabase_client
+    from backend.services.analysis_router_service import (
+        stable_percent_bucket as stable_percent_bucket_service,
+        should_route_analysis_to_deepseek as should_route_analysis_to_deepseek_service,
+        deepseek_generate_json as deepseek_generate_json_service,
+        analysis_generate_content_resilient as analysis_generate_content_resilient_service,
+        can_run_analysis_ai as can_run_analysis_ai_service,
+    )
 
 
 def get_ocr_model_candidates():
@@ -259,90 +271,56 @@ else:
 
 
 def _stable_percent_bucket(seed: str) -> int:
-    digest = hashlib.sha256(str(seed or '').encode('utf-8')).hexdigest()
-    return int(digest[:8], 16) % 100
+    return stable_percent_bucket_service(seed)
 
 
 def _should_route_analysis_to_deepseek(current_user_id: str, data: dict) -> bool:
-    if ANALYSIS_LLM_MODE == 'deepseek':
-        return True
-    if ANALYSIS_LLM_MODE == 'gemini':
-        return False
-    if ANALYSIS_LLM_MODE != 'ab':
-        return False
-    resume_id = str((data or {}).get('resumeId') or '')
-    jd_text = str((data or {}).get('jobDescription') or '')
-    seed = f"{current_user_id}|{resume_id}|{len(jd_text)}"
-    return _stable_percent_bucket(seed) < ANALYSIS_DEEPSEEK_RATIO
+    return should_route_analysis_to_deepseek_service(
+        current_user_id=current_user_id,
+        data=data,
+        analysis_llm_mode=ANALYSIS_LLM_MODE,
+        analysis_deepseek_ratio=ANALYSIS_DEEPSEEK_RATIO,
+    )
 
 
 def _deepseek_generate_json(prompt: str, *, timeout_seconds: int = 90):
-    if not DEEPSEEK_API_KEY:
-        raise RuntimeError('DEEPSEEK_API_KEY not configured')
-
-    response = requests.post(
-        f"{DEEPSEEK_BASE_URL}/chat/completions",
-        headers={
-            'Authorization': f'Bearer {DEEPSEEK_API_KEY}',
-            'Content-Type': 'application/json',
-        },
-        json={
-            'model': DEEPSEEK_ANALYSIS_MODEL,
-            'messages': [{'role': 'user', 'content': prompt}],
-            'temperature': 0.2,
-            'response_format': {'type': 'json_object'},
-        },
-        timeout=timeout_seconds,
+    return deepseek_generate_json_service(
+        prompt,
+        deepseek_api_key=DEEPSEEK_API_KEY,
+        deepseek_base_url=DEEPSEEK_BASE_URL,
+        deepseek_model=DEEPSEEK_ANALYSIS_MODEL,
+        requests_module=requests,
+        timeout_seconds=timeout_seconds,
     )
-    response.raise_for_status()
-    payload = response.json() or {}
-    choices = payload.get('choices') or []
-    if not choices:
-        raise RuntimeError('DeepSeek returned empty choices')
-
-    message = choices[0].get('message') or {}
-    content = message.get('content')
-    if isinstance(content, list):
-        text_parts = []
-        for part in content:
-            if isinstance(part, dict):
-                txt = part.get('text')
-                if txt:
-                    text_parts.append(str(txt))
-        content = ''.join(text_parts)
-
-    text = str(content or '').strip()
-    if not text:
-        raise RuntimeError('DeepSeek returned empty content')
-    return SimpleNamespace(text=text), str(payload.get('model') or DEEPSEEK_ANALYSIS_MODEL)
 
 
 def _analysis_generate_content_resilient(*, current_user_id: str, data: dict, prompt: str, analysis_models_tried):
-    use_deepseek = _should_route_analysis_to_deepseek(current_user_id, data)
-    if use_deepseek:
-        try:
-            response, model_name = _deepseek_generate_json(prompt)
-            return response, f"deepseek:{model_name}"
-        except Exception as deepseek_error:
-            logger.warning("DeepSeek analysis failed, fallback to Gemini: %s", deepseek_error)
-
-    last_error = None
-    for model_name in (analysis_models_tried or []):
-        try:
-            return _gemini_generate_content_resilient(model_name, prompt, want_json=True)
-        except Exception as model_error:
-            last_error = model_error
-            logger.warning("Analysis model failed: %s, error=%s", model_name, model_error)
-
-    if use_deepseek and not analysis_models_tried:
-        raise RuntimeError("No available analysis model (DeepSeek failed; Gemini candidates empty)")
-    raise last_error or RuntimeError("No available analysis model")
+    return analysis_generate_content_resilient_service(
+        current_user_id=current_user_id,
+        data=data,
+        prompt=prompt,
+        analysis_models_tried=analysis_models_tried,
+        analysis_llm_mode=ANALYSIS_LLM_MODE,
+        analysis_deepseek_ratio=ANALYSIS_DEEPSEEK_RATIO,
+        deepseek_api_key=DEEPSEEK_API_KEY,
+        deepseek_base_url=DEEPSEEK_BASE_URL,
+        deepseek_model=DEEPSEEK_ANALYSIS_MODEL,
+        requests_module=requests,
+        logger=logger,
+        gemini_generate_json_fn=_gemini_generate_content_resilient,
+    )
 
 
 def _can_run_analysis_ai(current_user_id: str, data: dict) -> bool:
-    if _should_route_analysis_to_deepseek(current_user_id, data) and DEEPSEEK_API_KEY:
-        return True
-    return bool(gemini_client and check_gemini_quota())
+    return can_run_analysis_ai_service(
+        current_user_id=current_user_id,
+        data=data,
+        analysis_llm_mode=ANALYSIS_LLM_MODE,
+        analysis_deepseek_ratio=ANALYSIS_DEEPSEEK_RATIO,
+        deepseek_api_key=DEEPSEEK_API_KEY,
+        gemini_client=gemini_client,
+        check_gemini_quota_fn=check_gemini_quota,
+    )
 
 # Anti-bot / anti-crawler guard (in-memory, per worker)
 antibot_config = build_antibot_config_from_env(os.getenv)

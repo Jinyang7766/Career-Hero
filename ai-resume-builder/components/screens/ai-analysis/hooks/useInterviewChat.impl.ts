@@ -20,6 +20,11 @@ import {
   isUnusableInterviewSummary,
   type InterviewAnswerTiming,
 } from '../chat-session-utils';
+import {
+  blobToBase64,
+  hasModelReplyAfterUserMessage,
+  parseReplayCandidate,
+} from '../interview-chat-replay';
 
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
 
@@ -135,18 +140,6 @@ export const useInterviewChat = ({
     sendingCountRef.current = Math.max(0, sendingCountRef.current - 1);
     setIsSending(sendingCountRef.current > 0);
   };
-
-  const blobToBase64 = (blob: Blob) =>
-    new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const res = String(reader.result || '');
-        const idx = res.indexOf('base64,');
-        resolve(idx >= 0 ? res.slice(idx + 7) : res);
-      };
-      reader.onerror = () => reject(new Error('read failed'));
-      reader.readAsDataURL(blob);
-    });
 
   const handleSendMessage = async (
     textOverride?: string,
@@ -689,58 +682,46 @@ export const useInterviewChat = ({
       raw = '';
     }
     if (!raw) return;
-    let pending: any = null;
-    try {
-      pending = JSON.parse(raw);
-    } catch {
+    const replay = parseReplayCandidate(raw);
+    if (!replay) {
       clearPendingReply();
       return;
     }
-    const requestId = String(pending?.requestId || '').trim();
-    const pendingText = String(pending?.text || '').trim();
-    const pendingUserMessageId = String(pending?.userMessageId || '').trim();
-    const replayCount = Math.max(0, Number(pending?.replayCount) || 0);
-    const createdAt = Date.parse(String(pending?.createdAt || ''));
-    if (!requestId || !pendingText || !pendingUserMessageId) {
-      clearPendingReply();
-      return;
-    }
-    if (Number.isFinite(createdAt) && (Date.now() - createdAt) > 10 * 60 * 1000) {
+    if (Number.isFinite(replay.createdAtMs) && (Date.now() - replay.createdAtMs) > 10 * 60 * 1000) {
       clearPendingReply();
       return;
     }
     // Guard: avoid repeated auto-replay loops when page keeps remounting while backend/network is unstable.
-    if (replayCount >= 1) {
+    if (replay.replayCount >= 1) {
       clearPendingReply();
       return;
     }
-    if (pendingReplayRef.current === requestId) return;
+    if (pendingReplayRef.current === replay.requestId) return;
 
     const msgs = chatMessagesRef.current || [];
-    const userIdx = msgs.findIndex((m) => m.id === pendingUserMessageId && m.role === 'user');
-    if (userIdx < 0) {
+    const hasModelAfter = hasModelReplyAfterUserMessage(msgs, replay.userMessageId);
+    if (hasModelAfter === null) {
       clearPendingReply();
       return;
     }
-    const hasModelAfter = msgs.slice(userIdx + 1).some((m) => m.role === 'model' && String(m.text || '').trim().length > 0);
     if (hasModelAfter) {
       clearPendingReply();
       return;
     }
 
-    pendingReplayRef.current = requestId;
+    pendingReplayRef.current = replay.requestId;
     try {
       localStorage.setItem(getPendingReplyKey(), JSON.stringify({
-        ...pending,
-        replayCount: replayCount + 1,
+        ...replay.rawPayload,
+        replayCount: replay.replayCount + 1,
       }));
     } catch {
       // ignore write failures
     }
     void handleSendMessage(
-      pendingText,
+      replay.text,
       null,
-      { skipAddUserMessage: true, existingUserMessageId: pendingUserMessageId, suppressErrorAlert: true }
+      { skipAddUserMessage: true, existingUserMessageId: replay.userMessageId, suppressErrorAlert: true }
     );
   }, [currentStep, isSending]);
 

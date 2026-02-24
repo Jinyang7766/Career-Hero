@@ -7,6 +7,8 @@ import { useAppContext } from '../../src/app-context';
 import { createEmptyResumeData, useAppStore } from '../../src/app-store';
 import BackButton from '../shared/BackButton';
 import { clearLocalAnalysisSnapshotForResume } from './all-resumes/resume-local-cleanup';
+import { buildEditorResumeData, buildPreviewResumeData, hasValidResumeData } from './all-resumes/resume-transformers';
+import { writePreviewBackTarget, writePreviewResumeId } from './preview/preview-storage';
 
 const AllResumes: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
@@ -177,15 +179,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
           });
 
-          // 检查resume_data是否为空
-          if (!resume.resume_data) {
-            console.error('❌ 简历数据为空: resume_data is null/undefined');
-            alert('简历数据为空，请重新创建简历');
-            return;
-          }
-
-          // 检查resume_data是否为空对象
-          if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+          if (!hasValidResumeData(resume.resume_data)) {
             console.error('❌ 简历数据为空对象: resume_data is empty object');
             alert('简历数据为空，请重新创建简历');
             return;
@@ -195,26 +189,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
           // Set the resume data with ID for editing
           if (setResumeData) {
-            // Define default structure to ensure all fields exist
-            const defaultData = {
-              personalInfo: { name: '', title: '', email: '', phone: '', age: '' },
-              workExps: [],
-              educations: [],
-              projects: [],
-              skills: [],
-              gender: '',
-            };
-
-            const finalResumeData = {
-              ...defaultData,
-              ...resume.resume_data,
-              id: resume.id,
-              resumeTitle: resume.title,
-              personalInfo: {
-                ...defaultData.personalInfo,
-                ...(resume.resume_data?.personalInfo || {})
-              }
-            };
+            const finalResumeData = buildEditorResumeData(resume);
 
             console.log('Setting resume data:', {
               id: finalResumeData.id,
@@ -287,15 +262,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
           resumeDataSize: resume.resume_data ? JSON.stringify(resume.resume_data).length : 0
         });
 
-        // Check if resume_data is empty
-        if (!resume.resume_data) {
-          console.error('❌ 简历数据为空: resume_data is null/undefined');
-          alert('简历数据为空，请重新创建简历');
-          return;
-        }
-
-        // Check if resume_data is empty object
-        if (typeof resume.resume_data === 'object' && Object.keys(resume.resume_data).length === 0) {
+        if (!hasValidResumeData(resume.resume_data)) {
           console.error('❌ 简历数据为空对象: resume_data is empty object');
           alert('简历数据为空，请重新创建简历');
           return;
@@ -305,11 +272,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
         // Set the resume data with ID for preview
         if (setResumeData) {
-          const finalResumeData = {
-            id: resume.id,
-            ...resume.resume_data,
-            resumeTitle: resume.title
-          };
+          const finalResumeData = buildPreviewResumeData(resume);
 
           console.log('Setting resume data for preview:', {
             id: finalResumeData.id,
@@ -322,6 +285,8 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
           setResumeData(finalResumeData);
         }
+        writePreviewBackTarget('all_resumes');
+        writePreviewResumeId(String(resume.id));
 
         navigateToView(View.PREVIEW);
       } else {

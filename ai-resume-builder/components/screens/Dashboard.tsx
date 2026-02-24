@@ -217,6 +217,8 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
               }
             });
           }
+          localStorage.setItem('preview_back_target', 'dashboard');
+          localStorage.setItem('preview_resume_id', String(fullResume.id));
           navigateToView(View.PREVIEW);
         } else {
           console.error('Resume data is empty');

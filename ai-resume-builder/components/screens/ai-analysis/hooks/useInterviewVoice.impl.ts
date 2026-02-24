@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { buildApiUrl } from '../../../../src/api-config';
 import type { ChatMessage } from '../types';
+import { detectSilentAudio, isVoiceDebugEnabled, pickRecorderMime } from '../interview-voice-utils';
 
 type AudioOverride = { blob: Blob; url: string; mime: string; duration?: number };
 
@@ -71,10 +72,6 @@ export const useInterviewVoice = ({
     if (!mediaStreamRef.current) return;
     try { mediaStreamRef.current.getTracks().forEach((t) => t.stop()); } catch { }
     mediaStreamRef.current = null;
-  };
-
-  const voiceDebugEnabled = () => {
-    try { return localStorage.getItem('voice_debug') === '1'; } catch { return false; }
   };
 
   useEffect(() => {
@@ -197,61 +194,6 @@ export const useInterviewVoice = ({
     }
   };
 
-  const pickRecorderMime = () => {
-    const MR: any = typeof window !== 'undefined' ? (window as any).MediaRecorder : null;
-    const isSupported = (t: string) => {
-      try { return !!MR?.isTypeSupported?.(t); } catch { return false; }
-    };
-    const candidates = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
-    for (const c of candidates) if (isSupported(c)) return c;
-    return '';
-  };
-
-  const isAudioLikelySilent = async (blob: Blob): Promise<boolean | null> => {
-    try {
-      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
-      if (!AC) return null;
-      const buf = await blob.arrayBuffer();
-      const ctx: AudioContext = new AC();
-      try { await (ctx as any).resume?.(); } catch { }
-      const audioBuffer = await new Promise<AudioBuffer>((resolve, reject) => {
-        try {
-          const ab = buf.slice(0);
-          ctx.decodeAudioData(ab, (decoded) => resolve(decoded), (err) => reject(err));
-        } catch (e) {
-          reject(e);
-        }
-      });
-
-      const ch = audioBuffer.numberOfChannels || 1;
-      const len = audioBuffer.length || 0;
-      if (!len) {
-        try { ctx.close(); } catch { }
-        return true;
-      }
-
-      const step = Math.max(1, Math.floor(len / 48000));
-      let sumSq = 0;
-      let count = 0;
-      let peak = 0;
-      for (let c = 0; c < ch; c++) {
-        const data = audioBuffer.getChannelData(c);
-        for (let i = 0; i < len; i += step) {
-          const v = data[i] || 0;
-          const av = Math.abs(v);
-          if (av > peak) peak = av;
-          sumSq += v * v;
-          count++;
-        }
-      }
-      const rms = Math.sqrt(sumSq / Math.max(1, count));
-      try { ctx.close(); } catch { }
-      return (rms < 0.003) && (peak < 0.02);
-    } catch {
-      return null;
-    }
-  };
-
   const transcribeAudioOnBackend = async (audioObj: { blob: Blob; url: string; mime: string }) => {
     const token = await getBackendAuthToken();
     if (!token) throw new Error('请先登录以使用 AI 功能');
@@ -302,7 +244,7 @@ export const useInterviewVoice = ({
           ? String((e as any).message).trim()
           : '转写失败，请稍后重试';
       showToast(msg, 'error');
-      if (voiceDebugEnabled()) console.debug('[voice] transcribeExistingVoiceMessage failed', e);
+      if (isVoiceDebugEnabled()) console.debug('[voice] transcribeExistingVoiceMessage failed', e);
     } finally {
       setTranscribingByMsgId((prev) => {
         const next = { ...prev };
@@ -347,7 +289,7 @@ export const useInterviewVoice = ({
         recordChunksRef.current = [];
 
         if (!blob || !blob.size) {
-          if (voiceDebugEnabled()) console.debug('[voice] audio recorder stopped: empty blob');
+          if (isVoiceDebugEnabled()) console.debug('[voice] audio recorder stopped: empty blob');
           try {
             const pendingId = voicePendingUserMsgIdRef.current;
             voicePendingUserMsgIdRef.current = null;
@@ -362,7 +304,7 @@ export const useInterviewVoice = ({
           return;
         }
 
-        if (voiceDebugEnabled()) {
+        if (isVoiceDebugEnabled()) {
           console.debug('[voice] audio recorder stopped', {
             token,
             size: blob.size,
@@ -379,7 +321,7 @@ export const useInterviewVoice = ({
         (async () => {
           const peak = holdVoicePeakRef.current;
           let silentVerdict: boolean | null = null;
-          if (peak < 0.08) silentVerdict = await isAudioLikelySilent(blob!);
+          if (peak < 0.08) silentVerdict = await detectSilentAudio(blob!);
 
           if (silentVerdict === true) {
             try { voiceSilenceByMsgIdRef.current.set(userMsgId, true); } catch { }
@@ -419,7 +361,7 @@ export const useInterviewVoice = ({
       };
 
       rec.onerror = (e: any) => {
-        if (voiceDebugEnabled()) console.debug('[voice] audio recorder error', e);
+        if (isVoiceDebugEnabled()) console.debug('[voice] audio recorder error', e);
       };
 
       try { rec.start(120); } catch { rec.start(); }
@@ -434,7 +376,7 @@ export const useInterviewVoice = ({
       mediaRecorderRef.current = null;
       setRecording(false);
       cleanupVoiceMeter();
-      if (voiceDebugEnabled()) console.debug('[voice] startAudioRecorder failed', e);
+      if (isVoiceDebugEnabled()) console.debug('[voice] startAudioRecorder failed', e);
     }
   };
 

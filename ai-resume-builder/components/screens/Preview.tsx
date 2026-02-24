@@ -5,17 +5,24 @@ import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
 import BackButton from '../shared/BackButton';
 import { usePreviewPdfExport } from './preview/hooks/usePreviewPdfExport';
+import { usePreviewRestore } from './preview/hooks/usePreviewRestore';
 import { usePreviewSectionOrder } from './preview/hooks/usePreviewSectionOrder';
 import { usePreviewZoomPan } from './preview/hooks/usePreviewZoomPan';
 import { renderPreviewTemplate, TEMPLATE_OPTIONS } from './preview/PreviewTemplates';
 
 const Preview: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
-  const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
+  const goBack = useAppContext((s) => s.goBack);
   const currentTemplateId = resumeData?.templateId || 'modern';
   const { isGenerating, handleExportPDF } = usePreviewPdfExport({ resumeData });
+  const { hasResumeContent, isRestoringPreview, restoreError, handlePreviewBack } = usePreviewRestore({
+    resumeData,
+    setResumeData,
+    navigateToView,
+    goBack,
+  });
   const { sectionOrder, handleTemplateChange, moveSection } = usePreviewSectionOrder({ resumeData, setResumeData });
   const {
     previewScale,
@@ -31,7 +38,7 @@ const Preview: React.FC<ScreenProps> = () => {
     <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="h-14 px-4 flex items-center justify-between relative">
-          <BackButton onClick={goBack} className="z-10" />
+          <BackButton onClick={handlePreviewBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
             简历预览
           </h2>
@@ -114,7 +121,21 @@ const Preview: React.FC<ScreenProps> = () => {
                 }
               `
             }} />
-            {resumeData ? renderPreviewTemplate({
+            {isRestoringPreview ? (
+              <div className="h-full w-full flex items-center justify-center">
+                <span className="size-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+              </div>
+            ) : restoreError && !hasResumeContent ? (
+              <div className="h-full w-full flex flex-col items-center justify-center gap-3 px-6 text-center">
+                <p className="text-sm text-slate-500 dark:text-slate-400">{restoreError}</p>
+                <button
+                  onClick={() => navigateToView(View.ALL_RESUMES, { replace: true })}
+                  className="h-9 px-4 rounded-full bg-primary text-white text-xs font-bold hover:opacity-90 transition-opacity"
+                >
+                  返回全部简历
+                </button>
+              </div>
+            ) : resumeData ? renderPreviewTemplate({
               templateId: resumeData.templateId || 'modern',
               data: resumeData,
               sectionOrder,
@@ -154,4 +175,3 @@ const Preview: React.FC<ScreenProps> = () => {
 };
 
 export default Preview;
-

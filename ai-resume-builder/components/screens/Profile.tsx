@@ -256,6 +256,20 @@ const Profile: React.FC<ScreenProps> = () => {
     ),
     pointsRemaining: Number((userProfile as any)?.points_balance ?? 0),
   };
+  const pointsDisplay = isLoggedIn ? String(userSub.pointsRemaining ?? '--') : '--';
+  const pointsNumberStyle = React.useMemo(() => {
+    const digits = pointsDisplay.replace(/\D/g, '').length;
+    const fontSize =
+      digits <= 4 ? 24 :
+      digits <= 6 ? 22 :
+      digits <= 8 ? 20 :
+      digits <= 10 ? 18 :
+      16;
+    return {
+      fontSize: `${fontSize}px`,
+      letterSpacing: digits >= 9 ? '-0.02em' : '0',
+    } as const;
+  }, [pointsDisplay]);
 
   const handleProtectedAction = async (action: () => void, message: string = '该功能需要登录后使用，是否立即去登录？') => {
     if (isLoggedIn) {
@@ -477,9 +491,14 @@ const Profile: React.FC<ScreenProps> = () => {
               </div>
 
               {/* Remaining Points Box */}
-              <div className="shrink-0 flex flex-col items-center justify-center min-w-[64px] h-16 px-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner">
+              <div className="shrink-0 flex flex-col items-center justify-center w-[124px] h-16 px-2 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 shadow-inner overflow-hidden">
                 <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight mb-1 whitespace-nowrap">剩余积分</span>
-                <span className="text-xl font-black text-primary dark:text-blue-400 leading-none">{isLoggedIn ? userSub.pointsRemaining : '--'}</span>
+                <span
+                  className="w-full text-center font-black text-primary dark:text-blue-400 leading-none tabular-nums whitespace-nowrap"
+                  style={pointsNumberStyle}
+                >
+                  {pointsDisplay}
+                </span>
               </div>
             </div>
           </div>

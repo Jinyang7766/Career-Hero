@@ -136,3 +136,18 @@ dev.log
 
 # AI simulated outputs
 backend/simulated-output/
+
+# Local verification artifacts (do not commit)
+output/
+.playwright-cli/
+playwright-report/
+test-results/
+
+# Cache and temp artifacts (do not commit)
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.tmp
+*.temp
+*.orig

@@ -216,7 +216,7 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-[#0b1219] animate-in fade-in duration-500">
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2 size-9" iconClassName="text-[22px]" />
           <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">面试深度反馈</h1>

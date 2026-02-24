@@ -319,7 +319,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2" />
           <h1 className="text-lg font-bold tracking-tight">

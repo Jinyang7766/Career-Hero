@@ -82,6 +82,10 @@ export const useEditorSaveAndPreview = ({
         } catch {
           // ignore local draft cleanup errors
         }
+        localStorage.setItem('preview_back_target', 'editor');
+        if (savedId !== undefined && savedId !== null) {
+          localStorage.setItem('preview_resume_id', String(savedId));
+        }
         navigateToView(View.PREVIEW);
       } else {
         alert(`保存失败: ${result.error?.message || '请重试'}`);
