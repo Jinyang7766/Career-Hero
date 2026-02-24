@@ -37,6 +37,71 @@ export class DatabaseService {
     return records.map((record) => DatabaseService.sanitizeResumeRecord(record));
   }
 
+  private static normalizeExportHistory(entries: any): Array<{
+    filename: string;
+    size: number;
+    type: 'PDF' | 'IMAGE';
+    exportedAt: string;
+  }> {
+    if (!Array.isArray(entries)) return [];
+    return entries
+      .map((entry) => {
+        const filename = String(entry?.filename || '').trim() || '导出文件';
+        const size = Math.max(0, Number(entry?.size) || 0);
+        const type: 'PDF' | 'IMAGE' =
+          String(entry?.type || '').trim().toUpperCase() === 'IMAGE' ? 'IMAGE' : 'PDF';
+        const exportedAtRaw = String(entry?.exportedAt || '').trim();
+        const exportedAt = exportedAtRaw || new Date().toISOString();
+        return { filename, size, type, exportedAt };
+      })
+      .slice(0, 400);
+  }
+
+  private static mergeExportHistory(currentEntries: any, nextEntries: any) {
+    const merged = [
+      ...DatabaseService.normalizeExportHistory(nextEntries),
+      ...DatabaseService.normalizeExportHistory(currentEntries),
+    ];
+    merged.sort((a, b) => {
+      const aTime = Date.parse(String(a?.exportedAt || ''));
+      const bTime = Date.parse(String(b?.exportedAt || ''));
+      const aSafe = Number.isFinite(aTime) ? aTime : 0;
+      const bSafe = Number.isFinite(bTime) ? bTime : 0;
+      return bSafe - aSafe;
+    });
+
+    const deduped: typeof merged = [];
+    const seen = new Set<string>();
+    for (const item of merged) {
+      const key = `${item.exportedAt}|${item.type}|${item.filename}|${item.size}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      deduped.push(item);
+      if (deduped.length >= 200) break;
+    }
+    return deduped;
+  }
+
+  private static async getCurrentExportHistory(resumeId: string) {
+    const queries = [
+      'id,exportHistory:resume_data->exportHistory',
+      'id,resume_data',
+    ];
+    for (const sel of queries) {
+      const { data, error } = await supabase
+        .from('resumes')
+        .select(sel)
+        .eq('id', resumeId)
+        .maybeSingle();
+      if (error) continue;
+      if (!data || typeof data !== 'object') return [];
+      const aliased = (data as any).exportHistory;
+      if (aliased !== undefined) return DatabaseService.normalizeExportHistory(aliased);
+      return DatabaseService.normalizeExportHistory((data as any)?.resume_data?.exportHistory);
+    }
+    return [];
+  }
+
   private static isNoRowsError(error: any) {
     const code = String(error?.code || '').trim().toUpperCase();
     const msg = String(error?.message || '').toLowerCase();
@@ -354,13 +419,29 @@ export class DatabaseService {
   static async updateResume(
     resumeId: string,
     updates: any,
-    options?: { touchUpdatedAt?: boolean }
+    options?: { touchUpdatedAt?: boolean; preserveExportHistory?: boolean }
   ) {
     try {
       const touchUpdatedAt = options?.touchUpdatedAt !== false;
+      const preserveExportHistory = options?.preserveExportHistory !== false;
       const nextUpdates = updates && typeof updates === 'object' ? { ...updates } : updates;
       if (nextUpdates?.resume_data && typeof nextUpdates.resume_data === 'object') {
-        nextUpdates.resume_data = DatabaseService.stripLocationFromResumeData(nextUpdates.resume_data);
+        const nextResumeData = {
+          ...DatabaseService.stripLocationFromResumeData(nextUpdates.resume_data),
+        } as any;
+        if (preserveExportHistory) {
+          const currentExportHistory = await DatabaseService.getCurrentExportHistory(String(resumeId || ''));
+          const hasExplicitExportHistory = Object.prototype.hasOwnProperty.call(nextResumeData, 'exportHistory');
+          if (!hasExplicitExportHistory) {
+            nextResumeData.exportHistory = currentExportHistory;
+          } else {
+            nextResumeData.exportHistory = DatabaseService.mergeExportHistory(
+              currentExportHistory,
+              nextResumeData.exportHistory
+            );
+          }
+        }
+        nextUpdates.resume_data = nextResumeData;
       }
       const payload = touchUpdatedAt
         ? { ...nextUpdates, updated_at: new Date().toISOString() }

@@ -1380,3 +1380,74 @@ Use one block per executed step:
   - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
 - Risks/Notes:
   - 仅为文案层改动，不影响字段是否显示的业务逻辑；字段仍是“可不填、空值不展示”。
+## [2026-02-24 15:39] Fix: AI 面试导航默认落在简历选择页
+- Agent: A + B-FE + C + D
+- Goal:
+  - 点击底部导航 AI 面试 时，默认先进入 简历选择页，由用户点击简历后再进入 面试场景页（jd_input）。
+- Root Cause:
+  - App.tsx 的 View.AI_INTERVIEW 导航分支误用了 i_analysis_force_resume_select，导致面试模式未命中强制选择简历逻辑，可能被会话恢复/外部入口缓存拉进子页面。
+- Changes:
+  - i-resume-builder/App.tsx:
+    - AI_INTERVIEW 分支改为写入 i_interview_force_resume_select=1。
+    - 清理 i_analysis_force_resume_select，避免跨模块标记串用。
+    - 清理外部入场缓存：i_interview_open、i_interview_resume_id、i_interview_entry_mode、i_nav_owner_user_id，防止底部导航点击时被旧缓存自动带入场景/对话页。
+- Backups:
+  - ackup/ai-resume-builder/App.tsx
+  - ackup/WORKLOG.md
+- Commands:
+  - pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
+- Risks/Notes:
+  - 本次仅约束“底部导航点击 AI 面试”的入口行为；通过业务按钮设置的“指定简历外部入场”流程不受影响。
+## [2026-02-24 15:43] Fix: 导出历史被后续保存覆盖导致部分记录消失
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复导出历史偶发“部分记录消失/保存不全”的问题，确保普通简历保存不会覆盖掉已存在导出记录。
+- Root Cause:
+  - 多处业务会通过 `DatabaseService.updateResume` 覆盖整包 `resume_data`。
+  - 导出历史由 `recordResumeExportHistory` 单独写入，但后续某次保存若使用旧快照（未带最新 `exportHistory`），会把历史覆盖回旧值。
+- Changes:
+  - `ai-resume-builder/src/database-service.ts`:
+    - 新增导出历史规范化/合并工具：
+      - `normalizeExportHistory(...)`
+      - `mergeExportHistory(...)`
+      - `getCurrentExportHistory(...)`
+    - `updateResume(...)` 增加选项 `preserveExportHistory?: boolean`（默认 `true`）。
+    - 当更新 `resume_data` 时：
+      - 若请求未显式携带 `exportHistory`，自动补齐当前库里的历史，防止被覆盖掉。
+      - 若显式携带 `exportHistory`，默认与库中历史做去重合并（按时间倒序，最多 200 条）。
+  - `ai-resume-builder/components/screens/History.tsx`:
+    - 删除单条/清空历史时，显式传 `preserveExportHistory: false`，保证删除语义仍生效。
+- Backups:
+  - `backup/ai-resume-builder/src/database-service.ts`
+  - `backup/ai-resume-builder/components/screens/History.tsx`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
+- Risks/Notes:
+  - `updateResume` 在携带 `resume_data` 时会额外读取一次当前导出历史，用于防覆盖，写入延迟会有轻微增加（换取数据完整性）。
+  - 历史列表仍按最多 200 条保留，超出会按时间截断。
+## [2026-02-24 15:51] Fix: database-service.ts 第47行类型错误（exportHistory type 联合类型）
+- Agent: B-FE + C + D
+- Goal:
+  - 修复 `ai-resume-builder/src/database-service.ts` 中 `normalizeExportHistory` 返回值的 TypeScript 类型不匹配问题。
+- Root Cause:
+  - `type` 变量被推断为 `string`，与函数声明要求的 `'PDF' | 'IMAGE'` 不兼容，触发 `TS2322`。
+- Changes:
+  - `ai-resume-builder/src/database-service.ts`:
+    - 在 `normalizeExportHistory` 中将 `type` 显式收窄为联合类型：
+      - `const type: 'PDF' | 'IMAGE' = ... ? 'IMAGE' : 'PDF'`
+- Backups:
+  - `backup/ai-resume-builder/src/database-service.ts`
+  - `backup/WORKLOG.md`
+- Commands:
+  - `npx --yes tsc -p ai-resume-builder/tsconfig.json --noEmit`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - `database-service.ts(47,5)` 的 `TS2322` 已消失。
+  - step gate 通过：local tests 全绿（frontend 3/3，backend 1/1）+ online smoke 全绿（含 UI login）。
+- Risks/Notes:
+  - 当前项目仍有与本次修复无关的 TypeScript 报错（如 `useResumeSelection.ts`、`PreviewTemplates.tsx`），不影响本次第 47 行问题修复。

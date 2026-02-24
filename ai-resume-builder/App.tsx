@@ -482,11 +482,13 @@ function App() {
       return;
     }
     if (view === View.AI_INTERVIEW) {
-      localStorage.setItem('ai_analysis_force_resume_select', '1');
-      localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
-      localStorage.removeItem('ai_analysis_step');
-      localStorage.removeItem('ai_analysis_in_progress');
-      localStorage.removeItem('ai_analysis_has_activity');
+      localStorage.setItem('ai_interview_force_resume_select', '1');
+      localStorage.removeItem('ai_analysis_force_resume_select');
+      // Bottom-nav entry should never auto-open stale external interview targets.
+      localStorage.removeItem('ai_interview_open');
+      localStorage.removeItem('ai_interview_resume_id');
+      localStorage.removeItem('ai_interview_entry_mode');
+      localStorage.removeItem('ai_nav_owner_user_id');
       setSingleHistory('/ai-interview');
       navigate('/ai-interview', { replace: true });
       return;
