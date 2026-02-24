@@ -379,27 +379,27 @@ const AllResumes: React.FC<ScreenProps> = () => {
               }}
               className={`group relative flex items-center gap-4 px-4 py-3.5 transition-colors cursor-pointer select-none ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
             >
-              {isSelectionMode && (
+              {isSelectionMode ? (
                 <div className={`shrink-0 flex items-center justify-center size-10 rounded-full transition-colors ${isSelected ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}>
                   <span className="material-symbols-outlined text-[24px]">
                     {isSelected ? 'check_circle' : 'radio_button_unchecked'}
                   </span>
                 </div>
-              )}
-
-              <div className="shrink-0 relative">
-                <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
-                  {resume.thumbnail}
-                </div>
-                {isLoadingResume === resume.id && (
-                  <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
-                    <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+              ) : (
+                <div className="shrink-0 relative">
+                  <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
+                    {resume.thumbnail}
                   </div>
-                )}
-                {resume.hasDot && !isSelectionMode && (
-                  <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
-                )}
-              </div>
+                  {isLoadingResume === resume.id && (
+                    <div className="absolute inset-0 bg-white/50 dark:bg-black/50 flex items-center justify-center z-10 rounded-lg">
+                      <span className="size-4 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+                    </div>
+                  )}
+                  {resume.hasDot && (
+                    <div className="absolute -top-1 -right-1 size-2.5 bg-primary rounded-full border-2 border-background-light dark:border-background-dark"></div>
+                  )}
+                </div>
+              )}
               <div className="flex flex-col flex-1 justify-center min-w-0">
                 <div className="flex items-center gap-2 min-w-0">
                   <p className={`text-sm font-bold truncate leading-tight ${isSelected ? 'text-primary' : 'text-slate-900 dark:text-white'}`}>{resume.title}</p>

@@ -545,3 +545,34 @@ Use one block per executed step:
     - `member_points_never_wrap: PASS`
 - Risks/Notes:
   - 本轮专项验证为本地基线 + 代码级定向断言；尚未执行带真实账号的在线 UI 登录回归（如需我可以继续补在线 Playwright 场景）。
+
+## [2026-02-24 19:45] UI Fix: 全部简历选中态隐藏简历图标并保持文本位置稳定
+- Agent: B-FE + C
+- Goal:
+  - 将 `全部简历` 的选中态调整为与 `导出历史` 一致：选中模式下隐藏简历缩略图，仅显示选择圆圈，且不改变简历标题与修改时间的位置。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/components/screens/AllResumes.tsx`
+    - 验证映射：列表项左侧区域改为“选中模式显示 check/radio，普通模式显示缩略图”的互斥渲染，标题和“上次修改”文案结构保持不变。
+- Changes:
+  - `ai-resume-builder/components/screens/AllResumes.tsx`:
+    - 将原先“选中模式额外插入选择图标 + 继续显示简历缩略图”的双左侧块改为单槽位互斥渲染：
+      - `isSelectionMode` 时：显示 `check_circle / radio_button_unchecked`。
+      - 非 `isSelectionMode` 时：显示简历缩略图、加载遮罩与红点提示。
+    - 保持标题行与“上次修改”文本容器结构不变，避免横向位移。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/AllResumes.tsx`
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+  - PowerShell 定向断言（互斥分支 / 旧双槽位移除 / 标题与修改时间结构保持）
+- Verification:
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：PASS（`vite build` 成功，含 `AllResumes` 打包产物）。
+  - 模块专项断言：PASS
+    - `selection_uses_mutual_exclusive_branch: PASS`
+    - `legacy_double_slot_removed: PASS`
+    - `selection_slot_present: PASS`
+    - `resume_thumbnail_slot_present_for_normal_mode: PASS`
+    - `title_and_modified_layout_unchanged: PASS`
+- Risks/Notes:
+  - 本次验证为本地自动化校验；未执行真实设备手工视觉回归，如需我可继续补一轮移动端截图对比验证。
