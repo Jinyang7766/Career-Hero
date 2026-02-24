@@ -214,17 +214,19 @@ const MemberCenter: React.FC = () => {
 
                             {/* User Identity & Badge */}
                             <div className="flex flex-col flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1 min-w-0">
+                                <div className="mb-1 min-w-0">
                                     <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                                         {displayName}
                                     </h2>
-                                    <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black ${tierStyle.iconBg} ${tierStyle.iconColor} border border-current opacity-90 uppercase tracking-tight`}>
-                                        {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
-                                    </span>
+                                    <div className="mt-1">
+                                        <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black ${tierStyle.iconBg} ${tierStyle.iconColor} border border-current opacity-90 uppercase tracking-tight`}>
+                                            {userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier}
+                                        </span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 min-w-0">
                                     {userSub.tier !== MembershipTier.FREE ? (
-                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium whitespace-nowrap">
                                             积分永久有效
                                         </span>
                                     ) : (

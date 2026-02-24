@@ -464,20 +464,22 @@ const Profile: React.FC<ScreenProps> = () => {
                 />
               </div>
               <div className="flex flex-col flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 min-w-0">
+                <div className="mb-1 min-w-0">
                   <h2 className="text-xl font-bold truncate text-slate-900 dark:text-white">
                     {isLoggedIn ? (displayName || ' ') : '未登录'}
                   </h2>
-                  <span className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-black border border-current opacity-90 uppercase tracking-tight ${isLoggedIn ? (
-                    userSub.tier === MembershipTier.STARTER ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' :
-                      userSub.tier === MembershipTier.PLUS ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
-                        userSub.tier === MembershipTier.PRO ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' :
-                          userSub.tier === MembershipTier.ULTRA ? 'bg-slate-800 dark:bg-slate-900 text-amber-400' :
-                            'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                  ) : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
-                    }`}>
-                    {isLoggedIn ? (userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier) : '访客'}
-                  </span>
+                  <div className="mt-1">
+                    <span className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black border border-current opacity-90 uppercase tracking-tight ${isLoggedIn ? (
+                      userSub.tier === MembershipTier.STARTER ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300' :
+                        userSub.tier === MembershipTier.PLUS ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400' :
+                          userSub.tier === MembershipTier.PRO ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400' :
+                            userSub.tier === MembershipTier.ULTRA ? 'bg-slate-800 dark:bg-slate-900 text-amber-400' :
+                              'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                    ) : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                      }`}>
+                      {isLoggedIn ? (userSub.tier === MembershipTier.FREE ? '免费版' : userSub.tier) : '访客'}
+                    </span>
+                  </div>
                 </div>
                 {isLoggedIn ? displayEmail && (
                   <p className="text-slate-500 dark:text-slate-400 text-[11px] truncate font-medium">

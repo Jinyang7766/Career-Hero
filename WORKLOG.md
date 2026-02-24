@@ -510,3 +510,38 @@ Use one block per executed step:
     - `.gitignore:142 .playwright-cli/` 生效
 - Risks/Notes:
   - 当前工作区仍存在与本次无关的历史改动；提交前仍需按任务范围做 staged 文件二次筛选。
+
+## [2026-02-24 18:16] UI Fix: 会员标签下移并修复“积分永久有效”换行
+- Agent: B-FE + C
+- Goal:
+  - 修复移动端用户卡片中 `ULTRA` 标签遮挡用户名的问题，并确保“积分永久有效”保持单行显示。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/components/screens/Profile.tsx`
+    - 验证映射：用户名与会员标签分两行渲染（标签位于用户名下方）。
+  - `ai-resume-builder/components/screens/MemberCenter.tsx`
+    - 验证映射：用户名与会员标签分行；“积分永久有效”增加单行约束类。
+- Changes:
+  - `ai-resume-builder/components/screens/Profile.tsx`:
+    - 将“用户名 + 会员标签”从同一 `flex row` 调整为上下两行：
+      - 第一行仅保留用户名；
+      - 第二行新增 `mt-1` 容器承载标签；
+      - 标签改为 `inline-flex`，避免挤压用户名。
+  - `ai-resume-builder/components/screens/MemberCenter.tsx`:
+    - 同步采用“用户名在上、标签在下”的布局。
+    - “积分永久有效”文本增加 `whitespace-nowrap`，防止窄屏自动换行。
+- Backups:
+  - `backup/ai-resume-builder/components/screens/Profile.tsx`
+  - `backup/ai-resume-builder/components/screens/MemberCenter.tsx`
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+  - `Select-String` 定向布局断言（`profile_badge_below_name` / `member_badge_below_name` / `member_points_never_wrap`）
+- Verification:
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：PASS（`vite build` 成功，含 `Profile` / `MemberCenter` 打包产物）。
+  - 模块专项断言：PASS
+    - `profile_badge_below_name: PASS`
+    - `member_badge_below_name: PASS`
+    - `member_points_never_wrap: PASS`
+- Risks/Notes:
+  - 本轮专项验证为本地基线 + 代码级定向断言；尚未执行带真实账号的在线 UI 登录回归（如需我可以继续补在线 Playwright 场景）。
