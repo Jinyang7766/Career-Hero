@@ -68,22 +68,23 @@ export const useAiDiagnosisExternalEntry = ({
         await handleResumeSelect(targetId, preferReportFromHome, undefined);
         return;
       }
-      const effectiveTargetStep = targetStep;
+      const effectiveTargetStep =
+        targetStep === 'final_report' || targetStep === 'comparison' || targetStep === 'interview_report'
+          ? 'final_report'
+          : targetStep === 'report' || targetStep === 'micro_intro' || targetStep === 'chat'
+            ? 'report'
+            : 'jd_input';
       localStorage.setItem('ai_analysis_step', effectiveTargetStep || 'resume_select');
       const preferReport = effectiveTargetStep !== 'jd_input' && effectiveTargetStep !== 'resume_select';
       const mappedTargetStep =
         effectiveTargetStep === 'report' ? 'report'
-          : effectiveTargetStep === 'chat' ? 'chat'
-            : effectiveTargetStep === 'final_report' ? 'final_report'
-              : undefined;
+          : effectiveTargetStep === 'final_report' ? 'final_report'
+            : undefined;
       setForceReportEntry(
         mappedTargetStep === 'report' ||
-        effectiveTargetStep === 'interview_report' ||
-        effectiveTargetStep === 'comparison' ||
         mappedTargetStep === 'final_report'
       );
       await handleResumeSelect(targetId, preferReport, mappedTargetStep);
     })();
   }, [currentUserId, currentStep, isInterviewMode]);
 };
-

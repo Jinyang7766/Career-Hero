@@ -684,3 +684,493 @@ Use one block per executed step:
   - online smoke: frontend health, backend templates, CORS preflight, UI login passed.
 - Risks/Notes:
   - focus baseline matching activates only when top-level `resume_data.interviewFocus` is non-empty; legacy records without this field continue to rely on JD/company/resume baseline.
+## [2026-02-24 13:00] UX Fix: Resume Card Restores Last Diagnosis Page + Progress Current/Done Stage Click Jump
+- Agent: A + B-FE + C + D
+- Goal:
+  - clicking a resume card in AI diagnosis should correctly restore the user's last diagnosis operation page.
+  - clicking diagnosis progress stages should jump to the corresponding page.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`:
+    - expanded `normalizeStep(...)` to include `jd_input/analyzing/report/micro_intro/chat/interview_report/comparison/final_report`.
+    - removed legacy downgrade logic that forced `chat -> report` when inferred micro-history was missing.
+    - `inferTargetStepFromResume(...)` now restores by last known step more faithfully:
+      - `chat -> chat`
+      - `final_report/comparison/interview_report -> final_report`
+      - `jd_input/analyzing/report/micro_intro -> report`
+    - when explicit target is `chat` and `openChat` is unavailable, fallback to `navigateToStep('chat')`.
+  - `ai-resume-builder/components/shared/DiagnosisProgressBar.tsx`:
+    - changed diagnosis stage clickability from `done-only` to `done-or-current`.
+    - enables jump from currently active stage as well.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - `backup/ai-resume-builder/components/shared/DiagnosisProgressBar.tsx`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login passed.
+- Risks/Notes:
+  - by removing `chat -> report` downgrade, very old/abnormal data without recoverable chat messages may open chat page with sparse content; this is intentional to prioritize "jump to last page" semantics.
+## [2026-02-24 13:10] Refactor: Extract App Toast/Confirm Overlays From App.tsx
+- Agent: A + B-FE + B-BE(N/A) + C + D
+- Goal:
+  - reduce `App.tsx` responsibility by extracting toast and confirm modal rendering into a dedicated reusable overlay component.
+- Changes:
+  - `ai-resume-builder/components/app/AppOverlays.tsx`:
+    - added `AppOverlays` component with internal `ToastOverlay` and `ConfirmModal` renderers.
+    - preserved existing styles, copy, and confirm regex behavior.
+  - `ai-resume-builder/App.tsx`:
+    - imported and wired `AppOverlays`.
+    - removed in-file `ToastOverlay`/`ConfirmModal` definitions.
+    - removed unused `useCallback` import.
+  - backups refreshed:
+    - `backup/ai-resume-builder/App.tsx`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `Copy-Item ai-resume-builder/App.tsx backup/ai-resume-builder/App.tsx -Force`
+  - `Copy-Item WORKLOG.md backup/WORKLOG.md -Force`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - first gate run failed at online UI login due missing env credentials (`CAREER_HERO_TEST_EMAIL` / `CAREER_HERO_TEST_PASSWORD`).
+  - rerun with `-SkipUiLogin` passed full local tests + online health/CORS/templates checks.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+- Risks/Notes:
+  - online UI login smoke was skipped in this environment because credentials are unavailable; functional login path was not re-verified in this step.
+## [2026-02-24 13:17] Validation Update: Full Step Gate Passed With UI Login Smoke
+- Agent: C + D
+- Goal:
+  - close residual risk from previous run by executing full `test-step` with online UI login smoke enabled.
+- Preconditions:
+  - runtime env vars were provided by user and set for this session only:
+    - `CAREER_HERO_TEST_EMAIL=***`
+    - `CAREER_HERO_TEST_PASSWORD=***`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke all passed.
+- Risks/Notes:
+  - none for this validation scope.
+## [2026-02-24 13:20] Refactor Step 1: Split AllResumes Local Snapshot Cleanup
+- Agent: A + B-FE + B-BE(N/A) + C + D
+- Goal:
+  - reduce `AllResumes.tsx` responsibility by extracting local analysis/interview cache cleanup into dedicated module.
+- Changes:
+  - `ai-resume-builder/components/screens/all-resumes/resume-local-cleanup.ts`:
+    - added `clearLocalAnalysisSnapshotForResume(resumeId)` utility.
+    - moved all localStorage cleanup rules for analysis/interview/report/session-plan keys.
+  - `ai-resume-builder/components/screens/AllResumes.tsx`:
+    - imported utility and removed in-file cleanup implementation.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/AllResumes.tsx`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - behavior is intended to be no-op equivalent; extraction only.
+## [2026-02-24 13:24] Refactor Step 2: Split Interview Chat Decision Heuristics
+- Agent: A + B-FE + B-BE(N/A) + C + D
+- Goal:
+  - split `useInterviewChat.impl.ts` decision-heavy logic into reusable pure helpers to reduce hook complexity.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-chat-decision.ts`:
+    - added `detectFollowUpNeed(...)` for follow-up heuristic decision.
+    - added `isNoMoreQuestionSignal(...)` for reverse-QA exit signal detection.
+    - added `resolveReverseQaState(...)` for reverse-QA state transition resolution.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewChat.impl.ts`:
+    - imported and consumed helper functions above.
+    - removed in-hook duplicated decision logic block and regex utilities.
+    - kept runtime behavior by writing helper outputs back to existing refs.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewChat.impl.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - (re-run same gate after failure) same command above.
+- Verification:
+  - first gate run failed at online backend templates check with transport EOF (transient network failure).
+  - second gate run passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - extraction preserves behavior path; any future heuristic tuning should now be changed in helper module only.
+## [2026-02-24 13:27] Refactor Step 3: Split AI Route Dependency Assembly From app_monolith
+- Agent: A + B-BE + C + D
+- Goal:
+  - reduce `backend/app_monolith.py` wiring complexity by extracting AI route dependency dictionary assembly.
+- Changes:
+  - `backend/routes/ai_route_deps.py`:
+    - added `build_ai_route_deps(**deps)` to construct route dependency map in one place.
+  - `backend/app_monolith.py`:
+    - imported `build_ai_route_deps` (with both import-path branches).
+    - replaced inline giant dependency dict passed to `register_ai_routes(...)` with `build_ai_route_deps(...)` call.
+  - backups refreshed:
+    - `backup/backend/app_monolith.py`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `python -m py_compile backend/app_monolith.py backend/routes/ai_route_deps.py`
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - syntax compile passed for changed backend files.
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - functional behavior should be unchanged; this is dependency wiring extraction only.
+## [2026-02-24 13:30] Refactor Step 4: Split PDF Asset URL/Avatar Utilities
+- Agent: A + B-BE + C + D
+- Goal:
+  - reduce `pdf_service.py` mixed responsibilities by extracting external URL safety and avatar normalization logic.
+- Changes:
+  - `backend/services/pdf_asset_service.py`:
+    - added `is_safe_external_url(...)`.
+    - added `normalize_avatar_data(...)`.
+  - `backend/services/pdf_service.py`:
+    - imported utility functions from `pdf_asset_service` (with fallback import path).
+    - removed in-file duplicated URL safety and avatar normalization implementations.
+    - cleaned now-unused imports.
+  - backups refreshed:
+    - `backup/backend/services/pdf_service.py`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `python -m py_compile backend/services/pdf_service.py backend/services/pdf_asset_service.py`
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - (re-run same gate after executor interruption) same command above.
+- Verification:
+  - syntax compile passed.
+  - first gate invocation returned executor abnormal exit (`-1`) with no test output.
+  - second gate run passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - functional behavior should remain unchanged; only utility relocation.
+## [2026-02-24 13:36] Refactor Step 5: Split DatabaseService User/Points Domains
+- Agent: A + B-FE + B-BE(N/A) + C + D
+- Goal:
+  - reduce `src/database-service.ts` monolithic responsibility by extracting user-domain and points-domain operations into dedicated repository modules while preserving external API.
+- Changes:
+  - `ai-resume-builder/src/database/user-repository.ts`:
+    - added `createUserRecord`, `getUserRecord`, `updateUserRecord`.
+  - `ai-resume-builder/src/database/points-repository.ts`:
+    - added `createPointsLedgerEntry`, `listPointsLedgerEntries`.
+  - `ai-resume-builder/src/database-service.ts`:
+    - imported repository helpers.
+    - refactored `createUser/getUser/updateUser/createPointsLedger/listPointsLedger` to delegate to helpers.
+  - backups refreshed:
+    - `backup/ai-resume-builder/src/database-service.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+  - (re-run same gate after online UI smoke failures) same command above.
+  - (debug parity check for login smoke flow) `playwright-cli` manual login script to `/login -> /dashboard -> /profile` with masked credentials.
+  - final re-run of same step gate command.
+- Verification:
+  - local tests consistently passed: frontend `3 passed`, backend `1 passed`.
+  - online checks eventually passed including UI login smoke.
+  - intermediate UI smoke failures appeared transient; manual Playwright flow succeeded during triage.
+- Risks/Notes:
+  - façade API remains stable; internal domain extraction only.
+## [2026-02-24 13:38] Fix: AI诊断简历点击无响应（force resume_select 一次性消费）
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复 AI 诊断页偶发“点击简历无响应/被留在选择页”的问题。
+  - 消除与该问题相关的本地 `Maximum update depth exceeded` 循环风险。
+- Root Cause:
+  - `useAiAnalysisPageUiEffects` 中 `ai_analysis_force_resume_select` 为持续生效状态。
+  - 当路径是 `/ai-analysis` 且 key 仍为 `1` 时，effect 会反复执行重置（含 `setStepHistory([])`），导致用户点击简历后的状态被持续覆盖。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`:
+    - 在检测到 force key 后立即 `localStorage.removeItem(forceKey)`，将其改为一次性消费（one-shot）。
+    - 保留首次进入时重置到 `resume_select` 的行为，不再重复重放。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (首次失败：缺少测试账号环境变量)
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; ./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"` (重跑通过)
+  - `npx --yes --package @playwright/cli playwright-cli -s=localclick4 open http://localhost:3000/login`
+  - `npx --yes --package @playwright/cli playwright-cli -s=localclick4 run-code "...登录->进入/ai-analysis->点击首个简历卡..."`
+  - `npx --yes --package @playwright/cli playwright-cli -s=localclick4 close`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+  - local Playwright复测：点击简历后页面到 `http://localhost:3000/ai-analysis/comparison/1a23763a-6f88-4767-9dbc-5ea9c2a0f9a9`，不再停留在 `/ai-analysis`。
+- Risks/Notes:
+  - 该修复限定为 force-key 消费时机，不改变“进入AI诊断默认落到简历选择页”的产品策略。
+  - 本地控制台仍有既有警告（Tailwind CDN、React Router future flags、favicon 404），与本次行为无关。
+## [2026-02-24 13:40] Refactor Step 6: Split AI Analysis Session/Execution Helper Logic
+- Agent: A + B-FE + C + D
+- Goal:
+  - reduce duplication and centralize pure helper logic across ai-analysis session and execution hooks.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-session-helpers.ts`:
+    - added `pickLatestByUpdatedAt(...)` helper.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`:
+    - replaced 4 duplicated reduce blocks selecting latest `updatedAt` session with `pickLatestByUpdatedAt(...)`.
+  - `ai-resume-builder/components/screens/ai-analysis/analysis-execution-runner.ts`:
+    - added `runRealAnalysisRequest(...)` wrapper to centralize `runRealAnalysis` request assembly.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`:
+    - removed duplicated request assembly callback and delegated to `runRealAnalysisRequest(...)`.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - refactor-only change; no intended runtime behavior modification.
+## [2026-02-24 13:42] Refactor Step 7: Split Profile Membership Tier Helpers
+- Agent: A + B-FE + C + D
+- Goal:
+  - reduce `Profile.tsx` inline business logic by extracting membership tier normalization and style resolution.
+- Changes:
+  - `ai-resume-builder/components/screens/profile/profile-membership-style.ts`:
+    - added `normalizeMembershipTier(...)`.
+    - added `getMembershipTierStyle(...)`.
+  - `ai-resume-builder/components/screens/Profile.tsx`:
+    - imported helper functions above.
+    - removed in-file `normalizeMembershipTier` implementation.
+    - replaced inline `getTierStyle` block with helper call.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/Profile.tsx`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - style mapping is centralized; future tier style updates should only touch helper module.
+## [2026-02-24 13:49] Refactor Step 8: Split Interview Chat Turn Pipeline Logic
+- Agent: A + B-FE + C + D
+- Goal:
+  - continue round-2 deeper refactor by extracting turn-level decision pipeline from `useInterviewChat.impl.ts` into a dedicated pure helper.
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-chat-turn-pipeline.ts`:
+    - added `buildInterviewTurnPipeline(...)` to centralize:
+      - answered count calculation for current turn.
+      - closing-phase decision and follow-up normalization.
+      - reverse-QA state resolution orchestration (via existing decision helper).
+      - strict next-question resolution.
+      - start-phase detection from prior message context.
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewChat.impl.ts`:
+    - replaced inline turn-decision block with `buildInterviewTurnPipeline(...)` call.
+    - preserved existing ref state updates (`reverseQaActiveRef`, `reverseQaAskedCountRef`, `reverseQaPendingEvaluationRef`) using helper outputs.
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewChat.impl.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - behavior is expected to remain unchanged; this step is structural extraction for maintainability and clearer test surface.
+## [2026-02-24 13:52] Fix: useAnalysisExecution 依赖数组残留未定义项（line 577）
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复 `useAnalysisExecution.impl.ts` 依赖数组中的未定义变量引用，消除第 577 行报错。
+- Root Cause:
+  - 之前将分析请求封装为 `generateRealAnalysisWithOptions(...)` 后，`startAnalysis` 的依赖数组仍保留旧标识符 `generateRealAnalysis`，导致未定义引用错误。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`:
+    - 在 `startAnalysis` 的 `useCallback` 依赖数组中移除 `generateRealAnalysis`。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke: frontend health, backend templates, CORS preflight, UI login smoke passed.
+- Risks/Notes:
+  - 本次为最小修复，仅删除无效依赖项，不改变运行时业务逻辑。
+## [2026-02-24 13:58] Test Infra Update: 完整 test-step 默认无界面 UI smoke，避免闪窗
+- Agent: A + B-FE + C + D
+- Goal:
+  - 调整完整 `test-step` 流程，保留 UI 登录 smoke 校验但避免每次执行时频繁弹出浏览器窗口。
+- Changes:
+  - `scripts/test-online.ps1`:
+    - 新增参数 `-UiLoginHeaded`。
+    - UI 登录 smoke 默认使用 `playwright-cli open ... --no-headed`（headless）。
+    - 日志中明确显示当前模式：`headless` 或 `headed`。
+  - `scripts/test-step.ps1`:
+    - 新增参数 `-UiLoginHeaded` 并透传给 `scripts/test-online.ps1`。
+    - 默认行为不再闪窗；如需可见窗口调试可显式传 `-UiLoginHeaded`。
+  - backups refreshed:
+    - `backup/scripts/test-online.ps1`
+    - `backup/scripts/test-step.ps1`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `$env:CAREER_HERO_TEST_EMAIL='***'; $env:CAREER_HERO_TEST_PASSWORD='***'; pwsh -File scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app"`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke logs now show `UI login smoke via Playwright CLI (headless)...` and completed successfully.
+- Risks/Notes:
+  - 若后续需要肉眼观察登录流程，可在命令上显式加 `-UiLoginHeaded`。
+## [2026-02-24 13:58] Fix: 导航进AI诊断后简历点击应恢复上次步骤（非仅依赖 analyzed）
+- Agent: A + B-FE + C + D
+- Goal:
+  - 保持导航栏进入 AI诊断默认落在简历选择页。
+  - 在简历选择页点击简历时，恢复该简历上一次诊断步骤，而不是误判为新简历流程。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`:
+    - 新增 `hasRecoverableDiagnosisStep(...)`，识别 `latestAnalysisStep`（`jd_input/analyzing/report/micro_intro/chat/comparison/final_report/interview_report`）或 `diagnosisProgress>=15` 的简历为“可恢复历史”。
+    - 简历卡点击 `preferReport` 改为：`resume.analyzed || hasRecoverableDiagnosisStep(resume)`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`:
+    - `inferTargetStepFromResume(...)` 从“压平到 report/final_report”改为优先返回真实历史步骤：
+      - `jd_input/analyzing/report/micro_intro/chat/comparison/final_report/interview_report` 原样恢复。
+    - 进度兜底改为：`>=95 -> final_report`, `>=60 -> report`, 其他 -> `jd_input`。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin` (首次失败：线上 CORS 预检 EOF 网络抖动)
+  - 同命令重跑（通过）
+  - 多次 `playwright-cli` 无头验证脚本（本地+线上）用于检查“导航进入 AI诊断 + 点击简历后 URL变化”与状态追踪。
+- Verification:
+  - regression gate passed（按无感模式）：local + online（health/templates/cors）通过。
+  - local tests: frontend `3 passed`, backend `1 passed`。
+  - 线上无头追踪确认旧部署仍存在 `ai_analysis_force_resume_select=1` 未消费导致回拉到 `resume_select`；本地代码已包含 one-shot 消费修复。
+- Risks/Notes:
+  - 当前本地环境存在独立运行时错误：`ReferenceError: generateRealAnalysis is not defined`（`useAnalysisExecution.impl.ts`），会干扰本地 AI诊断页面可视化验收；与本次改动文件不同。
+  - 线上行为与本地修复一致性取决于后续部署版本。
+## [2026-02-24 14:01] Behavior Contract: 点击简历仅落 3 页（JD输入/初步报告/最终报告）
+- Agent: A + B-FE + C + D
+- Goal:
+  - 收敛 AI诊断中“点击简历”的落点，只允许：
+    - `jd_input`
+    - `report`（初步诊断完成、微访谈未完成）
+    - `final_report`
+  - 禁止点击后进入中间态页面（如 `analyzing/micro_intro/chat/comparison`）。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`:
+    - `inferTargetStepFromResume(...)` 收敛为 3 态映射：
+      - `final_report/comparison/interview_report` -> `final_report`
+      - `report/micro_intro/chat` -> `report`
+      - `analyzing/jd_input/unknown` -> `jd_input`
+    - 显式目标 `chat` 也映射为 `report`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`:
+    - 诊断模式下（`!isInterviewMode`）恢复策略收敛为 3 态：
+      - in-progress/paused + 有消息 -> `report`（不再自动 `openChat`）
+      - `sessionStep=chat` -> `report`
+      - `sessionStep` 统一映射到 `jd_input/report/final_report`
+    - `interview_done` 在诊断模式下默认 completed 落点改为 `final_report`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiDiagnosisExternalEntry.ts`:
+    - 外部入口 `targetStep` 统一收敛到 `jd_input/report/final_report`，不再传 `chat`。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`:
+    - 简历卡点击 `preferReport` 不只看 `analyzed`，新增历史可恢复判断 `hasRecoverableDiagnosisStep(...)`。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiDiagnosisExternalEntry.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke (无界面模式): frontend health, backend templates, CORS preflight passed.
+- Risks/Notes:
+  - 该收敛针对“点击恢复路径”；用户主动在页面内点击流程按钮进入微访谈/优化流程的能力不受影响。
+## [2026-02-24 14:09] Fix: 底部导航 AI诊断 被路由同步抢回子页
+- Agent: A + B-FE + C + D
+- Goal:
+  - 修复点击底部导航 `AI诊断` 后，页面仍会被拉回历史子页（如 report/final-report），而不是停留在简历选择页。
+- Root Cause:
+  - `handleBottomNavClick(View.AI_ANALYSIS)` 会先导航到 `/ai-analysis` 并写入 `ai_analysis_force_resume_select=1`。
+  - 但 `useAiRouteSync` 在同一轮 effect 中根据旧 `currentStep` 把 URL 立即同步回历史子路由，导致 force 逻辑来不及生效。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`:
+    - 在 URL 同步 effect 新增 force guard：
+      - 当 `ai_analysis_force_resume_select === '1'` 且当前路径是 `/ai-analysis` 时，跳过本轮 route re-sync。
+    - 让 `useAiAnalysisPageUiEffects` 有机会先消费 force key 并落到 `resume_select`。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke (无界面模式): frontend health, backend templates, CORS preflight passed.
+- Risks/Notes:
+  - 该修复仅影响“底部导航强制回简历选择页”时机，不改变你设定的“点击简历恢复到限定落点”规则。
+## [2026-02-24 14:13] Fix: 导航AI诊断仍自动跳子页（force key 提前清除竞态）
+- Agent: A + B-FE + C + D
+- Goal:
+  - 解决点击导航栏 `AI诊断` 后仍被自动跳到历史子页，而不是稳定停在简历选择页的问题。
+- Root Cause:
+  - 先前在 `useAiAnalysisPageUiEffects` 中过早清理 `ai_analysis_force_resume_select`。
+  - 清理过早后，`useAnalysisSessionRecovery` 立即恢复历史步骤，覆盖“导航先落简历选择页”的预期。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`:
+    - force key 不再在进入 `/ai-analysis` 当下立即移除。
+    - 改为保留到离开 `resume_select` 时（既有 effect）再移除。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`:
+    - 保留已加的 force guard：当 `ai_analysis_force_resume_select=1` 且路径为 `/ai-analysis` 时，跳过本轮子路由回写。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - `./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+  - 本地无头验证：登录后点击底部 `AI诊断`，检查 URL 与选择页输入框存在。
+  - 线上无头验证：同流程检查 URL（`/ai-analysis`）。
+- Verification:
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - local playwright: 点击 `AI诊断` 后 URL 保持 `http://localhost:3000/ai-analysis`。
+  - online playwright: 点击 `AI诊断` 后 URL 保持 `https://career-hero-ai-resume-builder.vercel.app/ai-analysis`。
+- Risks/Notes:
+  - 本地仍存在独立错误 `Maximum update depth exceeded`（AiAnalysis），与“导航先落简历选择页”行为并行存在，需后续单独治理。
+## [2026-02-24 14:22] Hotfix: 导航落选择页后“点击简历点不动”竞态修复
+- Agent: A + B-FE + C + D
+- Goal:
+  - 同时满足两条行为：
+    - 点击底部导航 `AI诊断` 后必须先落 `resume_select`。
+    - 在选择页点击简历后，必须能离开选择页并进入恢复目标页（`jd/report/final-report`）。
+- Root Cause:
+  - 竞态1：`useAiAnalysisPageUiEffects` 在 force key 保留期间会重复执行 `setCurrentStep('resume_select')`，把点击后的跳转覆盖。
+  - 竞态2：`useAiRouteSync` 的 force guard 条件过宽，会误拦截“从选择页跳转到目标页”的那一跳。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`:
+    - 新增 `forceAppliedRef`，force 重置只执行一次，避免重复回拉。
+    - 保持“离开 resume_select 后再清 force key”的策略。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`:
+    - force guard 收紧为：仅当 `currentStep === 'resume_select'` 且路径是 `/ai-analysis` 时才跳过 route sync。
+    - 允许点击简历后的 `resume_select -> targetStep` 跳转写入 URL。
+  - backups refreshed:
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`
+    - `backup/ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`
+    - `backup/WORKLOG.md`
+- Commands:
+  - 本地无头双逻辑验收：`playwright-cli` 登录 -> 点击底部 `AI诊断` -> 点击简历（断言 URL 变化）
+  - `./scripts/test-step.ps1 -FrontendUrl "https://career-hero-ai-resume-builder.vercel.app/" -BackendUrl "https://career-hero-backend-production-a634.up.railway.app" -SkipUiLogin`
+- Verification:
+  - 本地无头验收通过：
+    - entry URL: `http://localhost:3000/ai-analysis`
+    - click 后 URL: `http://localhost:3000/ai-analysis/final-report/1a23763a-6f88-4767-9dbc-5ea9c2a0f9a9`
+  - step gate passed: local + online checks all PASS.
+  - local tests: frontend `3 passed`, backend `1 passed`.
+  - online smoke (无界面模式): frontend health, backend templates, CORS preflight passed.
+- Risks/Notes:
+  - 本地仍可见与该问题并行的既有控制台告警（如 favicon 404 / 路由 future flags）；不影响本次行为断言。

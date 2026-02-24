@@ -73,7 +73,7 @@ export const useAnalysisSessionRecovery = ({
     const hasInterviewMessages = hasInterviewSessionMessages(effectiveJdText, activeInterviewType, activeInterviewMode);
     const actionMarker = `${sceneMarker}:${String(status || '').toLowerCase()}:${String(sessionStep || '').toLowerCase()}:${hasInterviewMessages ? '1' : '0'}`;
     if (recoveredSessionKeyRef.current === actionMarker) return;
-    const completedStep = isInterviewMode ? 'interview_report' : 'comparison';
+    const completedStep = isInterviewMode ? 'interview_report' : 'final_report';
     const isOnCompletedFlow =
       currentStep === completedStep ||
       currentStep === 'interview_report' ||
@@ -99,6 +99,18 @@ export const useAnalysisSessionRecovery = ({
       hasInterviewMessages &&
       (status === 'interview_in_progress' || status === 'paused')
     ) {
+      if (!isInterviewMode) {
+        if (currentStep !== 'report') {
+          pushRuntimeTrace('ai_analysis.recovery', 'goto_report_from_in_progress_diagnosis', {
+            from: currentStep,
+            actionMarker,
+            status: String(status || '').toLowerCase(),
+          });
+          navigateToStep('report', true);
+        }
+        recoveredSessionKeyRef.current = actionMarker;
+        return;
+      }
       if (!jdText && effectiveJdText && String(jdText || '').trim() !== effectiveJdText) {
         setJdText(effectiveJdText);
       }
@@ -116,6 +128,17 @@ export const useAnalysisSessionRecovery = ({
     }
 
     if (sessionStep === 'chat') {
+      if (!isInterviewMode) {
+        if (currentStep !== 'report') {
+          pushRuntimeTrace('ai_analysis.recovery', 'goto_report_from_chat_diagnosis', {
+            from: currentStep,
+            actionMarker,
+          });
+          navigateToStep('report', true);
+        }
+        recoveredSessionKeyRef.current = actionMarker;
+        return;
+      }
       if (!jdText && effectiveJdText && String(jdText || '').trim() !== effectiveJdText) {
         setJdText(effectiveJdText);
       }
@@ -141,7 +164,18 @@ export const useAnalysisSessionRecovery = ({
       (sessionStep === 'final_report' || sessionStep === 'interview_report' || sessionStep === 'comparison' || sessionStep === 'micro_intro' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
       currentStep !== sessionStep
     ) {
-      const normalizedStep = sessionStep === 'micro_intro' ? 'report' : sessionStep;
+      const normalizedStep = !isInterviewMode
+        ? (
+          sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report'
+            ? 'final_report'
+            : sessionStep === 'report' || sessionStep === 'micro_intro'
+              ? 'report'
+              : sessionStep === 'jd_input' || sessionStep === 'analyzing'
+                ? 'jd_input'
+                : ''
+        )
+        : (sessionStep === 'micro_intro' ? 'report' : sessionStep);
+      if (!normalizedStep) return;
       pushRuntimeTrace('ai_analysis.recovery', 'goto_session_step', {
         from: currentStep,
         to: normalizedStep,

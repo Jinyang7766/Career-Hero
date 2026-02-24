@@ -5,7 +5,8 @@ param(
   [string]$BackendUrl,
   [string]$Email = $env:CAREER_HERO_TEST_EMAIL,
   [string]$Password = $env:CAREER_HERO_TEST_PASSWORD,
-  [switch]$SkipUiLogin
+  [switch]$SkipUiLogin,
+  [switch]$UiLoginHeaded
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,8 +21,8 @@ Write-Host "[step] Running online tests..."
   -BackendUrl $BackendUrl `
   -Email $Email `
   -Password $Password `
-  -SkipUiLogin:$SkipUiLogin
+  -SkipUiLogin:$SkipUiLogin `
+  -UiLoginHeaded:$UiLoginHeaded
 if ($LASTEXITCODE -ne 0) { throw "[step] online tests failed" }
 
 Write-Host "[step] Local + online tests passed."
-

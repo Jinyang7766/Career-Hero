@@ -20,6 +20,7 @@ import {
   normalizeSceneText,
   pickFirstNonEmptyText,
 } from '../interview-session-key-utils';
+import { pickLatestByUpdatedAt } from '../interview-session-helpers';
 
 type AnalysisSessionState =
   | 'idle'
@@ -130,13 +131,7 @@ export const useInterviewSessionStore = ({
         return true;
       })
       .map((entry) => entry.session);
-    const latestFallback = modeMatchedFallback.reduce((acc: any, curr: any) => {
-      const accAt = Date.parse(String(acc?.updatedAt || ''));
-      const currAt = Date.parse(String(curr?.updatedAt || ''));
-      if (!Number.isFinite(accAt)) return curr;
-      if (!Number.isFinite(currAt)) return acc;
-      return currAt > accAt ? curr : acc;
-    }, null);
+    const latestFallback = pickLatestByUpdatedAt(modeMatchedFallback as any[]) as any;
     const typedModeMatched = typedModeSession
       ? (
         isSessionModeMatched(typedModeSession, interviewMode) &&
@@ -185,13 +180,9 @@ export const useInterviewSessionStore = ({
         expectedResumeId,
       }))
       : modeMatchedFallback;
-    const strictLatestFallback = (strictModeMatchedFallback.length ? strictModeMatchedFallback : []).reduce((acc: any, curr: any) => {
-      const accAt = Date.parse(String(acc?.updatedAt || ''));
-      const currAt = Date.parse(String(curr?.updatedAt || ''));
-      if (!Number.isFinite(accAt)) return curr;
-      if (!Number.isFinite(currAt)) return acc;
-      return currAt > accAt ? curr : acc;
-    }, null);
+    const strictLatestFallback = pickLatestByUpdatedAt(
+      (strictModeMatchedFallback.length ? strictModeMatchedFallback : []) as any[]
+    ) as any;
     const relaxedLatestFallback = isInterviewMode ? null : latestFallback;
     return {
       interviewType,
@@ -264,13 +255,7 @@ export const useInterviewSessionStore = ({
       return itemType === interviewType && itemMode === interviewMode && itemChatMode === chatMode;
     });
     const source = filtered.length ? filtered : entries;
-    return source.reduce((acc: any, curr: any) => {
-      const accAt = Date.parse(String(acc?.updatedAt || ''));
-      const currAt = Date.parse(String(curr?.updatedAt || ''));
-      if (!Number.isFinite(accAt)) return curr;
-      if (!Number.isFinite(currAt)) return acc;
-      return currAt > accAt ? curr : acc;
-    }, null);
+    return pickLatestByUpdatedAt(source as any[]) as any;
   };
 
   const persistAnalysisSessionState = async (
@@ -409,13 +394,7 @@ export const useInterviewSessionStore = ({
         });
       });
       const candidatePool = modeMatched;
-      const latestFallback = candidatePool.reduce((acc: any, curr: any) => {
-        const accAt = Date.parse(String(acc?.updatedAt || ''));
-        const currAt = Date.parse(String(curr?.updatedAt || ''));
-        if (!Number.isFinite(accAt)) return curr;
-        if (!Number.isFinite(currAt)) return acc;
-        return currAt > accAt ? curr : acc;
-      }, null);
+      const latestFallback = pickLatestByUpdatedAt(candidatePool as any[]) as any;
       if (latestFallback && Array.isArray(latestFallback.messages) && latestFallback.messages.length) {
         setChatMessages(latestFallback.messages as ChatMessage[]);
         setChatInitialized(true);

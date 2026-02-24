@@ -5,7 +5,8 @@ param(
   [string]$BackendUrl,
   [string]$Email = $env:CAREER_HERO_TEST_EMAIL,
   [string]$Password = $env:CAREER_HERO_TEST_PASSWORD,
-  [switch]$SkipUiLogin
+  [switch]$SkipUiLogin,
+  [switch]$UiLoginHeaded
 )
 
 $ErrorActionPreference = "Stop"
@@ -53,17 +54,19 @@ if (-not $SkipUiLogin) {
     throw "[online.ui] missing Email/Password; pass params or set CAREER_HERO_TEST_EMAIL/CAREER_HERO_TEST_PASSWORD"
   }
 
-  Write-Host "[online] UI login smoke via Playwright CLI..."
+  $uiMode = if ($UiLoginHeaded) { "headed" } else { "headless" }
+  Write-Host "[online] UI login smoke via Playwright CLI ($uiMode)..."
   $session = "online-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
   $frontendLogin = "$($FrontendUrl.TrimEnd('/'))/login"
   $frontendProfile = "$($FrontendUrl.TrimEnd('/'))/profile"
+  $openModeFlag = if ($UiLoginHeaded) { "--headed" } else { "--no-headed" }
 
   $safeEmail = Escape-JsSingleQuoted -Value $Email
   $safePassword = Escape-JsSingleQuoted -Value $Password
   $safeLoginUrl = Escape-JsSingleQuoted -Value $frontendLogin
   $safeProfileUrl = Escape-JsSingleQuoted -Value $frontendProfile
 
-  & npx --yes --package @playwright/cli playwright-cli -s=$session open $frontendLogin | Out-Null
+  & npx --yes --package @playwright/cli playwright-cli -s=$session open $frontendLogin $openModeFlag | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "[online.ui] failed to open browser session" }
 
   $script = "async (page) => { await page.goto('$safeLoginUrl'); await page.getByRole('textbox', { name: '电子邮箱' }).fill('$safeEmail'); await page.getByRole('textbox', { name: '密码' }).fill('$safePassword'); await page.getByRole('button', { name: '登录' }).click(); await page.waitForURL('**/dashboard', { timeout: 20000 }); await page.goto('$safeProfileUrl'); await page.waitForSelector('text=$safeEmail', { timeout: 20000 }); }"
@@ -74,4 +77,3 @@ if (-not $SkipUiLogin) {
 }
 
 Write-Host "[online] All online smoke checks passed."
-

@@ -1,4 +1,13 @@
 import { supabase } from './supabase-client';
+import {
+  createUserRecord,
+  getUserRecord,
+  updateUserRecord,
+} from './database/user-repository';
+import {
+  createPointsLedgerEntry,
+  listPointsLedgerEntries,
+} from './database/points-repository';
 
 type CreateResumeOptions = {
   optimizedDuplicateStrategy?: 'reuse' | 'overwrite';
@@ -73,74 +82,17 @@ export class DatabaseService {
 
   // 创建用户记录
   static async createUser(userId: string, email: string, name: string) {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .insert({
-          id: userId,
-          email: email,
-          name: name,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        });
-
-      if (error) {
-        console.error('Error creating user record:', error);
-        return { success: false, error };
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error('Database operation failed:', err);
-      return { success: false, error: err };
-    }
+    return createUserRecord(userId, email, name);
   }
 
   // 获取用户信息
   static async getUser(userId: string) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) {
-        if (DatabaseService.isNoRowsError(error)) {
-          return { success: false, error: null, data: null };
-        }
-        console.error('Error fetching user:', error);
-        return { success: false, error, data: null };
-      }
-
-      return { success: true, data };
-    } catch (err) {
-      console.error('Database operation failed:', err);
-      return { success: false, error: err, data: null };
-    }
+    return getUserRecord(userId);
   }
 
   // 更新用户信息
   static async updateUser(userId: string, updates: any) {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Error updating user:', error);
-        return { success: false, error };
-      }
-
-      return { success: true };
-    } catch (err) {
-      console.error('Database operation failed:', err);
-      return { success: false, error: err };
-    }
+    return updateUserRecord(userId, updates);
   }
 
   // 创建简历记录
@@ -487,50 +439,10 @@ export class DatabaseService {
     balanceAfter?: number | null;
     metadata?: any;
   }) {
-    try {
-      const { error } = await supabase
-        .from('points_ledger')
-        .insert({
-          user_id: entry.userId,
-          delta: entry.delta,
-          action: entry.action,
-          source_type: entry.sourceType ?? null,
-          source_id: entry.sourceId == null ? null : String(entry.sourceId),
-          note: entry.note ?? null,
-          balance_after: entry.balanceAfter ?? null,
-          metadata: entry.metadata ?? null,
-          created_at: new Date().toISOString(),
-        });
-
-      if (error) {
-        console.error('Error creating points ledger:', error);
-        return { success: false, error };
-      }
-      return { success: true };
-    } catch (err) {
-      console.error('Database operation failed:', err);
-      return { success: false, error: err };
-    }
+    return createPointsLedgerEntry(entry);
   }
 
   static async listPointsLedger(userId: string, limit: number = 200) {
-    try {
-      const safeLimit = Math.max(1, Math.min(500, Number(limit) || 200));
-      const { data, error } = await supabase
-        .from('points_ledger')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(safeLimit);
-
-      if (error) {
-        console.error('Error listing points ledger:', error);
-        return { success: false, error, data: [] as any[] };
-      }
-      return { success: true, data: data || [] };
-    } catch (err) {
-      console.error('Database operation failed:', err);
-      return { success: false, error: err, data: [] as any[] };
-    }
+    return listPointsLedgerEntries(userId, limit);
   }
 }

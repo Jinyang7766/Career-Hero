@@ -1,12 +1,6 @@
 # -*- coding: utf-8 -*-
-import base64
-import ipaddress
 import os
 import re
-import socket
-from urllib.parse import urlparse
-
-import requests
 from jinja2 import Environment, BaseLoader
 from markupsafe import Markup
 from reportlab.pdfbase import pdfmetrics
@@ -18,6 +12,10 @@ from services.pdf_text_utils import (
     extract_company_name_from_jd,
     sanitize_filename_part,
 )
+try:
+    from services.pdf_asset_service import is_safe_external_url, normalize_avatar_data
+except ImportError:
+    from backend.services.pdf_asset_service import is_safe_external_url, normalize_avatar_data
 
 
 _PDF_FONT_FAMILY_CACHE = None
@@ -175,65 +173,6 @@ def inject_font_css_into_html(html_content: str) -> str:
     if '<body' in html_content:
         return html_content.replace('<body', f'{font_css}<body', 1)
     return f'{font_css}{html_content}'
-
-def is_safe_external_url(url: str) -> bool:
-    try:
-        parsed = urlparse(url)
-        if parsed.scheme not in ('http', 'https'):
-            return False
-        host = parsed.hostname
-        if not host:
-            return False
-        # Block localhost and internal hostnames
-        if host in ('localhost', '127.0.0.1', '::1'):
-            return False
-        # Resolve hostname and block private/loopback/link-local/reserved
-        try:
-            ip = ipaddress.ip_address(host)
-            ips = [ip]
-        except ValueError:
-            try:
-                infos = socket.getaddrinfo(host, None)
-                ips = [ipaddress.ip_address(info[4][0]) for info in infos]
-            except Exception:
-                return False
-        for ip in ips:
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
-                return False
-        return True
-    except Exception:
-        return False
-
-def normalize_avatar_data(avatar_url: str) -> str:
-    if not avatar_url:
-        return ''
-    avatar_url = str(avatar_url).strip()
-    if avatar_url.startswith('data:image/'):
-        return avatar_url
-    if avatar_url.startswith('http://') or avatar_url.startswith('https://'):
-        if not is_safe_external_url(avatar_url):
-            return ''
-        try:
-            resp = requests.get(
-                avatar_url,
-                timeout=3,
-                stream=True,
-                allow_redirects=False,
-                headers={'User-Agent': 'CareerHeroPDF/1.0'}
-            )
-            if resp.status_code != 200:
-                return ''
-            content_type = (resp.headers.get('Content-Type') or 'image/png').split(';')[0].strip().lower()
-            if not content_type.startswith('image/'):
-                return ''
-            data = resp.content[: 2 * 1024 * 1024]
-            if not data:
-                return ''
-            encoded = base64.b64encode(data).decode('utf-8')
-            return f"data:{content_type};base64,{encoded}"
-        except Exception:
-            return ''
-    return ''
 
 def format_multiline(text: str) -> Markup:
     safe_text = clean_text_for_pdf(text or '')

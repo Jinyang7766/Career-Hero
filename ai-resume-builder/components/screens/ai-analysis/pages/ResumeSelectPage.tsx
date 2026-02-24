@@ -50,6 +50,23 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   pointsRemaining,
   onRediagnoseResume,
 }) => {
+  const hasRecoverableDiagnosisStep = (resume: ResumeSummary) => {
+    const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
+    if ([
+      'jd_input',
+      'analyzing',
+      'report',
+      'micro_intro',
+      'chat',
+      'comparison',
+      'final_report',
+      'interview_report',
+    ].includes(latestStep)) {
+      return true;
+    }
+    const progress = Number(resume.diagnosisProgress ?? 0);
+    return Number.isFinite(progress) && progress >= 15;
+  };
   const [openMenuResumeId, setOpenMenuResumeId] = React.useState<number | null>(null);
   const menuWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -78,7 +95,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         {resumes.map((resume) => (
           <div
             key={resume.id}
-            onClick={() => onSelectResume(resume.id, !!resume.analyzed)}
+            onClick={() => onSelectResume(resume.id, !!resume.analyzed || hasRecoverableDiagnosisStep(resume))}
             className="group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
             <div className={`shrink-0 relative ${isReading && String(selectedResumeId) === String(resume.id) ? 'opacity-50 pointer-events-none' : ''}`}>

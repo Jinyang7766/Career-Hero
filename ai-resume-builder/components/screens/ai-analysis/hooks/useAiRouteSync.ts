@@ -48,6 +48,14 @@ export const useAiRouteSync = ({
   useEffect(() => {
     const currentPath = normalizePath(window.location.pathname || '');
     if (!currentPath.startsWith('/ai-analysis')) return;
+    // When bottom-nav explicitly requests resume_select, do not immediately
+    // re-sync URL back to the previous sub-route in the same render turn.
+    try {
+      const forceResumeSelect = localStorage.getItem('ai_analysis_force_resume_select') === '1';
+      if (forceResumeSelect && currentPath === '/ai-analysis' && currentStep === 'resume_select') return;
+    } catch {
+      // ignore storage failures
+    }
 
     const base = '/ai-analysis';
     const targetPath = (() => {

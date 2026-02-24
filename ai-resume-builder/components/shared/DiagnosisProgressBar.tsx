@@ -54,7 +54,7 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
                     const isCurrent = status === 'current';
                     const canJumpDiagnosisStage =
                         !isInterviewMode &&
-                        isDone &&
+                        (isDone || isCurrent) &&
                         typeof onDiagnosisStageClick === 'function';
                     const content = (
                         <>

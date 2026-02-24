@@ -21,6 +21,7 @@ export const useAiAnalysisPageUiEffects = ({
   setAnalysisResumeId,
 }: AiAnalysisPageEffectsParams) => {
   const navHiddenRef = useRef(false);
+  const forceAppliedRef = useRef(false);
   useEffect(() => {
     if (!setIsNavHidden) return;
     const nextHidden = currentStep === 'chat';
@@ -74,7 +75,11 @@ export const useAiAnalysisPageUiEffects = ({
     const expectedPath = isInterviewMode ? '/ai-interview' : '/ai-analysis';
     if (path !== expectedPath) return;
     if (localStorage.getItem(forceKey) !== '1') return;
+    if (forceAppliedRef.current) return;
+    // Keep force flag until user leaves resume_select so recovery effects
+    // cannot auto-restore to sub-pages during the same entry cycle.
 
+    forceAppliedRef.current = true;
     forcedResumeSelectRef.current = true;
     setStepHistory([]);
     setSelectedResumeId(null);
@@ -97,6 +102,7 @@ export const useAiAnalysisPageUiEffects = ({
   useEffect(() => {
     if (currentStep !== 'resume_select') {
       forcedResumeSelectRef.current = false;
+      forceAppliedRef.current = false;
       const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
       try {
         localStorage.removeItem(forceKey);

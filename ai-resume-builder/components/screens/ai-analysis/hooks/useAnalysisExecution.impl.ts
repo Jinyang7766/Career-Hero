@@ -1,10 +1,9 @@
 import { useCallback } from 'react';
 import { toSkillList } from '../../../../src/skill-utils';
-import { createMasker } from '../chat-payload';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
 import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import { sanitizeReasonText, sanitizeSuggestedValue, isGenderRelatedSuggestion, isEducationRelatedSuggestion } from '../chat-formatters';
-import { runRealAnalysis } from '../analysis-api';
+import { runRealAnalysisRequest } from '../analysis-execution-runner';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 import { checkInterviewContinuationState, decideMicroInterviewNeeded } from '../analysis-execution-helpers';
@@ -110,46 +109,19 @@ export const useAnalysisExecution = ({
   interviewEntryConfirmPendingRef,
 }: Params) => {
   const CACHE_BYPASS_ONCE_KEY = 'ai_analysis_bypass_cache_once';
-  const generateRealAnalysis = useCallback(async (runId: string, interviewType?: string) => {
-    return runRealAnalysis({
-      interviewType,
-      resumeData,
-      jdText,
-      getBackendAuthToken,
-      showToast,
-      buildApiUrl,
-      createMasker,
-      getRagEnabledFlag,
-      analysisAbortRef: analysisAbortRef as any,
-      analysisRunIdRef: analysisRunIdRef as any,
-      runId,
-      setIsFromCache,
-    });
-  }, [
-    analysisAbortRef,
-    analysisRunIdRef,
-    buildApiUrl,
-    getBackendAuthToken,
-    getRagEnabledFlag,
-    jdText,
-    resumeData,
-    setIsFromCache,
-    showToast,
-  ]);
 
   const generateRealAnalysisWithOptions = useCallback(async (
     runId: string,
     interviewType?: string,
     opts?: { bypassCache?: boolean }
   ) => {
-    return runRealAnalysis({
+    return runRealAnalysisRequest({
       interviewType,
       resumeData,
       jdText,
       getBackendAuthToken,
       showToast,
       buildApiUrl,
-      createMasker,
       getRagEnabledFlag,
       analysisAbortRef: analysisAbortRef as any,
       analysisRunIdRef: analysisRunIdRef as any,
@@ -602,7 +574,6 @@ export const useAnalysisExecution = ({
   }, [
     analysisRunIdRef,
     cancelInFlightAnalysis,
-    generateRealAnalysis,
     generateRealAnalysisWithOptions,
     jdText,
     markAnalysisCompleted,

@@ -11,6 +11,7 @@ import { getActiveInterviewType } from '../interview-plan-utils';
 import { generateInterviewSummary, streamInterviewResponse } from '../interview-chat-api';
 import { upsertStreamingModelMessage } from '../interview-chat-message-state';
 import { normalizeInterviewReplyText, shouldTreatAsFollowUpSignal } from '../interview-chat-text';
+import { buildInterviewTurnPipeline } from '../interview-chat-turn-pipeline';
 import { useInterviewChatStorage } from './useInterviewChatStorage';
 import {
   buildFallbackInterviewSummary,
@@ -101,8 +102,6 @@ export const useInterviewChat = ({
   const reverseQaAskedCountRef = useRef(0);
   const reverseQaPendingEvaluationRef = useRef(false);
   const REVERSE_QA_MAX = 3;
-  const isNoMoreQuestionSignal = (raw: string) =>
-    /(没有(了)?|没(有)?问题了|无(问题|疑问)|不用了|结束|就这样|没了)/i.test(String(raw || '').trim());
   const resetReverseQaState = () => {
     reverseQaActiveRef.current = false;
     reverseQaAskedCountRef.current = 0;
@@ -347,100 +346,32 @@ export const useInterviewChat = ({
       const isInterviewChat = !!isInterviewMode;
       const isMicroInterview = !isInterviewChat && currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
-      const detectFollowUpNeed = (raw: string) => {
-        const text = String(raw || '').trim();
-        if (!text) return { shouldFollowUp: false, hint: '' };
-        const normalized = text.replace(/\s+/g, '');
-        const isShort = normalized.length < 18;
-        const hasNumberEvidence = /(\d+(\.\d+)?%?)|(\d+\s*(ms|s|秒|天|周|月|年|人|次|万|百万|亿元|k|K|w|W))/i.test(text);
-        const hasActionEvidence = /(负责|主导|推进|制定|设计|执行|落地|优化|搭建|复盘|拆解|调整|实施|改造|推动|协调|分析了|我做了|我通过|通过.+(优化|调整|分析|改造))/i.test(text);
-        const hasDataKeyword = /(gmv|roi|ctr|cvr|uv|pv|客单价|转化率|点击率|留存率|复购率|曝光|订单量|营收|成本|毛利|投产比|客诉率|退款率|履约率|nps)/i.test(text);
-        const hasDataEvidence = hasNumberEvidence || hasDataKeyword;
-        const hasResultEvidence = /(提升|增长|下降|降低|减少|改善|达成|实现|结果|产出|收益|效果|拉升|优化后|最终|同比|环比)/i.test(text);
-        const structureHitCount = [hasActionEvidence, hasDataEvidence, hasResultEvidence].filter(Boolean).length;
-        const vagueWords = ['负责', '参与', '很多', '一些', '一般', '还行', '差不多', '优化了', '提升了', '做过', '了解'];
-        const uncertainWords = ['记不清', '不太清楚', '不确定', '可能', '大概', '应该', '差不多'];
-        const vagueHits = vagueWords.filter((w) => text.includes(w)).length;
-        const uncertainHits = uncertainWords.filter((w) => text.includes(w)).length;
-        const missingStructuredFields: string[] = [];
-        if (!hasActionEvidence) missingStructuredFields.push('动作');
-        if (!hasDataEvidence) missingStructuredFields.push('数据');
-        if (!hasResultEvidence) missingStructuredFields.push('结果');
-        const lacksStructuredEvidence = structureHitCount < 2;
-        const shouldFollowUp =
-          isShort ||
-          uncertainHits > 0 ||
-          (vagueHits >= 2 && !hasNumberEvidence) ||
-          lacksStructuredEvidence;
-        const reasons: string[] = [];
-        if (isShort) reasons.push('回答过短');
-        if (uncertainHits > 0) reasons.push('不确定表达较多');
-        if (vagueHits >= 2 && !hasNumberEvidence) reasons.push('缺少量化证据');
-        if (lacksStructuredEvidence) reasons.push(`结构化信息不足（动作/数据/结果至少需覆盖两项，当前缺少：${missingStructuredFields.join('、') || '关键要素'}）`);
-        return {
-          shouldFollowUp,
-          hint: reasons.join('、') || '细节不够具体',
-        };
-      };
-      const followUpDecision = isInterviewChat && hasText && !isSkipCurrentQuestion
-        ? detectFollowUpNeed(textToSend)
-        : { shouldFollowUp: false, hint: '' };
-      const answeredCountAtThisTurn = baseMessages.filter((m) => {
-        if (m.role !== 'user') return false;
-        const txt = String(m.text || '').trim();
-        const hasTextAnswer = !!txt && txt !== '结束面试' && txt !== '结束微访谈';
-        const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
-        return hasTextAnswer || hasVoiceAnswer;
-      }).length;
-      const isClosingPhase = (
-        isInterviewChat &&
-        plannedQuestionCount > 0 &&
-        answeredCountAtThisTurn >= plannedQuestionCount
-      );
-      const normalizedFollowUpDecision = isClosingPhase
-        ? { shouldFollowUp: false, hint: '' }
-        : followUpDecision;
-      const reverseQaJustActivated = isInterviewChat && isClosingPhase && !reverseQaActiveRef.current;
-      if (reverseQaJustActivated) {
-        reverseQaActiveRef.current = true;
-        reverseQaAskedCountRef.current = 0;
-        reverseQaPendingEvaluationRef.current = false;
-      }
-      const inReverseQa = isInterviewChat && reverseQaActiveRef.current;
-      const reverseQaUserDone = inReverseQa && hasText && isNoMoreQuestionSignal(textToSend);
-      let reverseQaMode: 'none' | 'announce' | 'evaluate' | 'force_end' = 'none';
-      let reverseQaQuestionNo = 0;
-      if (inReverseQa) {
-        if (reverseQaUserDone) {
-          reverseQaMode = 'force_end';
-        } else if (reverseQaJustActivated) {
-          reverseQaMode = 'announce';
-        } else {
-          reverseQaAskedCountRef.current += 1;
-          reverseQaQuestionNo = reverseQaAskedCountRef.current;
-          reverseQaPendingEvaluationRef.current = true;
-          reverseQaMode = reverseQaQuestionNo > REVERSE_QA_MAX ? 'force_end' : 'evaluate';
-        }
-      } else {
-        reverseQaPendingEvaluationRef.current = false;
-      }
-      const strictNextQuestion = (
-        isInterviewChat &&
-        !inReverseQa &&
-        !normalizedFollowUpDecision.shouldFollowUp &&
-        Array.isArray(interviewPlan) &&
-        interviewPlan.length > answeredCountAtThisTurn
-      )
-        ? formatInterviewQuestion(String(interviewPlan[answeredCountAtThisTurn] || ''))
-        : '';
-      const lastMsgBeforeUser = (() => {
-        const last = baseMessages[baseMessages.length - 1];
-        if (last && last.id === userMessage.id && baseMessages.length >= 2) return baseMessages[baseMessages.length - 2];
-        return last;
-      })();
-      const isStartPhase =
-        !!lastMsgBeforeUser &&
-        (lastMsgBeforeUser.id === 'ai-ask' || lastMsgBeforeUser.text.includes('准备好'));
+      const turnPipeline = buildInterviewTurnPipeline({
+        baseMessages,
+        userMessageId: userMessage.id,
+        textToSend,
+        hasText,
+        isInterviewChat,
+        isSkipCurrentQuestion,
+        plannedQuestionCount,
+        interviewPlan: Array.isArray(interviewPlan) ? interviewPlan : [],
+        formatInterviewQuestion,
+        reverseQaActive: reverseQaActiveRef.current,
+        reverseQaAskedCount: reverseQaAskedCountRef.current,
+        reverseQaMax: REVERSE_QA_MAX,
+      });
+      const answeredCountAtThisTurn = turnPipeline.answeredCountAtThisTurn;
+      const isClosingPhase = turnPipeline.isClosingPhase;
+      const normalizedFollowUpDecision = turnPipeline.normalizedFollowUpDecision;
+      const reverseQaResolution = turnPipeline.reverseQaResolution;
+      reverseQaActiveRef.current = reverseQaResolution.nextReverseQaActive;
+      reverseQaAskedCountRef.current = reverseQaResolution.nextReverseQaAskedCount;
+      reverseQaPendingEvaluationRef.current = reverseQaResolution.nextReverseQaPendingEvaluation;
+      const inReverseQa = reverseQaResolution.inReverseQa;
+      const reverseQaMode = reverseQaResolution.reverseQaMode;
+      const reverseQaQuestionNo = reverseQaResolution.reverseQaQuestionNo;
+      const strictNextQuestion = turnPipeline.strictNextQuestion;
+      const isStartPhase = turnPipeline.isStartPhase;
 
       const interviewWrapped = buildInterviewWrappedMessage({
         isInterviewChat,

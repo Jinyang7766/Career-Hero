@@ -59,35 +59,34 @@ export const useResumeSelection = ({
   const FORCE_JD_RESUME_ID_KEY = 'ai_force_jd_resume_id';
   const normalizeStep = (step: any) => {
     const v = String(step || '').trim().toLowerCase();
-    return ['report', 'chat', 'final_report', 'comparison', 'interview_report', 'micro_intro'].includes(v) ? v : '';
-  };
-  const hasMicroInterviewHistory = (resumeRow: any) => {
-    const source = (resumeRow as any)?.resume_data || resumeRow || {};
-    const sessions = (source as any)?.interviewSessions || {};
-    return Object.values(sessions || {}).some((session: any) => {
-      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-      if (chatMode !== 'micro') return false;
-      return Array.isArray(session?.messages) && session.messages.length > 0;
-    });
+    return [
+      'jd_input',
+      'analyzing',
+      'report',
+      'micro_intro',
+      'chat',
+      'interview_report',
+      'comparison',
+      'final_report',
+    ].includes(v)
+      ? v
+      : '';
   };
   const inferTargetStepFromResume = (resumeRow: any, explicit?: 'report' | 'chat' | 'final_report') => {
-    const canEnterMicroChat = hasMicroInterviewHistory(resumeRow);
-    if (explicit) {
-      if (explicit === 'chat' && !canEnterMicroChat) return 'report';
-      return explicit;
-    }
+    if (explicit === 'final_report') return 'final_report';
+    if (explicit === 'report' || explicit === 'chat') return 'report';
     const rawLatestStep =
       normalizeStep((resumeRow as any)?.latestAnalysisStep) ||
       normalizeStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
-    if (rawLatestStep === 'chat') return canEnterMicroChat ? 'chat' : 'report';
     if (rawLatestStep === 'final_report' || rawLatestStep === 'comparison' || rawLatestStep === 'interview_report') return 'final_report';
-    if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro') return 'report';
+    if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro' || rawLatestStep === 'chat') return 'report';
+    if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
 
     const sessionsSource = (resumeRow as any)?.resume_data || resumeData || {};
     const sessionStep = normalizeStep(deriveLatestAnalysisStep(sessionsSource));
-    if (sessionStep === 'chat') return canEnterMicroChat ? 'chat' : 'report';
     if (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report') return 'final_report';
-    if (sessionStep === 'report' || sessionStep === 'micro_intro') return 'report';
+    if (sessionStep === 'report' || sessionStep === 'micro_intro' || sessionStep === 'chat') return 'report';
+    if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
 
     const progress = Math.max(0, Math.min(100, Math.round(Number(
       (resumeRow as any)?.diagnosisProgress ??
@@ -96,9 +95,8 @@ export const useResumeSelection = ({
       0
     ))));
     if (progress >= 95) return 'final_report';
-    // Do not auto-open micro interview only based on progress.
-    if (progress >= 80) return 'report';
-    return 'report';
+    if (progress >= 60) return 'report';
+    return 'jd_input';
   };
 
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
@@ -232,6 +230,8 @@ export const useResumeSelection = ({
             window.setTimeout(() => {
               openChat('internal');
             }, 0);
+          } else if (inferredTarget === 'chat') {
+            navigateToStep('chat');
           } else {
             navigateToStep(inferredTarget);
           }
