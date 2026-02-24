@@ -1,6 +1,10 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { ResumeData } from '../../../types';
 import { clampByLimit, SUMMARY_MAX_CHARS } from '../../../src/editor-field-limits';
+import {
+  applySummaryToResumeData,
+  resolveResumeSummaryValue,
+} from '../../../src/editor-summary-sync';
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
 
@@ -21,6 +25,7 @@ export const useEditorDraftPersistence = ({
   setResumeData,
   onDraftRestored,
 }: Params) => {
+  const hydratedResumeIdRef = useRef<string | null | undefined>(undefined);
   const editorDraftKey = useMemo(
     () => `editor_resume_draft_${currentUserId || 'anonymous'}`,
     [currentUserId]
@@ -60,23 +65,22 @@ export const useEditorDraftPersistence = ({
 
   useEffect(() => {
     const localSummary = clampByLimit(summary || '', SUMMARY_MAX_CHARS);
-    const storeSummary = clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS);
+    const storeSummary = clampByLimit(resolveResumeSummaryValue(resumeData), SUMMARY_MAX_CHARS);
     if (localSummary !== storeSummary) {
-      setResumeData((prev) => {
-        const prevSummary = clampByLimit(prev?.summary || '', SUMMARY_MAX_CHARS);
-        if (prevSummary === localSummary) return prev;
-        return { ...prev, summary: localSummary };
-      });
+      setResumeData((prev) => applySummaryToResumeData(prev, localSummary));
     }
-  }, [summary, resumeData?.summary, setResumeData]);
+  }, [summary, resumeData?.summary, resumeData?.personalInfo?.summary, setResumeData]);
 
   useEffect(() => {
-    const storeSummary = clampByLimit(resumeData?.summary || '', SUMMARY_MAX_CHARS);
+    const resumeId = resumeData?.id == null ? null : String(resumeData.id);
+    if (hydratedResumeIdRef.current === resumeId) return;
+    hydratedResumeIdRef.current = resumeId;
+    const storeSummary = clampByLimit(resolveResumeSummaryValue(resumeData), SUMMARY_MAX_CHARS);
     const localSummary = clampByLimit(summary || '', SUMMARY_MAX_CHARS);
     if (storeSummary !== localSummary) {
       setSummary(storeSummary);
     }
-  }, [resumeData?.summary, summary, setSummary]);
+  }, [resumeData?.id, resumeData?.summary, resumeData?.personalInfo?.summary, summary, setSummary]);
 
   useEffect(() => {
     if (resumeData?.id) return;
@@ -92,8 +96,13 @@ export const useEditorDraftPersistence = ({
         ...draftData,
         id: undefined,
       }));
-      if (typeof draftData.summary === 'string') {
-        setSummary(clampByLimit(draftData.summary, SUMMARY_MAX_CHARS));
+      const restoredSummary = resolveResumeSummaryValue(draftData);
+      if (
+        restoredSummary ||
+        typeof draftData.summary === 'string' ||
+        typeof draftData.personalInfo?.summary === 'string'
+      ) {
+        setSummary(clampByLimit(restoredSummary, SUMMARY_MAX_CHARS));
       }
       onDraftRestored();
     } catch (error) {

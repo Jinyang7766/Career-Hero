@@ -3,6 +3,11 @@ import type { ResumeData } from '../../../types';
 import { buildApiUrl } from '../../../src/api-config';
 import { toSkillListForImport } from '../../../src/skill-utils';
 import { SUMMARY_MAX_CHARS, clampByLimit } from '../../../src/editor-field-limits';
+import {
+  normalizeEditorSummary,
+  pickFirstNonEmptySummary,
+  resolveImportedSummaryText,
+} from '../../../src/editor-summary-sync';
 
 type WizardStep = 'import' | 'personal' | 'work' | 'education' | 'projects' | 'skills' | 'summary';
 
@@ -15,6 +20,8 @@ type Params = {
   setShowImportSuccess: (value: boolean) => void;
   triggerManualSave: (data: ResumeData) => Promise<void>;
 };
+
+const toText = (value: any) => (typeof value === 'string' ? value.trim() : '');
 
 export const useEditorImportFlow = ({
   resumeData,
@@ -34,7 +41,6 @@ export const useEditorImportFlow = ({
 
   const handleResumeImport = (importedData: Omit<ResumeData, 'id'>) => {
     console.log('导入简历数据:', importedData);
-    const toText = (value: any) => (typeof value === 'string' ? value.trim() : '');
     const toKeyText = (value: any) => toText(value).toLowerCase().replace(/\s+/g, '');
     const parseRangeText = (date?: string) => {
       const raw = toText(date);
@@ -72,7 +78,7 @@ export const useEditorImportFlow = ({
       if (s && e) return `${s} - ${e}`;
       return s || e || '';
     };
-    const importedSummary = toText(importedData.summary || importedData.personalInfo?.summary);
+    const importedSummary = resolveImportedSummaryText(importedData as Partial<ResumeData>);
     const normalizedImportedSummary = importedSummary
       ? clampByLimit(importedSummary, SUMMARY_MAX_CHARS)
       : '';
@@ -204,6 +210,7 @@ export const useEditorImportFlow = ({
 
     const computeMergedData = (prev: ResumeData): ResumeData => {
       const mergedData = { ...prev };
+      const previousSummary = pickFirstNonEmptySummary(prev.summary, prev.personalInfo?.summary);
 
       if (importedData.personalInfo) {
         mergedData.personalInfo = {
@@ -216,7 +223,7 @@ export const useEditorImportFlow = ({
           website: importedData.personalInfo.website || prev.personalInfo.website,
           avatar: importedData.personalInfo.avatar || prev.personalInfo.avatar,
           age: importedData.personalInfo.age || prev.personalInfo.age,
-          summary: normalizedImportedSummary || prev.personalInfo.summary
+          summary: normalizedImportedSummary || pickFirstNonEmptySummary(prev.personalInfo.summary, prev.summary),
         };
       }
 
@@ -274,9 +281,18 @@ export const useEditorImportFlow = ({
         mergedData.skills = Array.isArray(prev.skills) ? prev.skills : [];
       }
 
-      if (normalizedImportedSummary) {
-        mergedData.summary = normalizedImportedSummary;
-      }
+      const finalSummary = pickFirstNonEmptySummary(
+        normalizedImportedSummary,
+        mergedData.summary,
+        mergedData.personalInfo?.summary,
+        previousSummary
+      );
+      const normalizedFinalSummary = normalizeEditorSummary(finalSummary);
+      mergedData.summary = normalizedFinalSummary;
+      mergedData.personalInfo = {
+        ...(mergedData.personalInfo || prev.personalInfo),
+        summary: normalizedFinalSummary,
+      };
 
       if (importedData.gender) {
         mergedData.gender = importedData.gender;
@@ -287,10 +303,7 @@ export const useEditorImportFlow = ({
 
     const finalData = computeMergedData(resumeData);
     setResumeData(finalData);
-
-    if (normalizedImportedSummary) {
-      setSummary(normalizedImportedSummary);
-    }
+    setSummary(normalizeEditorSummary(pickFirstNonEmptySummary(finalData.summary, finalData.personalInfo?.summary)));
 
     console.log('简历导入完成，触发保存');
     triggerManualSave(finalData);

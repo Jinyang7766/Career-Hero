@@ -683,3 +683,36 @@ Use one block per executed step:
   - 前端构建：PASS（`vite build` 成功，含 `Dashboard` 产物）。
 - Risks/Notes:
   - 该改动是 UI 文案显示删减，不涉及数据写入逻辑。
+
+## [2026-02-24 20:32] Bugfix: 导入后“个人总结填写状态”抖动（summary 双字段强一致 + 定向校验补测）
+- Agent: B-FE + C
+- Goal:
+  - 修复导入简历后“个人总结”在填写/未填写间反复变化的问题，统一 `summary` 与 `personalInfo.summary` 的读写口径并补齐定向验证证据。
+- Scope (Changed modules mapped to checks):
+  - `ai-resume-builder/src/editor-summary-sync.ts`
+    - 验证映射：统一 summary 归一化、非空优先选择、双字段同步写回。
+  - `ai-resume-builder/components/editor/hooks/useEditorImportFlow.ts`
+    - 验证映射：导入 summary 优先取非空值（避免 root summary 为空白字符串时覆盖掉 personalInfo.summary），导入后强制双字段一致。
+  - `ai-resume-builder/components/editor/hooks/useEditorDraftPersistence.ts`
+    - 验证映射：草稿双向同步改为基于统一 summary 解析，写回时同时更新双字段；同 `resumeId` 下只做一次 hydration，避免反复反向覆盖。
+  - `ai-resume-builder/components/editor/hooks/useEditorSaveAndPreview.ts`
+    - 验证映射：保存前强制 summary 双字段对齐，避免持久化后再次出现字段分叉。
+- Changes:
+  - 新增 `src/editor-summary-sync.ts` 作为 summary 单一规则入口：
+    - `resolveImportedSummaryText`
+    - `resolveResumeSummaryValue`
+    - `applySummaryToResumeData`
+    - `normalizeEditorSummary`
+  - `useEditorImportFlow` 改为使用统一规则选择并回写 summary。
+  - `useEditorDraftPersistence` 改为读取统一 summary 值并双字段写回，防止字段漂移触发 UI 状态抖动。
+  - `useEditorSaveAndPreview` 保存前统一 summary 到两个字段。
+- Commands:
+  - `npx --yes tsx -e "import { ... } from './ai-resume-builder/src/editor-summary-sync.ts'; ..."`（定向 summary 同步断言）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s build`
+- Verification:
+  - 定向 summary 断言：PASS（输出 `editor_summary_sync_check: PASS`）。
+  - 本地基线测试：PASS（frontend `3 passed`，backend `1 passed`）。
+  - 前端构建：FAIL（Vite HTML inline proxy 报错，`index.html?html-proxy&inline-css` 模块匹配失败；需后续单独排查构建链路）。
+- Risks/Notes:
+  - 本次已补上针对该问题的定向功能验证，但仍建议在真实“导入文本/PDF -> 进入个人总结步骤”场景再做一次可视化回归，以确认端到端体验无抖动。

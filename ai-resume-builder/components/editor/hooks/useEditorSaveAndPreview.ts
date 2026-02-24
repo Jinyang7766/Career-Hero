@@ -3,6 +3,7 @@ import { buildResumeTitle } from '../../../src/resume-utils';
 import { supabase } from '../../../src/supabase-client';
 import { View, type ResumeData } from '../../../types';
 import type { MutableRefObject } from 'react';
+import { normalizeEditorSummary } from '../../../src/editor-summary-sync';
 
 type Params = {
   resumeData: ResumeData;
@@ -35,9 +36,16 @@ export const useEditorSaveAndPreview = ({
     setIsSaving(true);
     setIsAutosaving(true);
     try {
+      const normalizedSummary = normalizeEditorSummary(
+        summary ?? resumeData?.summary ?? resumeData?.personalInfo?.summary ?? ''
+      );
       const latestData: ResumeData = {
         ...resumeData,
-        summary: summary ?? resumeData?.summary ?? '',
+        summary: normalizedSummary,
+        personalInfo: {
+          ...resumeData.personalInfo,
+          summary: normalizedSummary,
+        },
       };
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
