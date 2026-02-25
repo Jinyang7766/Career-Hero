@@ -16,6 +16,7 @@ export interface ChatMessage {
   id: string;
   role: 'user' | 'model';
   text: string;
+  animateBySentence?: boolean;
   audioUrl?: string;
   audioMime?: string;
   audioDuration?: number;
