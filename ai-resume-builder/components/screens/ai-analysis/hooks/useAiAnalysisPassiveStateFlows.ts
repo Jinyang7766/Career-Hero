@@ -1,6 +1,7 @@
 import { useAiAnalysisLifecycle } from './useAiAnalysisLifecycle';
 import { useAnalysisHungGuard } from './useAnalysisHungGuard';
-import { useAnalysisSessionRecovery } from './useAnalysisSessionRecovery';
+import { useDiagnosisSessionRecovery } from './useDiagnosisSessionRecovery';
+import { useInterviewSessionRecovery } from './useInterviewSessionRecovery';
 import { useChatIntroMessages } from './useChatIntroMessages';
 import { useReportSnapshotRestore } from './useReportSnapshotRestore';
 import type { AiAnalysisPassiveFlowsParams } from './useAiAnalysisPassiveFlows.types';
@@ -72,9 +73,22 @@ export const useAiAnalysisPassiveStateFlows = ({
     isInterviewMode,
   });
 
-  useAnalysisSessionRecovery({
+  useDiagnosisSessionRecovery({
     resumeData,
-    forcedResumeSelect,
+    forcedResumeSelect: isInterviewMode ? true : forcedResumeSelect,
+    currentStep,
+    jdText,
+    getAnalysisSession: getAnalysisSession as any,
+    makeJdKey,
+    hasInterviewSessionMessages: hasInterviewSessionMessages as any,
+    navigateToStep: navigateToStep as any,
+    loadLastAnalysis,
+    recoveredSessionKeyRef: recoveredSessionKeyRef as any,
+  });
+
+  useInterviewSessionRecovery({
+    resumeData,
+    forcedResumeSelect: isInterviewMode ? forcedResumeSelect : true,
     currentStep,
     jdText,
     setJdText,
@@ -84,9 +98,7 @@ export const useAiAnalysisPassiveStateFlows = ({
     restoreInterviewSession: restoreInterviewSession as any,
     openChat,
     navigateToStep: navigateToStep as any,
-    loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
-    isInterviewMode,
     interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
   });
 

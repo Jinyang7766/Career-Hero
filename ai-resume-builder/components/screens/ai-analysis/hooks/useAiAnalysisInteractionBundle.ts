@@ -1,5 +1,6 @@
 import type React from 'react';
-import { useAiAnalysisActions } from './useAiAnalysisActions';
+import { useAiAnalysisCommonActions } from './useAiAnalysisCommonActions';
+import { useDiagnosisEntryActions } from './useDiagnosisEntryActions';
 import { useInterviewEntryActions } from './useInterviewEntryActions';
 import { useInterviewVoice } from './useInterviewVoice';
 import { countInterviewAnsweredMessages, getEndChatCommand } from '../interview-chat-helpers';
@@ -79,20 +80,23 @@ export const useAiAnalysisInteractionBundle = ({
   const {
     getScoreColor,
     handleResumeSelectBack,
-    handleStartMicroInterview,
-    microInterviewActionLabel,
     handleRetryAnalysisFromIntro,
-  } = useAiAnalysisActions({
+  } = useAiAnalysisCommonActions({
     navigateToView,
     navigateToStep: navigateToStep as any,
+    onRetryAnalysisFromIntro,
+  });
+
+  const {
+    handleStartMicroInterview,
+    microInterviewActionLabel,
+  } = useDiagnosisEntryActions({
     openChat,
+    navigateToStep: navigateToStep as any,
     resumeData,
     jdText,
     makeJdKey,
     consumeUsageQuota,
-    isInterviewMode,
-    currentStep,
-    onRetryAnalysisFromIntro,
     persistAnalysisSessionState,
   });
 
