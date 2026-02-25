@@ -25,6 +25,50 @@ export type ResumeSelectPageProps = {
 
 import { DiagnosisProgressBar } from '../../../shared/DiagnosisProgressBar';
 
+export const hasRecoverableDiagnosisStepForResume = (resume: ResumeSummary) => {
+  const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
+  if ([
+    'jd_input',
+    'analyzing',
+    'report',
+    'micro_intro',
+    'chat',
+    'comparison',
+    'final_report',
+    'interview_report',
+  ].includes(latestStep)) {
+    return true;
+  }
+  const progress = Number(resume.diagnosisProgress ?? 0);
+  return Number.isFinite(progress) && progress >= 15;
+};
+
+export const shouldPreferReportOnResumeClick = (resume: ResumeSummary, isInterviewMode?: boolean) => {
+  const recoverable = hasRecoverableDiagnosisStepForResume(resume);
+  if (isInterviewMode) {
+    return !!resume.analyzed || recoverable;
+  }
+  // Diagnosis mode should follow diagnosis progress only.
+  // Interview signals may set `analyzed=true` but should not force report restore here.
+  return recoverable;
+};
+
+export const inferDiagnosisTargetStepFromSummary = (
+  resume: ResumeSummary
+): 'report' | 'final_report' | undefined => {
+  const latestStep = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
+  if (latestStep === 'final_report' || latestStep === 'comparison' || latestStep === 'interview_report') {
+    return 'final_report';
+  }
+  if (latestStep === 'report' || latestStep === 'micro_intro' || latestStep === 'chat') {
+    return 'report';
+  }
+  const progress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
+  if (progress >= 95) return 'final_report';
+  if (progress >= 60) return 'report';
+  return undefined;
+};
+
 const formatResumeModifiedAt = (rawDate: string) => {
   const source = String(rawDate || '').trim();
   if (!source) return '时间未知';
@@ -50,23 +94,6 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   pointsRemaining,
   onRediagnoseResume,
 }) => {
-  const hasRecoverableDiagnosisStep = (resume: ResumeSummary) => {
-    const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
-    if ([
-      'jd_input',
-      'analyzing',
-      'report',
-      'micro_intro',
-      'chat',
-      'comparison',
-      'final_report',
-      'interview_report',
-    ].includes(latestStep)) {
-      return true;
-    }
-    const progress = Number(resume.diagnosisProgress ?? 0);
-    return Number.isFinite(progress) && progress >= 15;
-  };
   const [openMenuResumeId, setOpenMenuResumeId] = React.useState<number | null>(null);
   const menuWrapperRef = React.useRef<HTMLDivElement | null>(null);
 
@@ -95,7 +122,11 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         {resumes.map((resume) => (
           <div
             key={resume.id}
-            onClick={() => onSelectResume(resume.id, !!resume.analyzed || hasRecoverableDiagnosisStep(resume))}
+            onClick={() => {
+              const preferReport = shouldPreferReportOnResumeClick(resume, isInterviewMode);
+              const targetStep = !isInterviewMode ? inferDiagnosisTargetStepFromSummary(resume) : undefined;
+              onSelectResume(resume.id, preferReport, targetStep);
+            }}
             className="group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
           >
             <div className={`shrink-0 relative ${isReading && String(selectedResumeId) === String(resume.id) ? 'opacity-50 pointer-events-none' : ''}`}>

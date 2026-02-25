@@ -37,6 +37,94 @@ type Params = {
   isInterviewMode?: boolean;
 };
 
+export const shouldRestoreJdInputFromResume = (
+  preferReport: boolean,
+  isInterviewMode?: boolean,
+  inferredTarget?: 'jd_input' | 'report' | 'final_report'
+) => {
+  if (isInterviewMode) return false;
+  if (preferReport) return true;
+  return inferredTarget === 'report' || inferredTarget === 'final_report';
+};
+
+export const buildResumeDataForJdEntry = <T extends Record<string, any>>(
+  rawResumeData: T,
+  shouldRestoreJdFromResume: boolean
+): T => (
+  shouldRestoreJdFromResume
+    ? rawResumeData
+    : ({
+      ...rawResumeData,
+      lastJdText: '',
+      targetCompany: '',
+    } as T)
+);
+
+const normalizeAnalysisStep = (step: any) => {
+  const v = String(step || '').trim().toLowerCase();
+  return [
+    'jd_input',
+    'analyzing',
+    'report',
+    'micro_intro',
+    'chat',
+    'interview_report',
+    'comparison',
+    'final_report',
+  ].includes(v)
+    ? v
+    : '';
+};
+
+export const inferDiagnosisTargetStep = (
+  resumeRow: any,
+  fallbackResumeData: any,
+  resumeSummary?: Partial<ResumeSummary> | null,
+  explicit?: 'report' | 'chat' | 'final_report'
+) => {
+  void fallbackResumeData;
+  if (explicit === 'final_report') return 'final_report';
+  if (explicit === 'report' || explicit === 'chat') return 'report';
+
+  const rawLatestStep =
+    normalizeAnalysisStep((resumeSummary as any)?.latestAnalysisStep) ||
+    normalizeAnalysisStep((resumeRow as any)?.latestAnalysisStep) ||
+    normalizeAnalysisStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
+  if (rawLatestStep === 'final_report' || rawLatestStep === 'comparison' || rawLatestStep === 'interview_report') return 'final_report';
+  if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro' || rawLatestStep === 'chat') return 'report';
+  if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
+
+  const rowSnapshotScore = Number((resumeRow as any)?.resume_data?.analysisSnapshot?.score || 0);
+  const summarySnapshotScore = Number((resumeSummary as any)?.resume_data?.analysisSnapshot?.score || 0);
+  const hasSnapshotScore = Number.isFinite(rowSnapshotScore) && rowSnapshotScore > 0
+    || Number.isFinite(summarySnapshotScore) && summarySnapshotScore > 0;
+  if (hasSnapshotScore) return 'report';
+
+  const rowBindings = (resumeRow as any)?.resume_data?.analysisBindings;
+  const summaryBindings = (resumeSummary as any)?.resume_data?.analysisBindings;
+  if ((rowBindings && Object.keys(rowBindings).length > 0) || (summaryBindings && Object.keys(summaryBindings).length > 0)) {
+    return 'report';
+  }
+
+  // Never infer target step from previously selected resume data.
+  // Only use the clicked row / summary payload to avoid cross-resume contamination.
+  const sessionsSource = (resumeRow as any)?.resume_data || (resumeSummary as any)?.resume_data || {};
+  const sessionStep = normalizeAnalysisStep(deriveLatestAnalysisStep(sessionsSource));
+  if (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report') return 'final_report';
+  if (sessionStep === 'report' || sessionStep === 'micro_intro' || sessionStep === 'chat') return 'report';
+  if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
+
+  const progress = Math.max(0, Math.min(100, Math.round(Number(
+    (resumeSummary as any)?.diagnosisProgress ??
+    (resumeRow as any)?.diagnosisProgress ??
+    (resumeRow as any)?.resume_data?.diagnosisProgress ??
+    0
+  ))));
+  if (progress >= 95) return 'final_report';
+  if (progress >= 60) return 'report';
+  return 'jd_input';
+};
+
 export const useResumeSelection = ({
   allResumes,
   resumeData,
@@ -57,46 +145,9 @@ export const useResumeSelection = ({
   isInterviewMode,
 }: Params) => {
   const FORCE_JD_RESUME_ID_KEY = 'ai_force_jd_resume_id';
-  const normalizeStep = (step: any) => {
-    const v = String(step || '').trim().toLowerCase();
-    return [
-      'jd_input',
-      'analyzing',
-      'report',
-      'micro_intro',
-      'chat',
-      'interview_report',
-      'comparison',
-      'final_report',
-    ].includes(v)
-      ? v
-      : '';
-  };
   const inferTargetStepFromResume = (resumeRow: any, explicit?: 'report' | 'chat' | 'final_report') => {
-    if (explicit === 'final_report') return 'final_report';
-    if (explicit === 'report' || explicit === 'chat') return 'report';
-    const rawLatestStep =
-      normalizeStep((resumeRow as any)?.latestAnalysisStep) ||
-      normalizeStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
-    if (rawLatestStep === 'final_report' || rawLatestStep === 'comparison' || rawLatestStep === 'interview_report') return 'final_report';
-    if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro' || rawLatestStep === 'chat') return 'report';
-    if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
-
-    const sessionsSource = (resumeRow as any)?.resume_data || resumeData || {};
-    const sessionStep = normalizeStep(deriveLatestAnalysisStep(sessionsSource));
-    if (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report') return 'final_report';
-    if (sessionStep === 'report' || sessionStep === 'micro_intro' || sessionStep === 'chat') return 'report';
-    if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
-
-    const progress = Math.max(0, Math.min(100, Math.round(Number(
-      (resumeRow as any)?.diagnosisProgress ??
-      (resumeRow as any)?.resume_data?.diagnosisProgress ??
-      (resumeData as any)?.diagnosisProgress ??
-      0
-    ))));
-    if (progress >= 95) return 'final_report';
-    if (progress >= 60) return 'report';
-    return 'jd_input';
+    const summary = (allResumes || []).find((item) => isSameResumeId(item?.id, (resumeRow as any)?.id));
+    return inferDiagnosisTargetStep(resumeRow, resumeData, summary, explicit);
   };
 
   const [resumeReadState, setResumeReadState] = useState<ResumeReadState>({
@@ -123,17 +174,11 @@ export const useResumeSelection = ({
     setSelectedResumeId(id);
     sourceResumeIdRef.current = id;
     setAnalysisResumeId(id);
-    setJdText('');
-    setTargetCompany('');
     const selectedTitle = (allResumes || []).find((item) => isSameResumeId(item.id, id))?.title || '当前简历';
     setResumeReadState({
       status: 'loading',
       message: `正在读取《${selectedTitle}》...`,
     });
-
-    if (!effectivePreferReport || isInterviewMode) {
-      navigateToStep('jd_input');
-    }
 
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
@@ -187,11 +232,18 @@ export const useResumeSelection = ({
       }
 
       if (setResumeData) {
-        const finalResumeData = {
-          id: resume.id,
+        const rawResumeData = {
           ...resume.resume_data,
+          id: resume.id,
           resumeTitle: resume.title,
         };
+        const inferredTarget = inferTargetStepFromResume(resume, targetStep);
+        const shouldRestoreJdFromResume = shouldRestoreJdInputFromResume(
+          effectivePreferReport,
+          !!isInterviewMode,
+          inferredTarget as 'jd_input' | 'report' | 'final_report'
+        );
+        const finalResumeData = buildResumeDataForJdEntry(rawResumeData as Record<string, any>, shouldRestoreJdFromResume);
         sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
         setResumeData(finalResumeData as any);
         setResumeReadState({
@@ -202,15 +254,20 @@ export const useResumeSelection = ({
           (finalResumeData as any).optimizedResumeId ||
           ((finalResumeData as any).optimizationStatus === 'optimized' ? resume.id : null)
         );
-        const restoredJdText = ((finalResumeData as any).lastJdText || '').trim();
-        if (restoredJdText) {
+        const restoredJdText = ((rawResumeData as any).lastJdText || '').trim();
+        if (shouldRestoreJdFromResume && restoredJdText) {
           setJdText(restoredJdText);
+        } else if (!shouldRestoreJdFromResume) {
+          setJdText('');
         }
-        if ((finalResumeData as any).targetCompany) {
-          setTargetCompany((finalResumeData as any).targetCompany);
+        if (shouldRestoreJdFromResume && (rawResumeData as any).targetCompany) {
+          setTargetCompany((rawResumeData as any).targetCompany);
+        } else if (!shouldRestoreJdFromResume) {
+          setTargetCompany('');
         }
 
-        if (effectivePreferReport || isInterviewMode) {
+        const shouldRestoreAnalysisContext = !!isInterviewMode || inferredTarget !== 'jd_input';
+        if (shouldRestoreAnalysisContext) {
           applyAnalysisSnapshot((finalResumeData as any).analysisSnapshot);
           if ((finalResumeData as any).analysisSnapshot) {
             saveLastAnalysis({
@@ -224,8 +281,7 @@ export const useResumeSelection = ({
           }
         }
 
-        if (effectivePreferReport && !isInterviewMode) {
-          const inferredTarget = inferTargetStepFromResume(resume, targetStep);
+        if (!isInterviewMode) {
           if (inferredTarget === 'chat' && openChat) {
             window.setTimeout(() => {
               openChat('internal');
@@ -235,6 +291,8 @@ export const useResumeSelection = ({
           } else {
             navigateToStep(inferredTarget);
           }
+        } else {
+          navigateToStep('jd_input');
         }
       }
     } catch (error) {

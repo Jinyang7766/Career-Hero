@@ -294,7 +294,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const {
     optimizedResumeIdRef,
     resolveOriginalResumeIdForOptimization,
-    ensureAnalysisBinding,
+    resolveAnalysisBinding,
     resetOptimizedCreationState,
   } = useOptimizedResumeStore({
     optimizedResumeId,
@@ -351,7 +351,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setOptimizedResumeId,
     optimizedResumeIdRef: optimizedResumeIdRef as any,
     resolveOriginalResumeIdForOptimization,
-    ensureAnalysisBinding: ensureAnalysisBinding as any,
+    resolveAnalysisBinding: resolveAnalysisBinding as any,
     analysisRunIdRef: analysisRunIdRef as any,
     analysisAbortRef: analysisAbortRef as any,
     setIsFromCache,
@@ -418,6 +418,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setTargetCompany,
     setJdText,
     setForceReportEntry,
+    setOptimizedResumeId,
     setResumeData: setResumeData as any,
     setAllResumes: setAllResumes as any,
     setSelectedResumeId,

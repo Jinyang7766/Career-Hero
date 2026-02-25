@@ -2,6 +2,7 @@ import React from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from '../../../../src/diagnosis-progress';
 import { deriveInterviewStageStatus } from '../interview-stage-status';
+import { makeJdKey } from '../id-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 
 type Params = {
@@ -20,6 +21,7 @@ type Params = {
   setTargetCompany: (v: string) => void;
   setJdText: (v: string) => void;
   setForceReportEntry: (v: boolean) => void;
+  setOptimizedResumeId: (v: string | number | null) => void;
   setResumeData: (v: any) => void;
   setAllResumes: React.Dispatch<React.SetStateAction<any[]>>;
   setSelectedResumeId: (v: string | number | null) => void;
@@ -27,6 +29,140 @@ type Params = {
   setAnalysisResumeId: (v: string | number | null) => void;
   navigateToStep: (step: any, replaceHistory?: boolean) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
+};
+
+const inferChatModeFromKey = (key: string) => {
+  const normalized = String(key || '').trim().toLowerCase();
+  if (!normalized) return '';
+  if (normalized.endsWith('__interview')) return 'interview';
+  if (normalized.endsWith('__micro')) return 'micro';
+  // Interview chat session keys include scene suffix.
+  if (normalized.includes('__scene_')) return 'interview';
+  return '';
+};
+
+const normalizeInterviewTypeMaybe = (value: any) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'general' || text === 'technical' || text === 'hr') return text;
+  return '';
+};
+
+const normalizeInterviewModeMaybe = (value: any) => {
+  const text = String(value || '').trim().toLowerCase();
+  if (text === 'simple' || text === 'comprehensive') return text;
+  return '';
+};
+
+const parseScopedInterviewKey = (key: string) => {
+  const parts = String(key || '').trim().split('__').filter(Boolean);
+  return {
+    jdKey: String(parts[0] || '').trim(),
+    interviewType: normalizeInterviewTypeMaybe(parts[1] || ''),
+    interviewMode: normalizeInterviewModeMaybe(parts[2] || ''),
+  };
+};
+
+const buildSessionSignature = (key: string, session: any) => {
+  const parsed = parseScopedInterviewKey(String(key || ''));
+  const jdKey =
+    String(session?.jdKey || '').trim() ||
+    String(parsed?.jdKey || '').trim() ||
+    makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
+  const interviewType = normalizeInterviewTypeMaybe(session?.interviewType || parsed?.interviewType || '');
+  const interviewMode = normalizeInterviewModeMaybe(session?.interviewMode || parsed?.interviewMode || '');
+  const resumeId = String(session?.resumeId || '').trim();
+  return {
+    jdKey,
+    interviewType,
+    interviewMode,
+    resumeId,
+  };
+};
+
+const isSignatureMatched = (left: ReturnType<typeof buildSessionSignature>, right: ReturnType<typeof buildSessionSignature>) => {
+  if (left.jdKey && right.jdKey && left.jdKey !== right.jdKey) return false;
+  if (left.interviewType && right.interviewType && left.interviewType !== right.interviewType) return false;
+  if (left.interviewMode && right.interviewMode && left.interviewMode !== right.interviewMode) return false;
+  if (left.resumeId && right.resumeId && left.resumeId !== right.resumeId) return false;
+  return true;
+};
+
+export const isInterviewSessionRecordForRediagnose = (key: string, session: any) => {
+  const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+  if (chatMode === 'interview') return true;
+  if (chatMode === 'micro') return false;
+
+  const inferred = inferChatModeFromKey(key);
+  if (inferred === 'interview') return true;
+  if (inferred === 'micro') return false;
+
+  // Legacy interview sessions may miss chatMode and scene suffix.
+  // Prefer keeping records that look like interview-scene data.
+  const interviewType = normalizeInterviewTypeMaybe(session?.interviewType || '');
+  const hasMessages = Array.isArray(session?.messages) && session.messages.length > 0;
+  const hasSceneSignal = !!String(session?.interviewFocus || '').trim();
+  if (hasMessages && interviewType && hasSceneSignal) return true;
+
+  return false;
+};
+
+export const isInterviewAnalysisSessionRecordForRediagnose = (
+  key: string,
+  session: any,
+  interviewSessionEntries: Array<{ key: string; session: any }>
+) => {
+  const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+  if (chatMode === 'interview') return true;
+  if (chatMode === 'micro') return false;
+
+  const inferred = inferChatModeFromKey(key);
+  if (inferred === 'interview') return true;
+  if (inferred === 'micro') return false;
+
+  const step = String(session?.step || '').trim().toLowerCase();
+  if (step === 'interview_report') return true;
+  if (step === 'report' || step === 'micro_intro' || step === 'comparison') return false;
+
+  // Legacy ambiguous session: keep only if it matches a retained interview chat session.
+  const signature = buildSessionSignature(key, session);
+  return interviewSessionEntries.some((entry) =>
+    isSignatureMatched(signature, buildSessionSignature(entry.key, entry.session))
+  );
+};
+
+export const retainInterviewSessionsForRediagnose = (sessions: any) => {
+  const source = sessions && typeof sessions === 'object' ? sessions : {};
+  const kept: Record<string, any> = {};
+  Object.entries(source).forEach(([key, session]: [string, any]) => {
+    if (isInterviewSessionRecordForRediagnose(key, session)) {
+      const normalizedChatMode = String(session?.chatMode || '').trim().toLowerCase();
+      kept[key] = normalizedChatMode === 'interview'
+        ? session
+        : {
+          ...session,
+          chatMode: 'interview',
+        };
+    }
+  });
+  return kept;
+};
+
+export const retainInterviewAnalysisSessionsForRediagnose = (byJd: any, keptInterviewSessions: Record<string, any>) => {
+  const source = byJd && typeof byJd === 'object' ? byJd : {};
+  const kept: Record<string, any> = {};
+  const interviewSessionEntries = Object.entries(keptInterviewSessions || {}).map(([key, session]) => ({ key, session }));
+  Object.entries(source).forEach(([key, session]: [string, any]) => {
+    if (isInterviewAnalysisSessionRecordForRediagnose(key, session, interviewSessionEntries as any)) {
+      const normalizedChatMode = String(session?.chatMode || '').trim().toLowerCase();
+      kept[key] = normalizedChatMode === 'interview'
+        ? session
+        : {
+          ...session,
+          chatMode: 'interview',
+        };
+    }
+  });
+  return kept;
 };
 
 export const useAnalysisResetActions = ({
@@ -45,6 +181,7 @@ export const useAnalysisResetActions = ({
   setTargetCompany,
   setJdText,
   setForceReportEntry,
+  setOptimizedResumeId,
   setResumeData,
   setAllResumes,
   setSelectedResumeId,
@@ -71,24 +208,10 @@ export const useAnalysisResetActions = ({
       // ignore storage failures
     }
   }, []);
-  const retainInterviewSessionsOnly = React.useCallback((sessions: any) => {
-    const source = sessions && typeof sessions === 'object' ? sessions : {};
-    const kept: Record<string, any> = {};
-    Object.entries(source).forEach(([key, session]: [string, any]) => {
-      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-      if (chatMode === 'interview') kept[key] = session;
-    });
-    return kept;
-  }, []);
+  const retainInterviewSessionsOnly = React.useCallback((sessions: any) => retainInterviewSessionsForRediagnose(sessions), []);
 
-  const retainInterviewAnalysisSessionsOnly = React.useCallback((byJd: any) => {
-    const source = byJd && typeof byJd === 'object' ? byJd : {};
-    const kept: Record<string, any> = {};
-    Object.entries(source).forEach(([key, session]: [string, any]) => {
-      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
-      if (chatMode === 'interview') kept[key] = session;
-    });
-    return kept;
+  const retainInterviewAnalysisSessionsOnly = React.useCallback((byJd: any, interviewSessions: Record<string, any>) => {
+    return retainInterviewAnalysisSessionsForRediagnose(byJd, interviewSessions);
   }, []);
 
   const CACHE_BYPASS_ONCE_KEY = 'ai_analysis_bypass_cache_once';
@@ -109,18 +232,24 @@ export const useAnalysisResetActions = ({
     setOriginalScore(0);
     setPostInterviewSummary('');
     setIsFromCache(false);
+    setOptimizedResumeId(null);
     clearLastAnalysis();
     purgeLocalFinalReportCache();
     markBypassCacheOnce();
     const currentResumeId = String((resumeData as any)?.id || '').trim();
     if (!currentResumeId || !resumeData) return;
+    const keptInterviewSessions = retainInterviewSessionsOnly((resumeData as any)?.interviewSessions);
     const updatedResumeData: any = {
       ...(resumeData as any),
       analysisSnapshot: null,
-      analysisSessionByJd: retainInterviewAnalysisSessionsOnly((resumeData as any)?.analysisSessionByJd),
-      interviewSessions: retainInterviewSessionsOnly((resumeData as any)?.interviewSessions),
+      analysisSessionByJd: retainInterviewAnalysisSessionsOnly((resumeData as any)?.analysisSessionByJd, keptInterviewSessions),
+      interviewSessions: keptInterviewSessions,
       postInterviewFinalReport: null,
       analysisDossierLatest: null,
+      analysisDossierHistory: [],
+      optimizedResumeId: null,
+      optimizationJdKey: '',
+      analysisReportId: '',
       score: 0,
     };
     setResumeData(updatedResumeData as any);
@@ -172,6 +301,7 @@ export const useAnalysisResetActions = ({
     setIsFromCache,
     setOriginalScore,
     setPostInterviewSummary,
+    setOptimizedResumeId,
     setReport,
     setResumeData,
     setScore,
@@ -201,6 +331,7 @@ export const useAnalysisResetActions = ({
       setTargetCompany('');
       setJdText('');
       setForceReportEntry(false);
+      setOptimizedResumeId(null);
       localStorage.removeItem('ai_result_open');
       localStorage.removeItem('ai_result_resume_id');
       localStorage.removeItem('ai_result_step');
@@ -231,15 +362,20 @@ export const useAnalysisResetActions = ({
         showToast('未找到可重置的简历数据，请稍后重试', 'error');
         return;
       }
+      const keptInterviewSessions = retainInterviewSessionsOnly(sourceResumeData?.interviewSessions);
 
       const updatedResumeData: any = {
         ...sourceResumeData,
         analysisSnapshot: null,
-        analysisSessionByJd: retainInterviewAnalysisSessionsOnly(sourceResumeData?.analysisSessionByJd),
-        interviewSessions: retainInterviewSessionsOnly(sourceResumeData?.interviewSessions),
+        analysisSessionByJd: retainInterviewAnalysisSessionsOnly(sourceResumeData?.analysisSessionByJd, keptInterviewSessions),
+        interviewSessions: keptInterviewSessions,
         postInterviewFinalReport: null,
         analysisDossierLatest: null,
+        analysisDossierHistory: [],
         analysisBindings: {},
+        optimizedResumeId: null,
+        optimizationJdKey: '',
+        analysisReportId: '',
         diagnosisProgress: 0,
         latestAnalysisStep: '',
         score: 0,
@@ -327,6 +463,7 @@ export const useAnalysisResetActions = ({
     setSuggestions,
     setTargetCompany,
     setForceReportEntry,
+    setOptimizedResumeId,
     setResumeData,
     markBypassCacheOnce,
     purgeLocalFinalReportCache,

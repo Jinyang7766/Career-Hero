@@ -12,6 +12,37 @@ type Step =
   | 'comparison'
   | 'final_report';
 
+export const popHistoryBackTarget = (
+  stepHistory: Step[],
+  currentStep: Step
+): { remainingHistory: Step[]; targetStep: Step | null } => {
+  const remainingHistory = [...stepHistory];
+  let targetStep: Step | undefined = remainingHistory.pop();
+
+  // Skip accidental duplicate history entries that equal current step,
+  // otherwise the first back tap appears to do nothing.
+  while (targetStep && targetStep === currentStep && remainingHistory.length > 0) {
+    targetStep = remainingHistory.pop();
+  }
+  // Report page should never go back to transient/visually-equivalent steps.
+  // `micro_intro` currently reuses a near-identical report UI, so stepping into it
+  // makes users feel "back needs two taps".
+  while (
+    currentStep === 'report' &&
+    (targetStep === 'analyzing' || targetStep === 'micro_intro') &&
+    remainingHistory.length > 0
+  ) {
+    targetStep = remainingHistory.pop();
+  }
+  if (currentStep === 'report' && (targetStep === 'analyzing' || targetStep === 'micro_intro')) {
+    targetStep = 'jd_input';
+  }
+  if (!targetStep || targetStep === currentStep) {
+    return { remainingHistory, targetStep: null };
+  }
+  return { remainingHistory, targetStep };
+};
+
 type Params = {
   currentStep: Step;
   setCurrentStep: (step: Step) => void;
@@ -105,26 +136,15 @@ export const useAiAnalysisNavigation = ({
       }
     }
     if (stepHistory.length > 0) {
-      const prev = [...stepHistory];
-      let lastStep: Step | undefined = prev.pop();
-      // Skip accidental duplicate history entries that equal current step,
-      // otherwise the first back tap appears to do nothing.
-      while (lastStep && lastStep === currentStep && prev.length > 0) {
-        lastStep = prev.pop();
+      const { remainingHistory, targetStep } = popHistoryBackTarget(stepHistory, currentStep);
+      setStepHistory(remainingHistory);
+      if (targetStep) {
+        setCurrentStep(targetStep);
+        currentStepRef.current = targetStep;
+        return;
       }
-      // Report page should never go back to transient analyzing screen.
-      while (currentStep === 'report' && lastStep === 'analyzing' && prev.length > 0) {
-        lastStep = prev.pop();
-      }
-      if (currentStep === 'report' && lastStep === 'analyzing') {
-        lastStep = 'jd_input';
-      }
-      setStepHistory(prev);
-      if (lastStep && lastStep !== currentStep) {
-        setCurrentStep(lastStep);
-        currentStepRef.current = lastStep;
-      }
-      return;
+      // History may only contain current-step duplicates.
+      // Fall through to fallback logic so one tap still navigates back.
     }
 
     const replacedFrom = replaceBackMapRef.current[currentStep];

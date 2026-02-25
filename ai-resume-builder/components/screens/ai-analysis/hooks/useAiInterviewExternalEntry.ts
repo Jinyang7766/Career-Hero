@@ -6,6 +6,9 @@ import type { AiExternalEntriesParams } from './useAiExternalEntries.types';
 const normalizeSceneText = (value: any) =>
   String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
+export const shouldRestoreInterviewJdOnExternalEntry = (entryMode: string) =>
+  String(entryMode || 'chat').trim().toLowerCase() !== 'scene_select';
+
 const pickLatestSessionByUpdatedAt = (sessions: any[]) =>
   sessions.reduce((acc: any, curr: any) => {
     const accAt = Date.parse(String(acc?.updatedAt || ''));
@@ -87,7 +90,12 @@ export const useAiInterviewExternalEntry = ({
         setTargetCompany(finalResumeData.targetCompany);
       }
       const savedJdText = (finalResumeData.lastJdText || '').trim();
-      if (savedJdText) {
+      const shouldRestoreJdOnEntry = shouldRestoreInterviewJdOnExternalEntry(interviewEntryMode);
+      if (!shouldRestoreJdOnEntry) {
+        // Explicit scene-select entry should always start with empty JD input.
+        setJdText('');
+      }
+      if (savedJdText && shouldRestoreJdOnEntry) {
         setJdText(savedJdText);
       }
       if (savedJdText) {

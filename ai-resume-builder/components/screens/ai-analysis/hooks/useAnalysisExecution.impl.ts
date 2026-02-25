@@ -25,14 +25,14 @@ type Params = {
   setOptimizedResumeId: (value: string | number | null) => void;
   optimizedResumeIdRef: { current: string | number | null };
   resolveOriginalResumeIdForOptimization: () => any;
-  ensureAnalysisBinding: (
+  resolveAnalysisBinding: (
     originalResumeId: string | number,
-    baseResumeData: any,
     analysisJdText: string
   ) => Promise<{
     analysisReportId: string;
-    optimizedResumeId: string | number;
-  }>;
+    optimizedResumeId: string | number | null;
+    jdKey: string;
+  } | null>;
   analysisRunIdRef: { current: string | null };
   analysisAbortRef: { current: AbortController | null };
   setIsFromCache: (value: boolean) => void;
@@ -76,7 +76,7 @@ export const useAnalysisExecution = ({
   setOptimizedResumeId,
   optimizedResumeIdRef,
   resolveOriginalResumeIdForOptimization,
-  ensureAnalysisBinding,
+  resolveAnalysisBinding,
   analysisRunIdRef,
   analysisAbortRef,
   setIsFromCache,
@@ -267,17 +267,15 @@ export const useAnalysisExecution = ({
     setChatInitialized(false);
     setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
     setAnalysisInProgress(true);
-    try {
-      await persistAnalysisSessionState('analyzing', {
-        jdText: jdText || resumeData.lastJdText || '',
-        targetCompany: targetCompany || resumeData.targetCompany || '',
-        step: 'analyzing',
-        force: true,
-      });
-    } catch (stateErr) {
-      console.warn('Failed to persist analyzing session state:', stateErr);
-    }
     navigateToStep('analyzing');
+    persistAnalysisSessionState('analyzing', {
+      jdText: jdText || resumeData.lastJdText || '',
+      targetCompany: targetCompany || resumeData.targetCompany || '',
+      step: 'analyzing',
+      force: true,
+    }).catch((stateErr) => {
+      console.warn('Failed to persist analyzing session state:', stateErr);
+    });
 
     try {
       let bypassCacheOnce = false;
@@ -317,20 +315,22 @@ export const useAnalysisExecution = ({
           : (optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
       if (originalResumeId) {
         try {
-          const baseResumeForBinding = resumeData.optimizationStatus === 'optimized'
-            ? { ...resumeData, id: originalResumeId }
-            : resumeData;
-          const binding = await ensureAnalysisBinding(
+          // For initial diagnosis, only reuse an existing binding.
+          // Do not auto-create optimized resumes here.
+          const binding = await resolveAnalysisBinding(
             originalResumeId,
-            baseResumeForBinding,
             jdText || resumeData.lastJdText || ''
           );
-          resolvedAnalysisReportId = binding.analysisReportId;
-          resolvedOptimizedResumeId = binding.optimizedResumeId;
-          optimizedResumeIdRef.current = binding.optimizedResumeId;
-          setOptimizedResumeId(binding.optimizedResumeId);
+          if (binding?.analysisReportId) {
+            resolvedAnalysisReportId = binding.analysisReportId;
+          }
+          if (binding?.optimizedResumeId) {
+            resolvedOptimizedResumeId = binding.optimizedResumeId;
+            optimizedResumeIdRef.current = binding.optimizedResumeId;
+            setOptimizedResumeId(binding.optimizedResumeId);
+          }
         } catch (bindingError) {
-          console.warn('ensureAnalysisBinding failed, continue with local report rendering:', bindingError);
+          console.warn('resolveAnalysisBinding failed, continue with local report rendering:', bindingError);
         }
       }
 
@@ -350,15 +350,11 @@ export const useAnalysisExecution = ({
         analysisReportId: resolvedAnalysisReportId || undefined,
         optimizedResumeId: resolvedOptimizedResumeId || undefined,
       };
-      const isSameId = (a: any, b: any) => String(a ?? '').trim() !== '' && String(a ?? '').trim() === String(b ?? '').trim();
       const persistTargetId =
         (resumeData.optimizationStatus === 'optimized' && resumeData.id)
           ? resumeData.id
-          : (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || null);
-      const safePersistTargetId =
-        (originalResumeId && isSameId(persistTargetId, originalResumeId))
-          ? (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || null)
-          : persistTargetId;
+          : (resolvedOptimizedResumeId || optimizedResumeIdRef.current || optimizedResumeId || resumeData.optimizedResumeId || resumeData.id || null);
+      const safePersistTargetId = persistTargetId;
       if (safePersistTargetId) {
         try {
           const persistedResume = await persistAnalysisSnapshot(
@@ -496,7 +492,7 @@ export const useAnalysisExecution = ({
     markAnalysisCompleted,
     navigateToStep,
     optimizedResumeId,
-    ensureAnalysisBinding,
+    resolveAnalysisBinding,
     optimizedResumeIdRef,
     persistAnalysisSessionState,
     persistAnalysisSnapshot,

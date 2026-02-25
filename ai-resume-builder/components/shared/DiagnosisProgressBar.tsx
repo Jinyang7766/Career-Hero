@@ -13,6 +13,38 @@ const DIAGNOSIS_STAGE_STEPS: Array<'report' | 'chat' | 'final_report'> = ['repor
 const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
 type StageStatus = 'todo' | 'current' | 'done';
 
+export const deriveDiagnosisStageStatuses = (latestStepRaw: string, progressRaw: number, isFinalReportCompleted: boolean): StageStatus[] => {
+    const latestStep = String(latestStepRaw || '').trim().toLowerCase();
+    const progress = Math.max(0, Math.min(100, Math.round(Number(progressRaw) || 0)));
+
+    if (isFinalReportCompleted) return ['done', 'done', 'done'];
+
+    const inFinalReportGenerating =
+        latestStep === 'interview_report' ||
+        latestStep === 'comparison' ||
+        progress >= 95;
+    if (inFinalReportGenerating) return ['done', 'done', 'current'];
+
+    const inMicroInterview =
+        latestStep === 'micro_intro' ||
+        latestStep === 'chat' ||
+        progress >= 72;
+    if (inMicroInterview) return ['done', 'current', 'todo'];
+
+    const initialReportCompleted =
+        latestStep === 'report' ||
+        progress >= 60;
+    if (initialReportCompleted) return ['done', 'todo', 'todo'];
+
+    const initialDiagnosisInProgress =
+        latestStep === 'jd_input' ||
+        latestStep === 'analyzing' ||
+        progress >= 15;
+    if (initialDiagnosisInProgress) return ['current', 'todo', 'todo'];
+
+    return ['todo', 'todo', 'todo'];
+};
+
 export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
     resume,
     isInterviewMode = false,
@@ -118,40 +150,7 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
             // For Interview Mode: Independent lighting
             return resume.interviewStageStatus?.[idx] || 'todo';
         }
-        if (isFinalReportCompleted) return 'done';
-
-        // Diagnosis mode: derive by both step + progress so "micro interview in progress"
-        // (state=interview_in_progress/paused) can light stage 2 even when latestStep is not "chat".
-        const inFinalReportGenerating =
-            latestStep === 'interview_report' ||
-            latestStep === 'comparison' ||
-            progress >= 95;
-        if (inFinalReportGenerating) {
-            if (idx === 0) return 'done';
-            if (idx === 1) return 'done';
-            return 'current';
-        }
-
-        const inMicroInterview =
-            latestStep === 'micro_intro' ||
-            latestStep === 'chat' ||
-            progress >= 72;
-        if (inMicroInterview) {
-            if (idx === 0) return 'done';
-            if (idx === 1) return 'current';
-            return 'todo';
-        }
-
-        const initialReportReady =
-            latestStep === 'report' ||
-            latestStep === 'analyzing' ||
-            latestStep === 'jd_input' ||
-            progress >= 15;
-        if (initialReportReady) {
-            if (idx === 0) return 'done';
-            return 'todo';
-        }
-        return 'todo';
+        return deriveDiagnosisStageStatuses(latestStep, progress, isFinalReportCompleted)[idx] || 'todo';
     });
 
     if (!resume.analyzed && !isInterviewMode) return null;

@@ -20,6 +20,37 @@ type Params = {
   interviewEntryConfirmPendingRef?: { current: boolean };
 };
 
+export const canApplyDiagnosisStepRecovery = (
+  fromStep: string,
+  toStep: string
+) => {
+  const normalizedFrom = String(fromStep || '').trim().toLowerCase();
+  const normalizedTo = String(toStep || '').trim().toLowerCase();
+  if (!normalizedTo || normalizedFrom === normalizedTo) return false;
+  if (normalizedTo === 'jd_input') {
+    // Never force users back into JD input from other pages.
+    // This caused back-button "double click" and report-page bouncing.
+    return false;
+  }
+  if (normalizedTo === 'report') {
+    return normalizedFrom === 'resume_select' || normalizedFrom === 'jd_input' || normalizedFrom === 'analyzing';
+  }
+  if (normalizedTo === 'final_report') {
+    return normalizedFrom !== 'final_report' && normalizedFrom !== 'comparison';
+  }
+  return false;
+};
+
+export const shouldSkipInterviewAutoRecovery = (
+  isInterviewMode: boolean | undefined,
+  currentStep: string
+) => {
+  if (!isInterviewMode) return false;
+  const normalizedStep = String(currentStep || '').trim().toLowerCase();
+  // Scene select flow should stay on form page and never auto-restore JD/chat.
+  return normalizedStep === 'resume_select' || normalizedStep === 'jd_input';
+};
+
 export const useAnalysisSessionRecovery = ({
   resumeData,
   forcedResumeSelect,
@@ -37,6 +68,7 @@ export const useAnalysisSessionRecovery = ({
   isInterviewMode,
   interviewEntryConfirmPendingRef,
 }: Params) => {
+
   useEffect(() => {
     if (!resumeData) return;
     if (currentStep === 'analyzing') return;
@@ -52,7 +84,7 @@ export const useAnalysisSessionRecovery = ({
     // Navigation entry from bottom nav should always land on resume_select first.
     if (forceResumeSelectActive) return;
     if (isInterviewMode && interviewEntryConfirmPendingRef?.current) return;
-    if (isInterviewMode && currentStep === 'jd_input') {
+    if (shouldSkipInterviewAutoRecovery(isInterviewMode, currentStep)) {
       // Scene setup page should never auto-enter chat/report.
       // Entry must be explicit via "开始面试/继续面试".
       return;
@@ -176,6 +208,9 @@ export const useAnalysisSessionRecovery = ({
         )
         : (sessionStep === 'micro_intro' ? 'report' : sessionStep);
       if (!normalizedStep) return;
+      if (!isInterviewMode && !canApplyDiagnosisStepRecovery(currentStep, normalizedStep)) {
+        return;
+      }
       pushRuntimeTrace('ai_analysis.recovery', 'goto_session_step', {
         from: currentStep,
         to: normalizedStep,
