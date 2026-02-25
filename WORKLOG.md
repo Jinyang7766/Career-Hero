@@ -1061,3 +1061,78 @@ Use one block per executed step:
       - 有效文本 -> `200`
 - Risks/Notes:
   - 本次未处理用户指定忽略文件：`PRODUCT_REQUIREMENTS_DOCUMENT.md`（保持不变）。
+
+## [2026-02-25 16:26] FE: JD 截图上传支持最多 3 张
+- Agent: B-FE + C
+- Goal:
+  - 将 JD 截图上传从单张扩展到最多 3 张，并保持现有 OCR 填充体验。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts: 支持多文件选择（最多 3 张）、逐张校验（格式/大小）、顺序 OCR 解析并合并文本后填充；超长时仍按 1500 字截断。
+  - ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx: 文件输入框增加 multiple，按钮文案改为“上传职位描述截图（最多3张）”。
+- Commands:
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm --prefix ai-resume-builder run -s build
+  - git status --short
+- Verification:
+  - local result: PASS。基线测试通过（frontend 13 passed, backend 16 passed）。
+  - local result: PASS。前端构建通过（vite build success），覆盖本次改动模块编译与打包路径。
+  - online result: 未执行（本次需求未要求在线验证）。
+- Risks/Notes:
+  - 当前为“最多 3 张”硬限制；若用户一次选择超过 3 张会直接提示并要求重选，不会自动截取前 3 张。
+
+## [2026-02-25 16:37] FE UX: 超过3张时自动仅处理前3张 JD 截图
+- Agent: B-FE + C
+- Goal:
+  - 避免用户选择超过3张后被强制重选，改为自动截取前3张继续识别。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts: 将 `files.length > 3` 的阻断改为 `slice(0, 3)` 自动截取，并提示“已自动取前3张”。
+- Commands:
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm --prefix ai-resume-builder run -s build
+  - git diff -- ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts
+- Verification:
+  - local result: PASS。基线测试通过（frontend 13 passed, backend 16 passed）。
+  - local result: PASS。前端构建通过（vite build success）。
+  - online result: 未执行（本次需求未要求在线验证）。
+- Risks/Notes:
+  - 浏览器原生文件选择器仍允许用户在系统弹窗中勾选超过3张；当前在应用层确保“最多处理3张”。
+
+## [2026-02-25 16:44] FE UX: 选图阶段限制为单次1张并在3张后禁用
+- Agent: B-FE + C
+- Goal:
+  - 尽量前置约束选图阶段，避免出现可继续选择第4张的交互。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts: 改为单文件处理；新增累计计数（最多3张）、上限判断、空JD时计数重置；每次识别结果追加到现有JD文本。
+  - ai-resume-builder/components/screens/AiAnalysis.tsx: 透传 jdText 到截图上传 hook，并向渲染层传递上传计数/上限状态。
+  - ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx: 新增上传计数相关 props 透传。
+  - ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx: 新增并透传上传计数相关参数到 JD 输入页。
+  - ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx: 移除 multiple；按钮文案显示 x/3；达到上限后按钮禁用。
+- Commands:
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm --prefix ai-resume-builder run -s build
+  - git diff -- ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx ai-resume-builder/components/screens/AiAnalysis.tsx
+- Verification:
+  - local result: PASS。基线测试通过（frontend 13 passed, backend 16 passed）。
+  - local result: PASS。前端构建通过（vite build success）。
+  - online result: 未执行（本次需求未要求在线验证）。
+- Risks/Notes:
+  - 浏览器原生文件弹窗无法直接控制“多选时第4张不可勾选”；当前通过“单次1张 + 3张后按钮禁用”实现等效强约束。
+
+## [2026-02-25 17:14] FE: JD 截图支持单次最多3张并一起解析
+- Agent: B-FE + C
+- Goal:
+  - 将 JD 截图上传从“单张逐次”调整为“单次可选最多3张并在一次流程中一起解析”。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useJdScreenshotUpload.ts: 支持 multiple 文件数组处理；限制单次最多3张；逐图压缩+解析并合并文本后填入 JD 文本框；保留 1500 字截断与登录态校验。
+  - ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx: 上传按钮文案改为“上传职位描述截图（最多3张）”，文件输入框开启 multiple。
+  - ai-resume-builder/components/screens/AiAnalysis.tsx: 给截图上传 hook 透传 jdText（用于与现有文本合并）。
+- Commands:
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm --prefix ai-resume-builder run -s build
+  - python (inline) -> 连续调用 /api/ai/parse-screenshot 两次，验证多图解析链路
+- Verification:
+  - local result: PASS。基线测试通过（frontend 13 passed, backend 16 passed）。
+  - local result: PASS。前端构建通过（vite build success）。
+  - local functional flow: PASS。两张测试图片分别调用 POST /api/ai/parse-screenshot 均返回 200 且 success=true，满足“一次多图顺序解析并合并”的接口前提。
+- Risks/Notes:
+  - 浏览器原生文件选择器层面无法做到“第4张不可勾选”，当前通过“选择后校验最多3张”实现上限约束。

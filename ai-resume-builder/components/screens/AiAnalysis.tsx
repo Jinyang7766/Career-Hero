@@ -178,6 +178,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getBackendAuthToken,
     buildApiUrl,
     setJdText,
+    jdText,
   });
   const { isSending, hasPendingReply, currentQuestionElapsedSec, interruptCurrentThinking, handleSendMessage } = useInterviewChat({
     currentUserId: currentUser?.id,

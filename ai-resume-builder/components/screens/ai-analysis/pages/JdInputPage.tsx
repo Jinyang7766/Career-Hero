@@ -469,13 +469,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
               ) : (
                 <span className="material-symbols-outlined text-[20px]">image</span>
               )}
-              <span className="text-sm">{isUploading ? '正在解析...' : '上传职位描述截图'}</span>
+              <span className="text-sm">{isUploading ? '正在解析...' : '上传职位描述截图（最多3张）'}</span>
             </button>
 
             <input
               type="file"
               id="jd-screenshot-upload"
               accept="image/*"
+              multiple
               onChange={onScreenshotUpload}
               className="hidden"
             />

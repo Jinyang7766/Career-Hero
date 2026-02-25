@@ -4,14 +4,17 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   setJdText: (v: string) => void;
+  jdText: string;
 };
 
 export const useJdScreenshotUpload = ({
   getBackendAuthToken,
   buildApiUrl,
   setJdText,
+  jdText,
 }: Params) => {
   const JD_MAX_CHARS = 1500;
+  const JD_MAX_SCREENSHOTS = 3;
   const [isUploading, setIsUploading] = useState(false);
 
   const readFileAsDataUrl = (file: File) =>
@@ -68,62 +71,89 @@ export const useJdScreenshotUpload = ({
     return compressed;
   };
 
+  const parseSingleScreenshot = async (base64Image: string, token: string): Promise<string> => {
+    const response = await fetch(buildApiUrl('/api/ai/parse-screenshot'), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token.trim()}`,
+      },
+      body: JSON.stringify({ image: base64Image }),
+    });
+
+    if (!response.ok) {
+      throw new Error('截图识别失败，请重试');
+    }
+
+    const result = await response.json();
+    if (!result?.success) {
+      throw new Error(result?.error || '截图识别失败，请重试');
+    }
+
+    return String(result?.text || '');
+  };
+
   const handleScreenshotUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    if (files.length > JD_MAX_SCREENSHOTS) {
+      alert(`最多可选择 ${JD_MAX_SCREENSHOTS} 张截图，请重新选择`);
+      e.target.value = '';
+      return;
+    }
 
     const maxSize = 5 * 1024 * 1024;
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
 
-    if (file.size > maxSize) {
-      alert('文件大小不能超过5MB');
-      return;
-    }
+    for (const file of files) {
+      if (file.size > maxSize) {
+        alert(`文件 "${file.name}" 大小不能超过5MB`);
+        e.target.value = '';
+        return;
+      }
 
-    if (!allowedTypes.includes(file.type)) {
-      alert('只支持JPG、PNG和WEBP格式的图片');
-      return;
+      if (!allowedTypes.includes(file.type)) {
+        alert(`文件 "${file.name}" 格式不支持，仅支持JPG、PNG和WEBP`);
+        e.target.value = '';
+        return;
+      }
     }
 
     setIsUploading(true);
 
     try {
-      const base64Image = await maybeCompressImage(file);
       const token = await getBackendAuthToken();
       if (!token) {
         alert('登录已过期，请重新登录');
         return;
       }
 
-      const response = await fetch(buildApiUrl('/api/ai/parse-screenshot'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token.trim()}`
-        },
-        body: JSON.stringify({ image: base64Image })
-      });
+      const parsedTexts: string[] = [];
+      for (const file of files) {
+        const base64Image = await maybeCompressImage(file);
+        const recognized = String(await parseSingleScreenshot(base64Image, token) || '').trim();
+        if (recognized) parsedTexts.push(recognized);
+      }
 
-      if (response.ok) {
-        const result = await response.json();
-        if (result?.success && result?.text) {
-          const text = String(result.text || '');
-          const clipped = text.slice(0, JD_MAX_CHARS);
-          setJdText(clipped);
-          if (text.length > JD_MAX_CHARS) {
-            alert(`截图识别成功，内容较长，已截取前 ${JD_MAX_CHARS} 字填充到文本框`);
-          } else {
-            alert('截图识别成功，已填充到文本框');
-          }
-        } else {
-          alert(result?.error || '截图识别失败，请重试');
-        }
-      } else {
+      if (!parsedTexts.length) {
         alert('截图识别失败，请重试');
+        return;
+      }
+
+      const current = String(jdText || '').trim();
+      const mergedRecognizedText = parsedTexts.join('\n\n');
+      const mergedText = current ? `${current}\n\n${mergedRecognizedText}` : mergedRecognizedText;
+      const clipped = mergedText.slice(0, JD_MAX_CHARS);
+      setJdText(clipped);
+      if (mergedText.length > JD_MAX_CHARS) {
+        alert(`截图识别成功，内容较长，已截取前 ${JD_MAX_CHARS} 字填充到文本框`);
+      } else {
+        alert(`截图识别成功（${files.length} 张），已填充到文本框`);
       }
     } catch (error) {
       console.error('Screenshot upload error:', error);
-      alert('上传失败，请重试');
+      alert(error instanceof Error ? error.message : '上传失败，请重试');
     } finally {
       setIsUploading(false);
       e.target.value = '';
