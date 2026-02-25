@@ -82,11 +82,44 @@ export const useAiAnalysisActions = ({
     });
   }, [jdText, makeJdKey, resumeData]);
 
+  const getMicroInterviewProgressState = useCallback((): 'none' | 'in_progress' | 'completed' => {
+    const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
+    const jdKey = makeJdKey ? makeJdKey(effectiveJdText || '__no_jd__') : '';
+    const analysisSessions = Object.values((resumeData as any)?.analysisSessionByJd || {}) as any[];
+    const matchedMicroSessions = analysisSessions.filter((session: any) => {
+      if (!session) return false;
+      const chatMode = String(session?.chatMode || '').trim().toLowerCase();
+      if (chatMode !== 'micro') return false;
+      const sessionJdKey =
+        String(session?.jdKey || '').trim() ||
+        (makeJdKey ? makeJdKey(String(session?.jdText || '').trim() || '__no_jd__') : '');
+      if (jdKey && sessionJdKey && sessionJdKey !== jdKey) return false;
+      return true;
+    });
+    const hasCompleted = matchedMicroSessions.some((session: any) => {
+      const state = String(session?.state || '').trim().toLowerCase();
+      const step = String(session?.step || '').trim().toLowerCase();
+      return state === 'interview_done' || step === 'comparison' || step === 'final_report' || step === 'interview_report';
+    });
+    if (hasCompleted) return 'completed';
+    const hasInProgress = matchedMicroSessions.some((session: any) => {
+      const state = String(session?.state || '').trim().toLowerCase();
+      const step = String(session?.step || '').trim().toLowerCase();
+      return state === 'interview_in_progress' || state === 'paused' || step === 'micro_intro' || step === 'chat';
+    });
+    return hasInProgress ? 'in_progress' : 'none';
+  }, [jdText, makeJdKey, resumeData]);
+
   const handleResumeSelectBack = useCallback(() => {
     navigateToView(View.DASHBOARD, { root: true, replace: true });
   }, [navigateToView]);
 
   const handleStartMicroInterview = useCallback(async () => {
+    const microProgressState = getMicroInterviewProgressState();
+    if (!isInterviewMode && microProgressState === 'completed') {
+      navigateToStep('final_report', true);
+      return;
+    }
     const hasStartedMicro = hasStartedMicroInterview();
     if (!isInterviewMode && !hasStartedMicro && consumeUsageQuota) {
       const normalizedInterviewType = String(getActiveInterviewType() || 'general').trim().toLowerCase() || 'general';
@@ -116,12 +149,15 @@ export const useAiAnalysisActions = ({
       return;
     }
     openChat('internal');
-  }, [consumeUsageQuota, hasStartedMicroInterview, isInterviewMode, jdText, openChat, persistAnalysisSessionState, resumeData?.lastJdText, resumeData?.targetCompany]);
+  }, [consumeUsageQuota, getMicroInterviewProgressState, hasStartedMicroInterview, isInterviewMode, jdText, navigateToStep, openChat, persistAnalysisSessionState, resumeData?.lastJdText, resumeData?.targetCompany]);
 
   const microAndFinalTotalCost = USAGE_POINT_COST.micro_interview + USAGE_POINT_COST.final_report;
-  const microInterviewActionLabel = (!isInterviewMode && hasStartedMicroInterview())
-    ? '继续微访谈'
-    : `进入微访谈（${microAndFinalTotalCost}积分）`;
+  const microProgressState = getMicroInterviewProgressState();
+  const microInterviewActionLabel = (!isInterviewMode && microProgressState === 'completed')
+    ? '查看最终报告'
+    : ((!isInterviewMode && hasStartedMicroInterview())
+      ? '继续微访谈'
+      : `进入微访谈（${microAndFinalTotalCost}积分）`);
 
   const handleRetryAnalysisFromIntro = useCallback(() => {
     onRetryAnalysisFromIntro?.();

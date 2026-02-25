@@ -180,9 +180,6 @@ export const useFinalDiagnosisReportGenerator = ({
       bypassCacheOnce = false;
     }
 
-    if (requestKeyRef.current === requestKey && !bypassCacheOnce) return;
-    requestKeyRef.current = requestKey;
-
     if (bypassCacheOnce) {
       setOverride(null);
       setIsGenerating(false);
@@ -233,6 +230,29 @@ export const useFinalDiagnosisReportGenerator = ({
       setIsGenerating(false);
       return;
     }
+
+    // Only comparison flow should actively trigger final report generation.
+    // Entering an existing final_report should hydrate from persisted/cache data only.
+    if (currentStep !== 'comparison') {
+      setIsGenerating(false);
+      return;
+    }
+
+    if (requestKeyRef.current === requestKey && !bypassCacheOnce) {
+      const existingTask = FINAL_REPORT_TASKS.get(requestKey);
+      if (existingTask) {
+        setIsGenerating(true);
+        existingTask
+          .then((result) => {
+            if (result) setOverride(result);
+          })
+          .finally(() => {
+            setIsGenerating(false);
+          });
+      }
+      return;
+    }
+    requestKeyRef.current = requestKey;
 
     const existingTask = bypassCacheOnce ? null : FINAL_REPORT_TASKS.get(requestKey);
     if (existingTask) {
