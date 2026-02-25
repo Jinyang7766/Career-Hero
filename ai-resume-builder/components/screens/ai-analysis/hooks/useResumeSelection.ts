@@ -307,15 +307,7 @@ export const useResumeSelection = ({
         }
 
         if (!isInterviewMode) {
-          if (inferredTarget === 'chat' && openChat) {
-            window.setTimeout(() => {
-              openChat('internal');
-            }, 0);
-          } else if (inferredTarget === 'chat') {
-            navigateToStep('chat');
-          } else {
-            navigateToStep(inferredTarget);
-          }
+          navigateToStep(inferredTarget);
         } else {
           navigateToStep('jd_input');
         }
