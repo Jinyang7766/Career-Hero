@@ -103,7 +103,11 @@ export const useAiAnalysisNavigation = ({
       setChatEntrySource('internal');
       localStorage.setItem('ai_chat_entry_source', 'internal');
       if (!options?.skipRestore) {
-        restoreInterviewSession();
+        try {
+          restoreInterviewSession();
+        } catch (error) {
+          console.warn('restoreInterviewSession failed, continue opening chat:', error);
+        }
       }
       navigateToStep('chat');
       return;

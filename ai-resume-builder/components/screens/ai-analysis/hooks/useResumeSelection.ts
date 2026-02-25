@@ -60,6 +60,14 @@ export const buildResumeDataForJdEntry = <T extends Record<string, any>>(
     } as T)
 );
 
+export const buildResumeDataForEntry = <T extends Record<string, any>>(
+  rawResumeData: T,
+  options: { isInterviewMode?: boolean; shouldRestoreJdFromResume: boolean }
+): T => {
+  if (options.isInterviewMode) return rawResumeData;
+  return buildResumeDataForJdEntry(rawResumeData, options.shouldRestoreJdFromResume);
+};
+
 const normalizeAnalysisStep = (step: any) => {
   const v = String(step || '').trim().toLowerCase();
   return [
@@ -243,7 +251,10 @@ export const useResumeSelection = ({
           !!isInterviewMode,
           inferredTarget as 'jd_input' | 'report' | 'final_report'
         );
-        const finalResumeData = buildResumeDataForJdEntry(rawResumeData as Record<string, any>, shouldRestoreJdFromResume);
+        const finalResumeData = buildResumeDataForEntry(rawResumeData as Record<string, any>, {
+          isInterviewMode,
+          shouldRestoreJdFromResume,
+        });
         sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
         setResumeData(finalResumeData as any);
         setResumeReadState({
@@ -254,16 +265,30 @@ export const useResumeSelection = ({
           (finalResumeData as any).optimizedResumeId ||
           ((finalResumeData as any).optimizationStatus === 'optimized' ? resume.id : null)
         );
-        const restoredJdText = ((rawResumeData as any).lastJdText || '').trim();
-        if (shouldRestoreJdFromResume && restoredJdText) {
+        const restoredJdText = String((rawResumeData as any).lastJdText || '').trim();
+        const restoredTargetCompany = String((rawResumeData as any).targetCompany || '').trim();
+        const restoredInterviewFocus = String((rawResumeData as any).interviewFocus || '').trim();
+        if (isInterviewMode) {
           setJdText(restoredJdText);
-        } else if (!shouldRestoreJdFromResume) {
-          setJdText('');
-        }
-        if (shouldRestoreJdFromResume && (rawResumeData as any).targetCompany) {
-          setTargetCompany((rawResumeData as any).targetCompany);
-        } else if (!shouldRestoreJdFromResume) {
-          setTargetCompany('');
+          setTargetCompany(restoredTargetCompany);
+          try {
+            const uid = String(user?.id || '').trim();
+            if (uid) localStorage.setItem(`ai_interview_focus:${uid}`, restoredInterviewFocus);
+            localStorage.setItem('ai_interview_focus', restoredInterviewFocus);
+          } catch {
+            // ignore storage failures
+          }
+        } else {
+          if (shouldRestoreJdFromResume && restoredJdText) {
+            setJdText(restoredJdText);
+          } else if (!shouldRestoreJdFromResume) {
+            setJdText('');
+          }
+          if (shouldRestoreJdFromResume && restoredTargetCompany) {
+            setTargetCompany(restoredTargetCompany);
+          } else if (!shouldRestoreJdFromResume) {
+            setTargetCompany('');
+          }
         }
 
         const shouldRestoreAnalysisContext = !!isInterviewMode || inferredTarget !== 'jd_input';

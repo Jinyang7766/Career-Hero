@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildResumeDataForEntry,
   buildResumeDataForJdEntry,
   inferDiagnosisTargetStep,
   shouldRestoreJdInputFromResume,
@@ -33,6 +34,21 @@ describe('useResumeSelection JD restore rules', () => {
     expect(sanitized.lastJdText).toBe('');
     expect(sanitized.targetCompany).toBe('');
     expect(sanitized.resumeTitle).toBe('My Resume');
+  });
+
+  it('keeps JD and target company in interview mode entry', () => {
+    const raw = {
+      id: 'resume-2',
+      lastJdText: 'jd text',
+      targetCompany: 'company',
+      resumeTitle: 'Interview Resume',
+    };
+    const retained = buildResumeDataForEntry(raw, {
+      isInterviewMode: true,
+      shouldRestoreJdFromResume: false,
+    });
+    expect(retained.lastJdText).toBe('jd text');
+    expect(retained.targetCompany).toBe('company');
   });
 
   it('uses resume summary progress to enter report when row data lacks derived fields', () => {
