@@ -46,13 +46,20 @@ export const useEditorAutosave = ({
         const serialized = JSON.stringify(currentData);
         if (serialized === lastAutosavedRef.current) return;
         setIsAutosaving(true);
+        const nowIso = new Date().toISOString();
+        const savedData: ResumeData = {
+          ...currentData,
+          contentUpdatedAt: nowIso,
+        };
         const saveResult = await DatabaseService.updateResume(String(currentData.id), {
-          resume_data: currentData,
+          resume_data: savedData,
         }, { touchUpdatedAt: true });
         if (!saveResult?.success) {
           throw saveResult?.error || new Error('Auto-save failed');
         }
-        lastAutosavedRef.current = serialized;
+        // Keep local autosave digest aligned with the payload, avoiding repeated saves when only contentUpdatedAt changed.
+        latestResumeDataRef.current = savedData;
+        lastAutosavedRef.current = JSON.stringify(savedData);
         const now = new Date();
         const timeLabel = now.toLocaleTimeString('zh-CN', {
           hour: '2-digit',
@@ -73,7 +80,7 @@ export const useEditorAutosave = ({
             const seconds = String(beijingTime.getSeconds()).padStart(2, '0');
             return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
           };
-          const formatted = formatDateTime(now.toISOString()).replace(/[^0-9\-:\s]/g, '');
+          const formatted = formatDateTime(nowIso).replace(/[^0-9\-:\s]/g, '');
           setAllResumes((prev: any) => (prev || []).map((r: any) =>
             r.id === currentData.id ? { ...r, date: formatted } : r
           ));

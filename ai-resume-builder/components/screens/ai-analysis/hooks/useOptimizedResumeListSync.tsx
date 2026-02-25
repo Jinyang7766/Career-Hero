@@ -252,7 +252,7 @@ export const useOptimizedResumeListSync = ({
       const summaryItem: any = {
         id: resumeRow.id,
         title: resumeRow.title,
-        date: toDisplayDate(resumeRow.updated_at || resumeRow.created_at),
+        date: toDisplayDate(rowData?.contentUpdatedAt || resumeRow.updated_at || resumeRow.created_at),
         score: resumeRow.score,
         analysisScore,
         diagnosisProgress,

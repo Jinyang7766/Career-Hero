@@ -70,9 +70,11 @@ const isInterviewSceneSession = (sessionKey: string, session: any, interviewSess
 };
 
 export const mapDbResumeToSummary = (resume: any): ResumeSummary => {
-  const formattedDate = formatDateTimeToBeijing(resume.updated_at || resume.created_at);
-  const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
   const rowData = resume.resume_data || {};
+  const contentUpdatedAt = String(rowData?.contentUpdatedAt || '').trim();
+  const displayDateSource = contentUpdatedAt || resume.updated_at || resume.created_at;
+  const formattedDate = formatDateTimeToBeijing(displayDateSource);
+  const cleanedDate = formattedDate.replace(/[^0-9\-:\s]/g, '');
   const analysisSnapshot = rowData.analysisSnapshot || null;
   const analysisBindings = rowData.analysisBindings || {};
   const analysisSessionByJd = rowData.analysisSessionByJd || {};

@@ -41,6 +41,7 @@ export const useEditorSaveAndPreview = ({
       );
       const latestData: ResumeData = {
         ...resumeData,
+        contentUpdatedAt: new Date().toISOString(),
         summary: normalizedSummary,
         personalInfo: {
           ...resumeData.personalInfo,

@@ -132,14 +132,20 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
     }
     setIsAutosaving(true);
     try {
+      const contentUpdatedAt = new Date().toISOString();
+      const savedData: ResumeData = {
+        ...data,
+        contentUpdatedAt,
+      };
       const title = `${data.personalInfo.name || '未命名'}的简历`;
       const result = await DatabaseService.updateResume(String(data.id), {
         title: title,
-        resume_data: data,
+        resume_data: savedData,
       }, { touchUpdatedAt: true });
 
       if (result.success) {
-        lastAutosavedRef.current = JSON.stringify(data);
+        latestResumeDataRef.current = savedData;
+        lastAutosavedRef.current = JSON.stringify(savedData);
         const now = new Date();
         const timeLabel = now.toLocaleTimeString('zh-CN', {
           hour: '2-digit', minute: '2-digit'

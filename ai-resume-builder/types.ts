@@ -81,6 +81,7 @@ export interface Education extends ExperienceItem {
 export interface ResumeData {
   id?: number;
   resumeTitle?: string;
+  contentUpdatedAt?: string;
   personalInfo: PersonalInfo;
   workExps: WorkExperience[];
   educations: Education[];
