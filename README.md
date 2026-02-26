@@ -47,6 +47,24 @@ Career-Hero/
 
 ---
 
+## 📸 关键页面截图
+
+登录态关键页面拼图：
+
+![关键页面拼图](docs/screenshots/request-pages-collage.jpg)
+
+以下为对应缩略图（预览页已修正为不含错误底部导航的版本）：
+
+| 首页 | 个人中心 | 面试场景选择页 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/request-pages-v2/home-首页.png" width="170" alt="首页" /> | <img src="docs/screenshots/request-pages-v2/profile-个人中心.png" width="170" alt="个人中心" /> | <img src="docs/screenshots/request-pages-v2/interview-面试场景.png" width="170" alt="面试场景选择页" /> |
+
+| 聊天页 | 简历编辑 | 预览 |
+| :---: | :---: | :---: |
+| <img src="docs/screenshots/request-pages-v2/chat-聊天页.png" width="170" alt="聊天页" /> | <img src="docs/screenshots/request-pages-v2/editor-简历编辑.png" width="170" alt="简历编辑" /> | <img src="docs/screenshots/request-pages-v2/preview-预览.png" width="170" alt="预览" /> |
+
+---
+
 ## 🚀 快速开始
 
 ### 1. 环境准备
