@@ -4,7 +4,6 @@ import { DatabaseService } from '../../../../src/database-service';
 import { buildResumeTitle } from '../../../../src/resume-utils';
 import { normalizeTimelineFields } from '../../../../src/timeline-utils';
 import type { ResumeData } from '../../../../types';
-import { persistUserDossierToProfile } from '../dossier-persistence';
 
 type Params = {
   currentUserId?: string;
@@ -21,10 +20,14 @@ type Params = {
   setAnalysisResumeId: (v: string | number | null) => void;
   setOptimizedResumeId: (v: string | number | null) => void;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
-  navigateToStep: (step: any, replace?: boolean) => void;
-  finalReportScore?: number;
-  finalReportSummary?: string;
-  finalReportAdvice?: string[];
+  finalReportSnapshot?: {
+    score?: number;
+    summary?: string;
+    advice?: string[];
+    weaknesses?: string[];
+    suggestions?: any[];
+    generatedResume?: any | null;
+  } | null;
   finalAnalysisReady?: boolean;
 };
 
@@ -261,25 +264,22 @@ export const usePostInterviewFinalize = ({
   setAnalysisResumeId,
   setOptimizedResumeId,
   showToast,
-  navigateToStep,
-  finalReportScore,
-  finalReportSummary,
-  finalReportAdvice,
+  finalReportSnapshot,
   finalAnalysisReady,
 }: Params) => {
   const handleCompleteAndSavePostInterview = useCallback(async (editedResume?: ResumeData | null) => {
     if (!currentUserId) {
       showToast('登录已过期，请重新登录', 'error');
-      return;
+      throw new Error('missing-user-id');
     }
     const resumeToSave = (editedResume || generatedResume) as ResumeData | null;
     if (!resumeToSave) {
       showToast('未生成可保存的新简历', 'error');
-      return;
+      throw new Error('missing-generated-resume');
     }
     if (!finalAnalysisReady) {
       showToast('最终报告正在生成，请稍后再试', 'info');
-      return;
+      throw new Error('final-analysis-not-ready');
     }
 
     const sourceId = String(
@@ -334,14 +334,45 @@ export const usePostInterviewFinalize = ({
       sourceResumeData,
       (resumeData as any) || {}
     );
+    const nowIso = new Date().toISOString();
+    const effectiveTargetCompany = targetCompany || (resumeData as any)?.targetCompany || '';
     const payload: any = {
       ...normalizedResume,
+      contentUpdatedAt: nowIso,
       optimizationStatus: 'optimized',
       optimizedFromId: sourceId || undefined,
       optimizationJdKey,
       lastJdText: effectiveJdText,
-      targetCompany: targetCompany || (resumeData as any)?.targetCompany || '',
+      targetCompany: effectiveTargetCompany,
     };
+    const snapshotSummary = String(finalReportSnapshot?.summary || '').trim();
+    const snapshotScore = Number(finalReportSnapshot?.score);
+    const canPersistSnapshot = !!snapshotSummary && Number.isFinite(snapshotScore);
+    const currentFinalReport = ((resumeData as any)?.postInterviewFinalReport && typeof (resumeData as any).postInterviewFinalReport === 'object')
+      ? (resumeData as any).postInterviewFinalReport
+      : null;
+    if (canPersistSnapshot) {
+      payload.postInterviewFinalReport = {
+        score: Math.max(0, Math.min(100, Math.round(snapshotScore))),
+        summary: snapshotSummary,
+        advice: Array.isArray(finalReportSnapshot?.advice) ? finalReportSnapshot!.advice : [],
+        weaknesses: Array.isArray(finalReportSnapshot?.weaknesses) ? finalReportSnapshot!.weaknesses : [],
+        suggestions: Array.isArray(finalReportSnapshot?.suggestions) ? finalReportSnapshot!.suggestions : [],
+        generatedResume: finalReportSnapshot?.generatedResume && typeof finalReportSnapshot.generatedResume === 'object'
+          ? finalReportSnapshot.generatedResume
+          : null,
+        updatedAt: nowIso,
+        jdText: effectiveJdText,
+        targetCompany: effectiveTargetCompany,
+      };
+    } else if (currentFinalReport) {
+      payload.postInterviewFinalReport = {
+        ...currentFinalReport,
+        updatedAt: String(currentFinalReport.updatedAt || nowIso),
+        jdText: String(currentFinalReport.jdText || effectiveJdText),
+        targetCompany: String(currentFinalReport.targetCompany || effectiveTargetCompany),
+      };
+    }
     payload.personalInfo = {
       ...(payload.personalInfo || {}),
     };
@@ -368,12 +399,11 @@ export const usePostInterviewFinalize = ({
     delete payload.id;
 
     const saveResult = await DatabaseService.createResume(currentUserId, newTitle, payload, {
-      optimizedDuplicateStrategy: 'overwrite',
-      touchUpdatedAtOnOptimizedOverwrite: true,
+      optimizedDuplicateStrategy: 'create_new',
     });
     if (!saveResult.success || !saveResult.data) {
       showToast('保存优化简历失败，请重试', 'error');
-      return;
+      throw new Error('save-optimized-resume-failed');
     }
 
     const savedRow = saveResult.data as any;
@@ -387,21 +417,6 @@ export const usePostInterviewFinalize = ({
     setSelectedResumeId(savedRow.id);
     setAnalysisResumeId(savedRow.id);
     setOptimizedResumeId(savedRow.id);
-    try {
-      await persistUserDossierToProfile({
-        source: 'final_diagnosis',
-        score: Number(finalReportScore || 0),
-        summary: String(finalReportSummary || '').trim() || '最终诊断已完成',
-        jdText: effectiveJdText,
-        targetCompany: targetCompany || (resumeData as any)?.targetCompany || '',
-        weaknesses: Array.isArray(finalReportAdvice) ? finalReportAdvice : [],
-      });
-    } catch (dossierErr) {
-      console.warn('Failed to persist final diagnosis dossier to user profile:', dossierErr);
-    }
-
-    showToast('优化简历已保存', 'success');
-    navigateToStep('final_report', true);
   }, [
     currentUserId,
     generatedResume,
@@ -417,10 +432,7 @@ export const usePostInterviewFinalize = ({
     setAnalysisResumeId,
     setOptimizedResumeId,
     showToast,
-    navigateToStep,
-    finalReportScore,
-    finalReportSummary,
-    finalReportAdvice,
+    finalReportSnapshot,
     finalAnalysisReady,
   ]);
 

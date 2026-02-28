@@ -5,11 +5,11 @@ interface DiagnosisProgressBarProps {
     resume: ResumeSummary;
     isInterviewMode?: boolean;
     variant?: 'default' | 'on-dark';
-    onDiagnosisStageClick?: (step: 'report' | 'chat' | 'final_report') => void;
+    onDiagnosisStageClick?: (step: 'comparison' | 'final_report') => void;
 }
 
-const DIAGNOSIS_STAGES = ['初步诊断', '微访谈', '最终报告'] as const;
-const DIAGNOSIS_STAGE_STEPS: Array<'report' | 'chat' | 'final_report'> = ['report', 'chat', 'final_report'];
+const DIAGNOSIS_STAGES = ['岗位分析', '优化对比', '最终报告'] as const;
+const DIAGNOSIS_STAGE_STEPS: Array<'comparison' | 'final_report'> = ['comparison', 'comparison', 'final_report'];
 const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
 type StageStatus = 'todo' | 'current' | 'done';
 
@@ -21,26 +21,21 @@ export const deriveDiagnosisStageStatuses = (latestStepRaw: string, progressRaw:
 
     const inFinalReportGenerating =
         latestStep === 'interview_report' ||
-        latestStep === 'comparison' ||
         progress >= 95;
     if (inFinalReportGenerating) return ['done', 'done', 'current'];
 
-    const inMicroInterview =
-        latestStep === 'micro_intro' ||
-        latestStep === 'chat' ||
-        progress >= 72;
-    if (inMicroInterview) return ['done', 'current', 'todo'];
-
-    const initialReportCompleted =
+    const inComparison =
+        latestStep === 'comparison' ||
         latestStep === 'report' ||
+        latestStep === 'chat' ||
         progress >= 60;
-    if (initialReportCompleted) return ['done', 'todo', 'todo'];
+    if (inComparison) return ['done', 'current', 'todo'];
 
-    const initialDiagnosisInProgress =
+    const initialAnalysisInProgress =
         latestStep === 'jd_input' ||
         latestStep === 'analyzing' ||
         progress >= 15;
-    if (initialDiagnosisInProgress) return ['current', 'todo', 'todo'];
+    if (initialAnalysisInProgress) return ['current', 'todo', 'todo'];
 
     return ['todo', 'todo', 'todo'];
 };
@@ -55,8 +50,7 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
     const latestStep = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
     const isFinalReportCompleted =
         progress >= 100 ||
-        latestStep === 'final_report' ||
-        latestStep === 'comparison';
+        latestStep === 'final_report';
     const isOnDark = variant === 'on-dark';
 
     // Both modes use a 3-stage visual approach
@@ -70,7 +64,7 @@ export const DiagnosisProgressBar: React.FC<DiagnosisProgressBarProps> = ({
         <div className="w-full">
             <div className="flex items-center gap-2 mb-2 px-0.5">
                 <span className={`text-[10px] font-bold uppercase tracking-wider ${isOnDark ? 'text-white/70' : 'text-slate-500 dark:text-slate-400'}`}>
-                    {isInterviewMode ? '面试进程' : '诊断进度'}
+                    {isInterviewMode ? '面试进程' : '优化进度'}
                 </span>
                 {!!modeLabel && (
                     <span className={`text-[10px] font-bold tracking-tight rounded-[4px] px-1.5 py-0.5 ${isOnDark ? 'bg-white/15 text-white/90' : 'bg-slate-100 dark:bg-white/10 text-slate-500 dark:text-slate-300'}`}>

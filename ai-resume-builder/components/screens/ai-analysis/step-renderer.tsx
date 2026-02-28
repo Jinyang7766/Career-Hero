@@ -2,7 +2,6 @@ import React from 'react';
 import ChatPage from './ChatPage';
 import ResumeSelectPage from './pages/ResumeSelectPage';
 import JdInputPage from './pages/JdInputPage';
-import ReportPage from './pages/ReportPage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
 import InterviewReportPage from './pages/InterviewReportPage';
@@ -23,13 +22,12 @@ type Params = {
   handleResumeSelect: (
     resumeId: string | number,
     preferReport: boolean,
-    targetStep?: 'report' | 'chat' | 'final_report'
+    targetStep?: 'chat' | 'comparison' | 'final_report'
   ) => void;
   selectedResumeId: string | number | null;
   resumeReadState: any;
   isInterviewMode?: boolean;
   pointsRemaining?: number | null;
-  onRediagnoseResume?: (resumeId: number) => void | Promise<void>;
   isSameResumeId: (a: any, b: any) => boolean;
   resumeData: any;
   targetCompany: string;
@@ -46,16 +44,9 @@ type Params = {
   startAnalysis: (interviewType?: string) => void | Promise<void>;
   onRestartCompletedInterviewScene?: () => Promise<void> | void;
   interviewEntryConfirmPendingRef?: React.MutableRefObject<boolean>;
-  hasJdInput: () => boolean;
   score: number;
   originalScore: number;
-  report: any;
   getScoreColor: (s: number) => string;
-  handleAnalyzeOtherResume: () => void;
-  handleStartMicroInterview: () => void;
-  microInterviewActionLabel?: string;
-  handleRetryAnalysisFromIntro: () => void;
-  onInitialReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   onFinalReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   onInterviewReportFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   ToastOverlay: React.ComponentType;
@@ -140,7 +131,6 @@ export const renderAiAnalysisStep = (p: Params) => {
         isReading={p.resumeReadState.status === 'loading'}
         isInterviewMode={p.isInterviewMode}
         pointsRemaining={p.pointsRemaining}
-        onRediagnoseResume={p.onRediagnoseResume}
       />
     );
   }
@@ -172,39 +162,28 @@ export const renderAiAnalysisStep = (p: Params) => {
     );
   }
 
-  if (p.currentStep === 'analyzing' || p.currentStep === 'report') {
-    return (
-      <ReportPage
-        mode={p.currentStep === 'analyzing' ? 'analyzing' : 'report'}
-        hasJdInput={p.hasJdInput}
-        handleStepBack={p.handleStepBack}
-        score={p.score}
-        report={p.report}
-        getScoreColor={p.getScoreColor}
-        handleStartMicroInterview={p.handleStartMicroInterview}
-        microInterviewActionLabel={p.microInterviewActionLabel}
-        onFeedback={p.onInitialReportFeedback}
-      />
-    );
-  }
-
-  if (p.currentStep === 'micro_intro') {
-    return (
-      <ReportPage
-        mode="report"
-        hasJdInput={p.hasJdInput}
-        handleStepBack={p.handleStepBack}
-        score={p.score}
-        report={p.report}
-        getScoreColor={p.getScoreColor}
-        handleStartMicroInterview={p.handleStartMicroInterview}
-        microInterviewActionLabel={p.microInterviewActionLabel}
-        onFeedback={p.onInitialReportFeedback}
-      />
-    );
+  if (p.currentStep === 'analyzing') {
+    return <FinalAnalysisLoadingPage />;
   }
 
   if (p.currentStep === 'chat') {
+    if (!p.isInterviewMode) {
+      if (p.isFinalReportGenerating) {
+        return <FinalAnalysisLoadingPage />;
+      }
+      return (
+        <FinalResumeReportPage
+          score={p.finalReportScore}
+          summary={p.finalReportSummary}
+          advice={p.finalReportAdvice}
+          getScoreColor={p.getScoreColor}
+          onBack={p.handleStepBack}
+          onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
+          onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
+          onFeedback={p.onFinalReportFeedback}
+        />
+      );
+    }
     return (
       <ChatPage
         isInterviewMode={!!p.isInterviewMode}
@@ -329,7 +308,6 @@ export const renderAiAnalysisStep = (p: Params) => {
       isReading={p.resumeReadState?.status === 'loading'}
       isInterviewMode={p.isInterviewMode}
       pointsRemaining={p.pointsRemaining}
-      onRediagnoseResume={p.onRediagnoseResume}
     />
   );
 };

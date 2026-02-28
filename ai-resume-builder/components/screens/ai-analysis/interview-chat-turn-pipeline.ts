@@ -39,7 +39,7 @@ const countAnsweredUserMessages = (messages: ChatMessage[]): number =>
   messages.filter((message) => {
     if (message.role !== 'user') return false;
     const text = String(message.text || '').trim();
-    const hasTextAnswer = !!text && text !== '结束面试' && text !== '结束微访谈';
+    const hasTextAnswer = !!text && text !== '结束面试';
     const hasVoiceAnswer = !!message.audioUrl || !!message.audioPending;
     return hasTextAnswer || hasVoiceAnswer;
   }).length;

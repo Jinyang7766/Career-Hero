@@ -2,7 +2,6 @@ import type React from 'react';
 
 export type AiAnalysisPassiveFlowsParams = {
   isInterviewMode?: boolean;
-  reportMicroInterviewFirstQuestion?: string;
   currentStep: string;
   chatInitialized: boolean;
   chatMessagesRef: React.MutableRefObject<any[]>;

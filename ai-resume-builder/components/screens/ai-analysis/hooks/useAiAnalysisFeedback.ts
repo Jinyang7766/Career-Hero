@@ -112,7 +112,7 @@ export const useAiAnalysisFeedback = ({
     submitReportFeedback({
       source: 'initial_report',
       suggestionId: 'analysis-initial-report',
-      title: '初步诊断报告反馈',
+      title: '诊断报告反馈',
       summaryText: initialReportSummary,
       rating,
       reason,
@@ -148,4 +148,3 @@ export const useAiAnalysisFeedback = ({
     handleInterviewReportFeedback,
   };
 };
-

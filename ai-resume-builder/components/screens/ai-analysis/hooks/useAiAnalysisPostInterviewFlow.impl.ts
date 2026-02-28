@@ -37,7 +37,6 @@ type Params = {
   setSelectedResumeId: (v: string | number | null) => void;
   setAnalysisResumeId: (v: string | number | null) => void;
   setOptimizedResumeId: (v: string | number | null) => void;
-  navigateToStep: (...args: any[]) => any;
 };
 
 export const useAiAnalysisPostInterviewFlow = ({
@@ -68,7 +67,6 @@ export const useAiAnalysisPostInterviewFlow = ({
   setSelectedResumeId,
   setAnalysisResumeId,
   setOptimizedResumeId,
-  navigateToStep,
 }: Params) => {
   const baseData = usePostInterviewReportData({
     originalResumeData,
@@ -179,10 +177,16 @@ export const useAiAnalysisPostInterviewFlow = ({
     setAnalysisResumeId,
     setOptimizedResumeId,
     showToast,
-    navigateToStep: navigateToStep as any,
-    finalReportScore: resolvedFinalReport?.score,
-    finalReportSummary: resolvedFinalReport?.summary,
-    finalReportAdvice: resolvedFinalReport?.advice,
+    finalReportSnapshot: resolvedFinalReport
+      ? {
+        score: resolvedFinalReport.score,
+        summary: resolvedFinalReport.summary,
+        advice: resolvedFinalReport.advice,
+        weaknesses: resolvedFinalReport.weaknesses,
+        suggestions: resolvedFinalReport.suggestions,
+        generatedResume: resolvedFinalReport.generatedResume || null,
+      }
+      : null,
     finalAnalysisReady: !!resolvedFinalReport && !isFinalReportGenerating,
   });
 

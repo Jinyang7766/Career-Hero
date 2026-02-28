@@ -6,7 +6,6 @@ import {
   buildChatRequestBody,
   buildInterviewWrappedMessage,
 } from '../chat-request-builders';
-import { persistUserDossierToProfile } from '../dossier-persistence';
 import { getActiveInterviewType } from '../interview-plan-utils';
 import { generateInterviewSummary, streamInterviewResponse } from '../interview-chat-api';
 import { upsertStreamingModelMessage } from '../interview-chat-message-state';
@@ -154,7 +153,7 @@ export const useInterviewChat = ({
     const hasText = !!textToSend.trim();
     const requestId = `req-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const normalizedTextOverride = String(textOverride || '').trim();
-    const isManualEndCommand = normalizedTextOverride === '结束面试' || normalizedTextOverride === '结束微访谈';
+    const isManualEndCommand = normalizedTextOverride === '结束面试';
     const isEndCommand =
       isManualEndCommand || !!opts?.forceEnd;
     const isSkipCurrentQuestion = !!opts?.skipCurrentQuestion;
@@ -257,7 +256,7 @@ export const useInterviewChat = ({
               force: true,
             });
           } catch (stateErr) {
-            console.warn('Failed to persist interview_done state for micro interview:', stateErr);
+            console.warn('Failed to persist interview_done state for non-interview chat:', stateErr);
           }
           if (onInterviewCompleted) {
             try {
@@ -307,18 +306,6 @@ export const useInterviewChat = ({
         } catch (stateErr) {
           console.warn('Failed to persist interview_done state:', stateErr);
         }
-        try {
-          await persistUserDossierToProfile({
-            source: 'interview',
-            score,
-            summary: summary || '面试已结束',
-            jdText,
-            targetCompany: String((resumeData as any)?.targetCompany || '').trim(),
-            suggestionsTotal: Array.isArray(suggestions) ? suggestions.length : 0,
-          });
-        } catch (dossierErr) {
-          console.warn('Failed to persist interview dossier to user profile:', dossierErr);
-        }
         if (onInterviewCompleted) {
           try {
             onInterviewCompleted(summary || '', finalMessages);
@@ -337,7 +324,6 @@ export const useInterviewChat = ({
 
       const masker = createMasker();
       const isInterviewChat = !!isInterviewMode;
-      const isMicroInterview = !isInterviewChat && currentStep === 'chat';
       const cleanTextForWrap = hasText ? textToSend : (hasAudio ? '（语音回答，见音频附件）' : '');
       const turnPipeline = buildInterviewTurnPipeline({
         baseMessages,
@@ -368,7 +354,6 @@ export const useInterviewChat = ({
 
       const interviewWrapped = buildInterviewWrappedMessage({
         isInterviewChat,
-        isMicroInterview,
         isStartPhase,
         cleanTextForWrap,
         isAffirmative,
@@ -439,8 +424,8 @@ export const useInterviewChat = ({
       }));
 
       const safeText = normalizeInterviewReplyText(unmaskedText);
-      if (safeText === '结束面试' || safeText === '结束微访谈') {
-        const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
+      if (safeText === '结束面试') {
+        const endToken = '结束面试';
         await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
         return;
       }
@@ -504,7 +489,7 @@ export const useInterviewChat = ({
       if (inReverseQa && reverseQaPendingEvaluationRef.current) {
         reverseQaPendingEvaluationRef.current = false;
         if (reverseQaAskedCountRef.current >= REVERSE_QA_MAX) {
-          const endToken = isInterviewChat ? '结束面试' : '结束微访谈';
+          const endToken = '结束面试';
           await handleSendMessage(endToken, null, { skipAddUserMessage: true, forceEnd: true });
           return;
         }
@@ -526,7 +511,7 @@ export const useInterviewChat = ({
       clearPendingReply();
       if (isEndCommand) {
         if (!isInterviewMode) {
-          // End-micro-interview is a local completion path; do not block UI on persistence hiccups.
+          // Non-interview chat completion is local-only; do not block UI on persistence hiccups.
           const finalMessages = [...baseMessages];
           chatMessagesRef.current = finalMessages;
           setChatMessages(finalMessages);

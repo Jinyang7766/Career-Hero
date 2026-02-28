@@ -40,7 +40,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
       <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2" />
-          <h1 className="text-base font-bold tracking-tight">最终诊断报告</h1>
+          <h1 className="text-base font-bold tracking-tight">诊断报告</h1>
           <div className="w-10"></div>
         </div>
       </header>
@@ -96,7 +96,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
             className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
             type="button"
           >
-            简历批改
+            查看优化简历
           </button>
           <button
             onClick={onStartInterview}

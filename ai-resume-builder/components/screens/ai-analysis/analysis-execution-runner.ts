@@ -4,6 +4,7 @@ import { runRealAnalysis } from './analysis-api';
 type RunAnalysisRequestParams = {
   interviewType?: string;
   resumeData: any;
+  careerProfile?: any;
   jdText: string;
   getBackendAuthToken: () => Promise<string>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error', durationMs?: number) => void;
@@ -19,6 +20,7 @@ type RunAnalysisRequestParams = {
 export const runRealAnalysisRequest = async ({
   interviewType,
   resumeData,
+  careerProfile,
   jdText,
   getBackendAuthToken,
   showToast,
@@ -33,6 +35,7 @@ export const runRealAnalysisRequest = async ({
   return runRealAnalysis({
     interviewType,
     resumeData,
+    careerProfile,
     jdText,
     getBackendAuthToken,
     showToast,

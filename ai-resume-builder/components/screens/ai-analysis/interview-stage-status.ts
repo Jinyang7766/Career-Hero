@@ -25,7 +25,7 @@ const normalizeMode = (value: any) => {
 const parseScopedParts = (key: string) => {
   const parts = String(key || '').trim().split('__').filter(Boolean);
   const tail = String(parts[parts.length - 1] || '').trim().toLowerCase();
-  const chatModeSuffix = tail === 'interview' || tail === 'micro' ? tail : '';
+  const chatModeSuffix = tail === 'interview' ? tail : '';
   return {
     jdKey: String(parts[0] || '').trim(),
     interviewType: normalizeType(parts[1] || ''),
@@ -112,7 +112,6 @@ const hasMatchingInterviewChatSession = (
   interviewSessions: any
 ) => {
   const parsedState = parseScopedParts(sessionKey);
-  if (parsedState.chatModeSuffix === 'micro') return false;
   const stateType = resolveInterviewType(session, sessionKey);
   const stateMode = resolveInterviewMode(session, sessionKey);
   const stateJdKey = resolveJdKey(session, sessionKey);
@@ -146,13 +145,12 @@ const isInterviewSceneSession = (
   interviewSessions: any
 ) => {
   const parsed = parseScopedParts(sessionKey);
-  if (parsed.chatModeSuffix === 'micro') return false;
   const chatMode = String(session?.chatMode || '').trim().toLowerCase();
   if (chatMode) return chatMode === 'interview';
 
   // Legacy entries without chatMode: infer by step + matching interview chat session.
   const step = String(session?.step || '').trim().toLowerCase();
-  if (step === 'comparison' || step === 'report' || step === 'micro_intro') {
+  if (step === 'comparison' || step === 'report') {
     return false;
   }
   const hasInterviewIdentity = !!resolveInterviewType(session, sessionKey);

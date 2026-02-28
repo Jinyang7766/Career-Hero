@@ -20,17 +20,13 @@ const actionToInfo = (action: string) => {
   const act = String(action || '').toLowerCase();
   switch (act) {
     case 'analysis_consume':
-      return { label: 'AI 初步诊断', icon: 'assessment', color: 'rose' };
+      return { label: 'AI 诊断报告', icon: 'assessment', color: 'rose' };
     case 'analysis_refund':
       return { label: '诊断退还', icon: 'refresh', color: 'emerald' };
     case 'interview_consume':
       return { label: 'AI 面试', icon: 'forum', color: 'rose' };
     case 'interview_refund':
       return { label: '面试退还', icon: 'refresh', color: 'emerald' };
-    case 'micro_interview_consume':
-      return { label: '微访谈', icon: 'forum', color: 'rose' };
-    case 'micro_interview_refund':
-      return { label: '微访谈退还', icon: 'refresh', color: 'emerald' };
     case 'final_report_consume':
       return { label: '最终报告', icon: 'description', color: 'rose' };
     case 'final_report_refund':
@@ -52,11 +48,9 @@ const actionToInfo = (action: string) => {
 const resolveLedgerDisplayTexts = (row: LedgerRow, fallbackLabel: string, fallbackSubtitle: string) => {
   const act = String(row?.action || '').toLowerCase();
   const diagnosisStepByAction: Record<string, string> = {
-    analysis_consume: '初步诊断',
-    micro_interview_consume: '微访谈',
+    analysis_consume: '诊断报告',
     final_report_consume: '最终报告',
-    analysis_refund: '初步诊断（退还）',
-    micro_interview_refund: '微访谈（退还）',
+    analysis_refund: '诊断报告（退还）',
     final_report_refund: '最终报告（退还）',
   };
   const diagnosisStep = diagnosisStepByAction[act];
@@ -228,7 +222,7 @@ const PointsHistory: React.FC = () => {
             </div>
             <p className="text-slate-900 dark:text-white font-bold text-lg mb-1">暂无明细记录</p>
             <p className="text-slate-500 dark:text-slate-400 text-sm max-w-[200px] leading-relaxed px-4">
-              这里还没有记录呢，快去试试 AI 诊断或邀请好友吧
+              这里还没有记录呢，快去试试 AI 优化或邀请好友吧
             </p>
           </div>
         )}

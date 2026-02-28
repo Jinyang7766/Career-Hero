@@ -9,6 +9,7 @@ interface CacheEntry {
     timestamp: number;
     resumeHash: string;
     jdHash: string;
+    profileHash?: string;
 }
 
 interface CacheStats {
@@ -133,21 +134,22 @@ export class AICacheService {
     /**
      * 生成缓存键
      */
-    public static generateCacheKey(resumeData: ResumeData, jdText: string): string {
+    public static generateCacheKey(resumeData: ResumeData, jdText: string, profileHash = 'no_profile'): string {
         const normalizedResume = this.normalizeResumeData(resumeData);
         const resumeHash = this.generateHash(normalizedResume);
         const jdHash = this.generateHash(jdText.trim().toLowerCase());
+        const safeProfileHash = this.generateHash(String(profileHash || 'no_profile'));
 
-        return `analysis_${resumeHash}_${jdHash}`;
+        return `analysis_${resumeHash}_${jdHash}_${safeProfileHash}`;
     }
 
     /**
      * 从缓存获取分析结果
      */
-    public static async get(resumeData: ResumeData, jdText: string): Promise<any | null> {
+    public static async get(resumeData: ResumeData, jdText: string, profileHash = 'no_profile'): Promise<any | null> {
         try {
             const db = await this.initDB();
-            const key = this.generateCacheKey(resumeData, jdText);
+            const key = this.generateCacheKey(resumeData, jdText, profileHash);
 
             return new Promise((resolve) => {
                 const transaction = db.transaction(CACHE_CONFIG.STORE_NAME, 'readonly');
@@ -196,17 +198,18 @@ export class AICacheService {
     /**
      * 存储分析结果到缓存
      */
-    public static async set(resumeData: ResumeData, jdText: string, result: any): Promise<void> {
+    public static async set(resumeData: ResumeData, jdText: string, result: any, profileHash = 'no_profile'): Promise<void> {
         try {
             const db = await this.initDB();
-            const key = this.generateCacheKey(resumeData, jdText);
+            const key = this.generateCacheKey(resumeData, jdText, profileHash);
 
             const entry: CacheEntry = {
                 key,
                 result,
                 timestamp: Date.now(),
                 resumeHash: this.generateHash(this.normalizeResumeData(resumeData)),
-                jdHash: this.generateHash(jdText.trim().toLowerCase())
+                jdHash: this.generateHash(jdText.trim().toLowerCase()),
+                profileHash: this.generateHash(String(profileHash || 'no_profile')),
             };
 
             return new Promise((resolve, reject) => {

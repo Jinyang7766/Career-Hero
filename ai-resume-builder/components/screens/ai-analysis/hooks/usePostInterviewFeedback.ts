@@ -33,7 +33,7 @@ export const usePostInterviewFeedback = ({
       resumeId: feedbackResumeId ? String(feedbackResumeId) : null,
       suggestionId: 'post-interview-generated-resume',
       rating,
-      title: '微访谈生成简历整体反馈',
+      title: '最终报告生成简历整体反馈',
       reasonMasked: `${String(reason || '').trim() ? `${String(reason || '').trim()} | ` : ''}${effectivePostInterviewSummary || ''}` || undefined,
       originalValueMasked: null,
       suggestedValueMasked: {

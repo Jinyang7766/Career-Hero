@@ -15,7 +15,6 @@ import { useJdScreenshotUpload } from './ai-analysis/hooks/useJdScreenshotUpload
 import { useAiRouteSync } from './ai-analysis/hooks/useAiRouteSync';
 import { useAnalysisRuntime } from './ai-analysis/hooks/useAnalysisRuntime';
 import { useAnalysisSnapshotApplier } from './ai-analysis/hooks/useAnalysisSnapshotApplier';
-import { useAnalyzeOtherResumeReset } from './ai-analysis/hooks/useAnalyzeOtherResumeReset';
 import { useAnalysisExecution } from './ai-analysis/hooks/useAnalysisExecution';
 import { useUsageQuota } from './ai-analysis/hooks/useUsageQuota';
 import { useAiAnalysisPageState } from './ai-analysis/hooks/useAiAnalysisPageState';
@@ -24,7 +23,6 @@ import { useAiAnalysisPassiveFlows } from './ai-analysis/hooks/useAiAnalysisPass
 import { useAiAnalysisPostInterviewFlow } from './ai-analysis/hooks/useAiAnalysisPostInterviewFlow';
 import { useAiAnalysisInteractionBundle } from './ai-analysis/hooks/useAiAnalysisInteractionBundle';
 import { useAiAnalysisFeedback } from './ai-analysis/hooks/useAiAnalysisFeedback';
-import { useAnalysisResetActions } from './ai-analysis/hooks/useAnalysisResetActions';
 import { useInterviewSceneReset } from './ai-analysis/hooks/useInterviewSceneReset';
 import { usePersistedInterviewSummaryHydration } from './ai-analysis/hooks/usePersistedInterviewSummaryHydration';
 import {
@@ -295,7 +293,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     optimizedResumeIdRef,
     resolveOriginalResumeIdForOptimization,
     resolveAnalysisBinding,
-    resetOptimizedCreationState,
   } = useOptimizedResumeStore({
     optimizedResumeId,
     setOptimizedResumeId,
@@ -347,6 +344,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     jdText,
     targetCompany,
     setTargetCompany,
+    userProfile,
     optimizedResumeId,
     setOptimizedResumeId,
     optimizedResumeIdRef: optimizedResumeIdRef as any,
@@ -382,55 +380,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     interviewEntryConfirmPendingRef,
   });
 
-  
-
-  const { handleAnalyzeOtherResume } = useAnalyzeOtherResumeReset({
-    setSelectedResumeId,
-    sourceResumeIdRef: sourceResumeIdRef as any,
-    setAnalysisResumeId,
-    resetOptimizedCreationState,
-    clearLastAnalysis,
-    setJdText,
-    setSuggestions: setSuggestions as any,
-    setReport: setReport as any,
-    setScore,
-    setOriginalScore,
-    setChatMessages: setChatMessages as any,
-    setIsFromCache,
-    setOptimizedResumeId,
-    setAnalysisInProgress,
-    setCurrentStep,
-  });
-
-  const { clearInitialReportForRetry, handleRediagnoseFromResumeSelect } = useAnalysisResetActions({
-    allResumes: allResumes as any[],
-    resumeData,
-    clearLastAnalysis,
-    setReport: setReport as any,
-    setSuggestions: setSuggestions as any,
-    setScore,
-    setOriginalScore,
-    setPostInterviewSummary,
-    setIsFromCache,
-    setChatMessages: setChatMessages as any,
-    setChatInitialized,
-    setInterviewPlan,
-    setTargetCompany,
-    setJdText,
-    setForceReportEntry,
-    setOptimizedResumeId,
-    setResumeData: setResumeData as any,
-    setAllResumes: setAllResumes as any,
-    setSelectedResumeId,
-    sourceResumeIdRef: sourceResumeIdRef as any,
-    setAnalysisResumeId,
-    navigateToStep: navigateToStep as any,
-    showToast,
-  });
-
   useAiAnalysisPassiveFlows({
     isInterviewMode,
-    reportMicroInterviewFirstQuestion: report?.microInterviewFirstQuestion,
     currentStep,
     chatInitialized,
     chatMessagesRef: chatMessagesRef as any,
@@ -504,9 +455,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     transcribeExistingVoiceMessage,
     getScoreColor,
     handleResumeSelectBack,
-    handleStartMicroInterview,
-    microInterviewActionLabel,
-    handleRetryAnalysisFromIntro,
     handleRestartInterview,
     handleStartInterviewFromFinalReport,
     endInterviewFromChat,
@@ -525,7 +473,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     targetCompany,
     resumeData,
     makeJdKey,
-    consumeUsageQuota,
     currentUserId: currentUser?.id,
     setAllResumes,
     setInterviewPlan,
@@ -536,7 +483,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigateToStep: navigateToStep as any,
     setTargetCompany,
     setJdText,
-    onRetryAnalysisFromIntro: clearInitialReportForRetry,
     isInterviewMode,
     chatMessages,
     chatIntroScheduledRef,
@@ -581,12 +527,10 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setSelectedResumeId,
     setAnalysisResumeId,
     setOptimizedResumeId,
-    navigateToStep: navigateToStep as any,
   });
 
   const {
     handleChatMessageFeedback,
-    handleInitialReportFeedback,
     handleFinalReportFeedback,
     handleInterviewReportFeedback,
   } = useAiAnalysisFeedback({
@@ -625,6 +569,17 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setPostInterviewSummary,
   });
 
+  React.useEffect(() => {
+    if (isInterviewMode) return;
+    if (
+      currentStep === 'chat' ||
+      currentStep === 'interview_report' ||
+      currentStep === 'interview_report_loading'
+    ) {
+      navigateToStep('final_report', true);
+    }
+  }, [isInterviewMode, currentStep, navigateToStep]);
+
   return renderAiAnalysisStep(buildAiAnalysisRenderProps({
     currentStep,
     allResumes,
@@ -640,7 +595,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     resumeReadState,
     isInterviewMode,
     pointsRemaining: Number((userProfile as any)?.points_balance ?? NaN),
-    onRediagnoseResume: handleRediagnoseFromResumeSelect,
     isSameResumeId,
     resumeData,
     targetCompany,
@@ -657,15 +611,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     startAnalysis,
     onRestartCompletedInterviewScene: handleRestartCompletedInterviewScene,
     interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
-    hasJdInput: () => jdText.length > 0,
     score,
     originalScore,
-    report,
     getScoreColor,
-    handleStartMicroInterview,
-    microInterviewActionLabel,
-    handleRetryAnalysisFromIntro,
-    onInitialReportFeedback: handleInitialReportFeedback,
     onFinalReportFeedback: handleFinalReportFeedback,
     onInterviewReportFeedback: handleInterviewReportFeedback,
     ToastOverlay,

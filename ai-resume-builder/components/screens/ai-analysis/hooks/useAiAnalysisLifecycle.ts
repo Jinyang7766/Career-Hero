@@ -32,15 +32,15 @@ export const useAiAnalysisLifecycle = ({
     const states = Object.values(analysisSessionByJd)
       .filter((item: any) => {
         const chatMode = String(item?.chatMode || '').trim().toLowerCase();
-        // Diagnosis lifecycle should only react to diagnosis/micro sessions.
+        // Diagnosis lifecycle should only react to non-interview sessions.
         if (chatMode === 'interview') return false;
         return true;
       })
       .map((item: any) => String(item?.state || '').toLowerCase())
       .filter(Boolean);
-    if (states.includes('interview_done')) return 'comparison';
-    if (states.includes('interview_in_progress') || states.includes('paused')) return 'report';
-    if (score > 0 || suggestionsLength > 0) return 'report';
+    if (states.includes('interview_done')) return 'final_report';
+    if (states.includes('interview_in_progress') || states.includes('paused')) return 'final_report';
+    if (score > 0 || suggestionsLength > 0) return 'final_report';
     return 'resume_select';
   };
 

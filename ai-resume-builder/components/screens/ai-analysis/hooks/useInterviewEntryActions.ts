@@ -25,7 +25,7 @@ type Params = {
   setInterviewPlan: (v: string[]) => void;
   setPlanFetchTrigger: Dispatch<SetStateAction<number>>;
   openChat: (source: 'internal' | 'preview') => void;
-  navigateToStep?: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'chat' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep?: (step: 'jd_input' | 'analyzing' | 'chat' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   navigateToView?: (view: View, options?: any) => void;
   setTargetCompany?: (v: string) => void;
   setJdText?: (v: string) => void;
@@ -172,7 +172,7 @@ export const useInterviewEntryActions = ({
           force: true,
         });
       } catch (stateErr) {
-        console.warn('Failed to persist micro restart checkpoint:', stateErr);
+        console.warn('Failed to persist non-interview chat restart checkpoint:', stateErr);
       }
     }
   }, [isInterviewMode, chatIntroScheduledRef, clearInterviewSession, clearInterviewSceneState, persistAnalysisSessionState, jdText, targetCompany, resumeData?.lastJdText, resumeData?.targetCompany, resumeData?.id, makeJdKey, currentUserId, setAllResumes, setInterviewPlan, setPlanFetchTrigger, navigateToStep, setTargetCompany, setJdText, clearCurrentScenePlanCache]);

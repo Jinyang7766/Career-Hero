@@ -15,8 +15,11 @@ ALTER TABLE public.users ADD COLUMN IF NOT EXISTS interviews_remaining INTEGER N
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS points_balance INTEGER NOT NULL DEFAULT 30;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS membership_tier TEXT NOT NULL DEFAULT 'FREE';
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS deletion_pending_until TIMESTAMP WITH TIME ZONE;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_latest JSONB;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS analysis_dossier_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS career_profile_latest JSONB;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS career_profile_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 DO $$
 BEGIN
@@ -35,6 +38,10 @@ END $$;
 CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_key
   ON public.users(referral_code)
   WHERE referral_code IS NOT NULL;
+
+CREATE INDEX IF NOT EXISTS users_deletion_pending_until_idx
+  ON public.users(deletion_pending_until)
+  WHERE deletion_pending_until IS NOT NULL;
 
 -- Reward event ledger for idempotency (one invited user can be rewarded once)
 CREATE TABLE IF NOT EXISTS public.referral_reward_events (

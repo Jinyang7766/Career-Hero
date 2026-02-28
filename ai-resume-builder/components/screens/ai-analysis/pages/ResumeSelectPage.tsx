@@ -14,24 +14,19 @@ export type ResumeSelectPageProps = {
   onSelectResume: (
     resumeId: number,
     preferReport?: boolean,
-    targetStep?: 'report' | 'chat' | 'final_report'
+    targetStep?: 'chat' | 'comparison' | 'final_report'
   ) => void;
   selectedResumeId?: string | number | null;
   isReading?: boolean;
   isInterviewMode?: boolean;
   pointsRemaining?: number | null;
-  onRediagnoseResume?: (resumeId: number) => void | Promise<void>;
 };
-
-import { DiagnosisProgressBar } from '../../../shared/DiagnosisProgressBar';
 
 export const hasRecoverableDiagnosisStepForResume = (resume: ResumeSummary) => {
   const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
   if ([
     'jd_input',
     'analyzing',
-    'report',
-    'micro_intro',
     'chat',
     'comparison',
     'final_report',
@@ -55,17 +50,17 @@ export const shouldPreferReportOnResumeClick = (resume: ResumeSummary, isIntervi
 
 export const inferDiagnosisTargetStepFromSummary = (
   resume: ResumeSummary
-): 'report' | 'final_report' | undefined => {
+): 'final_report' | undefined => {
   const latestStep = String((resume as any)?.latestAnalysisStep || '').trim().toLowerCase();
-  if (latestStep === 'final_report' || latestStep === 'comparison' || latestStep === 'interview_report') {
+  if (latestStep === 'final_report' || latestStep === 'interview_report') {
     return 'final_report';
   }
-  if (latestStep === 'report' || latestStep === 'micro_intro' || latestStep === 'chat') {
-    return 'report';
+  if (latestStep === 'comparison' || latestStep === 'report' || latestStep === 'chat') {
+    return 'final_report';
   }
   const progress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
   if (progress >= 95) return 'final_report';
-  if (progress >= 60) return 'report';
+  if (progress >= 60) return 'final_report';
   return undefined;
 };
 
@@ -92,26 +87,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   isReading,
   isInterviewMode,
   pointsRemaining,
-  onRediagnoseResume,
 }) => {
-  const [openMenuResumeId, setOpenMenuResumeId] = React.useState<number | null>(null);
-  const menuWrapperRef = React.useRef<HTMLDivElement | null>(null);
-
-  React.useEffect(() => {
-    if (!openMenuResumeId) return;
-    const onPointerDown = (event: MouseEvent | TouchEvent) => {
-      const target = event.target as Node | null;
-      if (target && menuWrapperRef.current?.contains(target)) return;
-      setOpenMenuResumeId(null);
-    };
-    document.addEventListener('mousedown', onPointerDown);
-    document.addEventListener('touchstart', onPointerDown, { passive: true });
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      document.removeEventListener('touchstart', onPointerDown);
-    };
-  }, [openMenuResumeId]);
-
   const filtered = (allResumes || []).filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -144,64 +120,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               <p className="text-slate-600 dark:text-slate-500 text-[12px] font-medium leading-normal line-clamp-1">
                 上次修改: {formatResumeModifiedAt(resume.date)}
               </p>
-              {(resume.analyzed || isInterviewMode) && (
-                <DiagnosisProgressBar
-                  resume={resume}
-                  isInterviewMode={!!isInterviewMode}
-                  onDiagnosisStageClick={(step) => onSelectResume(resume.id, true, step)}
-                />
-              )}
             </div>
-
-            {!isInterviewMode && !!resume.analyzed && (
-              <div
-                ref={openMenuResumeId === resume.id ? menuWrapperRef : null}
-                className="absolute top-1 right-1 z-10"
-              >
-                <button
-                  type="button"
-                  aria-label="更多操作"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    setOpenMenuResumeId((prev) => (prev === resume.id ? null : resume.id));
-                  }}
-                  className="size-9 flex items-center justify-center rounded-full text-slate-300 hover:text-slate-600 dark:text-slate-600 dark:hover:text-white transition-colors transition-all active:scale-90"
-                >
-                  <span className="material-symbols-outlined" style={{ fontSize: '20px' }}>
-                    more_vert
-                  </span>
-                </button>
-                {openMenuResumeId === resume.id && (
-                  <div
-                    role="menu"
-                    className="absolute right-0 top-10 w-32 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setOpenMenuResumeId(null);
-                        void onRediagnoseResume?.(resume.id);
-                      }}
-                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 flex items-center gap-2 transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">restart_alt</span>
-                      重新诊断
-                    </button>
-                  </div>
-                )}
-                {openMenuResumeId === resume.id && (
-                  <div
-                    className="fixed inset-0 z-[45]"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenMenuResumeId(null);
-                    }}
-                  />
-                )}
-              </div>
-            )}
 
             <div className="shrink-0 flex items-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600" style={{ fontSize: '18px' }}>
@@ -220,7 +139,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="z-10" />
           <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">
-            {isInterviewMode ? 'AI 面试' : 'AI 诊断'}
+            {isInterviewMode ? 'AI 面试' : 'AI 优化'}
           </h1>
           <div className="w-10" />
         </div>
@@ -254,12 +173,12 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
             </div>
             <div className="flex flex-col min-w-0 pr-2">
               <h2 className="text-base font-black mb-0.5 text-white tracking-wide">
-                {isInterviewMode ? '模拟面试' : '简历诊断'}
+                {isInterviewMode ? '模拟面试' : '简历优化'}
               </h2>
               <p className="text-[11px] text-white/90 leading-tight font-medium whitespace-nowrap overflow-hidden text-ellipsis">
                 {isInterviewMode
                   ? 'AI 面试官将基于简历提问，模拟真实面试场景。'
-                  : 'AI 将全方位诊断亮点并提供专业优化建议。'}
+                  : 'AI 将基于 JD 与职业画像生成针对性的优化方案。'}
               </p>
             </div>
           </div>

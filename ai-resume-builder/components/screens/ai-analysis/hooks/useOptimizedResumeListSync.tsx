@@ -67,7 +67,7 @@ export const useOptimizedResumeListSync = ({
       }) ||
       Object.values(rowData?.interviewSessions || {}).some((s: any) => {
         const chatMode = String(s?.chatMode || '').trim().toLowerCase();
-        if (chatMode !== 'interview' && chatMode !== 'micro') return false;
+        if (chatMode !== 'interview' && chatMode !== 'analysis') return false;
         return Array.isArray(s?.messages) && s.messages.length > 0;
       })
     );
@@ -189,7 +189,7 @@ export const useOptimizedResumeListSync = ({
         const chatMode = String(session?.chatMode || '').trim().toLowerCase();
         if (chatMode) return chatMode === 'interview';
         const legacyStep = String(session?.step || '').trim().toLowerCase();
-        if (legacyStep === 'final_report' || legacyStep === 'comparison' || legacyStep === 'report' || legacyStep === 'micro_intro') {
+        if (legacyStep === 'final_report' || legacyStep === 'comparison' || legacyStep === 'report') {
           return false;
         }
         if (legacyStep === 'chat' || legacyStep === 'interview_report') {

@@ -32,7 +32,6 @@ export const buildInterviewSummaryPrompt = (timingContext?: string) =>
 
 export const buildInterviewWrappedMessage = ({
   isInterviewChat,
-  isMicroInterview,
   isStartPhase,
   cleanTextForWrap,
   isAffirmative,
@@ -49,7 +48,6 @@ export const buildInterviewWrappedMessage = ({
   reverseQaMaxQuestions = 3,
 }: {
   isInterviewChat: boolean;
-  isMicroInterview?: boolean;
   isStartPhase: boolean;
   cleanTextForWrap: string;
   isAffirmative: (v: string) => boolean;
@@ -66,16 +64,7 @@ export const buildInterviewWrappedMessage = ({
   reverseQaMaxQuestions?: number;
 }) => {
   if (!isInterviewChat) {
-    if (!isMicroInterview) return hasText ? textToSend : (hasAudio ? '（语音）' : '');
-    return `[MICRO_INTERVIEW_MODE]
-【你是“微访谈补充助手”。目标是通过最少轮次补齐关键信息（背景、动作、结果、量化证据），用于生成最终诊断报告。
-规则：
-1. 每轮先给一句简短反馈，再提出1个最关键追问。
-2. 若用户回答仍空泛，继续追问，不要结束。
-3. 当你判断信息已足够支撑最终诊断（核心经历、动作与结果已清晰，且无关键缺口）时，必须仅输出“结束微访谈”（不要附加任何其他内容）。
-4. 输出纯文本，不要使用 Markdown。】
-
-候选人回答：${cleanTextForWrap}`;
+    return hasText ? textToSend : (hasAudio ? '（语音）' : '');
   }
   // Startup command flow removed: first user message is always treated as
   // an answer to the warmup question rather than a "start interview" command.

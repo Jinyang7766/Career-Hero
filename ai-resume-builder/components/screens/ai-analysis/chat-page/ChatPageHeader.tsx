@@ -1,7 +1,7 @@
 import React from 'react';
 import { confirmDialog } from '../../../../src/ui/dialogs';
 import BackButton from '../../../shared/BackButton';
-import { AI_AVATAR_FALLBACK, MICRO_INTERVIEW_AVATAR } from './chat-page-utils';
+import { AI_AVATAR_FALLBACK } from './chat-page-utils';
 
 type Props = {
   isInterviewMode: boolean;
@@ -54,7 +54,7 @@ export const ChatPageHeader: React.FC<Props> = ({
         <BackButton onClick={handleStepBack} className="-ml-1 size-9" iconClassName="text-[22px]" />
         <div className="size-10 rounded-full overflow-hidden">
           <img
-            src={isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR}
+            src={aiAvatarUrl}
             onError={(e) => {
               (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
             }}
@@ -63,7 +63,7 @@ export const ChatPageHeader: React.FC<Props> = ({
         </div>
         <div>
           <h3 className="font-bold text-slate-900 dark:text-white leading-tight">
-            {isInterviewMode ? interviewerTitle : 'AI 微访谈助手'}
+              {interviewerTitle}
           </h3>
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">在线</span>
@@ -86,7 +86,7 @@ export const ChatPageHeader: React.FC<Props> = ({
             <button
               onClick={async () => {
                 setMenuOpen(false);
-                if (await confirmDialog(isInterviewMode ? '重新开始将初始化全部设置并清空当前面试记录，确认继续吗？' : '确定要重新开始吗？当前面试记录将被清空。')) {
+                if (await confirmDialog('重新开始将初始化全部设置并清空当前面试记录，确认继续吗？')) {
                   onInterruptThinking();
                   onRestartInterview();
                 }
@@ -100,7 +100,7 @@ export const ChatPageHeader: React.FC<Props> = ({
             <button
               onClick={async () => {
                 setMenuOpen(false);
-                if (await confirmDialog(isInterviewMode ? '确认结束面试并生成总结吗？' : '确认结束微访谈并生成最终诊断报告吗？')) {
+                if (await confirmDialog('确认结束面试并生成总结吗？')) {
                   onInterruptThinking();
                   onEndInterview();
                 }
@@ -108,7 +108,7 @@ export const ChatPageHeader: React.FC<Props> = ({
               className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2 whitespace-nowrap"
             >
               <span className="material-symbols-outlined text-[18px]">logout</span>
-              {isInterviewMode ? '结束面试' : '结束微访谈'}
+              结束面试
             </button>
           </div>
         )}

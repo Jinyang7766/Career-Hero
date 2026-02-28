@@ -8,7 +8,7 @@ describe('rediagnose retain interview progress', () => {
   it('keeps interview chat sessions including legacy scene-key records', () => {
     const kept = retainInterviewSessionsForRediagnose({
       'k1': { chatMode: 'interview', messages: [{ id: 'm1' }] },
-      'k2': { chatMode: 'micro', messages: [{ id: 'm2' }] },
+      'k2': { chatMode: 'analysis', messages: [{ id: 'm2' }] },
       'jd_123__technical__comprehensive__scene_s_1': {
         messages: [{ id: 'm3' }],
         interviewType: 'technical',
@@ -45,9 +45,9 @@ describe('rediagnose retain interview progress', () => {
           step: 'chat',
           state: 'paused',
         },
-        // Explicit micro row should be dropped.
-        'jd_999__technical__comprehensive__micro': {
-          chatMode: 'micro',
+        // Explicit non-interview row should be dropped.
+        'jd_999__technical__comprehensive__analysis': {
+          chatMode: 'analysis',
           jdKey: 'jd_999',
           interviewType: 'technical',
           interviewMode: 'comprehensive',

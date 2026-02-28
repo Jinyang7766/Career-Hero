@@ -31,7 +31,7 @@ export const useReportSnapshotRestore = ({
   sourceResumeIdRef,
 }: Params) => {
   useEffect(() => {
-    if (currentStep !== 'report') return;
+    if (currentStep !== 'final_report') return;
     if (score > 0 || suggestionsLength > 0 || report) return;
 
     const last = loadLastAnalysis();

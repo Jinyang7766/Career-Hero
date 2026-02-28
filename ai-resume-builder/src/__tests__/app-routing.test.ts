@@ -8,6 +8,8 @@ describe('app-routing', () => {
     expect(viewToPath(View.AI_ANALYSIS)).toBe('/ai-analysis');
     expect(viewToPath(View.AI_INTERVIEW)).toBe('/ai-interview');
     expect(viewToPath(View.PROFILE)).toBe('/profile');
+    expect(viewToPath(View.CAREER_PROFILE)).toBe('/career-profile');
+    expect(viewToPath(View.CAREER_PROFILE_RESULT)).toBe('/career-profile/result');
     expect(viewToPath(View.LOGIN)).toBe('/login');
   });
 
@@ -16,6 +18,8 @@ describe('app-routing', () => {
     expect(pathToView('/ai-analysis')).toBe(View.AI_ANALYSIS);
     expect(pathToView('/ai-interview')).toBe(View.AI_INTERVIEW);
     expect(pathToView('/profile')).toBe(View.PROFILE);
+    expect(pathToView('/career-profile')).toBe(View.CAREER_PROFILE);
+    expect(pathToView('/career-profile/result')).toBe(View.CAREER_PROFILE_RESULT);
     expect(pathToView('/login')).toBe(View.LOGIN);
   });
 
@@ -24,4 +28,3 @@ describe('app-routing', () => {
     expect(pathToView('/unknown-route')).toBe(View.LOGIN);
   });
 });
-

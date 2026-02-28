@@ -41,7 +41,7 @@ const isInterviewSceneSession = (sessionKey: string, session: any, interviewSess
   if (chatMode) return chatMode === 'interview';
 
   const legacyStep = String(session?.step || '').trim().toLowerCase();
-  if (legacyStep === 'final_report' || legacyStep === 'comparison' || legacyStep === 'report' || legacyStep === 'micro_intro') {
+  if (legacyStep === 'final_report' || legacyStep === 'comparison' || legacyStep === 'report') {
     return false;
   }
   if (legacyStep === 'chat' || legacyStep === 'interview_report') {

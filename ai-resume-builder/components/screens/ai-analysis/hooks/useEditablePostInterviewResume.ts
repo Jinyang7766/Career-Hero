@@ -17,10 +17,13 @@ export const useEditablePostInterviewResume = ({
   }, [generatedResume]);
 
   const handleCompleteAndSaveClick = async () => {
-    if (!onCompleteAndSave || isSaving) return;
+    if (!onCompleteAndSave || isSaving) return false;
     setIsSaving(true);
     try {
       await onCompleteAndSave(editableGeneratedResume);
+      return true;
+    } catch {
+      return false;
     } finally {
       setIsSaving(false);
     }
@@ -117,4 +120,3 @@ export const useEditablePostInterviewResume = ({
     getDisplayDate,
   };
 };
-

@@ -311,6 +311,57 @@ def _build_suggestions_context(suggestions):
     return normalized_suggestions, ('\n'.join(suggestions_text_blocks) if suggestions_text_blocks else '无')
 
 
+def _build_career_profile_context(career_profile):
+    if not isinstance(career_profile, dict):
+        return '未提供'
+
+    summary = str(
+        career_profile.get('summary')
+        or career_profile.get('profileSummary')
+        or career_profile.get('careerSummary')
+        or ''
+    ).strip()
+    experiences = career_profile.get('experiences') or career_profile.get('careerFacts') or []
+    core_skills = career_profile.get('coreSkills') or career_profile.get('skills') or []
+    constraints = career_profile.get('constraints') or career_profile.get('hardConstraints') or []
+
+    lines = []
+    if summary:
+        lines.append(f"- 画像摘要：{summary}")
+    if isinstance(core_skills, list) and core_skills:
+        skills = [str(x).strip() for x in core_skills[:12] if str(x).strip()]
+        if skills:
+            lines.append(f"- 核心能力：{'、'.join(skills)}")
+    if isinstance(experiences, list) and experiences:
+        lines.append("- 关键经历：")
+        for idx, item in enumerate(experiences[:8], start=1):
+            if not isinstance(item, dict):
+                continue
+            title = str(item.get('title') or item.get('name') or f'经历{idx}').strip()
+            period = str(item.get('period') or '').strip()
+            organization = str(item.get('organization') or item.get('company') or '').strip()
+            actions = str(item.get('actions') or item.get('action') or '').strip()
+            results = str(item.get('results') or item.get('result') or '').strip()
+            segments = [f"{idx}. {title}"]
+            if period:
+                segments.append(f"时间：{period}")
+            if organization:
+                segments.append(f"组织：{organization}")
+            if actions:
+                segments.append(f"行动：{actions[:160]}")
+            if results:
+                segments.append(f"结果：{results[:160]}")
+            lines.append("；".join(segments))
+    if isinstance(constraints, list) and constraints:
+        constraints_text = [str(x).strip() for x in constraints[:8] if str(x).strip()]
+        if constraints_text:
+            lines.append(f"- 使用约束：{'；'.join(constraints_text)}")
+
+    if not lines:
+        return '未提供'
+    return '\n'.join(lines)
+
+
 def _extract_section_text(resume, section: str) -> str:
     sec = str(section or '').strip().lower()
     if sec == 'summary':
@@ -538,6 +589,7 @@ def generate_optimized_resume(
     chat_history,
     score,
     suggestions,
+    career_profile=None,
 ):
     if not resume_data:
         raise ValueError('需要提供简历数据')
@@ -553,6 +605,7 @@ def generate_optimized_resume(
             formatted_chat += f"{role}: {msg.get('text', '')}\n"
 
         normalized_suggestions, suggestions_context = _build_suggestions_context(suggestions)
+        career_profile_context = _build_career_profile_context(career_profile)
         resume_info = format_resume_for_ai(resume_data)
         chat_info = formatted_chat if formatted_chat else '无对话历史'
 
@@ -568,20 +621,24 @@ def generate_optimized_resume(
 2. 对话历史：
 {chat_info}
 
-3. 当前评分：
+3. 用户职业画像（可能包含简历外经历）：
+{career_profile_context}
+
+4. 当前评分：
 {score}/100
 
-4. 优化建议（必须尽量落实到最终简历）：
+5. 优化建议（必须尽量落实到最终简历）：
 {suggestions_context}
 
 **输出要求（精简版）**
 1. 仅返回 JSON。
 2. 输出可直接投递的终稿，不要说明性文字与占位符（XX/TBD/示例等）。
-3. 保持事实边界：不得虚构公司、项目、时间线、证书。
-4. 无法确认数字时用中性结果口径，不得编造具体值。
-5. workExps/projects 的描述必须是完整自然语句，且至少包含“动作/方法/结果”中的两项。
-6. suggestions 指向的薄弱内容必须落实改写，不得大段原文照搬。
-7. personalInfo 中已有 name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
+3. 保持事实边界：事实来源仅限“原始简历 + 用户职业画像 + 对话历史”。
+4. 不得虚构公司、项目、时间线、证书；无法确认时必须保持留白或中性表述。
+5. 无法确认数字时用中性结果口径，不得编造具体值。
+6. workExps/projects 的描述必须是完整自然语句，且至少包含“动作/方法/结果”中的两项。
+7. suggestions 指向的薄弱内容必须落实改写，不得大段原文照搬。
+8. personalInfo 中已有 name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
 
 **输出格式**
 {{
@@ -668,6 +725,9 @@ def generate_optimized_resume(
 
 原始简历：
 {resume_info}
+
+用户职业画像：
+{career_profile_context}
 
 候选新简历（第一版）：
 {json.dumps(generated, ensure_ascii=False)}

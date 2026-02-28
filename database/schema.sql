@@ -5,10 +5,14 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     name VARCHAR(255),
     avatar_url TEXT,
+    deletion_pending_until TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deletion_pending_until TIMESTAMP WITH TIME ZONE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS career_profile_latest JSONB;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS career_profile_history JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Create resumes table
 CREATE TABLE IF NOT EXISTS resumes (
@@ -40,6 +44,9 @@ CREATE TABLE IF NOT EXISTS ai_suggestion_feedback (
 CREATE INDEX IF NOT EXISTS idx_resumes_user_id ON resumes(user_id);
 CREATE INDEX IF NOT EXISTS idx_resumes_created_at ON resumes(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+CREATE INDEX IF NOT EXISTS idx_users_deletion_pending_until
+    ON users(deletion_pending_until)
+    WHERE deletion_pending_until IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_ai_feedback_user_id ON ai_suggestion_feedback(user_id);
 CREATE INDEX IF NOT EXISTS idx_ai_feedback_resume_id ON ai_suggestion_feedback(resume_id);
 CREATE INDEX IF NOT EXISTS idx_ai_feedback_created_at ON ai_suggestion_feedback(created_at DESC);

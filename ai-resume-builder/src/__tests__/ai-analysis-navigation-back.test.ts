@@ -14,27 +14,16 @@ describe('popHistoryBackTarget', () => {
     expect(result.targetStep).toBe('resume_select');
   });
 
-  it('maps report->analyzing history to jd_input', () => {
-    const result = popHistoryBackTarget(['analyzing'], 'report');
+  it('maps final_report->analyzing history to jd_input', () => {
+    const result = popHistoryBackTarget(['analyzing'], 'final_report');
     expect(result.remainingHistory).toEqual([]);
     expect(result.targetStep).toBe('jd_input');
   });
 
-  it('never returns analyzing when back from report if earlier step exists', () => {
-    const result = popHistoryBackTarget(['jd_input', 'analyzing'], 'report');
+  it('never returns analyzing when back from final_report if earlier step exists', () => {
+    const result = popHistoryBackTarget(['jd_input', 'analyzing'], 'final_report');
     expect(result.remainingHistory).toEqual([]);
     expect(result.targetStep).toBe('jd_input');
   });
 
-  it('maps report->micro_intro history to jd_input', () => {
-    const result = popHistoryBackTarget(['micro_intro'], 'report');
-    expect(result.remainingHistory).toEqual([]);
-    expect(result.targetStep).toBe('jd_input');
-  });
-
-  it('skips micro_intro from report when earlier step exists', () => {
-    const result = popHistoryBackTarget(['resume_select', 'micro_intro'], 'report');
-    expect(result.remainingHistory).toEqual([]);
-    expect(result.targetStep).toBe('resume_select');
-  });
 });

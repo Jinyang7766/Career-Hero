@@ -1,8 +1,10 @@
 import { AICacheService } from '../../../src/ai-cache-service';
 import type { MutableRefObject } from 'react';
+import { buildCareerProfileFingerprint, normalizeCareerProfile } from '../../../src/career-profile-utils';
 
 type Params = {
   resumeData: any;
+  careerProfile?: any;
   jdText: string;
   getBackendAuthToken: () => Promise<string>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
@@ -73,6 +75,7 @@ const buildIndependentBreakdown = (
 
 export const runRealAnalysis = async ({
   resumeData,
+  careerProfile,
   jdText,
   getBackendAuthToken,
   showToast,
@@ -88,12 +91,14 @@ export const runRealAnalysis = async ({
 }: Params) => {
   if (!resumeData) return null;
   let controller: AbortController | null = null;
+  const normalizedCareerProfile = normalizeCareerProfile(careerProfile || null);
+  const careerProfileFingerprint = buildCareerProfileFingerprint(normalizedCareerProfile);
 
   try {
     console.log('Generating real AI analysis via backend API...');
 
     if (!bypassCache) {
-      const cachedResult = await AICacheService.get(resumeData, jdText);
+      const cachedResult = await AICacheService.get(resumeData, jdText, careerProfileFingerprint);
       if (cachedResult) {
         const cachedSummary = String(cachedResult.summary || '').trim();
         if (cachedSummary.length < 80) {
@@ -125,6 +130,7 @@ export const runRealAnalysis = async ({
     const masker = createMasker();
     const maskedResumeData = masker.maskObject(resumeData);
     const maskedJdText = masker.maskText(jdText || '');
+    const maskedCareerProfile = normalizedCareerProfile ? masker.maskObject(normalizedCareerProfile) : null;
     const ragEnabled = getRagEnabledFlag();
 
     let response: Response;
@@ -145,6 +151,7 @@ export const runRealAnalysis = async ({
       body: JSON.stringify({
         resumeData: maskedResumeData,
         jobDescription: maskedJdText,
+        careerProfile: maskedCareerProfile,
         analysisStage: 'pre_interview',
         ragEnabled,
         interviewType
@@ -174,7 +181,6 @@ export const runRealAnalysis = async ({
 
     const analysisResult = {
       summary: unmaskedResult.summary || 'AI诊断完成',
-      microInterviewFirstQuestion: String(unmaskedResult.microInterviewFirstQuestion || '').trim(),
       targetCompany: unmaskedResult.targetCompany || '',
       targetCompanyConfidence: Number(unmaskedResult.targetCompanyConfidence || 0),
       strengths: unmaskedResult.strengths || [],
@@ -193,7 +199,7 @@ export const runRealAnalysis = async ({
       suggestions: unmaskedResult.suggestions
     };
 
-    await AICacheService.set(resumeData, jdText, analysisResult);
+    await AICacheService.set(resumeData, jdText, analysisResult, careerProfileFingerprint);
     return analysisResult;
   } catch (error: any) {
     const isAbort = String(error?.name || '') === 'AbortError';

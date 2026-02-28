@@ -4,8 +4,6 @@ type Step =
   | 'resume_select'
   | 'jd_input'
   | 'analyzing'
-  | 'report'
-  | 'micro_intro'
   | 'chat'
   | 'interview_report_loading'
   | 'interview_report'
@@ -24,17 +22,15 @@ export const popHistoryBackTarget = (
   while (targetStep && targetStep === currentStep && remainingHistory.length > 0) {
     targetStep = remainingHistory.pop();
   }
-  // Report page should never go back to transient/visually-equivalent steps.
-  // `micro_intro` currently reuses a near-identical report UI, so stepping into it
-  // makes users feel "back needs two taps".
+  // Final report page should never go back to transient steps.
   while (
-    currentStep === 'report' &&
-    (targetStep === 'analyzing' || targetStep === 'micro_intro') &&
+    currentStep === 'final_report' &&
+    targetStep === 'analyzing' &&
     remainingHistory.length > 0
   ) {
     targetStep = remainingHistory.pop();
   }
-  if (currentStep === 'report' && (targetStep === 'analyzing' || targetStep === 'micro_intro')) {
+  if (currentStep === 'final_report' && targetStep === 'analyzing') {
     targetStep = 'jd_input';
   }
   if (!targetStep || targetStep === currentStep) {
@@ -67,7 +63,7 @@ export const useAiAnalysisNavigation = ({
   });
   const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
     const stored = localStorage.getItem('ai_chat_prev_step');
-    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'report', 'micro_intro', 'interview_report_loading', 'interview_report', 'comparison', 'final_report'];
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'interview_report_loading', 'interview_report', 'comparison', 'final_report'];
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
@@ -91,10 +87,10 @@ export const useAiAnalysisNavigation = ({
   const openChat = (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => {
     if (source === 'internal') {
       setIsInterviewEntry(false);
-      // If chat is auto-opened right after analysis, treat report as previous step
-      // so back navigation returns to report instead of the transient analyzing screen.
+      // If chat is auto-opened right after analysis, treat final_report as previous
+      // step so back navigation returns to final report instead of analyzing.
       const prevStep = currentStep === 'analyzing'
-        ? 'report'
+        ? 'final_report'
         : (currentStep !== 'chat' ? currentStep : lastChatStep);
       if (prevStep && prevStep !== 'chat') {
         setLastChatStep(prevStep);
@@ -158,20 +154,11 @@ export const useAiAnalysisNavigation = ({
       currentStepRef.current = replacedFrom;
       return;
     } else if (currentStep === 'final_report') {
-      setCurrentStep('comparison');
-      currentStepRef.current = 'comparison';
-    } else if (currentStep === 'micro_intro') {
-      setCurrentStep('report');
-      currentStepRef.current = 'report';
-    } else if (currentStep === 'report') {
-      if (goBack) {
-        goBack();
-        return;
-      }
-      setCurrentStep('resume_select');
-      currentStepRef.current = 'resume_select';
+      setCurrentStep('jd_input');
+      currentStepRef.current = 'jd_input';
     } else if (goBack) {
       goBack();
+      return;
     }
   };
 

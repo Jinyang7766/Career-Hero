@@ -267,7 +267,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
     return '无';
   })();
   const startButtonLabel = (() => {
-    if (!isInterviewMode) return `开始诊断（${USAGE_POINT_COST.analysis}积分）`;
+    if (!isInterviewMode) return `开始简历优化（${USAGE_POINT_COST.analysis}积分）`;
     if (shouldShowContinueInterview) return '继续面试';
     const interviewCost = interviewMode === 'simple'
       ? USAGE_POINT_COST.interview_simple
@@ -337,7 +337,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                 <span className={`material-symbols-outlined ${statusTone.text}`}>description</span>
               </div>
               <div className="flex flex-col">
-                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isInterviewMode ? '面试简历' : '当前诊断简历'}</h4>
+                <h4 className="text-[10px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">{isInterviewMode ? '面试简历' : '当前优化简历'}</h4>
                 <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5 line-clamp-1">{selectedResumeLabel}</p>
               </div>
             </div>
@@ -560,7 +560,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   <p className="text-[15px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed px-2">
                     {isInterviewMode
                       ? '您未填写职位描述，无法生成针对性的模拟面试题。是否坚持继续通用面试？'
-                      : '您未填写职位描述，无法进行岗位定向匹配。是否坚持继续通用诊断？'}
+                      : '您未填写职位描述，无法进行岗位定向优化。是否坚持继续通用优化？'}
                   </p>
                 </div>
               </div>
@@ -582,7 +582,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   {isStarting ? (
                     <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                   ) : null}
-                  {isInterviewMode ? '坚持进入面试' : '坚持继续诊断'}
+                  {isInterviewMode ? '坚持进入面试' : '坚持继续优化'}
                 </button>
                 <button
                   onClick={() => setShowJdEmptyModal(false)}

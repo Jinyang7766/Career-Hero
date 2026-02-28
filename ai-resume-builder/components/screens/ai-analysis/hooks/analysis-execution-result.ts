@@ -119,7 +119,6 @@ export const buildAnalysisResultSnapshot = ({
 
   const report: AnalysisReport = {
     summary: aiAnalysisResult.summary || 'AI诊断完成，请查看详细报告。',
-    microInterviewFirstQuestion: String((aiAnalysisResult as any).microInterviewFirstQuestion || '').trim(),
     strengths: aiAnalysisResult.strengths || ['结构清晰'],
     weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
     missingKeywords: aiAnalysisResult.missingKeywords,

@@ -35,7 +35,7 @@ export const buildInterviewSessionStorageKey = ({
   targetCompany?: string;
   interviewFocus?: string;
   resumeId?: string | number | null;
-  chatMode: 'interview' | 'micro';
+  chatMode: 'interview' | 'analysis';
 }) => {
   const baseKey = makeInterviewSessionKey(jdText, interviewType, interviewMode);
   if (chatMode !== 'interview') return baseKey;
@@ -57,7 +57,7 @@ export const buildAnalysisSessionStorageKey = ({
   jdKey: string;
   interviewType: any;
   interviewMode?: any;
-  chatMode: 'interview' | 'micro';
+  chatMode: 'interview' | 'analysis';
 }) => `${makeInterviewScopedKey(jdKey, interviewType, interviewMode)}__${chatMode}`;
 
 export const isSessionModeMatched = (session: any, desiredMode: string) => {

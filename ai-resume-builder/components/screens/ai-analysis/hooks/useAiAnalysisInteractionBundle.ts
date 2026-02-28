@@ -1,10 +1,8 @@
 import type React from 'react';
 import { useAiAnalysisCommonActions } from './useAiAnalysisCommonActions';
-import { useDiagnosisEntryActions } from './useDiagnosisEntryActions';
 import { useInterviewEntryActions } from './useInterviewEntryActions';
 import { useInterviewVoice } from './useInterviewVoice';
 import { countInterviewAnsweredMessages, getEndChatCommand } from '../interview-chat-helpers';
-import type { QuotaKind } from './useUsageQuota';
 
 type Params = {
   currentStep: string;
@@ -20,7 +18,6 @@ type Params = {
   targetCompany?: string;
   resumeData: any;
   makeJdKey: (v: string) => string;
-  consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
   currentUserId?: string;
   setAllResumes?: (updater: (prev: any[]) => any[]) => void;
   setInterviewPlan: React.Dispatch<React.SetStateAction<string[]>>;
@@ -29,7 +26,6 @@ type Params = {
   clearInterviewSceneState?: (...args: any[]) => Promise<void>;
   setTargetCompany?: (v: string) => void;
   setJdText?: (v: string) => void;
-  onRetryAnalysisFromIntro?: () => void;
   isInterviewMode?: boolean;
   chatMessages: any[];
   chatIntroScheduledRef: React.MutableRefObject<boolean>;
@@ -53,7 +49,6 @@ export const useAiAnalysisInteractionBundle = ({
   targetCompany,
   resumeData,
   makeJdKey,
-  consumeUsageQuota,
   currentUserId,
   setAllResumes,
   setInterviewPlan,
@@ -63,7 +58,6 @@ export const useAiAnalysisInteractionBundle = ({
   persistAnalysisSessionState,
   setTargetCompany,
   setJdText,
-  onRetryAnalysisFromIntro,
   isInterviewMode,
   chatMessages,
   chatIntroScheduledRef,
@@ -80,24 +74,8 @@ export const useAiAnalysisInteractionBundle = ({
   const {
     getScoreColor,
     handleResumeSelectBack,
-    handleRetryAnalysisFromIntro,
   } = useAiAnalysisCommonActions({
     navigateToView,
-    navigateToStep: navigateToStep as any,
-    onRetryAnalysisFromIntro,
-  });
-
-  const {
-    handleStartMicroInterview,
-    microInterviewActionLabel,
-  } = useDiagnosisEntryActions({
-    openChat,
-    navigateToStep: navigateToStep as any,
-    resumeData,
-    jdText,
-    makeJdKey,
-    consumeUsageQuota,
-    persistAnalysisSessionState,
   });
 
   const { handleRestartInterview, handleStartInterviewFromFinalReport } = useInterviewEntryActions({
@@ -122,7 +100,7 @@ export const useAiAnalysisInteractionBundle = ({
   });
 
   const endInterviewFromChat = () => {
-    void handleSendMessage(getEndChatCommand(isInterviewMode), null);
+    void handleSendMessage(getEndChatCommand(), null);
   };
   const skipInterviewQuestionFromChat = () => {
     void handleSendMessage('我选择跳过本题，请给出该题参考回复并进入下一题。', null, {
@@ -136,9 +114,6 @@ export const useAiAnalysisInteractionBundle = ({
     ...voice,
     getScoreColor,
     handleResumeSelectBack,
-    handleStartMicroInterview,
-    microInterviewActionLabel,
-    handleRetryAnalysisFromIntro,
     handleRestartInterview,
     handleStartInterviewFromFinalReport,
     endInterviewFromChat,

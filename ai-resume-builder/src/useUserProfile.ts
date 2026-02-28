@@ -62,6 +62,48 @@ export interface UserProfile {
     weaknesses?: string[];
     missingKeywords?: string[];
   }>;
+  career_profile_latest?: {
+    id: string;
+    createdAt: string;
+    source?: string;
+    summary: string;
+    careerHighlights?: string[];
+    coreSkills?: string[];
+    constraints?: string[];
+    experiences?: Array<{
+      title: string;
+      period?: string;
+      organization?: string;
+      actions?: string;
+      results?: string;
+      skills?: string[];
+      inResume?: 'yes' | 'no' | 'unknown';
+      confidence?: 'high' | 'medium' | 'low';
+      evidence?: string;
+    }>;
+    rawInput?: string;
+  };
+  career_profile_history?: Array<{
+    id: string;
+    createdAt: string;
+    source?: string;
+    summary: string;
+    careerHighlights?: string[];
+    coreSkills?: string[];
+    constraints?: string[];
+    experiences?: Array<{
+      title: string;
+      period?: string;
+      organization?: string;
+      actions?: string;
+      results?: string;
+      skills?: string[];
+      inResume?: 'yes' | 'no' | 'unknown';
+      confidence?: 'high' | 'medium' | 'low';
+      evidence?: string;
+    }>;
+    rawInput?: string;
+  }>;
 }
 
 // 缓存项接口
@@ -134,6 +176,12 @@ const cacheWithExpiry = {
       // Ignore localStorage remove errors.
     }
   }
+};
+
+export const primeUserProfileCache = (userId: string, profile: UserProfile) => {
+  if (!userId || !profile) return;
+  cacheWithExpiry.set(userId, profile);
+  lastProfileFetchAt.set(userId, Date.now());
 };
 
 // 从localStorage获取用户信息

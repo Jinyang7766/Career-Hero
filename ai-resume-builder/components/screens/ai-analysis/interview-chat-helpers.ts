@@ -1,7 +1,6 @@
 import type { ChatMessage } from './types';
 
-export const getEndChatCommand = (isInterviewMode?: boolean) =>
-  isInterviewMode ? '结束面试' : '结束微访谈';
+export const getEndChatCommand = () => '结束面试';
 
 const NEXT_QUESTION_PREFIX_RE = /^(下一题|下一道问题|下一道具体问题|下一个问题)\s*[:：]/u;
 

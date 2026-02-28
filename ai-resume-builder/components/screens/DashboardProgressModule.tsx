@@ -25,8 +25,8 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
     const hasInterviewProgress = hasInterviewProgressByMode || hasInterviewProgressLegacy;
     const hasAnyProgress = hasDiagnosisProgress || hasInterviewProgress;
     const diagnosisActionLabel = !hasAnyProgress
-        ? '去诊断'
-        : (diagnosisProgress >= 100 ? '查看报告' : '继续诊断');
+        ? '去优化'
+        : (diagnosisProgress >= 100 ? '查看结果' : '继续优化');
     const interviewActionLabel = hasAnyProgress ? '继续面试' : '去面试';
     // Determine key metrics
     const score = (resume as any).analysisScore || (resume as any).score || (resume as any).diagnosisScore || 0;
@@ -77,7 +77,7 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
                     ) : (
                         <div className="py-2">
                             <p className="text-sm font-semibold text-white/90">你还没有最近进展</p>
-                            <p className="text-xs text-white/70 mt-1">先去诊断简历或直接开始模拟面试吧！</p>
+                            <p className="text-xs text-white/70 mt-1">先去优化简历或直接开始模拟面试吧！</p>
                         </div>
                     )}
                 </div>

@@ -14,7 +14,7 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   handleResumeSelect: (
     resumeId: string | number,
     preferReport: boolean,
-    targetStep?: 'report' | 'chat' | 'final_report'
+    targetStep?: 'chat' | 'comparison' | 'final_report'
   ) => {
     void p.handleResumeSelect(resumeId, preferReport, targetStep);
   },
@@ -22,7 +22,6 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   resumeReadState: p.resumeReadState,
   isInterviewMode: p.isInterviewMode,
   pointsRemaining: p.pointsRemaining,
-  onRediagnoseResume: p.onRediagnoseResume,
   isSameResumeId: p.isSameResumeId,
   resumeData: p.resumeData,
   targetCompany: p.targetCompany,
@@ -39,18 +38,9 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   startAnalysis: p.startAnalysis,
   onRestartCompletedInterviewScene: p.onRestartCompletedInterviewScene,
   interviewEntryConfirmPendingRef: p.interviewEntryConfirmPendingRef,
-  hasJdInput: p.hasJdInput,
   score: p.score,
   originalScore: p.originalScore,
-  report: p.report,
   getScoreColor: p.getScoreColor,
-  handleAnalyzeOtherResume: () => {
-    void p.startAnalysis(undefined, { preserveReportOnError: true, bypassCache: true });
-  },
-  handleStartMicroInterview: p.handleStartMicroInterview,
-  microInterviewActionLabel: p.microInterviewActionLabel,
-  handleRetryAnalysisFromIntro: p.handleRetryAnalysisFromIntro,
-  onInitialReportFeedback: p.onInitialReportFeedback,
   onFinalReportFeedback: p.onFinalReportFeedback,
   onInterviewReportFeedback: p.onInterviewReportFeedback,
   ToastOverlay: p.ToastOverlay,

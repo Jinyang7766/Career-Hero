@@ -7,7 +7,6 @@ try:
     from services.ai_endpoint_prompt_service import (
         ANALYSIS_PROMPT_VERSION,
         _build_analysis_prompt,
-        _resolve_micro_interview_first_question,
     )
     from services.ai_endpoint_shared_service import (
         PIIMasker,
@@ -47,7 +46,6 @@ except ImportError:
     from backend.services.ai_endpoint_prompt_service import (
         ANALYSIS_PROMPT_VERSION,
         _build_analysis_prompt,
-        _resolve_micro_interview_first_question,
     )
     from backend.services.ai_endpoint_shared_service import (
         PIIMasker,

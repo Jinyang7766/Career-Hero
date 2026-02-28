@@ -23,7 +23,6 @@ export type AiExternalEntriesParams = {
   handleResumeSelect: (
     id: string | number,
     preferReport?: boolean,
-    targetStep?: 'report' | 'chat' | 'final_report'
+    targetStep?: 'chat' | 'comparison' | 'final_report'
   ) => Promise<void> | void;
 };
-

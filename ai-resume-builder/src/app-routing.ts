@@ -9,6 +9,8 @@ export const viewToPath = (view: View) => {
     case View.ALL_RESUMES: return '/all-resumes';
     case View.AI_ANALYSIS: return '/ai-analysis';
     case View.PROFILE: return '/profile';
+    case View.CAREER_PROFILE: return '/career-profile';
+    case View.CAREER_PROFILE_RESULT: return '/career-profile/result';
     case View.EDITOR: return '/editor';
     case View.PREVIEW: return '/preview';
     case View.TEMPLATES: return '/templates';
@@ -32,6 +34,8 @@ export const pathToView = (pathname: string): View => {
   if (p.startsWith('/ai-analysis')) return View.AI_ANALYSIS;
   if (p.startsWith('/dashboard')) return View.DASHBOARD;
   if (p.startsWith('/all-resumes')) return View.ALL_RESUMES;
+  if (p.startsWith('/career-profile/result')) return View.CAREER_PROFILE_RESULT;
+  if (p.startsWith('/career-profile')) return View.CAREER_PROFILE;
   if (p.startsWith('/profile')) return View.PROFILE;
   if (p.startsWith('/editor')) return View.EDITOR;
   if (p.startsWith('/preview')) return View.PREVIEW;
@@ -50,4 +54,3 @@ export const pathToView = (pathname: string): View => {
   if (p.startsWith('/privacy-policy')) return View.PRIVACY_POLICY;
   return View.LOGIN;
 };
-

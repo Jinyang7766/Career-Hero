@@ -8,7 +8,6 @@ import type { AiAnalysisPassiveFlowsParams } from './useAiAnalysisPassiveFlows.t
 
 export const useAiAnalysisPassiveStateFlows = ({
   isInterviewMode,
-  reportMicroInterviewFirstQuestion,
   currentStep,
   chatInitialized,
   chatMessagesRef,
@@ -48,7 +47,6 @@ export const useAiAnalysisPassiveStateFlows = ({
 }: AiAnalysisPassiveFlowsParams) => {
   useChatIntroMessages({
     isInterviewMode,
-    microInterviewFirstQuestion: reportMicroInterviewFirstQuestion,
     currentStep,
     chatInitialized,
     chatMessagesRef: chatMessagesRef as any,

@@ -44,7 +44,7 @@ describe('shouldPreferReportOnResumeClick', () => {
     expect(prefer).toBe(true);
   });
 
-  it('infers report target from summary progress', () => {
+  it('infers final_report target from summary progress', () => {
     const target = inferDiagnosisTargetStepFromSummary({
       id: 'resume-4',
       title: 'D',
@@ -54,7 +54,7 @@ describe('shouldPreferReportOnResumeClick', () => {
       analyzed: true,
       thumbnail: null as any,
     } as any);
-    expect(target).toBe('report');
+    expect(target).toBe('final_report');
   });
 
   it('infers final_report target from summary latest step', () => {
@@ -63,7 +63,7 @@ describe('shouldPreferReportOnResumeClick', () => {
       title: 'E',
       date: '2026-01-01 00:00:00',
       diagnosisProgress: 0,
-      latestAnalysisStep: 'comparison',
+      latestAnalysisStep: 'final_report',
       analyzed: true,
       thumbnail: null as any,
     } as any);

@@ -48,12 +48,10 @@ def ai_chat_stream_core(data, deps):
     if (not message) and (not has_audio):
         return None, {'error': '消息内容不能为空'}, 400
 
-    is_micro_mode = (mode == 'micro_interview') or ('[MICRO_INTERVIEW_MODE]' in str(message or ''))
     clean_message = (
         str(message or '')
         .replace('[INTERVIEW_MODE]', '')
         .replace('[INTERVIEW_SUMMARY]', '')
-        .replace('[MICRO_INTERVIEW_MODE]', '')
         .strip()
     )
     # Frontend interview wrapper contains long control text plus
@@ -120,8 +118,6 @@ def ai_chat_stream_core(data, deps):
             clean_message = str(transcript).strip()
 
         if _is_low_information_answer(clean_message):
-            if is_micro_mode:
-                return None, {'response': "你的回答信息量不足。请补充这三点：你具体做了什么、怎么做的、结果数据是多少（可用区间或近似值）。"}, 200
             question = last_q or '请把你的回答说得更具体一些。'
             return None, {'response': f"你的回答信息量不足。请只补充当前问题中缺失的关键点（例如你的具体职责、行动细节、结果数据），无需整题重答。当前问题：{question}"}, 200
 
@@ -146,14 +142,6 @@ def ai_chat_stream_core(data, deps):
             break
 
     is_self_intro_q = bool(re.search(r'(自我介绍|介绍一下你自己|简单介绍一下自己)', _get_last_interviewer_question(chat_history) or ''))
-
-    def _sanitize_micro_reply(text: str) -> str:
-        value = str(text or '').replace('*', '').strip()
-        value = re.sub(r'(?:\n|^)\s*下一题[:：][\s\S]*$', '', value).strip()
-        value = re.sub(r'自我介绍时间为?\s*1分钟[。.]?', '', value).strip()
-        if re.search(r'(我是今天的面试官|下一题[:：]|请做.*自我介绍|重新进行自我介绍)', value):
-            return "请先补充一条最能体现岗位匹配度的真实经历：你具体做了什么、怎么做、结果数据是多少？"
-        return value
 
     if mode == 'interview_summary':
         prompt = f"""
@@ -191,23 +179,6 @@ def ai_chat_stream_core(data, deps):
 职位描述：{job_description if job_description else '未提供'}
 对话记录：{formatted_chat if formatted_chat else '无'}
 候选人结束指令：{clean_message if clean_message else '（无）'}
-"""
-    elif is_micro_mode:
-        prompt = f"""
-【严格角色】你是“微访谈补充助手”。
-目标：补齐岗位证据（背景、动作、结果、量化数据），用于最终诊断报告。
-规则：
-- 每轮先一句简短反馈，再提 1 个最关键追问。
-- 若回答空泛，继续追问，不要结束，不要进入下一题。
-- 仅当信息已足够支撑最终诊断时，输出“结束微访谈”。
-- 输出纯文本，不用 Markdown，不要出现“下一题：”。
-
-职位描述：{job_description if job_description else '未提供'}
-简历信息：{deps['format_resume_for_ai'](resume_data) if resume_data else '未提供'}
-诊断档案：{diagnosis_context if diagnosis_context else '未提供'}
-历史对话：{formatted_chat if formatted_chat else '微访谈刚开始'}
-候选人回答：{clean_message if clean_message else ('（语音回答见音频附件）' if has_audio else '')}
-请直接输出微访谈助手回复：
 """
     else:
         persona_prompts = {
@@ -292,11 +263,7 @@ def ai_chat_stream_core(data, deps):
                     (time.perf_counter() - req_started) * 1000.0,
                     len(text or ''),
                 )
-                done_text = text or ('请补充一个关键细节（动作、方法或结果数据）。' if is_micro_mode else '感谢你的回答，我们继续下一题。')
-                if is_micro_mode:
-                    done_text = _sanitize_micro_reply(done_text)
-                    if not done_text:
-                        done_text = "请补充你在目标岗位最相关的一段真实经历：你的职责、关键动作和结果数据。"
+                done_text = text or '感谢你的回答，我们继续下一题。'
                 yield {'type': 'done', 'text': done_text}
                 return
             except Exception as fallback_err:
@@ -339,11 +306,7 @@ def ai_chat_stream_core(data, deps):
                 chunk_count,
                 len(final_text or ''),
             )
-            done_text = final_text or ('请补充一个关键细节（动作、方法或结果数据）。' if is_micro_mode else '感谢你的回答，我们继续下一题。')
-            if is_micro_mode:
-                done_text = _sanitize_micro_reply(done_text)
-                if not done_text:
-                    done_text = "请补充你在目标岗位最相关的一段真实经历：你的职责、关键动作和结果数据。"
+            done_text = final_text or '感谢你的回答，我们继续下一题。'
             yield {'type': 'done', 'text': done_text}
         except Exception as stream_err:
             deps['logger'].error(

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { createMasker, maskChatHistory } from '../chat-payload';
 import type { QuotaKind } from './useUsageQuota';
+import { buildCareerProfileFingerprint, getLatestCareerProfile } from '../../../../src/career-profile-utils';
 
 const FINAL_REPORT_TASKS = new Map<string, Promise<any>>();
 const FINAL_REPORT_RESULTS = new Map<string, {
@@ -161,12 +162,15 @@ export const useFinalDiagnosisReportGenerator = ({
     const effectiveResume = (resumeData as any) || (postInterviewGeneratedResume as any);
     if (!effectiveResume) return;
     const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
+    const latestCareerProfile = getLatestCareerProfile(userProfile);
+    const careerProfileFingerprint = buildCareerProfileFingerprint(latestCareerProfile);
     const baseSummary = String(effectivePostInterviewSummary || finalReportSummary || '').trim();
     const summaryFingerprint = hashText(baseSummary);
     const requestKey = [
       String((effectiveResume as any)?.id || ''),
       makeJdKey(effectiveJdText),
       summaryFingerprint,
+      careerProfileFingerprint,
     ].join('|');
     if (!requestKey) return;
 
@@ -231,9 +235,8 @@ export const useFinalDiagnosisReportGenerator = ({
       return;
     }
 
-    // Only comparison flow should actively trigger final report generation.
-    // Entering an existing final_report should hydrate from persisted/cache data only.
-    if (currentStep !== 'comparison') {
+    // Final report can be triggered from comparison (legacy flow) or directly from report.
+    if (currentStep !== 'comparison' && currentStep !== 'final_report') {
       setIsGenerating(false);
       return;
     }
@@ -284,6 +287,7 @@ export const useFinalDiagnosisReportGenerator = ({
       const masker = createMasker();
       const maskedResumeData = masker.maskObject(effectiveResume);
       const maskedJdText = masker.maskText(effectiveJdText);
+      const maskedCareerProfile = latestCareerProfile ? masker.maskObject(latestCareerProfile) : null;
       const candidateFocusedSummaryPrompt = [
         baseSummary,
         '输出要求：请给出候选人综合评价，并提供 3-5 条候选人后续提升建议（如面试表达、业务能力、项目复盘、沟通协作等），不要输出简历排版或措辞修改建议。'
@@ -311,6 +315,7 @@ export const useFinalDiagnosisReportGenerator = ({
           interviewSummary: masker.maskText(candidateFocusedSummaryPrompt),
           chatHistory: maskChatHistory(chatMessagesRef.current || [], masker.maskText),
           diagnosisDossier: diagnosisDossier ? masker.maskObject(diagnosisDossier) : null,
+          careerProfile: maskedCareerProfile,
         }),
       });
       if (!resp.ok) throw new Error(`final_report_generate_failed_${resp.status}`);

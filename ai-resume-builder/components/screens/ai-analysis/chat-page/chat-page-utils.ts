@@ -2,7 +2,6 @@ import type { ChatMessage } from '../types';
 
 export const AI_AVATAR_FALLBACK =
   'https://api.dicebear.com/7.x/avataaars/svg?seed=Hiroshi&top=shortHair&clothing=blazerAndShirt';
-export const MICRO_INTERVIEW_AVATAR = '/ai-avatar-mircointro.png';
 
 export const shouldShowMessageFeedback = (msg: ChatMessage) => {
   if (msg.role !== 'model') return false;
@@ -12,7 +11,7 @@ export const shouldShowMessageFeedback = (msg: ChatMessage) => {
   if (id === 'ai-summary') return false;
   const greetingLike =
     /您好|你好/.test(text) &&
-    /我是您的\s*AI|我是你的\s*AI|微访谈助手|模拟面试官|HR面试官|复试深挖面试官/.test(text);
+    /我是您的\s*AI|我是你的\s*AI|模拟面试官|HR面试官|复试深挖面试官/.test(text);
   return !greetingLike;
 };
 

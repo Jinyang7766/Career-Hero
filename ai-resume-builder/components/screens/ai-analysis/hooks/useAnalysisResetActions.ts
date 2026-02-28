@@ -35,7 +35,7 @@ const inferChatModeFromKey = (key: string) => {
   const normalized = String(key || '').trim().toLowerCase();
   if (!normalized) return '';
   if (normalized.endsWith('__interview')) return 'interview';
-  if (normalized.endsWith('__micro')) return 'micro';
+  if (normalized.endsWith('__analysis')) return 'analysis';
   // Interview chat session keys include scene suffix.
   if (normalized.includes('__scene_')) return 'interview';
   return '';
@@ -90,11 +90,9 @@ const isSignatureMatched = (left: ReturnType<typeof buildSessionSignature>, righ
 export const isInterviewSessionRecordForRediagnose = (key: string, session: any) => {
   const chatMode = String(session?.chatMode || '').trim().toLowerCase();
   if (chatMode === 'interview') return true;
-  if (chatMode === 'micro') return false;
 
   const inferred = inferChatModeFromKey(key);
   if (inferred === 'interview') return true;
-  if (inferred === 'micro') return false;
 
   // Legacy interview sessions may miss chatMode and scene suffix.
   // Prefer keeping records that look like interview-scene data.
@@ -113,15 +111,15 @@ export const isInterviewAnalysisSessionRecordForRediagnose = (
 ) => {
   const chatMode = String(session?.chatMode || '').trim().toLowerCase();
   if (chatMode === 'interview') return true;
-  if (chatMode === 'micro') return false;
+  if (chatMode === 'analysis') return false;
 
   const inferred = inferChatModeFromKey(key);
   if (inferred === 'interview') return true;
-  if (inferred === 'micro') return false;
+  if (inferred === 'analysis') return false;
 
   const step = String(session?.step || '').trim().toLowerCase();
   if (step === 'interview_report') return true;
-  if (step === 'report' || step === 'micro_intro' || step === 'comparison') return false;
+  if (step === 'report' || step === 'comparison') return false;
 
   // Legacy ambiguous session: keep only if it matches a retained interview chat session.
   const signature = buildSessionSignature(key, session);

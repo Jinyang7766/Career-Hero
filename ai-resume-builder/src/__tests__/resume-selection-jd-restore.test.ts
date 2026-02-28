@@ -15,8 +15,8 @@ describe('useResumeSelection JD restore rules', () => {
     expect(shouldRestoreJdInputFromResume(true, false)).toBe(true);
   });
 
-  it('restores JD input when inferred target is report even if preferReport=false', () => {
-    expect(shouldRestoreJdInputFromResume(false, false, 'report')).toBe(true);
+  it('restores JD input when inferred target is final_report even if preferReport=false', () => {
+    expect(shouldRestoreJdInputFromResume(false, false, 'final_report')).toBe(true);
   });
 
   it('does not restore JD input in interview mode even when preferReport=true', () => {
@@ -51,7 +51,7 @@ describe('useResumeSelection JD restore rules', () => {
     expect(retained.targetCompany).toBe('company');
   });
 
-  it('uses resume summary progress to enter report when row data lacks derived fields', () => {
+  it('uses resume summary progress to enter final report when row data lacks derived fields', () => {
     const target = inferDiagnosisTargetStep(
       {
         id: 'resume-1',
@@ -65,10 +65,10 @@ describe('useResumeSelection JD restore rules', () => {
       } as any,
       undefined
     );
-    expect(target).toBe('report');
+    expect(target).toBe('final_report');
   });
 
-  it('enters report when target resume has analysis snapshot score', () => {
+  it('enters final report when target resume has analysis snapshot score', () => {
     const target = inferDiagnosisTargetStep(
       {
         id: 'resume-3',
@@ -83,7 +83,7 @@ describe('useResumeSelection JD restore rules', () => {
       null,
       undefined
     );
-    expect(target).toBe('report');
+    expect(target).toBe('final_report');
   });
 
   it('uses resume summary step to enter final report', () => {

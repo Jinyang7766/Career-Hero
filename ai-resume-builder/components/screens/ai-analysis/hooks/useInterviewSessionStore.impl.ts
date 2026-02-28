@@ -69,7 +69,7 @@ export const useInterviewSessionStore = ({
   };
   const getCurrentInterviewType = () => normalizeInterviewType(getActiveInterviewType());
   const getCurrentInterviewMode = () => normalizeInterviewMode(getActiveInterviewMode());
-  const getCurrentChatMode = () => (isInterviewMode ? 'interview' : 'micro') as 'interview' | 'micro';
+  const getCurrentChatMode = () => (isInterviewMode ? 'interview' : 'analysis') as 'interview' | 'analysis';
   const getCurrentInterviewFocus = () => normalizeSceneText(getActiveInterviewFocus());
 
   const resolveInterviewSession = (
@@ -260,7 +260,7 @@ export const useInterviewSessionStore = ({
 
     const sessions = currentResumeData.interviewSessions || {};
     if (!sessionJdText) {
-      const expectedChatMode = isInterviewMode ? 'interview' : 'micro';
+      const expectedChatMode = isInterviewMode ? 'interview' : 'analysis';
       const expectedInterviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
       const expectedInterviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode());
       const expectedTargetCompany = normalizeSceneText(targetCompany || currentResumeData?.targetCompany || '');
@@ -331,7 +331,7 @@ export const useInterviewSessionStore = ({
       targetCompany: targetCompany || currentResumeData.targetCompany || '',
       interviewFocus: getCurrentInterviewFocus(),
       resumeId: currentResumeData?.id,
-      chatMode: isInterviewMode ? 'interview' : 'micro',
+      chatMode: isInterviewMode ? 'interview' : 'analysis',
     });
     const currentSessions = currentResumeData.interviewSessions || {};
     const updatedSessions = {
@@ -344,7 +344,7 @@ export const useInterviewSessionStore = ({
         interviewMode,
         interviewFocus: getCurrentInterviewFocus(),
         targetCompany: targetCompany || currentResumeData.targetCompany || '',
-        chatMode: isInterviewMode ? 'interview' : 'micro',
+        chatMode: isInterviewMode ? 'interview' : 'analysis',
         messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
         updatedAt: new Date().toISOString(),
       },
@@ -393,7 +393,7 @@ export const useInterviewSessionStore = ({
       targetCompany: targetCompany || currentResumeData.targetCompany || '',
       interviewFocus: getCurrentInterviewFocus(),
       resumeId: currentResumeData?.id,
-      chatMode: isInterviewMode ? 'interview' : 'micro',
+      chatMode: isInterviewMode ? 'interview' : 'analysis',
     });
     const typedLegacyKey = makeInterviewSessionKey(sessionJdText, interviewType);
     const legacyJdKey = makeJdKey(sessionJdText || '__no_jd__');
@@ -406,7 +406,7 @@ export const useInterviewSessionStore = ({
     // Keep full JD legacy key cleanup for old data only.
     if (updatedSessions[legacyJdKey]) delete updatedSessions[legacyJdKey];
     if (!isInterviewMode) {
-      // Micro interview restart should clear all micro chat sessions under current JD
+      // Non-interview restart should clear all analysis chat sessions under current JD
       // regardless of legacy type/mode keys, otherwise intro may be suppressed by leftovers.
       Object.entries(updatedSessions).forEach(([key, session]: [string, any]) => {
         const chatMode = String(session?.chatMode || '').trim().toLowerCase();
@@ -416,12 +416,12 @@ export const useInterviewSessionStore = ({
         const sessionResumeId = String(session?.resumeId || '').trim();
         const resumeMatched = !sessionResumeId || sessionResumeId === currentResumeId;
         if (!resumeMatched) return;
-        if (!sessionJdText && chatMode === 'micro') {
-          // No-JD micro restart: clear all micro sessions for this resume to avoid fallback restore.
+        if (!sessionJdText && chatMode === 'analysis') {
+          // No-JD restart: clear all analysis sessions for this resume to avoid fallback restore.
           delete updatedSessions[key];
           return;
         }
-        if (chatMode === 'micro' && sessionJdKey === legacyJdKey) {
+        if (chatMode === 'analysis' && sessionJdKey === legacyJdKey) {
           delete updatedSessions[key];
         }
       });

@@ -2,14 +2,14 @@ import { useCallback } from 'react';
 import { runRealAnalysisRequest } from '../analysis-execution-runner';
 import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { confirmDialog } from '../../../../src/ui/dialogs';
-import { checkInterviewContinuationState, decideMicroInterviewNeeded } from '../analysis-execution-helpers';
+import { checkInterviewContinuationState } from '../analysis-execution-helpers';
 import { openChatWithInterviewCheckpoint } from '../interview-entry-checkpoint';
 import type { AnalysisReport, Suggestion } from '../types';
 import { buildAnalysisResultSnapshot } from './analysis-execution-result';
+import { getLatestCareerProfile } from '../../../../src/career-profile-utils';
 
 type QuotaKind =
   | 'analysis'
-  | 'micro_interview'
   | 'final_report'
   | 'interview'
   | 'interview_simple'
@@ -21,6 +21,7 @@ type Params = {
   jdText: string;
   targetCompany: string;
   setTargetCompany: (value: string) => void;
+  userProfile?: any;
   optimizedResumeId: string | number | null;
   setOptimizedResumeId: (value: string | number | null) => void;
   optimizedResumeIdRef: { current: string | number | null };
@@ -72,6 +73,7 @@ export const useAnalysisExecution = ({
   jdText,
   targetCompany,
   setTargetCompany,
+  userProfile,
   optimizedResumeId,
   setOptimizedResumeId,
   optimizedResumeIdRef,
@@ -113,9 +115,11 @@ export const useAnalysisExecution = ({
     interviewType?: string,
     opts?: { bypassCache?: boolean }
   ) => {
+    const latestCareerProfile = getLatestCareerProfile(userProfile);
     return runRealAnalysisRequest({
       interviewType,
       resumeData,
+      careerProfile: latestCareerProfile,
       jdText,
       getBackendAuthToken,
       showToast,
@@ -134,6 +138,7 @@ export const useAnalysisExecution = ({
     getBackendAuthToken,
     getRagEnabledFlag,
     jdText,
+    userProfile,
     resumeData,
     setIsFromCache,
     showToast,
@@ -337,7 +342,6 @@ export const useAnalysisExecution = ({
       const snapshotForPersist = {
         score: totalScore,
         summary: newReport.summary,
-        microInterviewFirstQuestion: newReport.microInterviewFirstQuestion || '',
         strengths: newReport.strengths,
         weaknesses: newReport.weaknesses,
         missingKeywords: newReport.missingKeywords,
@@ -390,56 +394,14 @@ export const useAnalysisExecution = ({
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: effectiveTargetCompany,
           score: totalScore,
-          step: 'report',
+          step: 'final_report',
           force: true,
         });
       } catch (stateErr) {
         console.warn('Failed to persist report_ready session state:', stateErr);
       }
       markAnalysisCompleted();
-      const shouldEnterMicroInterview = decideMicroInterviewNeeded({
-        isInterviewMode,
-        aiAnalysisResult,
-        totalScore,
-        appliedSuggestions,
-        weaknesses: newReport.weaknesses || [],
-        missingKeywords: newReport.missingKeywords || [],
-        summary: newReport.summary || '',
-      });
-      if (shouldEnterMicroInterview) {
-        if (isInterviewMode) {
-          openChatWithInterviewCheckpoint({
-            persist: persistAnalysisSessionState,
-            patch: {
-              jdText: jdText || resumeData.lastJdText || '',
-              targetCompany: effectiveTargetCompany,
-              score: totalScore,
-              step: 'chat',
-              force: true,
-            },
-            openChat,
-            source: 'internal',
-            timeoutMs: 1600,
-            label: 'interview handoff state',
-          });
-        } else {
-          try {
-            await persistAnalysisSessionState('interview_in_progress', {
-              jdText: jdText || resumeData.lastJdText || '',
-              targetCompany: effectiveTargetCompany,
-              score: totalScore,
-              step: 'chat',
-              force: true,
-            });
-          } catch (stateErr) {
-            console.warn('Failed to persist interview_in_progress session state:', stateErr);
-          }
-          navigateToStep('report');
-        }
-      } else {
-        showToast('本次诊断结果较完善，已跳过微访谈。', 'success', 2200);
-        navigateToStep('report');
-      }
+      navigateToStep('final_report');
     } catch (error) {
       if (analysisRunIdRef.current !== runId) return;
       console.error('AI analysis failed:', error);
@@ -450,7 +412,7 @@ export const useAnalysisExecution = ({
         await persistAnalysisSessionState('paused', {
           jdText: jdText || resumeData?.lastJdText || '',
           targetCompany: targetCompany || resumeData?.targetCompany || '',
-          step: opts?.preserveReportOnError ? 'report' : 'jd_input',
+          step: opts?.preserveReportOnError ? 'final_report' : 'jd_input',
           error: message || 'analysis_interrupted',
           force: true,
         });
@@ -474,7 +436,7 @@ export const useAnalysisExecution = ({
         showToast(`AI 诊断失败：${message || '网络连接异常，请稍后重试'}`, 'error', 2600);
       }
       if (opts?.preserveReportOnError) {
-        navigateToStep('report');
+        navigateToStep('final_report');
       } else {
         navigateToStep('jd_input');
       }

@@ -12,7 +12,6 @@ type Params = {
 
 export type QuotaKind =
   | 'analysis'
-  | 'micro_interview'
   | 'final_report'
   | 'interview'
   | 'interview_simple'
@@ -68,7 +67,6 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
 
   const resolveNeededPoints = (kind: QuotaKind) => {
     if (kind === 'analysis') return USAGE_POINT_COST.analysis;
-    if (kind === 'micro_interview') return USAGE_POINT_COST.micro_interview;
     if (kind === 'final_report') return USAGE_POINT_COST.final_report;
     if (kind === 'interview_simple') return USAGE_POINT_COST.interview_simple;
     if (kind === 'interview_comprehensive') return USAGE_POINT_COST.interview_comprehensive;
@@ -77,8 +75,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
   const isInterviewKind = (kind: QuotaKind) =>
     kind !== 'analysis' && kind !== 'final_report';
   const getKindLabel = (kind: QuotaKind) => {
-    if (kind === 'analysis') return '初步诊断';
-    if (kind === 'micro_interview') return '微访谈';
+    if (kind === 'analysis') return '简历优化分析';
     if (kind === 'final_report') return '最终报告';
     return '面试';
   };

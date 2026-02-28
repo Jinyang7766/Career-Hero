@@ -11,7 +11,7 @@ const FinalAnalysisLoadingPage: React.FC = () => (
     </div>
     <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">正在生成最终分析报告...</h3>
     <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-xs leading-relaxed">
-      AI 正在整合微访谈对话、简历与岗位信息，生成最终评分和优化建议。
+      AI 正在整合职业画像、简历与岗位信息，生成最终评分和优化建议。
     </p>
     <p className="text-xs text-slate-400 dark:text-slate-500 text-center mt-2 animate-pulse">
       这会需要一点时间，请耐心等待...

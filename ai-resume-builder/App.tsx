@@ -17,6 +17,8 @@ import { mapDbResumeToSummary } from './src/resume-summary-mapper';
 
 const Dashboard = React.lazy(() => import('./components/screens/Dashboard'));
 const Profile = React.lazy(() => import('./components/screens/Profile'));
+const CareerProfile = React.lazy(() => import('./components/screens/CareerProfile'));
+const CareerProfileResult = React.lazy(() => import('./components/screens/CareerProfileResult'));
 const Preview = React.lazy(() => import('./components/screens/Preview'));
 const Editor = React.lazy(() => import('./components/screens/Editor'));
 const Settings = React.lazy(() => import('./components/screens/Settings'));
@@ -445,6 +447,10 @@ function App() {
         );
       case View.PROFILE:
         return <Profile />;
+      case View.CAREER_PROFILE:
+        return <CareerProfile />;
+      case View.CAREER_PROFILE_RESULT:
+        return <CareerProfileResult />;
       case View.PREVIEW:
         return <Preview />;
       case View.EDITOR:

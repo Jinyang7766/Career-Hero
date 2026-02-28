@@ -10,17 +10,16 @@ describe('canApplyDiagnosisStepRecovery', () => {
     expect(canApplyDiagnosisStepRecovery('report', 'jd_input')).toBe(false);
   });
 
-  it('allows recovering report only from entry-like steps', () => {
-    expect(canApplyDiagnosisStepRecovery('resume_select', 'report')).toBe(true);
-    expect(canApplyDiagnosisStepRecovery('jd_input', 'report')).toBe(true);
-    expect(canApplyDiagnosisStepRecovery('analyzing', 'report')).toBe(true);
-    expect(canApplyDiagnosisStepRecovery('final_report', 'report')).toBe(false);
+  it('allows recovering final_report from entry-like steps', () => {
+    expect(canApplyDiagnosisStepRecovery('resume_select', 'final_report')).toBe(true);
+    expect(canApplyDiagnosisStepRecovery('jd_input', 'final_report')).toBe(true);
+    expect(canApplyDiagnosisStepRecovery('analyzing', 'final_report')).toBe(true);
+    expect(canApplyDiagnosisStepRecovery('final_report', 'final_report')).toBe(false);
   });
 
-  it('allows recovering final_report unless already in completed flow', () => {
+  it('allows recovering final_report from comparison and legacy report steps', () => {
+    expect(canApplyDiagnosisStepRecovery('comparison', 'final_report')).toBe(true);
     expect(canApplyDiagnosisStepRecovery('report', 'final_report')).toBe(true);
-    expect(canApplyDiagnosisStepRecovery('comparison', 'final_report')).toBe(false);
-    expect(canApplyDiagnosisStepRecovery('final_report', 'final_report')).toBe(false);
   });
 });
 
@@ -30,9 +29,9 @@ describe('shouldSkipInterviewAutoRecovery', () => {
     expect(shouldSkipInterviewAutoRecovery(true, 'jd_input')).toBe(true);
   });
 
-  it('allows recovery checks on chat/report when in interview mode', () => {
+  it('allows recovery checks on chat/final_report when in interview mode', () => {
     expect(shouldSkipInterviewAutoRecovery(true, 'chat')).toBe(false);
-    expect(shouldSkipInterviewAutoRecovery(true, 'report')).toBe(false);
+    expect(shouldSkipInterviewAutoRecovery(true, 'final_report')).toBe(false);
   });
 
   it('never blocks diagnosis mode', () => {

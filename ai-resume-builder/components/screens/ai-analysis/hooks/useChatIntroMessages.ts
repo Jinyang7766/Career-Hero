@@ -6,7 +6,6 @@ import { makeJdKey } from '../id-utils';
 
 type Params = {
   isInterviewMode?: boolean;
-  microInterviewFirstQuestion?: string;
   currentStep: string;
   chatInitialized: boolean;
   chatMessagesRef: MutableRefObject<ChatMessage[]>;
@@ -19,7 +18,6 @@ type Params = {
 
 export const useChatIntroMessages = ({
   isInterviewMode = false,
-  microInterviewFirstQuestion,
   currentStep,
   chatInitialized,
   chatMessagesRef,
@@ -64,7 +62,7 @@ export const useChatIntroMessages = ({
     const sessions = (resumeData as any)?.interviewSessions || {};
     const list = Object.values(sessions || {}) as any[];
     if (!list.length) return false;
-    const expectedChatMode = isInterviewMode ? 'interview' : 'micro';
+    const expectedChatMode = isInterviewMode ? 'interview' : 'analysis';
     const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
     const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
     const expectedType = String(getActiveInterviewType() || '').trim().toLowerCase();
@@ -111,14 +109,9 @@ export const useChatIntroMessages = ({
       '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
 
     if (!isInterviewMode) {
-      const immediateQuestion = String(
-        microInterviewFirstQuestion ||
-        resumeData?.analysisSnapshot?.microInterviewFirstQuestion ||
-        ''
-      ).trim();
       return {
-        summary: `${greeting}我是您的 AI 微访谈助手。${hasJd ? '我会结合简历与职位描述，' : '我会结合你的简历，'}围绕诊断里信息不足的点做追问，帮助你补齐关键证据。`,
-        ask: immediateQuestion || '先从最关键的一条开始：请补充一个你最能体现岗位匹配度的项目/经历，尽量包含动作、数据和结果。'
+        summary: `${greeting}我是您的 AI 职业助手。${hasJd ? '我会结合简历与职位描述，' : '我会结合你的简历，'}围绕诊断里信息不足的点做追问，帮助你补齐关键证据。`,
+        ask: '先从最关键的一条开始：请补充一个你最能体现岗位匹配度的项目/经历，尽量包含动作、数据和结果。'
       };
     }
 
@@ -219,7 +212,7 @@ export const useChatIntroMessages = ({
       }
       askTimerRef.current = null;
     }, askDelayMs);
-  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, resumeData?.interviewSessions, resumeData?.lastJdText, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatInitialized, isInterviewMode, jdText, resumeData?.personalInfo?.name, resumeData?.interviewSessions, resumeData?.lastJdText, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
@@ -252,5 +245,5 @@ export const useChatIntroMessages = ({
     if (!chatInitialized) {
       setChatInitialized(true);
     }
-  }, [currentStep, chatInitialized, isInterviewMode, microInterviewFirstQuestion, jdText, resumeData?.personalInfo?.name, resumeData?.analysisSnapshot?.microInterviewFirstQuestion, chatMessagesRef, setChatInitialized, setChatMessages]);
+  }, [currentStep, chatInitialized, isInterviewMode, jdText, resumeData?.personalInfo?.name, chatMessagesRef, setChatInitialized, setChatMessages]);
 };

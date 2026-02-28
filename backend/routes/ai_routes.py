@@ -1,5 +1,10 @@
 from flask import request, jsonify, Response, stream_with_context
 
+try:
+    from services.career_profile_service import organize_career_profile_core
+except ImportError:
+    from backend.services.career_profile_service import organize_career_profile_core
+
 
 def get_json_payload(req):
     data = req.get_json(silent=True)
@@ -284,6 +289,7 @@ def register_ai_routes(app, deps):
             chat_history = data.get('chatHistory', [])
             score = data.get('score', 0)
             suggestions = data.get('suggestions', [])
+            career_profile = data.get('careerProfile') or None
 
             generated_resume = generate_optimized_resume(
                 gemini_client=gemini_client,
@@ -296,9 +302,33 @@ def register_ai_routes(app, deps):
                 chat_history=chat_history,
                 score=score,
                 suggestions=suggestions,
+                career_profile=career_profile,
             )
             return jsonify({'resumeData': generated_resume}), 200
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         except Exception:
+            return jsonify({'error': '服务器内部错误'}), 500
+
+    @app.route('/api/ai/organize-career-profile', methods=['POST'])
+    @token_required
+    def organize_career_profile(current_user_id):
+        try:
+            body, status = organize_career_profile_core(
+                current_user_id=current_user_id,
+                data=request.get_json() or {},
+                deps={
+                    'logger': logger,
+                    'gemini_client': gemini_client,
+                    'check_gemini_quota': check_gemini_quota,
+                    'parse_ai_response': parse_ai_response,
+                    'analysis_generate_content_resilient': _analysis_generate_content_resilient,
+                    'get_analysis_model_candidates': get_analysis_model_candidates,
+                    'GEMINI_RESUME_GENERATION_MODEL': GEMINI_RESUME_GENERATION_MODEL,
+                    'can_run_analysis_ai': _can_run_analysis_ai,
+                },
+            )
+            return jsonify(body), status
+        except Exception:
+            logger.error("organize_career_profile failed: %s", traceback.format_exc())
             return jsonify({'error': '服务器内部错误'}), 500

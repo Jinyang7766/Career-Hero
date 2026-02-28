@@ -36,7 +36,7 @@ export const buildPendingReplyKey = ({
   const uid = String(currentUserId || 'anon').trim() || 'anon';
   const rid = String(resumeId || 'no_resume').trim() || 'no_resume';
   const jdKey = hashText(String(jdText || lastJdText || ''));
-  const mode = isInterviewMode ? 'interview' : 'micro';
+  const mode = isInterviewMode ? 'interview' : 'analysis';
   return `ai_chat_pending_reply:${uid}:${rid}:${jdKey}:${mode}`;
 };
 
@@ -62,7 +62,7 @@ export const buildTimingStorageKey = ({
   const jdKey = hashText(String(jdText || lastJdText || ''));
   const normalizedType = String(interviewType || 'general').trim().toLowerCase() || 'general';
   const normalizedMode = String(interviewMode || 'comprehensive').trim().toLowerCase() || 'comprehensive';
-  const mode = isInterviewMode ? 'interview' : 'micro';
+  const mode = isInterviewMode ? 'interview' : 'analysis';
   return `ai_chat_answer_timing:${uid}:${rid}:${jdKey}:${mode}:${normalizedType}:${normalizedMode}`;
 };
 
@@ -70,7 +70,7 @@ export const countUserAnswers = (messages: ChatMessage[]) =>
   messages.filter((m) => {
     if (m.role !== 'user') return false;
     const txt = String(m.text || '').trim();
-    const hasTextAnswer = !!txt && txt !== '结束面试' && txt !== '结束微访谈';
+    const hasTextAnswer = !!txt && txt !== '结束面试';
     const hasVoiceAnswer = !!m.audioUrl || !!m.audioPending;
     return hasTextAnswer || hasVoiceAnswer;
   }).length;
@@ -149,7 +149,7 @@ export const buildFallbackInterviewSummary = (messages: ChatMessage[], entries: 
   const userAnswers = (messages || []).filter((m) => {
     if (m.role !== 'user') return false;
     const txt = String(m.text || '').trim();
-    return !!txt && txt !== '结束面试' && txt !== '结束微访谈';
+    return !!txt && txt !== '结束面试';
   });
   const answerCount = userAnswers.length;
   const totalSec = (entries || []).reduce((sum, item) => sum + Math.max(0, Number(item.seconds) || 0), 0);

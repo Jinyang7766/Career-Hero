@@ -47,12 +47,13 @@ export const useAnalysisStepCheckpoint = ({
     > = {
       jd_input: { state: 'jd_ready', step: 'jd_input' },
       analyzing: { state: 'analyzing', step: 'analyzing' },
-      report: { state: 'report_ready', step: 'report' },
-      micro_intro: { state: 'interview_in_progress', step: 'micro_intro' },
       chat: { state: 'interview_in_progress', step: 'chat' },
       interview_report: { state: 'interview_done', step: 'interview_report' },
       comparison: { state: 'interview_done', step: 'comparison' },
-      final_report: { state: 'interview_done', step: 'final_report' },
+      final_report: {
+        state: isInterviewMode ? 'interview_done' : 'report_ready',
+        step: 'final_report',
+      },
     };
     const mapped = map[currentStep];
     if (!mapped) return;

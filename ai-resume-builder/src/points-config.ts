@@ -17,7 +17,6 @@ export const ADDON_POINT_PACKAGES = [
 export const USAGE_POINT_COST = {
   analysis: 10,
   interview: 20,
-  micro_interview: 20,
   interview_simple: 20,
   interview_comprehensive: 50,
   final_report: 20,

@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
-import { persistUserDossierToProfile } from '../dossier-persistence';
 
 type Params = {
   currentStep: string;
@@ -135,15 +134,6 @@ export const usePostInterviewFinalReportPersistence = ({
             resumeTitle: latest.data.title,
           });
         }
-        await persistUserDossierToProfile({
-          source: 'final_diagnosis',
-          score: nextDossier.score,
-          summary: nextDossier.summary,
-          jdText: effectiveJdText,
-          targetCompany: effectiveTargetCompany,
-          weaknesses,
-          suggestionsTotal: suggestionsList.length,
-        });
       } catch {
         persistedFinalReportKeyRef.current = '';
       }
@@ -163,4 +153,3 @@ export const usePostInterviewFinalReportPersistence = ({
     targetCompany,
   ]);
 };
-

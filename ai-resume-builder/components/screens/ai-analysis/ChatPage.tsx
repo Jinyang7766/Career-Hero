@@ -2,13 +2,11 @@ import React from 'react';
 import type { ChatMessage } from './types';
 import AiDisclaimer from './AiDisclaimer';
 import ReportFeedback from './ReportFeedback';
-import { USAGE_POINT_COST } from '../../../src/points-config';
 import { ChatPageHeader } from './chat-page/ChatPageHeader';
 import { InterviewProgressCard } from './chat-page/InterviewProgressCard';
 import { ThinkingIndicator } from './chat-page/ThinkingIndicator';
 import {
   AI_AVATAR_FALLBACK,
-  MICRO_INTERVIEW_AVATAR,
   shouldShowMessageFeedback,
 } from './chat-page/chat-page-utils';
 
@@ -131,9 +129,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
   aiAvatarUrl,
   onMessageFeedback,
 }) => {
-  const restartLabel = isInterviewMode
-    ? '重新开始'
-    : `重新开始（${USAGE_POINT_COST.micro_interview}积分）`;
+  const restartLabel = '重新开始';
   return (
     <div className="fixed inset-0 mx-auto w-full max-w-md z-[100] bg-slate-50 dark:bg-[#0b1219] flex flex-col animate-in slide-in-from-right duration-300 overflow-hidden pt-[76px]">
       <ToastOverlay />
@@ -177,7 +173,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
                 className={`size-9 rounded-full overflow-hidden shrink-0 shadow-sm ${msg.role === 'user' ? 'ml-3' : 'mr-3'}`}
               >
                 <img
-                  src={msg.role === 'user' ? userAvatar : (isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR)}
+                  src={msg.role === 'user' ? userAvatar : aiAvatarUrl}
                   onError={(e) => {
                     if (msg.role !== 'user') (e.currentTarget as HTMLImageElement).src = AI_AVATAR_FALLBACK;
                   }}
@@ -344,7 +340,7 @@ const ChatPage: React.FC<ChatPageProps> = ({
         ))}
 
         {(isSending || hasPendingReply) && !chatMessages.some((m) => m.id.startsWith('ai-stream')) && (
-          <ThinkingIndicator avatarUrl={isInterviewMode ? aiAvatarUrl : MICRO_INTERVIEW_AVATAR} />
+          <ThinkingIndicator avatarUrl={aiAvatarUrl} />
         )}
 
         <div ref={messagesEndRef} />

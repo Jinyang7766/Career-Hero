@@ -17,7 +17,6 @@ const getStepProgress = (step: string) => {
     jd_input: 15,
     analyzing: 35,
     report: 60,
-    micro_intro: 72,
     chat: 82,
     interview_report: 95,
     comparison: 95,

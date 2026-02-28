@@ -40,11 +40,11 @@ type Params = {
 export const shouldRestoreJdInputFromResume = (
   preferReport: boolean,
   isInterviewMode?: boolean,
-  inferredTarget?: 'jd_input' | 'report' | 'final_report'
+  inferredTarget?: 'jd_input' | 'final_report'
 ) => {
   if (isInterviewMode) return false;
   if (preferReport) return true;
-  return inferredTarget === 'report' || inferredTarget === 'final_report';
+  return inferredTarget === 'final_report';
 };
 
 export const buildResumeDataForJdEntry = <T extends Record<string, any>>(
@@ -74,7 +74,6 @@ const normalizeAnalysisStep = (step: any) => {
     'jd_input',
     'analyzing',
     'report',
-    'micro_intro',
     'chat',
     'interview_report',
     'comparison',
@@ -88,38 +87,38 @@ export const inferDiagnosisTargetStep = (
   resumeRow: any,
   fallbackResumeData: any,
   resumeSummary?: Partial<ResumeSummary> | null,
-  explicit?: 'report' | 'chat' | 'final_report'
+  explicit?: 'chat' | 'comparison' | 'final_report'
 ) => {
   void fallbackResumeData;
   if (explicit === 'final_report') return 'final_report';
-  if (explicit === 'report' || explicit === 'chat') return 'report';
+  if (explicit === 'chat' || explicit === 'comparison') return 'final_report';
 
   const rawLatestStep =
     normalizeAnalysisStep((resumeSummary as any)?.latestAnalysisStep) ||
     normalizeAnalysisStep((resumeRow as any)?.latestAnalysisStep) ||
     normalizeAnalysisStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
-  if (rawLatestStep === 'final_report' || rawLatestStep === 'comparison' || rawLatestStep === 'interview_report') return 'final_report';
-  if (rawLatestStep === 'report' || rawLatestStep === 'micro_intro' || rawLatestStep === 'chat') return 'report';
+  if (rawLatestStep === 'final_report' || rawLatestStep === 'interview_report') return 'final_report';
+  if (rawLatestStep === 'comparison' || rawLatestStep === 'report' || rawLatestStep === 'chat') return 'final_report';
   if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
 
   const rowSnapshotScore = Number((resumeRow as any)?.resume_data?.analysisSnapshot?.score || 0);
   const summarySnapshotScore = Number((resumeSummary as any)?.resume_data?.analysisSnapshot?.score || 0);
   const hasSnapshotScore = Number.isFinite(rowSnapshotScore) && rowSnapshotScore > 0
     || Number.isFinite(summarySnapshotScore) && summarySnapshotScore > 0;
-  if (hasSnapshotScore) return 'report';
+  if (hasSnapshotScore) return 'final_report';
 
   const rowBindings = (resumeRow as any)?.resume_data?.analysisBindings;
   const summaryBindings = (resumeSummary as any)?.resume_data?.analysisBindings;
   if ((rowBindings && Object.keys(rowBindings).length > 0) || (summaryBindings && Object.keys(summaryBindings).length > 0)) {
-    return 'report';
+    return 'final_report';
   }
 
   // Never infer target step from previously selected resume data.
   // Only use the clicked row / summary payload to avoid cross-resume contamination.
   const sessionsSource = (resumeRow as any)?.resume_data || (resumeSummary as any)?.resume_data || {};
   const sessionStep = normalizeAnalysisStep(deriveLatestAnalysisStep(sessionsSource));
-  if (sessionStep === 'final_report' || sessionStep === 'comparison' || sessionStep === 'interview_report') return 'final_report';
-  if (sessionStep === 'report' || sessionStep === 'micro_intro' || sessionStep === 'chat') return 'report';
+  if (sessionStep === 'final_report' || sessionStep === 'interview_report') return 'final_report';
+  if (sessionStep === 'comparison' || sessionStep === 'report' || sessionStep === 'chat') return 'final_report';
   if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
 
   const progress = Math.max(0, Math.min(100, Math.round(Number(
@@ -129,7 +128,7 @@ export const inferDiagnosisTargetStep = (
     0
   ))));
   if (progress >= 95) return 'final_report';
-  if (progress >= 60) return 'report';
+  if (progress >= 60) return 'final_report';
   return 'jd_input';
 };
 
@@ -153,7 +152,7 @@ export const useResumeSelection = ({
   isInterviewMode,
 }: Params) => {
   const FORCE_JD_RESUME_ID_KEY = 'ai_force_jd_resume_id';
-  const inferTargetStepFromResume = (resumeRow: any, explicit?: 'report' | 'chat' | 'final_report') => {
+  const inferTargetStepFromResume = (resumeRow: any, explicit?: 'chat' | 'comparison' | 'final_report') => {
     const summary = (allResumes || []).find((item) => isSameResumeId(item?.id, (resumeRow as any)?.id));
     return inferDiagnosisTargetStep(resumeRow, resumeData, summary, explicit);
   };
@@ -166,7 +165,7 @@ export const useResumeSelection = ({
   const handleResumeSelect = async (
     id: string | number,
     preferReport: boolean = false,
-    targetStep?: 'report' | 'chat' | 'final_report'
+    targetStep?: 'chat' | 'comparison' | 'final_report'
   ) => {
     let effectivePreferReport = preferReport;
     try {
@@ -249,7 +248,7 @@ export const useResumeSelection = ({
         const shouldRestoreJdFromResume = shouldRestoreJdInputFromResume(
           effectivePreferReport,
           !!isInterviewMode,
-          inferredTarget as 'jd_input' | 'report' | 'final_report'
+          inferredTarget as 'jd_input' | 'final_report'
         );
         const finalResumeData = buildResumeDataForEntry(rawResumeData as Record<string, any>, {
           isInterviewMode,

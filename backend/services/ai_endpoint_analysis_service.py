@@ -6,10 +6,10 @@ try:
     from services.ai_endpoint_prompt_service import (
         ANALYSIS_PROMPT_VERSION,
         _build_analysis_prompt,
-        _resolve_micro_interview_first_question,
     )
     from services.ai_endpoint_suggestion_service import (
         _format_diagnosis_dossier,
+        _format_career_profile_context,
         _sanitize_suggestions_for_metric_consistency,
         _ensure_sentence_level_coverage,
         _merge_duplicate_suggestions,
@@ -24,10 +24,10 @@ except ImportError:
     from backend.services.ai_endpoint_prompt_service import (
         ANALYSIS_PROMPT_VERSION,
         _build_analysis_prompt,
-        _resolve_micro_interview_first_question,
     )
     from backend.services.ai_endpoint_suggestion_service import (
         _format_diagnosis_dossier,
+        _format_career_profile_context,
         _sanitize_suggestions_for_metric_consistency,
         _ensure_sentence_level_coverage,
         _merge_duplicate_suggestions,
@@ -46,6 +46,8 @@ def analyze_resume_core(current_user_id, data, deps):
     interview_summary = str((data or {}).get('interviewSummary') or '').strip()
     diagnosis_dossier = (data or {}).get('diagnosisDossier') or {}
     diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
+    career_profile = (data or {}).get('careerProfile') or {}
+    career_profile_context = _format_career_profile_context(career_profile)
     raw_chat_history = (data or {}).get('chatHistory') or []
     if isinstance(raw_chat_history, list):
         chat_lines = []
@@ -205,6 +207,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 chat_history=raw_chat_history if isinstance(raw_chat_history, list) else [],
                 score=_score,
                 suggestions=safe_suggestions,
+                career_profile=career_profile,
             )
             return generated if isinstance(generated, dict) else None
         except Exception as gen_err:
@@ -322,6 +325,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 interview_summary=interview_summary,
                 interview_chat_history=interview_chat_history,
                 diagnosis_context=diagnosis_context,
+                career_profile_context=career_profile_context,
             )
 
             final_stage_model = str(deps.get('GEMINI_RESUME_GENERATION_MODEL') or '').strip()
@@ -394,7 +398,6 @@ def analyze_resume_core(current_user_id, data, deps):
                 ai_result.get('score', 70),
                 ai_result.get('suggestions', []),
             )
-            micro_interview_first_question = _resolve_micro_interview_first_question(ai_result, job_description)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -416,7 +419,6 @@ def analyze_resume_core(current_user_id, data, deps):
                 'score': ai_result.get('score', 70),
                 'scoreBreakdown': ai_result.get('scoreBreakdown', {'experience': 0, 'skills': 0, 'format': 0}),
                 'summary': ensured_summary,
-                'microInterviewFirstQuestion': micro_interview_first_question,
                 'suggestions': ai_result.get('suggestions', []),
                 'strengths': ai_result.get('strengths', []),
                 'weaknesses': ai_result.get('weaknesses', []),
@@ -466,14 +468,9 @@ def analyze_resume_core(current_user_id, data, deps):
                 int(score or 0),
                 len(suggestions or []),
             )
-            fallback_first_question = _resolve_micro_interview_first_question({
-                'weaknesses': ['经历描述较为笼统', '缺少量化结果'],
-                'missingKeywords': [] if not job_description else ['岗位关键词覆盖不足'],
-            }, job_description)
             return {
                 'score': score,
                 'summary': '智能分析暂时不可用，已生成基础分析报告，建议稍后再试。',
-                'microInterviewFirstQuestion': fallback_first_question,
                 'suggestions': suggestions,
                 'strengths': ['结构清晰', '格式规范'],
                 'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
@@ -512,10 +509,6 @@ def analyze_resume_core(current_user_id, data, deps):
             suggestions = _merge_duplicate_suggestions(suggestions)
         suggestions = _append_education_gap_advisory(suggestions)
     final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
-    rule_based_first_question = _resolve_micro_interview_first_question({
-        'weaknesses': ['简历叙述缺少关键细节'],
-        'missingKeywords': [] if not job_description else ['关键词覆盖不足'],
-    }, job_description)
     logger.info(
         "analyze.rule_based user=%s stage=%s score=%s suggestions=%s",
         str(current_user_id),
@@ -526,7 +519,6 @@ def analyze_resume_core(current_user_id, data, deps):
     return {
         'score': score,
         'summary': '简历分析完成，请查看优化建议。',
-        'microInterviewFirstQuestion': rule_based_first_question,
         'suggestions': suggestions,
         'strengths': ['结构清晰', '格式规范'],
         'weaknesses': ['缺少量化结果', '技能描述过于笼统'],

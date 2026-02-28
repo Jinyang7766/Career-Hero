@@ -12,7 +12,7 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
   openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
-  navigateToStep: (step: 'jd_input' | 'analyzing' | 'report' | 'micro_intro' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep: (step: 'jd_input' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
   isInterviewMode?: boolean;

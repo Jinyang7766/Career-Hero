@@ -6,7 +6,9 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
+import { getLatestCareerProfile } from '../../src/career-profile-utils';
 import DashboardProgressModule from './DashboardProgressModule';
+import CareerProfileEntryCard from './dashboard/CareerProfileEntryCard';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力，量化成果是金标准。",
@@ -81,6 +83,15 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
   // Get user profile with real name
   const { userProfile } = useUserProfile();
+  const latestCareerProfile = React.useMemo(
+    () => getLatestCareerProfile(userProfile),
+    [userProfile]
+  );
+  const careerProfileSummary = String(latestCareerProfile?.summary || '').trim();
+  const careerProfileExperienceCount = Array.isArray(latestCareerProfile?.experiences)
+    ? latestCareerProfile!.experiences.length
+    : 0;
+  const careerProfileUpdatedAt = String(latestCareerProfile?.createdAt || '').trim();
   const displayName =
     userProfile?.name ||
     currentUser?.user_metadata?.name ||
@@ -302,29 +313,13 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       </div>
 
       <div className="px-4 space-y-6 pt-2">
-        {/* Quick Actions Strip */}
-        <div className="grid grid-cols-4 gap-3">
-          {[
-            { label: '新建简历', icon: 'add_circle', onClick: createNewResume, color: 'text-primary' },
-            { label: '我的简历', icon: 'description', onClick: () => navigateToView(View.ALL_RESUMES), color: 'text-primary' },
-            { label: '开始诊断', icon: 'assessment', onClick: () => navigateToView(View.AI_ANALYSIS), color: 'text-primary' },
-            { label: '开始面试', icon: 'forum', onClick: () => navigateToView(View.AI_INTERVIEW), color: 'text-primary' },
-          ].map((action, idx) => (
-            <button
-              key={idx}
-              onClick={action.onClick}
-              className="flex flex-col items-center gap-2 group active:scale-95 transition-transform"
-            >
-              <div className="w-full aspect-square rounded-2xl bg-white dark:bg-surface-dark border border-slate-100 dark:border-white/5 shadow-sm flex items-center justify-center group-hover:shadow-md group-hover:border-primary/20 transition-all">
-                <span className={`material-symbols-outlined text-[28px] ${action.color} transition-transform group-hover:scale-110`}>
-                  {action.icon}
-                </span>
-              </div>
-              <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400">
-                {action.label}
-              </span>
-            </button>
-          ))}
+        <div>
+          <CareerProfileEntryCard
+            summary={careerProfileSummary}
+            experienceCount={careerProfileExperienceCount}
+            updatedAt={careerProfileUpdatedAt}
+            onOpen={() => navigateToView(View.CAREER_PROFILE)}
+          />
         </div>
 
         {/* Progress Module or Create New Resume */}
@@ -421,7 +416,6 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
 
           </div>
         </div>
-
       </div>
     </div>
   );

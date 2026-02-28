@@ -78,7 +78,7 @@ const resolveExplicitGenderLabel = (value: any): string => {
 };
 
 const resolvePersonalMetaItems = (data: ResumeData): string[] => {
-  const personal = data?.personalInfo || {};
+  const personal = data?.personalInfo;
   const genderAge = [resolveExplicitGenderLabel((data as any)?.gender), personal?.age ? `${personal.age}岁` : '']
     .filter(Boolean)
     .join(' · ');

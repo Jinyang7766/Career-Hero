@@ -111,6 +111,61 @@ def _format_diagnosis_dossier(dossier):
         return ''
 
 
+def _format_career_profile_context(profile):
+    if not isinstance(profile, dict):
+        return ''
+    try:
+        summary = str(
+            profile.get('summary')
+            or profile.get('profileSummary')
+            or profile.get('careerSummary')
+            or ''
+        ).strip()
+        highlights = profile.get('careerHighlights') or profile.get('highlights') or []
+        constraints = profile.get('constraints') or profile.get('hardConstraints') or []
+        core_skills = profile.get('coreSkills') or profile.get('skills') or []
+        experiences = profile.get('experiences') or profile.get('careerFacts') or []
+
+        lines = []
+        if summary:
+            lines.append(f"- 职业画像摘要：{summary}")
+        if isinstance(core_skills, list) and core_skills:
+            lines.append(f"- 核心能力：{'、'.join([str(x).strip() for x in core_skills[:12] if str(x).strip()])}")
+        if isinstance(highlights, list) and highlights:
+            lines.append(f"- 关键亮点：{'；'.join([str(x).strip() for x in highlights[:8] if str(x).strip()])}")
+
+        if isinstance(experiences, list) and experiences:
+            lines.append("- 关键经历（可能包含简历外信息）：")
+            for index, item in enumerate(experiences[:8], start=1):
+                if not isinstance(item, dict):
+                    continue
+                title = str(item.get('title') or item.get('name') or f'经历{index}').strip()
+                period = str(item.get('period') or '').strip()
+                org = str(item.get('organization') or item.get('company') or '').strip()
+                actions = str(item.get('actions') or item.get('action') or '').strip()
+                results = str(item.get('results') or item.get('result') or '').strip()
+                in_resume = str(item.get('inResume') or item.get('isInResume') or '').strip()
+                parts = [f"{index}. {title}"]
+                if period:
+                    parts.append(f"时间：{period}")
+                if org:
+                    parts.append(f"组织：{org}")
+                if actions:
+                    parts.append(f"行动：{actions[:160]}")
+                if results:
+                    parts.append(f"结果：{results[:160]}")
+                if in_resume:
+                    parts.append(f"是否在简历：{in_resume}")
+                lines.append("；".join(parts))
+
+        if isinstance(constraints, list) and constraints:
+            lines.append(f"- 使用约束：{'；'.join([str(x).strip() for x in constraints[:8] if str(x).strip()])}")
+
+        return '\n'.join([line for line in lines if str(line).strip()])
+    except Exception:
+        return ''
+
+
 def _split_into_sentences(text: str):
     raw = str(text or '').strip()
     if not raw:

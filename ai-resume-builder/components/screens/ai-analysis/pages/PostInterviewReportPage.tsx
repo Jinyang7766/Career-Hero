@@ -1,9 +1,11 @@
 import React from 'react';
 import type { ResumeData } from '../../../../types';
+import { View } from '../../../../types';
 import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
 import ReportFeedback from '../ReportFeedback';
 import { useEditablePostInterviewResume } from '../hooks/useEditablePostInterviewResume';
+import { useAppContext } from '../../../../src/app-context';
 import {
   buildModuleOverview,
   getUniformSectionNote,
@@ -33,6 +35,11 @@ type Props = {
   onCompleteAndSave?: (editedResume?: ResumeData | null) => Promise<void> | void;
   onBack: () => void;
 };
+
+export const resolvePostInterviewSaveResult = (saveSucceeded: boolean) => ({
+  shouldOpenSuccessModal: saveSucceeded,
+  shouldNavigateImmediately: false,
+});
 
 const ResumeBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="rounded-[24px] border border-slate-100 dark:border-white/5 bg-white dark:bg-[#1c2936] p-6 shadow-sm hover:shadow-md transition-shadow">
@@ -80,6 +87,8 @@ const PostInterviewReportPage: React.FC<Props> = ({
   onCompleteAndSave,
   onBack,
 }) => {
+  const navigateToView = useAppContext((s) => s.navigateToView);
+  const [showSaveSuccessModal, setShowSaveSuccessModal] = React.useState(false);
   const {
     isSaving,
     editableGeneratedResume,
@@ -95,6 +104,16 @@ const PostInterviewReportPage: React.FC<Props> = ({
     generatedResume,
     onCompleteAndSave,
   });
+  const handleSaveAsNewResumeClick = React.useCallback(async () => {
+    const outcome = resolvePostInterviewSaveResult(await handleCompleteAndSaveClick());
+    if (outcome.shouldOpenSuccessModal) {
+      setShowSaveSuccessModal(true);
+    }
+  }, [handleCompleteAndSaveClick]);
+  const handleGoToAllResumes = React.useCallback(() => {
+    setShowSaveSuccessModal(false);
+    navigateToView(View.ALL_RESUMES, { replace: true });
+  }, [navigateToView]);
   const annBySection = React.useMemo(
     () => groupAnnotationsBySection(annotations),
     [annotations]
@@ -487,7 +506,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
             <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-2">
               <button
                 type="button"
-                onClick={() => { void handleCompleteAndSaveClick(); }}
+                onClick={() => { void handleSaveAsNewResumeClick(); }}
                 disabled={!editableGeneratedResume || isSaving}
                 className={`w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${(!editableGeneratedResume || isSaving) ? 'opacity-70 cursor-not-allowed shadow-none' : ''}`}
               >
@@ -497,7 +516,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
                     <span>正在保存至云端...</span>
                   </>
                 ) : (
-                  '确认为最终简历并保存'
+                  '保存为新简历（原简历不变）'
                 )}
               </button>
             </div>
@@ -509,6 +528,43 @@ const PostInterviewReportPage: React.FC<Props> = ({
           <AiDisclaimer className="pt-4 opacity-60" />
         </div>
       </main>
+
+      {showSaveSuccessModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setShowSaveSuccessModal(false)}>
+          <div
+            className="w-full max-w-sm bg-white dark:bg-[#1c2936] rounded-[28px] shadow-[0_20px_50px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 dark:border-white/5 animate-in zoom-in-95 duration-200"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="p-8 pb-6">
+              <div className="flex flex-col items-center text-center">
+                <div className="size-16 rounded-3xl bg-emerald-50 dark:bg-emerald-400/10 flex items-center justify-center mb-6">
+                  <span className="material-symbols-outlined text-emerald-500 text-[36px]">check_circle</span>
+                </div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">保存成功</h3>
+                <p className="text-[15px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed px-2">
+                  已保存为新的优化简历，原简历内容保持不变。
+                </p>
+              </div>
+            </div>
+            <div className="p-6 pt-0 flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleGoToAllResumes}
+                className="w-full h-12 rounded-2xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/25 hover:bg-blue-600 transition-all active:scale-95"
+              >
+                去我的简历查看
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowSaveSuccessModal(false)}
+                className="w-full h-12 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
+              >
+                留在本页面
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

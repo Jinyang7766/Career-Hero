@@ -32,7 +32,6 @@ export interface ScoreBreakdown {
 
 export interface AnalysisReport {
   summary: string;
-  microInterviewFirstQuestion?: string;
   strengths: string[];
   weaknesses: string[];
   missingKeywords: string[];

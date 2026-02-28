@@ -2,8 +2,8 @@ import re
 
 ANALYSIS_PROMPT_VERSION = "analysis-v2.3"
 
-def _resolve_micro_interview_first_question(ai_result, job_description):
-    question = str((ai_result or {}).get('microInterviewFirstQuestion') or '').strip()
+def _resolve_follow_up_question(ai_result, job_description):
+    question = str((ai_result or {}).get('followUpQuestion') or '').strip()
     if question:
         return question
 
@@ -28,12 +28,13 @@ def _build_analysis_prompt(
     interview_summary='',
     interview_chat_history='',
     diagnosis_context='',
+    career_profile_context='',
 ):
     stage = str(analysis_stage or '').strip().lower()
     if stage == 'pre_interview':
         if job_description:
             return f"""
-你是一位严格的资深简历诊断顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+你是一位严格的资深简历诊断顾问。当前处于“诊断预评估”阶段，只需给出粗粒度评价，不做详细改写。
 要求：
 1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
 2) `suggestions` 必须返回空数组 []。
@@ -41,10 +42,13 @@ def _build_analysis_prompt(
 4) 可给出缺失关键词（missingKeywords），数量最多 5 个，不要给可直接替换的改写文本。
 5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
 6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
-7) 必须生成 microInterviewFirstQuestion：基于当前短板生成“微访谈第一问”，用于用户点击进入微访谈后立即提问。
+7) 事实来源仅允许：用户简历 + 用户职业画像。若信息不足，只能指出缺口，禁止臆造经历或结果。
 
 简历：
 {format_resume_for_ai(resume_data)}
+
+用户职业画像（可能包含未写入简历的经历）：
+{str(career_profile_context or '').strip() or '未提供'}
 
 职位描述：
 {job_description}
@@ -57,8 +61,7 @@ def _build_analysis_prompt(
     "skills": 52,
     "format": 66
   }},
-  "summary": "微访谈前初步评估总结",
-  "microInterviewFirstQuestion": "请补充一条最能体现岗位匹配度的真实经历，重点说明你的行动方法与量化结果。",
+  "summary": "诊断预评估总结",
   "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
   "targetCompanyConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
@@ -70,7 +73,7 @@ def _build_analysis_prompt(
 {rag_context}
 """
         return f"""
-你是一位严格的资深简历诊断顾问。当前处于“微访谈前预评估”阶段，只需给出粗粒度评价，不做详细改写。
+你是一位严格的资深简历诊断顾问。当前处于“诊断预评估”阶段，只需给出粗粒度评价，不做详细改写。
 要求：
 1) 只输出总体判断、分维度评分、亮点与短板，不生成逐条优化建议。
 2) `suggestions` 必须返回空数组 []。
@@ -78,10 +81,13 @@ def _build_analysis_prompt(
 4) missingKeywords 最多 5 个。
 5) summary 中禁止出现“建议/可改为/补充为/优化为”等措辞，只做现状判断。
 6) 返回合法 JSON，字段值中文；所有 key 必须完整返回，不得省略。
-7) 必须生成 microInterviewFirstQuestion：基于当前短板生成“微访谈第一问”，用于用户点击进入微访谈后立即提问。
+7) 事实来源仅允许：用户简历 + 用户职业画像。若信息不足，只能指出缺口，禁止臆造经历或结果。
 
 简历：
 {format_resume_for_ai(resume_data)}
+
+用户职业画像（可能包含未写入简历的经历）：
+{str(career_profile_context or '').strip() or '未提供'}
 
 仅返回 JSON：
 {{
@@ -91,8 +97,7 @@ def _build_analysis_prompt(
     "skills": 52,
     "format": 66
   }},
-  "summary": "微访谈前初步评估总结",
-  "microInterviewFirstQuestion": "请补充一个你最能证明岗位匹配度的案例，说明你做了什么、结果提升了哪些指标。",
+  "summary": "诊断预评估总结",
   "targetCompany": "",
   "targetCompanyConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
@@ -114,9 +119,9 @@ def _build_analysis_prompt(
     }
 
     final_stage_requirements = """
-13. 最终阶段必须明确“岗位关键任务的支撑缺口”，写入 weaknesses 与 suggestions。
-14. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
-15. 无法确认数字时用中性结果口径，不得编造与占位符。
+15. 最终阶段必须明确“岗位关键任务的支撑缺口”，写入 weaknesses 与 suggestions。
+16. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
+17. 无法确认数字时用中性结果口径，不得编造与占位符。
 """ if is_final_stage else ""
     format_requirements = f"""
 输出规范（精简版）：
@@ -135,6 +140,8 @@ def _build_analysis_prompt(
 10. 批注建议遵循人工逻辑：先模块结论，再逐句问题；每条建议只对应一个问题。
 11. 严禁重复输出同义建议；同一能力缺口只保留一条合并建议。
 12. 当简历存在多个关键短板时，suggestions 需覆盖不同 targetSection（如 summary/workExps/skills），避免集中在单一模块。
+13. 事实来源仅允许：用户简历、用户职业画像、补充对话内容（若有）。禁止凭空新增公司/项目/时间线/结果数据。
+14. 若用户画像与简历信息冲突，优先保持“已明确可验证事实”，并在 reason 中提示信息冲突风险，不得自行拍板编造。
 {final_stage_requirements}
 {rag_context}
 """
@@ -143,12 +150,19 @@ def _build_analysis_prompt(
     if is_final_stage:
         final_context_block = f"""
 最终报告补充上下文（仅用于事实校验与归纳，不得臆造）：
-- 微访谈总结：
+- 补充对话总结：
 {str(interview_summary or '').strip() or '未提供'}
-- 微访谈关键对话：
+- 补充对话关键内容：
 {str(interview_chat_history or '').strip() or '未提供'}
 - 用户画像（历史诊断档案）：
 {str(diagnosis_context or '').strip() or '未提供'}
+- 用户职业画像（用户手动补充，可能包含未写入简历经历）：
+{str(career_profile_context or '').strip() or '未提供'}
+"""
+    else:
+        final_context_block = f"""
+用户职业画像（用户手动补充，可能包含未写入简历经历）：
+{str(career_profile_context or '').strip() or '未提供'}
 """
 
     if job_description:
@@ -159,7 +173,7 @@ def _build_analysis_prompt(
 评分标准（总分100，候选人综合匹配度评分）：
 - 任务/经历匹配（40分，对应 scoreBreakdown.experience）：工作经历与职位描述关键任务的重合度、可验证案例支撑强度。
 - 能力/技能匹配（35分，对应 scoreBreakdown.skills）：关键能力与技能（工具、方法、业务能力）覆盖率与深度。
-- 综合表现质量（25分，对应 scoreBreakdown.format）：证据可信度、表达结构清晰度、微访谈反馈（若有）与发展潜力。
+- 综合表现质量（25分，对应 scoreBreakdown.format）：证据可信度、表达结构清晰度、沟通反馈（若有）与发展潜力。
 
 简历：
 {format_resume_for_ai(resume_data)}

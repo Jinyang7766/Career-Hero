@@ -10,7 +10,7 @@ import {
 } from './database/points-repository';
 
 type CreateResumeOptions = {
-  optimizedDuplicateStrategy?: 'reuse' | 'overwrite';
+  optimizedDuplicateStrategy?: 'reuse' | 'overwrite' | 'create_new';
   touchUpdatedAtOnOptimizedOverwrite?: boolean;
 };
 
@@ -215,14 +215,15 @@ export class DatabaseService {
       const optimizationStatus = String(sanitizedResumeData?.optimizationStatus || '').trim().toLowerCase();
       const optimizedFromId = DatabaseService.normalizeResumeId(sanitizedResumeData?.optimizedFromId);
       const optimizationJdKey = String(sanitizedResumeData?.optimizationJdKey ?? '').trim();
-      if (optimizationStatus === 'optimized' && optimizedFromId) {
+      const strategy = options?.optimizedDuplicateStrategy || 'reuse';
+      const shouldSkipDuplicateLookup = strategy === 'create_new';
+      if (optimizationStatus === 'optimized' && optimizedFromId && !shouldSkipDuplicateLookup) {
         const existing = await DatabaseService.findExistingOptimizedResume(userId, optimizedFromId, optimizationJdKey);
         if (!existing.success) {
           console.error('❌ Error finding existing optimized resume:', existing.error);
           return { success: false, error: existing.error, data: null };
         }
         if (existing.data?.id) {
-          const strategy = options?.optimizedDuplicateStrategy || 'reuse';
           if (strategy === 'reuse') {
             return { success: true, data: existing.data };
           }

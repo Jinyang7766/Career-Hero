@@ -1,11 +1,9 @@
 import { DatabaseService } from '../../../../src/database-service';
-import { supabase } from '../../../../src/supabase-client';
 import type { ResumeData } from '../../../../types';
 import type { Suggestion } from '../types';
 
 type AnalysisReportLike = {
   summary: string;
-  microInterviewFirstQuestion?: string;
   strengths: string[];
   weaknesses: string[];
   missingKeywords: string[];
@@ -76,7 +74,6 @@ export const useAnalysisPersistence = ({
     const snapshot = {
       score: scoreValue,
       summary: reportData.summary || '',
-      microInterviewFirstQuestion: String(reportData.microInterviewFirstQuestion || '').trim(),
       strengths: reportData.strengths || [],
       weaknesses: reportData.weaknesses || [],
       missingKeywords: reportData.missingKeywords || [],
@@ -120,22 +117,6 @@ export const useAnalysisPersistence = ({
     await DatabaseService.updateResume(targetId, {
       resume_data: updatedResumeData,
     }, { touchUpdatedAt: false });
-    try {
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      if (!userError && user?.id) {
-        const userResult = await DatabaseService.getUser(String(user.id));
-        const userHistory = Array.isArray((userResult as any)?.data?.analysis_dossier_history)
-          ? (userResult as any).data.analysis_dossier_history
-          : [];
-        const nextUserHistory = [dossier, ...userHistory].slice(0, 50);
-        await DatabaseService.updateUser(String(user.id), {
-          analysis_dossier_latest: dossier,
-          analysis_dossier_history: nextUserHistory,
-        });
-      }
-    } catch (err) {
-      console.warn('Failed to persist user-level analysis dossier:', err);
-    }
     return updatedResumeData;
   };
 
