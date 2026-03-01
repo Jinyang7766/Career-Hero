@@ -1,6 +1,5 @@
 import React from 'react';
 import { ResumeSummary } from '../../types';
-import { DiagnosisProgressBar } from '../shared/DiagnosisProgressBar';
 
 interface DashboardProgressModuleProps {
     resume: ResumeSummary;
@@ -11,6 +10,8 @@ interface DashboardProgressModuleProps {
 const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resume, onContinueDiagnosis, onContinueInterview }) => {
     const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
     const hasDiagnosisProgress = diagnosisProgress >= 15;
+    const isDiagnosisComplete = diagnosisProgress >= 100;
+
     const byMode = (resume as any)?.interviewStageStatusByMode;
     const hasInterviewProgressByMode = !!(
         byMode &&
@@ -24,10 +25,38 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
         : false;
     const hasInterviewProgress = hasInterviewProgressByMode || hasInterviewProgressLegacy;
     const hasAnyProgress = hasDiagnosisProgress || hasInterviewProgress;
-    const diagnosisActionLabel = !hasAnyProgress
-        ? '去优化'
-        : (diagnosisProgress >= 100 ? '查看结果' : '继续优化');
-    const interviewActionLabel = hasAnyProgress ? '继续面试' : '去面试';
+
+    // Determine the primary action based on state
+    let primaryAction = {
+        label: '智能诊断',
+        icon: 'assessment',
+        description: 'AI 自动分析简历薄弱点',
+        onClick: () => onContinueDiagnosis(resume)
+    };
+
+    if (hasInterviewProgress) {
+        primaryAction = {
+            label: '继续面试',
+            icon: 'forum',
+            description: '回到你上次未完成的模拟面试',
+            onClick: () => onContinueInterview(resume)
+        };
+    } else if (hasDiagnosisProgress && !isDiagnosisComplete) {
+        primaryAction = {
+            label: '继续优化',
+            icon: 'assessment',
+            description: '继续完善你的简历内容',
+            onClick: () => onContinueDiagnosis(resume)
+        };
+    } else if (isDiagnosisComplete) {
+        primaryAction = {
+            label: '模拟面试',
+            icon: 'forum',
+            description: '简历已优化，开始针对性模拟面试吧',
+            onClick: () => onContinueInterview(resume)
+        };
+    }
+
     // Determine key metrics
     const score = (resume as any).analysisScore || (resume as any).score || (resume as any).diagnosisScore || 0;
 
@@ -62,41 +91,24 @@ const DashboardProgressModule: React.FC<DashboardProgressModuleProps> = ({ resum
 
                 </div>
 
-                {/* Progress Bar Container */}
-                <div className="bg-black/10 rounded-2xl p-4 backdrop-blur-md border border-white/5 shadow-inner">
-                    {hasAnyProgress ? (
-                        <>
-                            <DiagnosisProgressBar
-                                resume={resume}
-                                variant="on-dark"
-                            />
-                            <div className="mt-3 pt-3 border-t border-white/10">
-                                <DiagnosisProgressBar resume={resume} isInterviewMode variant="on-dark" />
-                            </div>
-                        </>
-                    ) : (
-                        <div className="py-2">
-                            <p className="text-sm font-semibold text-white/90">你还没有最近进展</p>
-                            <p className="text-xs text-white/70 mt-1">先去优化简历或直接开始模拟面试吧！</p>
+                {/* Info & Action Container */}
+                <div
+                    onClick={primaryAction.onClick}
+                    className="bg-black/10 rounded-2xl p-4 backdrop-blur-md border border-white/5 shadow-inner cursor-pointer hover:bg-white/10 active:scale-[0.98] transition-all group/action flex items-center justify-between"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="size-10 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-white text-xl">{primaryAction.icon}</span>
                         </div>
-                    )}
-                </div>
+                        <div>
+                            <p className="text-base font-bold text-white tracking-tight">{primaryAction.label}</p>
+                            <p className="text-[11px] text-white/70 mt-0.5">{primaryAction.description}</p>
+                        </div>
+                    </div>
 
-                {/* Actions */}
-                <div className="flex items-center gap-3 pt-1">
-                    <button
-                        onClick={() => onContinueDiagnosis(resume)}
-                        className="flex-1 flex items-center justify-center bg-white text-primary hover:bg-white/90 active:scale-[0.97] h-12 rounded-xl text-sm font-black shadow-[0_8px_20px_rgba(0,0,0,0.2)] transition-all"
-                    >
-                        <span>{diagnosisActionLabel}</span>
-                    </button>
-
-                    <button
-                        onClick={() => onContinueInterview(resume)}
-                        className="flex-1 flex items-center justify-center h-12 rounded-xl bg-white/10 hover:bg-white/20 active:scale-[0.97] backdrop-blur-xl border border-white/20 text-white text-sm font-black transition-all"
-                    >
-                        {interviewActionLabel}
-                    </button>
+                    <div className="size-8 rounded-full bg-white text-primary flex items-center justify-center shrink-0 shadow-sm group-hover/action:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                    </div>
                 </div>
             </div>
         </div>

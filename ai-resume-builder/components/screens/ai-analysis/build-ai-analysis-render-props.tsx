@@ -102,7 +102,7 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   postInterviewAnnotations: p.postInterviewAnnotations,
   handlePostInterviewFeedback: p.handlePostInterviewFeedback,
   handleCompleteAndSavePostInterview: p.handleCompleteAndSavePostInterview,
-  finalReportSummary: p.finalReportOverride?.summary || '最终报告生成中，请稍候…',
+  finalReportSummary: p.finalReportOverride?.summary || '报告生成中，请稍候…',
   finalReportAdvice: p.finalReportOverride?.advice || [],
   finalReportScore: p.finalReportOverride?.score ?? 0,
   handleStartInterviewFromFinalReport: p.handleStartInterviewFromFinalReport,

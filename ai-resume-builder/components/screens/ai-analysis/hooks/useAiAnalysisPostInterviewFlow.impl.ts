@@ -156,7 +156,7 @@ export const useAiAnalysisPostInterviewFlow = ({
     showToast,
     effectivePostInterviewSummary: resolvedFinalReport
       ? effectivePostInterviewSummary
-      : '最终分析报告生成中，请稍候…',
+      : '分析报告生成中，请稍候…',
     postInterviewGeneratedResume,
     postInterviewOriginalResume,
     resumeId: resumeData?.id,
@@ -209,7 +209,7 @@ export const useAiAnalysisPostInterviewFlow = ({
       ? effectivePostInterviewSummary
       : '',
     finalReportScore: resolvedFinalReport ? finalReportScore : 0,
-    finalReportSummary: resolvedFinalReport ? finalReportSummary : '最终报告生成中，请稍候…',
+    finalReportSummary: resolvedFinalReport ? finalReportSummary : '报告生成中，请稍候…',
     finalReportAdvice: resolvedFinalReport ? finalReportAdvice : [],
     finalReportOverride: resolvedFinalReport,
     isFinalReportGenerating,

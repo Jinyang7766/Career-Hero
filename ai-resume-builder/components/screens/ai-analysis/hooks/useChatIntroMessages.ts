@@ -28,22 +28,7 @@ export const useChatIntroMessages = ({
   jdText,
 }: Params) => {
   const askTimerRef = useRef<number | null>(null);
-  const summaryTimerRefs = useRef<number[]>([]);
   const hasText = (value: any) => String(value ?? '').trim().length > 0;
-  const splitSentences = (input: string) => {
-    const source = String(input || '').trim();
-    if (!source) return [];
-    const matches = source.match(/[^。！？!?；;]+[。！？!?；;]?/g);
-    if (!matches) return [source];
-    return matches.map((segment) => segment.trim()).filter(Boolean);
-  };
-  const compactIntroSegments = (segments: string[]) => {
-    const list = Array.isArray(segments) ? segments.filter(Boolean) : [];
-    if (list.length <= 3) {
-      return list.length ? [list.join('')] : [];
-    }
-    return [list.slice(0, 3).join(''), ...list.slice(3)];
-  };
   const resolveUserName = () => {
     if (!resumeData?.personalInfo?.name) return '';
     const fullName = String(resumeData.personalInfo.name || '').trim();
@@ -137,10 +122,6 @@ export const useChatIntroMessages = ({
 
   useEffect(() => {
     if (currentStep !== 'chat') {
-      if (summaryTimerRefs.current.length) {
-        summaryTimerRefs.current.forEach((timer) => window.clearTimeout(timer));
-        summaryTimerRefs.current = [];
-      }
       if (askTimerRef.current) {
         window.clearTimeout(askTimerRef.current);
         askTimerRef.current = null;
@@ -165,58 +146,41 @@ export const useChatIntroMessages = ({
     setChatInitialized(true);
 
     const intro = buildIntroTexts(resolveUserName());
-    const summarySentences = splitSentences(intro.summary);
-    const summarySegments = compactIntroSegments(
-      summarySentences.length ? summarySentences : [String(intro.summary || '').trim()]
-    );
-    if (summarySegments.length > 0 && summarySegments[0]) {
-      const firstMessage: ChatMessage = {
-        id: 'ai-summary-0',
+    const summaryText = String(intro.summary || '').trim();
+    if (summaryText) {
+      const summaryMessage: ChatMessage = {
+        id: 'ai-summary',
         role: 'model',
-        text: summarySegments[0],
+        text: summaryText,
       };
-      setChatMessages((prev) => (prev.some((m) => m.id === firstMessage.id) ? prev : [...prev, firstMessage]));
-    }
-
-    const perSentenceDelayMs = 420;
-    if (summaryTimerRefs.current.length) {
-      summaryTimerRefs.current.forEach((timer) => window.clearTimeout(timer));
-      summaryTimerRefs.current = [];
-    }
-    for (let i = 1; i < summarySegments.length; i += 1) {
-      const timer = window.setTimeout(() => {
-        const message: ChatMessage = {
-          id: `ai-summary-${i}`,
-          role: 'model',
-          text: summarySegments[i],
-        };
-        setChatMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]));
-      }, i * perSentenceDelayMs);
-      summaryTimerRefs.current.push(timer);
+      setChatMessages((prev) => {
+        const filtered = prev.filter((m) => !String((m as any)?.id || '').startsWith('ai-summary-'));
+        return filtered.some((m) => m.id === summaryMessage.id) ? filtered : [...filtered, summaryMessage];
+      });
     }
 
     if (askTimerRef.current) {
       window.clearTimeout(askTimerRef.current);
       askTimerRef.current = null;
     }
-    const askDelayMs = Math.max(1, summarySegments.length) * perSentenceDelayMs + 280;
+    const askDelayMs = summaryText ? 700 : 280;
     askTimerRef.current = window.setTimeout(() => {
       const askMessage: ChatMessage = {
         id: 'ai-ask',
         role: 'model',
         text: intro.ask
       };
-      setChatMessages(prev => (prev.some(m => m.id === askMessage.id) ? prev : [...prev, askMessage]));
-      if (summaryTimerRefs.current.length) {
-        summaryTimerRefs.current = [];
-      }
+      setChatMessages((prev) => {
+        const filtered = prev.filter((m) => !String((m as any)?.id || '').startsWith('ai-summary-'));
+        return filtered.some((m) => m.id === askMessage.id) ? filtered : [...filtered, askMessage];
+      });
       askTimerRef.current = null;
     }, askDelayMs);
   }, [currentStep, chatInitialized, isInterviewMode, jdText, resumeData?.personalInfo?.name, resumeData?.interviewSessions, resumeData?.lastJdText, chatIntroScheduledRef, chatMessagesRef, setChatInitialized, setChatMessages]);
 
   useEffect(() => {
     if (currentStep !== 'chat') return;
-    if (chatIntroScheduledRef.current && (askTimerRef.current || summaryTimerRefs.current.length)) return;
+    if (chatIntroScheduledRef.current && askTimerRef.current) return;
     const messages = Array.isArray(chatMessagesRef.current) ? chatMessagesRef.current : [];
     if (!messages.length) return;
     const introOnly = messages.every((m) => {
@@ -224,23 +188,24 @@ export const useChatIntroMessages = ({
       return (m as any)?.role === 'model' && (id === 'ai-ask' || id === 'ai-summary' || id.startsWith('ai-summary-'));
     });
     if (!introOnly) return;
-    const hasValidSummary = messages.some((m) => String((m as any)?.id || '').trim().startsWith('ai-summary') && hasText((m as any)?.text));
+    const hasValidSummary = messages.some((m) => {
+      const id = String((m as any)?.id || '').trim();
+      return (id === 'ai-summary' || id.startsWith('ai-summary-')) && hasText((m as any)?.text);
+    });
     const hasValidAsk = messages.some((m) => String((m as any)?.id || '').trim() === 'ai-ask' && hasText((m as any)?.text));
     if (hasValidSummary && hasValidAsk) return;
 
     const intro = buildIntroTexts(resolveUserName());
-    const summarySentences = splitSentences(intro.summary);
-    const summarySegments = compactIntroSegments(
-      summarySentences.length ? summarySentences : [String(intro.summary || '').trim()]
-    );
-    const repaired: ChatMessage[] = [
-      ...summarySegments.map((segment, idx) => ({
-        id: `ai-summary-${idx}`,
-        role: 'model' as const,
-        text: segment,
-      })),
-      { id: 'ai-ask', role: 'model', text: intro.ask },
-    ];
+    const summaryText = String(intro.summary || '').trim();
+    const repaired: ChatMessage[] = [];
+    if (summaryText) {
+      repaired.push({
+        id: 'ai-summary',
+        role: 'model',
+        text: summaryText,
+      });
+    }
+    repaired.push({ id: 'ai-ask', role: 'model', text: intro.ask });
     setChatMessages(repaired);
     if (!chatInitialized) {
       setChatInitialized(true);
