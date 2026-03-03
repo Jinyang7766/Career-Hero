@@ -7,12 +7,17 @@ import {
   undoPreviewHistory,
   type PreviewHistoryState,
 } from '../history-stack';
+import { resolvePreviewDirtyKeys } from '../preview-dirty';
 
 type Params = {
   resumeData: ResumeData | null | undefined;
   setResumeData: (data: ResumeData | ((prev: ResumeData) => ResumeData)) => void;
   enabled: boolean;
   maxHistory?: number;
+};
+
+type ApplyEditMutationOptions = {
+  dirtyKeys?: string[];
 };
 
 const DEFAULT_MAX_HISTORY = 40;
@@ -24,8 +29,12 @@ export const usePreviewEditHistory = ({
   maxHistory = DEFAULT_MAX_HISTORY,
 }: Params) => {
   const [history, setHistory] = React.useState<PreviewHistoryState<ResumeData>>(createPreviewHistoryState);
+  const [dirtyFieldKeys, setDirtyFieldKeys] = React.useState<string[]>([]);
+
   const historyRef = React.useRef(history);
   const currentRef = React.useRef<ResumeData | null | undefined>(resumeData);
+  const baselineRef = React.useRef<ResumeData | null | undefined>(null);
+  const trackedDirtyKeysRef = React.useRef<Set<string>>(new Set());
 
   React.useEffect(() => {
     historyRef.current = history;
@@ -35,14 +44,50 @@ export const usePreviewEditHistory = ({
     currentRef.current = resumeData;
   }, [resumeData]);
 
-  React.useEffect(() => {
-    if (enabled) return;
-    const reset = createPreviewHistoryState<ResumeData>();
-    historyRef.current = reset;
-    setHistory(reset);
-  }, [enabled]);
+  const refreshDirtyState = React.useCallback((nextData: ResumeData | null | undefined, incomingKeys?: string[]) => {
+    if (incomingKeys?.length) {
+      incomingKeys
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .forEach((item) => trackedDirtyKeysRef.current.add(item));
+    }
 
-  const applyEditMutation = React.useCallback((updater: (current: ResumeData) => ResumeData) => {
+    const baseline = baselineRef.current;
+    if (!baseline || !nextData) {
+      setDirtyFieldKeys([]);
+      return;
+    }
+
+    const nextDirtyKeys = resolvePreviewDirtyKeys({
+      baseline,
+      current: nextData,
+      trackedKeys: trackedDirtyKeysRef.current,
+    });
+    setDirtyFieldKeys(nextDirtyKeys);
+  }, []);
+
+  React.useEffect(() => {
+    if (!enabled) {
+      const reset = createPreviewHistoryState<ResumeData>();
+      historyRef.current = reset;
+      setHistory(reset);
+      baselineRef.current = null;
+      trackedDirtyKeysRef.current = new Set();
+      setDirtyFieldKeys([]);
+      return;
+    }
+
+    if (!baselineRef.current && resumeData) {
+      baselineRef.current = resumeData;
+      trackedDirtyKeysRef.current = new Set();
+      setDirtyFieldKeys([]);
+    }
+  }, [enabled, resumeData]);
+
+  const applyEditMutation = React.useCallback((
+    updater: (current: ResumeData) => ResumeData,
+    options?: ApplyEditMutationOptions
+  ) => {
     if (!enabled) return;
     const current = currentRef.current;
     if (!current) return;
@@ -53,8 +98,9 @@ export const usePreviewEditHistory = ({
     historyRef.current = nextHistory;
     setHistory(nextHistory);
     currentRef.current = next;
+    refreshDirtyState(next, options?.dirtyKeys);
     setResumeData(next);
-  }, [enabled, maxHistory, setResumeData]);
+  }, [enabled, maxHistory, refreshDirtyState, setResumeData]);
 
   const undo = React.useCallback(() => {
     if (!enabled) return;
@@ -66,8 +112,9 @@ export const usePreviewEditHistory = ({
     historyRef.current = result.history;
     setHistory(result.history);
     currentRef.current = result.snapshot;
+    refreshDirtyState(result.snapshot);
     setResumeData(result.snapshot);
-  }, [enabled, setResumeData]);
+  }, [enabled, refreshDirtyState, setResumeData]);
 
   const redo = React.useCallback(() => {
     if (!enabled) return;
@@ -79,8 +126,12 @@ export const usePreviewEditHistory = ({
     historyRef.current = result.history;
     setHistory(result.history);
     currentRef.current = result.snapshot;
+    refreshDirtyState(result.snapshot);
     setResumeData(result.snapshot);
-  }, [enabled, setResumeData]);
+  }, [enabled, refreshDirtyState, setResumeData]);
+
+  const dirtySet = React.useMemo(() => new Set(dirtyFieldKeys), [dirtyFieldKeys]);
+  const isFieldDirty = React.useCallback((dirtyKey: string) => dirtySet.has(dirtyKey), [dirtySet]);
 
   return {
     canUndo: history.past.length > 0,
@@ -88,6 +139,8 @@ export const usePreviewEditHistory = ({
     undo,
     redo,
     applyEditMutation,
+    dirtyFieldKeys,
+    hasDirtyChanges: dirtyFieldKeys.length > 0,
+    isFieldDirty,
   };
 };
-

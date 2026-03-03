@@ -14,6 +14,15 @@ import { hasMeaningfulResumeData, usePreviewRestore } from './preview/hooks/useP
 import { usePreviewSectionOrder } from './preview/hooks/usePreviewSectionOrder';
 import { usePreviewZoomPan } from './preview/hooks/usePreviewZoomPan';
 import { buildSectionTitleFocusKey, buildSkillFocusKey } from './preview/inline-focus';
+import {
+  buildPreviewPersonalDirtyKey,
+  buildPreviewSectionCollectionDirtyKey,
+  buildPreviewSectionFieldDirtyKey,
+  buildPreviewSkillDirtyKey,
+  buildPreviewSkillsCollectionDirtyKey,
+  buildPreviewSummaryDirtyKey,
+} from './preview/preview-dirty';
+import { getPreviewExportGuardState } from './preview/preview-export-guard';
 import { renderPreviewTemplate, TEMPLATE_OPTIONS } from './preview/PreviewTemplates';
 import {
   addResumeSectionItem,
@@ -148,6 +157,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     undo,
     redo,
     applyEditMutation,
+    hasDirtyChanges,
+    isFieldDirty,
   } = usePreviewEditHistory({
     resumeData: resumeData as any,
     setResumeData: setResumeData as any,
@@ -155,7 +166,10 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
   });
 
   const handlePersonalFieldChange = React.useCallback((field: keyof ResumeData['personalInfo'], value: string) => {
-    applyEditMutation((current) => updateResumePersonalField(current, field as any, value));
+    applyEditMutation(
+      (current) => updateResumePersonalField(current, field as any, value),
+      { dirtyKeys: [buildPreviewPersonalDirtyKey(field)] }
+    );
   }, [applyEditMutation]);
 
   const handleSummaryChange = React.useCallback((value: string) => {
@@ -166,7 +180,9 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
         ...current.personalInfo,
         summary: value,
       },
-    }));
+    }), {
+      dirtyKeys: [buildPreviewSummaryDirtyKey()],
+    });
   }, [applyEditMutation]);
 
   const handleSectionItemChange = React.useCallback((
@@ -175,7 +191,10 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     field: 'title' | 'subtitle' | 'description' | 'date',
     value: string
   ) => {
-    applyEditMutation((current) => updateResumeSectionItem(current, section as any, id, field as any, value));
+    applyEditMutation(
+      (current) => updateResumeSectionItem(current, section as any, id, field as any, value),
+      { dirtyKeys: [buildPreviewSectionFieldDirtyKey(section, id, field)] }
+    );
   }, [applyEditMutation]);
 
   const queueAutoFocus = React.useCallback((key: string) => {
@@ -185,11 +204,17 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
   const handleAddSectionItem = React.useCallback((section: 'workExps' | 'educations' | 'projects') => {
     const itemId = Date.now();
     queueAutoFocus(buildSectionTitleFocusKey(section, itemId));
-    applyEditMutation((current) => addResumeSectionItem(current, section, itemId));
+    applyEditMutation(
+      (current) => addResumeSectionItem(current, section, itemId),
+      { dirtyKeys: [buildPreviewSectionCollectionDirtyKey(section)] }
+    );
   }, [applyEditMutation, queueAutoFocus]);
 
   const handleRemoveSectionItem = React.useCallback((section: 'workExps' | 'educations' | 'projects', id: number) => {
-    applyEditMutation((current) => removeResumeSectionItem(current, section, id));
+    applyEditMutation(
+      (current) => removeResumeSectionItem(current, section, id),
+      { dirtyKeys: [buildPreviewSectionCollectionDirtyKey(section)] }
+    );
   }, [applyEditMutation]);
 
   const handleSkillsTextChange = React.useCallback((value: string) => {
@@ -200,7 +225,9 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     applyEditMutation((current) => ({
       ...current,
       skills,
-    }));
+    }), {
+      dirtyKeys: [buildPreviewSkillsCollectionDirtyKey()],
+    });
   }, [applyEditMutation]);
 
   const handleSkillItemChange = React.useCallback((index: number, value: string) => {
@@ -216,6 +243,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
         ...current,
         skills: next.filter((item) => String(item || '').trim().length > 0),
       };
+    }, {
+      dirtyKeys: [buildPreviewSkillDirtyKey(index), buildPreviewSkillsCollectionDirtyKey()],
     });
   }, [applyEditMutation]);
 
@@ -225,11 +254,16 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     applyEditMutation((current) => ({
       ...current,
       skills: [...(Array.isArray(current.skills) ? current.skills : []), '新技能'],
-    }));
+    }), {
+      dirtyKeys: [buildPreviewSkillsCollectionDirtyKey()],
+    });
   }, [applyEditMutation, queueAutoFocus, resumeData]);
 
   const handleRemoveSkillItem = React.useCallback((index: number) => {
-    applyEditMutation((current) => removeResumeSkillByIndex(current, index));
+    applyEditMutation(
+      (current) => removeResumeSkillByIndex(current, index),
+      { dirtyKeys: [buildPreviewSkillDirtyKey(index), buildPreviewSkillsCollectionDirtyKey()] }
+    );
   }, [applyEditMutation]);
 
   const handleUndo = React.useCallback(() => {
@@ -263,6 +297,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           onAddSkillItem: handleAddSkillItem,
           onRemoveSkillItem: handleRemoveSkillItem,
           onSkillsTextChange: handleSkillsTextChange,
+          isFieldDirty,
           autoFocusKey: autoFocusRequest.key,
           autoFocusToken: autoFocusRequest.token,
         }
@@ -280,7 +315,18 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
       handleSkillsTextChange,
       handleSummaryChange,
       isEditMode,
+      isFieldDirty,
     ]
+  );
+
+  const exportGuard = React.useMemo(
+    () => getPreviewExportGuardState({
+      isEditMode,
+      isSavingEdit,
+      hasDirtyChanges,
+      isGenerating,
+    }),
+    [hasDirtyChanges, isEditMode, isGenerating, isSavingEdit]
   );
 
   return (
@@ -314,6 +360,15 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
                 >
                   <span className="material-symbols-outlined text-[18px]">redo</span>
                 </button>
+                <span
+                  className={`inline-flex h-7 px-2 rounded-full text-[11px] font-semibold items-center border ${
+                    hasDirtyChanges
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  }`}
+                >
+                  {hasDirtyChanges ? '未保存改动' : '已保存'}
+                </span>
               </>
             ) : null}
             <button
@@ -431,30 +486,37 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           </div>
         </div>
 
-        {!isEditMode && (
-          <div className="w-[85%] flex flex-col gap-4">
-            <button
-              onClick={handleExportPDF}
-              disabled={isGenerating}
-              className="w-full flex items-center justify-center gap-2 h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white rounded-xl shadow-[0_0_20px_rgba(19,127,236,0.15)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isGenerating ? (
-                <>
-                  <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                  <span className="text-base font-bold tracking-wide">生成中...</span>
-                </>
-              ) : (
-                <>
-                  <span className="material-symbols-outlined text-[24px]">download</span>
-                  <span className="text-base font-bold tracking-wide">导出 PDF</span>
-                </>
-              )}
-            </button>
-            <p className="text-center text-xs text-slate-400 dark:text-slate-600 mt-2 mb-4">
-              注意：PDF导出样式取决于后端生成配置，可能与预览略有差异。
-            </p>
-          </div>
-        )}
+        <div className="w-[85%] flex flex-col gap-3">
+          <button
+            onClick={handleExportPDF}
+            disabled={exportGuard.disabled}
+            title={exportGuard.reason || '导出 PDF'}
+            className="w-full flex items-center justify-center gap-2 h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white rounded-xl shadow-[0_0_20px_rgba(19,127,236,0.15)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isGenerating ? (
+              <>
+                <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                <span className="text-base font-bold tracking-wide">{exportGuard.buttonText}</span>
+              </>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-[24px]">
+                  {exportGuard.disabled ? 'lock' : 'download'}
+                </span>
+                <span className="text-base font-bold tracking-wide">{exportGuard.buttonText}</span>
+              </>
+            )}
+          </button>
+          <p
+            className={`text-center text-xs mt-1 mb-4 ${
+              exportGuard.disabled
+                ? 'text-amber-600 dark:text-amber-300'
+                : 'text-slate-400 dark:text-slate-600'
+            }`}
+          >
+            {exportGuard.helperText}
+          </p>
+        </div>
       </main>
 
       <BottomNav />

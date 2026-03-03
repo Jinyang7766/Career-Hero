@@ -3,6 +3,14 @@ import type { ResumeData } from '../../../types';
 import { formatTimeline } from '../../../src/timeline-utils';
 import type { MoveSectionDirection, PreviewSectionKey } from './hooks/usePreviewSectionOrder';
 import { buildSectionTitleFocusKey, buildSkillFocusKey } from './inline-focus';
+import {
+  buildPreviewPersonalDirtyKey,
+  buildPreviewSectionCollectionDirtyKey,
+  buildPreviewSectionFieldDirtyKey,
+  buildPreviewSkillDirtyKey,
+  buildPreviewSkillsCollectionDirtyKey,
+  buildPreviewSummaryDirtyKey,
+} from './preview-dirty';
 
 export type PreviewEditBindings = {
   enabled: boolean;
@@ -21,6 +29,7 @@ export type PreviewEditBindings = {
   onAddSkillItem: () => void;
   onRemoveSkillItem: (index: number) => void;
   onSkillsTextChange: (value: string) => void;
+  isFieldDirty?: (dirtyKey: string) => boolean;
   autoFocusKey?: string;
   autoFocusToken?: number;
 };
@@ -36,7 +45,10 @@ type EditableTextProps = {
   focusKey?: string;
   autoFocusKey?: string;
   autoFocusToken?: number;
+  dirtyKey?: string;
 };
+
+const PreviewDirtyContext = React.createContext<((dirtyKey: string) => boolean) | undefined>(undefined);
 
 const EditableText: React.FC<EditableTextProps> = ({
   as = 'span',
@@ -49,12 +61,16 @@ const EditableText: React.FC<EditableTextProps> = ({
   focusKey,
   autoFocusKey,
   autoFocusToken,
+  dirtyKey,
 }) => {
   const Tag = as as any;
   const elementRef = React.useRef<HTMLElement | null>(null);
+  const isFieldDirty = React.useContext(PreviewDirtyContext);
+  const isDirty = Boolean(editable && dirtyKey && isFieldDirty?.(dirtyKey));
   const editableClass = editable
     ? 'rounded-sm px-0.5 -mx-0.5 hover:bg-amber-100/70 focus:bg-amber-100/70 focus:outline-none focus:ring-1 focus:ring-amber-300'
     : '';
+  const dirtyClass = isDirty ? 'bg-amber-50 ring-1 ring-amber-300' : '';
 
   const handleBlur = (event: React.FocusEvent<HTMLElement>) => {
     if (!editable || !onCommit) return;
@@ -106,7 +122,7 @@ const EditableText: React.FC<EditableTextProps> = ({
   return React.createElement(
     Tag,
     {
-      className: [className, editableClass].filter(Boolean).join(' '),
+      className: [className, editableClass, dirtyClass].filter(Boolean).join(' '),
       style,
       ref: elementRef as any,
       contentEditable: editable || undefined,
@@ -115,7 +131,10 @@ const EditableText: React.FC<EditableTextProps> = ({
       onBlur: handleBlur,
       onKeyDown: handleKeyDown,
       onPaste: handlePaste,
+      title: isDirty ? 'Field has unsaved edits' : undefined,
       'data-focus-key': focusKey,
+      'data-dirty-key': dirtyKey,
+      'data-dirty': isDirty ? 'true' : undefined,
     },
     value
   );
@@ -285,8 +304,18 @@ const HeaderActions: React.FC<{
   hideOrderButtons?: boolean;
   canAdd?: boolean;
   onAdd?: () => void;
-}> = ({ sectionOrderIndex, total, onMoveSection, hideOrderButtons, canAdd, onAdd }) => (
+  dirty?: boolean;
+}> = ({ sectionOrderIndex, total, onMoveSection, hideOrderButtons, canAdd, onAdd, dirty }) => (
   <div className="flex items-center gap-1">
+    {dirty ? (
+      <span
+        className="no-print inline-flex items-center justify-center w-5 h-5 rounded-full bg-amber-100 text-amber-600 text-[10px] font-bold"
+        title="该模块存在未保存改动"
+        aria-label="该模块存在未保存改动"
+      >
+        •
+      </span>
+    ) : null}
     {canAdd && onAdd ? (
       <EditIconButton icon="add" label="新增条目" onClick={onAdd} />
     ) : null}
@@ -306,7 +335,8 @@ const ModernTemplate: React.FC<{
   hideOrderButtons?: boolean;
   editBindings?: PreviewEditBindings;
 }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
-  <div id="resume-content-modern" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
+  <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
+    <div id="resume-content-modern" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="flex gap-4 mb-6 border-b border-gray-200 pb-4 no-break">
       <div className="w-16 h-20 bg-gray-200 rounded-sm shrink-0 overflow-hidden">
         {data?.personalInfo?.avatar ? (
@@ -324,6 +354,7 @@ const ModernTemplate: React.FC<{
           style={{ fontSize: '18px', fontWeight: 'bold' }}
           value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
           editable={!!editBindings?.enabled}
+          dirtyKey={buildPreviewPersonalDirtyKey('name')}
           onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
         />
         <EditableText
@@ -332,6 +363,7 @@ const ModernTemplate: React.FC<{
           style={{ fontSize: '14px', color: '#666' }}
           value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
           editable={!!editBindings?.enabled}
+          dirtyKey={buildPreviewPersonalDirtyKey('title')}
           onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
         />
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
@@ -365,6 +397,7 @@ const ModernTemplate: React.FC<{
               value={resolveSummaryText(data)}
               editable={!!editBindings?.enabled}
               multiline
+              dirtyKey={buildPreviewSummaryDirtyKey()}
               onCommit={(value) => editBindings?.onSummaryChange(value)}
             />
           </div>
@@ -382,6 +415,7 @@ const ModernTemplate: React.FC<{
                 hideOrderButtons={hideOrderButtons}
                 canAdd={!!editBindings?.enabled}
                 onAdd={editBindings?.onAddWorkItem}
+                dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('workExps'))}
               />
             </div>
             {data.workExps.length === 0 && editBindings?.enabled ? (
@@ -405,6 +439,7 @@ const ModernTemplate: React.FC<{
                     focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
                     autoFocusKey={editBindings?.autoFocusKey}
                     autoFocusToken={editBindings?.autoFocusToken}
+                    dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'title')}
                     onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
                   />
                   <EditableText
@@ -412,6 +447,7 @@ const ModernTemplate: React.FC<{
                     style={{ fontSize: '10px', color: '#6b7280' }}
                     value={formatDateRange(exp) || (editBindings?.enabled ? '' : '工作时间')}
                     editable={!!editBindings?.enabled}
+                    dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'date')}
                     onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
                   />
                 </div>
@@ -421,6 +457,7 @@ const ModernTemplate: React.FC<{
                   style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}
                   value={resolveExperienceSubtitle(exp) || (editBindings?.enabled ? '' : '职位')}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'subtitle')}
                   onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
                 />
                 <EditableText
@@ -430,6 +467,7 @@ const ModernTemplate: React.FC<{
                   value={String(exp.description || '')}
                   editable={!!editBindings?.enabled}
                   multiline
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'description')}
                   onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
                 />
               </div>
@@ -449,6 +487,7 @@ const ModernTemplate: React.FC<{
                 hideOrderButtons={hideOrderButtons}
                 canAdd={!!editBindings?.enabled}
                 onAdd={editBindings?.onAddEducationItem}
+                dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('educations'))}
               />
             </div>
             {data.educations.length === 0 && editBindings?.enabled ? (
@@ -471,6 +510,7 @@ const ModernTemplate: React.FC<{
                   focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
                   autoFocusKey={editBindings?.autoFocusKey}
                   autoFocusToken={editBindings?.autoFocusToken}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'title')}
                   onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
                 />
                 <EditableText
@@ -478,6 +518,7 @@ const ModernTemplate: React.FC<{
                   style={{ fontSize: '10px', color: '#6b7280' }}
                   value={formatDateRange(edu) || (editBindings?.enabled ? '' : '教育时间')}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'date')}
                   onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
                 />
               </div>
@@ -491,6 +532,7 @@ const ModernTemplate: React.FC<{
                   style={{ fontSize: '10px', color: '#4b5563' }}
                   value={resolveExperienceSubtitle(edu)}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'subtitle')}
                   onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
                 />
               ))}
@@ -510,6 +552,7 @@ const ModernTemplate: React.FC<{
                 hideOrderButtons={hideOrderButtons}
                 canAdd={!!editBindings?.enabled}
                 onAdd={editBindings?.onAddProjectItem}
+                dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('projects'))}
               />
             </div>
             {data.projects.length === 0 && editBindings?.enabled ? (
@@ -533,6 +576,7 @@ const ModernTemplate: React.FC<{
                     focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
                     autoFocusKey={editBindings?.autoFocusKey}
                     autoFocusToken={editBindings?.autoFocusToken}
+                    dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'title')}
                     onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
                   />
                   <EditableText
@@ -540,6 +584,7 @@ const ModernTemplate: React.FC<{
                     style={{ fontSize: '10px', color: '#6b7280' }}
                     value={formatDateRange(proj) || (editBindings?.enabled ? '' : '项目时间')}
                     editable={!!editBindings?.enabled}
+                    dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'date')}
                     onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
                   />
                 </div>
@@ -549,6 +594,7 @@ const ModernTemplate: React.FC<{
                   style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}
                   value={resolveExperienceSubtitle(proj) || (editBindings?.enabled ? '' : '项目角色')}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'subtitle')}
                   onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
                 />
                 <EditableText
@@ -558,6 +604,7 @@ const ModernTemplate: React.FC<{
                   value={String(proj.description || '')}
                   editable={!!editBindings?.enabled}
                   multiline
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'description')}
                   onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
                 />
               </div>
@@ -580,6 +627,7 @@ const ModernTemplate: React.FC<{
                 hideOrderButtons={hideOrderButtons}
                 canAdd={!!editBindings?.enabled}
                 onAdd={editBindings?.onAddSkillItem}
+                dirty={editBindings?.isFieldDirty?.(buildPreviewSkillsCollectionDirtyKey())}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -592,6 +640,7 @@ const ModernTemplate: React.FC<{
                     focusKey={buildSkillFocusKey(index)}
                     autoFocusKey={editBindings?.autoFocusKey}
                     autoFocusToken={editBindings?.autoFocusToken}
+                    dirtyKey={buildPreviewSkillDirtyKey(index)}
                     onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
                   />
                   {editBindings?.enabled ? (
@@ -609,11 +658,13 @@ const ModernTemplate: React.FC<{
       }
       return null;
     })}
-  </div>
+    </div>
+  </PreviewDirtyContext.Provider>
 );
 
 const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; editBindings?: PreviewEditBindings; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
-  <div id="resume-content-classic" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
+  <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
+    <div id="resume-content-classic" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
       <div className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 flex items-center justify-center text-gray-400">
         {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[28px]">person</span>}
@@ -623,6 +674,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         className="text-2xl font-bold text-black uppercase tracking-wider mb-2"
         value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
         editable={!!editBindings?.enabled}
+        dirtyKey={buildPreviewPersonalDirtyKey('name')}
         onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
       />
       <EditableText
@@ -630,6 +682,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         className="text-base text-gray-800 font-serif italic mb-2"
         value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
         editable={!!editBindings?.enabled}
+        dirtyKey={buildPreviewPersonalDirtyKey('title')}
         onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
       />
       <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs text-gray-600">
@@ -659,6 +712,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
             value={resolveSummaryText(data)}
             editable={!!editBindings?.enabled}
             multiline
+            dirtyKey={buildPreviewSummaryDirtyKey()}
             onCommit={(value) => editBindings?.onSummaryChange(value)}
           />
         </div>
@@ -674,6 +728,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               hideOrderButtons={hideOrderButtons}
               canAdd={!!editBindings?.enabled}
               onAdd={editBindings?.onAddWorkItem}
+              dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('workExps'))}
             />
           </div>
           {data.workExps.length === 0 && editBindings?.enabled ? (
@@ -696,12 +751,14 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
                   autoFocusKey={editBindings?.autoFocusKey}
                   autoFocusToken={editBindings?.autoFocusToken}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'title')}
                   onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
                 />
                 <EditableText
                   className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
                   value={formatDateRange(exp) || (editBindings?.enabled ? '' : '工作时间')}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'date')}
                   onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
                 />
               </div>
@@ -710,6 +767,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 className="text-xs font-bold text-gray-800 mb-1"
                 value={resolveExperienceSubtitle(exp) || (editBindings?.enabled ? '' : '职位')}
                 editable={!!editBindings?.enabled}
+                dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'subtitle')}
                 onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
               />
               <EditableText
@@ -718,6 +776,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 value={String(exp.description || '')}
                 editable={!!editBindings?.enabled}
                 multiline
+                dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'description')}
                 onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
               />
             </div>
@@ -735,6 +794,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               hideOrderButtons={hideOrderButtons}
               canAdd={!!editBindings?.enabled}
               onAdd={editBindings?.onAddEducationItem}
+              dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('educations'))}
             />
           </div>
           {data.educations.length === 0 && editBindings?.enabled ? (
@@ -758,6 +818,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
                   autoFocusKey={editBindings?.autoFocusKey}
                   autoFocusToken={editBindings?.autoFocusToken}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'title')}
                   onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
                 />
                 <EditableText
@@ -765,6 +826,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   className="text-xs text-gray-800"
                   value={resolveExperienceSubtitle(edu)}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'subtitle')}
                   onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
                 />
               </div>
@@ -772,6 +834,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
                 value={formatDateRange(edu) || (editBindings?.enabled ? '' : '教育时间')}
                 editable={!!editBindings?.enabled}
+                dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'date')}
                 onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
               />
             </div>
@@ -789,6 +852,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               hideOrderButtons={hideOrderButtons}
               canAdd={!!editBindings?.enabled}
               onAdd={editBindings?.onAddProjectItem}
+              dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('projects'))}
             />
           </div>
           {data.projects.length === 0 && editBindings?.enabled ? (
@@ -811,12 +875,14 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
                   autoFocusKey={editBindings?.autoFocusKey}
                   autoFocusToken={editBindings?.autoFocusToken}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'title')}
                   onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
                 />
                 <EditableText
                   className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
                   value={formatDateRange(proj) || (editBindings?.enabled ? '' : '项目时间')}
                   editable={!!editBindings?.enabled}
+                  dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'date')}
                   onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
                 />
               </div>
@@ -825,6 +891,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 className="text-xs font-bold text-gray-800 mb-1"
                 value={resolveExperienceSubtitle(proj) || (editBindings?.enabled ? '' : '项目角色')}
                 editable={!!editBindings?.enabled}
+                dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'subtitle')}
                 onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
               />
               <EditableText
@@ -833,6 +900,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 value={String(proj.description || '')}
                 editable={!!editBindings?.enabled}
                 multiline
+                dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'description')}
                 onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
               />
             </div>
@@ -853,6 +921,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
               hideOrderButtons={hideOrderButtons}
               canAdd={!!editBindings?.enabled}
               onAdd={editBindings?.onAddSkillItem}
+              dirty={editBindings?.isFieldDirty?.(buildPreviewSkillsCollectionDirtyKey())}
             />
           </div>
           <div className="flex flex-wrap gap-2 pl-2">
@@ -866,6 +935,7 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   focusKey={buildSkillFocusKey(index)}
                   autoFocusKey={editBindings?.autoFocusKey}
                   autoFocusToken={editBindings?.autoFocusToken}
+                  dirtyKey={buildPreviewSkillDirtyKey(index)}
                   onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
                 />
                 {editBindings?.enabled ? (
@@ -883,11 +953,13 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
       }
       return null;
     })}
-  </div>
+    </div>
+  </PreviewDirtyContext.Provider>
 );
 
 const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; editBindings?: PreviewEditBindings; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
-  <div id="resume-content-minimal" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
+  <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
+    <div id="resume-content-minimal" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-10 no-break">
       <div className="mb-4 w-14 h-14 rounded-full border border-slate-300 bg-slate-200 flex items-center justify-center text-slate-400">
         {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[24px]">person</span>}
@@ -897,6 +969,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         className="text-4xl font-black text-black tracking-tight mb-2"
         value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
         editable={!!editBindings?.enabled}
+        dirtyKey={buildPreviewPersonalDirtyKey('name')}
         onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
       />
       <EditableText
@@ -904,6 +977,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         className="text-lg text-gray-500 font-light mb-4"
         value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
         editable={!!editBindings?.enabled}
+        dirtyKey={buildPreviewPersonalDirtyKey('title')}
         onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
       />
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono">
@@ -927,6 +1001,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                 value={resolveSummaryText(data)}
                 editable={!!editBindings?.enabled}
                 multiline
+                dirtyKey={buildPreviewSummaryDirtyKey()}
                 onCommit={(value) => editBindings?.onSummaryChange(value)}
               />
             </section>
@@ -944,6 +1019,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   hideOrderButtons={hideOrderButtons}
                   canAdd={!!editBindings?.enabled}
                   onAdd={editBindings?.onAddWorkItem}
+                  dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('workExps'))}
                 />
               </div>
               <div className="space-y-6">
@@ -968,12 +1044,14 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                         focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
                         autoFocusKey={editBindings?.autoFocusKey}
                         autoFocusToken={editBindings?.autoFocusToken}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'title')}
                         onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
                       />
                       <EditableText
                         className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
                         value={formatDateRange(exp)}
                         editable={!!editBindings?.enabled}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'date')}
                         onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
                       />
                     </div>
@@ -982,6 +1060,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       className="text-sm text-gray-700 mb-2 font-medium italic"
                       value={resolveExperienceSubtitle(exp)}
                       editable={!!editBindings?.enabled}
+                      dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'subtitle')}
                       onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
                     />
                     <EditableText
@@ -990,6 +1069,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       value={String(exp.description || '')}
                       editable={!!editBindings?.enabled}
                       multiline
+                      dirtyKey={buildPreviewSectionFieldDirtyKey('workExps', Number(exp.id), 'description')}
                       onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
                     />
                   </div>
@@ -1010,6 +1090,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   hideOrderButtons={hideOrderButtons}
                   canAdd={!!editBindings?.enabled}
                   onAdd={editBindings?.onAddEducationItem}
+                  dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('educations'))}
                 />
               </div>
               <div className="space-y-4">
@@ -1034,12 +1115,14 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                         focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
                         autoFocusKey={editBindings?.autoFocusKey}
                         autoFocusToken={editBindings?.autoFocusToken}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'title')}
                         onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
                       />
                       <EditableText
                         className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
                         value={formatDateRange(edu)}
                         editable={!!editBindings?.enabled}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'date')}
                         onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
                       />
                     </div>
@@ -1048,6 +1131,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       className="text-sm text-gray-700 italic"
                       value={resolveExperienceSubtitle(edu)}
                       editable={!!editBindings?.enabled}
+                      dirtyKey={buildPreviewSectionFieldDirtyKey('educations', Number(edu.id), 'subtitle')}
                       onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
                     />
                   </div>
@@ -1068,6 +1152,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   hideOrderButtons={hideOrderButtons}
                   canAdd={!!editBindings?.enabled}
                   onAdd={editBindings?.onAddProjectItem}
+                  dirty={editBindings?.isFieldDirty?.(buildPreviewSectionCollectionDirtyKey('projects'))}
                 />
               </div>
               <div className="space-y-6">
@@ -1092,12 +1177,14 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                         focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
                         autoFocusKey={editBindings?.autoFocusKey}
                         autoFocusToken={editBindings?.autoFocusToken}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'title')}
                         onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
                       />
                       <EditableText
                         className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
                         value={formatDateRange(proj)}
                         editable={!!editBindings?.enabled}
+                        dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'date')}
                         onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
                       />
                     </div>
@@ -1106,6 +1193,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       className="text-sm text-gray-700 mb-2 font-medium italic"
                       value={resolveExperienceSubtitle(proj)}
                       editable={!!editBindings?.enabled}
+                      dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'subtitle')}
                       onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
                     />
                     <EditableText
@@ -1114,6 +1202,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       value={String(proj.description || '')}
                       editable={!!editBindings?.enabled}
                       multiline
+                      dirtyKey={buildPreviewSectionFieldDirtyKey('projects', Number(proj.id), 'description')}
                       onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
                     />
                   </div>
@@ -1136,6 +1225,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                   hideOrderButtons={hideOrderButtons}
                   canAdd={!!editBindings?.enabled}
                   onAdd={editBindings?.onAddSkillItem}
+                  dirty={editBindings?.isFieldDirty?.(buildPreviewSkillsCollectionDirtyKey())}
                 />
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-3">
@@ -1148,6 +1238,7 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
                       focusKey={buildSkillFocusKey(index)}
                       autoFocusKey={editBindings?.autoFocusKey}
                       autoFocusToken={editBindings?.autoFocusToken}
+                      dirtyKey={buildPreviewSkillDirtyKey(index)}
                       onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
                     />
                     {editBindings?.enabled ? (
@@ -1166,7 +1257,8 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         return null;
       })}
     </div>
-  </div>
+    </div>
+  </PreviewDirtyContext.Provider>
 );
 
 export const renderPreviewTemplate = ({
