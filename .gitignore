@@ -153,3 +153,12 @@ test-results/
 *.tmp
 *.temp
 *.orig
+
+# Test artifacts and local test changes (do not commit)
+ai-resume-builder/src/__tests__/
+backend/tests/
+**/*.test.*
+**/*.spec.*
+scripts/test-*.ps1
+scripts/e2e_*.py
+scripts/*smoke*.py
