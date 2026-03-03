@@ -114,10 +114,22 @@ pwsh -File scripts/test-step.ps1 `
   -FrontendUrl "https://your-frontend.vercel.app/" `
   -BackendUrl "https://your-backend.up.railway.app"
 
+# 如需把 legacy 会话迁移回归串联到 step 门禁：
+pwsh -File scripts/test-step.ps1 `
+  -FrontendUrl "https://your-frontend.vercel.app/" `
+  -BackendUrl "https://your-backend.up.railway.app" `
+  -RunLegacyJdInputMigrationUiSmoke
+
 # 如需仅跑线上：
 pwsh -File scripts/test-online.ps1 `
   -FrontendUrl "https://your-frontend.vercel.app/" `
   -BackendUrl "https://your-backend.up.railway.app"
+
+# 如需补跑 legacy 会话迁移回归（旧 jd_input -> interview_scene）：
+pwsh -File scripts/test-online.ps1 `
+  -FrontendUrl "https://your-frontend.vercel.app/" `
+  -BackendUrl "https://your-backend.up.railway.app" `
+  -RunLegacyJdInputMigrationUiSmoke
 ```
 
 ### 6. Agent Smoke（可选）

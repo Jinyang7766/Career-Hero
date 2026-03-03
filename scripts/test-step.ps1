@@ -6,7 +6,8 @@ param(
   [string]$Email = $env:CAREER_HERO_TEST_EMAIL,
   [string]$Password = $env:CAREER_HERO_TEST_PASSWORD,
   [switch]$SkipUiLogin,
-  [switch]$UiLoginHeaded
+  [switch]$UiLoginHeaded,
+  [switch]$RunLegacyJdInputMigrationUiSmoke
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,7 +23,8 @@ Write-Host "[step] Running online tests..."
   -Email $Email `
   -Password $Password `
   -SkipUiLogin:$SkipUiLogin `
-  -UiLoginHeaded:$UiLoginHeaded
+  -UiLoginHeaded:$UiLoginHeaded `
+  -RunLegacyJdInputMigrationUiSmoke:$RunLegacyJdInputMigrationUiSmoke
 if ($LASTEXITCODE -ne 0) { throw "[step] online tests failed" }
 
 Write-Host "[step] Local + online tests passed."
