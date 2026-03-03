@@ -4,6 +4,14 @@ import re
 
 
 _SKILL_SPLIT_RE = re.compile(r'[，,、;；|]+|\t+|\s{2,}')
+_PLACEHOLDER_TEXT_RE = re.compile(r'^(?:unknown|n/?a|none|null|nil|未(?:知|填写)|无|暂无|不详|-+)$', re.IGNORECASE)
+
+
+def _is_placeholder_text(value):
+    text = str(value or '').strip()
+    if not text:
+        return True
+    return bool(_PLACEHOLDER_TEXT_RE.fullmatch(text))
 
 
 def _split_skill_items(payload):
@@ -166,11 +174,13 @@ def normalize_parsed_resume_result(ai_result):
             return default
         for k in keys:
             v = d.get(k)
-            if isinstance(v, str) and v.strip():
-                return v.strip()
+            if isinstance(v, str):
+                vv = v.strip()
+                if vv and not _is_placeholder_text(vv):
+                    return vv
             if isinstance(v, (int, float)):
                 vv = str(v).strip()
-                if vv:
+                if vv and not _is_placeholder_text(vv):
                     return vv
         return default
 
@@ -330,6 +340,8 @@ def normalize_parsed_resume_result(ai_result):
             'email': _pick(personal, ['email', '邮箱']) or '',
             'phone': _pick(personal, ['phone', 'mobile', '手机号', '电话']) or '',
             'location': _pick(personal, ['location', 'city', '地址', '所在地']) or '',
+            'linkedin': _pick(personal, ['linkedin', 'linkedIn', 'LinkedIn', '领英']) or '',
+            'website': _pick(personal, ['website', 'site', 'homepage', 'portfolio', '网址', '网站', '个人主页']) or '',
             'age': normalized_age,
             'summary': (
                 _pick(personal, ['summary', 'profile', 'selfIntro', '自我评价', '个人总结', '个人简介'])
@@ -599,9 +611,20 @@ def fill_profile_meta_if_missing(parsed_data, resume_text, logger_obj=None):
     if not text:
         return parsed_data
 
-    personal = parsed_data.get('personalInfo') or {}
-    current_age = str(personal.get('age') or '').strip()
-    current_gender = str(parsed_data.get('gender') or '').strip().lower()
+    personal = parsed_data.get('personalInfo') if isinstance(parsed_data.get('personalInfo'), dict) else {}
+
+    def _clean_personal_value(value):
+        raw = str(value or '').strip()
+        if _is_placeholder_text(raw):
+            return ''
+        return raw
+
+    current_gender = _clean_personal_value(parsed_data.get('gender')).lower()
+    current_age = _clean_personal_value(personal.get('age'))
+    current_email = _clean_personal_value(personal.get('email'))
+    current_phone = _clean_personal_value(personal.get('phone'))
+    current_linkedin = _clean_personal_value(personal.get('linkedin'))
+    current_website = _clean_personal_value(personal.get('website'))
 
     def _normalize_gender(value):
         raw = str(value or '').strip().lower()
@@ -624,17 +647,33 @@ def fill_profile_meta_if_missing(parsed_data, resume_text, logger_obj=None):
         compact = re.sub(r'\s+', '', raw)
         compact = re.sub(r'(周?岁|years?old|yrs?)', '', compact, flags=re.IGNORECASE)
         m = re.search(r'(?<!\d)(\d{1,3})(?!\d)', compact)
-        if m:
-            age_num = int(m.group(1))
-            if 12 <= age_num <= 80:
-                return str(age_num)
+        if not m:
+            return ''
+        age_num = int(m.group(1))
+        if 12 <= age_num <= 80:
+            return str(age_num)
         return ''
+
+    def _clean_url(value):
+        text_val = str(value or '').strip()
+        if not text_val:
+            return ''
+        text_val = text_val.rstrip('.,;:，。；：)）]】')
+        if _is_placeholder_text(text_val):
+            return ''
+        if re.match(r'^www\.', text_val, flags=re.IGNORECASE):
+            return f'https://{text_val}'
+        return text_val
 
     extracted_gender = ''
     extracted_age = ''
+    extracted_email = ''
+    extracted_phone = ''
+    extracted_linkedin = ''
+    extracted_website = ''
 
     lines = [ln.strip() for ln in re.split(r'[\r\n]+', text) if str(ln).strip()]
-    probe_blob = '\n'.join(lines[:20]) if lines else text
+    probe_blob = '\n'.join(lines[:30]) if lines else text
 
     gender_match = re.search(r'性别\s*[:：]?\s*(男|女|男性|女性|male|female)', probe_blob, flags=re.IGNORECASE)
     if gender_match:
@@ -652,20 +691,67 @@ def fill_profile_meta_if_missing(parsed_data, resume_text, logger_obj=None):
         if age_token_match:
             extracted_age = _normalize_age(age_token_match.group(1))
 
+    email_match = re.search(r'\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b', text, flags=re.IGNORECASE)
+    if email_match:
+        extracted_email = _clean_personal_value(email_match.group(0))
+
+    phone_matches = re.findall(r'(?:\+?\d[\d\s\-()]{6,}\d)', text)
+    for candidate in phone_matches:
+        compact_digits = re.sub(r'\D', '', candidate)
+        if 7 <= len(compact_digits) <= 16:
+            extracted_phone = str(candidate).strip()
+            break
+
+    linkedin_matches = re.findall(r'(?:(?:https?://)?(?:www\.)?linkedin\.com/[^\s<>()]+)', text, flags=re.IGNORECASE)
+    if linkedin_matches:
+        extracted_linkedin = _clean_url(linkedin_matches[0])
+        if extracted_linkedin and not re.match(r'^https?://', extracted_linkedin, flags=re.IGNORECASE):
+            extracted_linkedin = f'https://{extracted_linkedin}'
+
+    url_matches = re.findall(r'(?:(?:https?://|www\.)[^\s<>()]+)', text, flags=re.IGNORECASE)
+    for candidate in url_matches:
+        cleaned = _clean_url(candidate)
+        if not cleaned:
+            continue
+        if re.search(r'linkedin\.com', cleaned, flags=re.IGNORECASE):
+            if not extracted_linkedin:
+                extracted_linkedin = cleaned if re.match(r'^https?://', cleaned, flags=re.IGNORECASE) else f'https://{cleaned}'
+            continue
+        extracted_website = cleaned
+        break
+
     changed = False
     if not current_gender and extracted_gender:
         parsed_data['gender'] = extracted_gender
         changed = True
     if not current_age and extracted_age:
         personal['age'] = extracted_age
-        parsed_data['personalInfo'] = personal
         changed = True
+    if not current_email and extracted_email:
+        personal['email'] = extracted_email
+        changed = True
+    if not current_phone and extracted_phone:
+        personal['phone'] = extracted_phone
+        changed = True
+    if not current_linkedin and extracted_linkedin:
+        personal['linkedin'] = extracted_linkedin
+        changed = True
+    if not current_website and extracted_website:
+        personal['website'] = extracted_website
+        changed = True
+
+    if personal:
+        parsed_data['personalInfo'] = personal
 
     if logger_obj:
         logger_obj.info(
-            "Profile meta fallback extraction: gender=%s age=%s changed=%s",
+            "Profile meta fallback extraction: gender=%s age=%s email=%s phone=%s linkedin=%s website=%s changed=%s",
             parsed_data.get('gender') or '',
             (parsed_data.get('personalInfo') or {}).get('age') or '',
+            (parsed_data.get('personalInfo') or {}).get('email') or '',
+            (parsed_data.get('personalInfo') or {}).get('phone') or '',
+            (parsed_data.get('personalInfo') or {}).get('linkedin') or '',
+            (parsed_data.get('personalInfo') or {}).get('website') or '',
             changed
         )
     return parsed_data

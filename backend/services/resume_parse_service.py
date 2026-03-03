@@ -380,6 +380,8 @@ def parse_resume_text_with_ai(resume_text):
         "email": "",
         "phone": "",
         "location": "",
+        "linkedin": "",
+        "website": "",
         "age": "",
         "summary": ""
       }},
@@ -401,7 +403,7 @@ def parse_resume_text_with_ai(resume_text):
     
     **解析准则：**
     1. **语义优先**：理解标题含义。例如，“学业”、“教育经历”、“求学” -> `educations`；“实践”、“履历”、“工作背景”、“项目案例” -> `workExps` 或 `projects`。
-    2. **贪婪提取**：无论是否有明确标题，都要尽力识别姓名、电话、邮箱、现居地。
+    2. **贪婪提取**：无论是否有明确标题，都要尽力识别姓名、电话、邮箱、现居地、LinkedIn、个人网站。
     2.1 **性别与年龄**：尽力提取性别与年龄；`gender` 允许输出 `male/female` 或 `男/女`（后处理会统一），年龄写到 `personalInfo.age`。
     3. **关键词对标**：确保提取以下核心字段，即使简历中使用了同义词：
        - `company`: 公司全称/机构名称。
@@ -422,6 +424,8 @@ def parse_resume_text_with_ai(resume_text):
             "email": "",
             "phone": "",
             "location": "",
+            "linkedin": "",
+            "website": "",
             "age": "",
             "summary": ""
         }},

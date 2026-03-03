@@ -31,6 +31,9 @@ export type CareerProfileSummaryDisplayModel = {
 
 const toText = (value: unknown): string => String(value || '').trim();
 
+const isUnknownLike = (value: string): boolean =>
+  /^(?:unknown|n\/?a|none|null|nil|未(?:知|填写)|无|暂无|不详|-+)$/i.test(String(value || '').trim());
+
 const hasCjk = (value: string): boolean => /[\u3400-\u9fff]/.test(value);
 
 const normalizeTextKey = (value: unknown): string =>
@@ -126,7 +129,7 @@ const appendRow = (
   value: unknown
 ) => {
   const text = toText(value);
-  if (!text) return;
+  if (!text || isUnknownLike(text)) return;
   const key = normalizeTextKey(text);
   if (!key || seenValues.has(key)) return;
   seenValues.add(key);

@@ -50,8 +50,12 @@ export type CareerProfile = {
   rawInput?: string;
 };
 
+const isUnknownLike = (value: string): boolean =>
+  /^(?:unknown|n\/?a|none|null|nil|未(?:知|填写)|无|暂无|不详|-+)$/i.test(String(value || '').trim());
+
 const compactText = (value: unknown, maxLen = 300) => {
   const text = String(value || '').replace(/\s+/g, ' ').trim();
+  if (!text || isUnknownLike(text)) return '';
   return text.slice(0, maxLen);
 };
 
