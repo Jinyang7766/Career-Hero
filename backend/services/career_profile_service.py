@@ -2,6 +2,8 @@ import json
 import re
 from datetime import datetime, timezone
 
+from .payload_sanitizer import resolve_fact_items_with_fallback
+
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -51,6 +53,41 @@ def _normalize_text_list(raw_list, max_items=12, max_len=200):
         if len(out) >= max_items:
             break
     return out
+
+
+def _fact_key(text):
+    return re.sub(r'[\s\W_]+', '', str(text or '').lower())[:120]
+
+
+def _derive_fact_items(core_skills, highlights, constraints):
+    fact_items = []
+    seen = set()
+
+    def _append(kind, values):
+        for text in values or []:
+            normalized_text = _compact_text(text, 260)
+            if not normalized_text:
+                continue
+            key = _fact_key(normalized_text)
+            if not key:
+                continue
+            dedupe = (kind, key)
+            if dedupe in seen:
+                continue
+            seen.add(dedupe)
+            fact_items.append(
+                {
+                    'id': f'fact_{kind}_{len(fact_items) + 1}',
+                    'kind': kind,
+                    'text': normalized_text,
+                    'key': key,
+                }
+            )
+
+    _append('skill', core_skills)
+    _append('highlight', highlights)
+    _append('constraint', constraints)
+    return fact_items
 
 
 def _sanitize_experience_item(item, fallback_index):
@@ -277,7 +314,7 @@ def _extract_personal_info(raw_profile, existing_profile, raw_text):
     return info if info else None
 
 
-def _build_fallback_profile(raw_text, existing_profile=None):
+def _build_fallback_profile(raw_text, existing_profile=None, logger=None):
     existing = existing_profile if isinstance(existing_profile, dict) else {}
     summary = _compact_text(existing.get('summary') or raw_text, 220)
     highlights = _extract_fallback_sentences(raw_text, limit=4)
@@ -287,6 +324,11 @@ def _build_fallback_profile(raw_text, existing_profile=None):
         existing.get('jobDirection'),
         (personal_info or {}).get('title'),
     )
+    constraints = [
+        '仅基于用户明确提供的信息',
+        '未明确的时间/结果不得补全',
+        '后续诊断与优化禁止虚构经历',
+    ]
     experiences = []
     for idx, sentence in enumerate(_extract_fallback_sentences(raw_text, limit=6), start=1):
         experiences.append({
@@ -301,6 +343,16 @@ def _build_fallback_profile(raw_text, existing_profile=None):
             'evidence': '来自用户自述',
         })
 
+    derived_fact_items = _derive_fact_items([], highlights, constraints)
+    fact_items, source, _errors = resolve_fact_items_with_fallback(
+        incoming_fact_items=None,
+        existing_fact_items=existing.get('factItems'),
+        logger=logger,
+        field_path='profile.factItems',
+    )
+    if source == 'empty_list' and derived_fact_items:
+        fact_items = derived_fact_items
+
     return {
         'id': f"career_profile_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
         'createdAt': _now_iso(),
@@ -310,11 +362,8 @@ def _build_fallback_profile(raw_text, existing_profile=None):
         'coreSkills': [],
         'targetRole': target_role,
         'jobDirection': target_role,
-        'constraints': [
-            '仅基于用户明确提供的信息',
-            '未明确的时间/结果不得补全',
-            '后续诊断与优化禁止虚构经历',
-        ],
+        'constraints': constraints,
+        'factItems': fact_items,
         'experiences': experiences,
         'educations': [],
         'projects': [],
@@ -323,9 +372,9 @@ def _build_fallback_profile(raw_text, existing_profile=None):
     }
 
 
-def _sanitize_profile(raw_profile, raw_text, existing_profile=None):
+def _sanitize_profile(raw_profile, raw_text, existing_profile=None, logger=None):
     if not isinstance(raw_profile, dict):
-        return _build_fallback_profile(raw_text, existing_profile=existing_profile)
+        return _build_fallback_profile(raw_text, existing_profile=existing_profile, logger=logger)
 
     summary = _compact_text(
         raw_profile.get('summary')
@@ -410,6 +459,16 @@ def _sanitize_profile(raw_profile, raw_text, existing_profile=None):
         existing.get('jobDirection'),
     )
 
+    derived_fact_items = _derive_fact_items(core_skills, highlights, constraints)
+    fact_items, fact_source, _fact_errors = resolve_fact_items_with_fallback(
+        incoming_fact_items=raw_profile.get('factItems') if 'factItems' in raw_profile else None,
+        existing_fact_items=existing.get('factItems'),
+        logger=logger,
+        field_path='profile.factItems',
+    )
+    if fact_source == 'empty_list' and derived_fact_items:
+        fact_items = derived_fact_items
+
     return {
         'id': f"career_profile_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
         'createdAt': _now_iso(),
@@ -420,6 +479,7 @@ def _sanitize_profile(raw_profile, raw_text, existing_profile=None):
         'targetRole': target_role,
         'jobDirection': target_role,
         'constraints': constraints,
+        'factItems': fact_items,
         'experiences': experiences,
         'educations': educations,
         'projects': projects,
@@ -444,7 +504,7 @@ def organize_career_profile_core(current_user_id, data, deps):
     )
 
     if not ai_enabled:
-        fallback_profile = _build_fallback_profile(raw_text, existing_profile=existing_profile)
+        fallback_profile = _build_fallback_profile(raw_text, existing_profile=existing_profile, logger=logger)
         return {
             'success': True,
             'profile': fallback_profile,
@@ -538,7 +598,7 @@ def organize_career_profile_core(current_user_id, data, deps):
             analysis_models_tried=deduped_models,
         )
         parsed = deps['parse_ai_response'](response.text)
-        profile = _sanitize_profile(parsed, raw_text, existing_profile=existing_profile)
+        profile = _sanitize_profile(parsed, raw_text, existing_profile=existing_profile, logger=logger)
         return {
             'success': True,
             'profile': profile,
@@ -546,7 +606,7 @@ def organize_career_profile_core(current_user_id, data, deps):
         }, 200
     except Exception as err:
         logger.warning("organize_career_profile fallback due to error: %s", err)
-        fallback_profile = _build_fallback_profile(raw_text, existing_profile=existing_profile)
+        fallback_profile = _build_fallback_profile(raw_text, existing_profile=existing_profile, logger=logger)
         return {
             'success': True,
             'profile': fallback_profile,

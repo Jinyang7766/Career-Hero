@@ -37,11 +37,15 @@ def create_resume_record(
     normalize_resume_id,
     find_existing_optimized_resume,
     storage_context,
+    logger=None,
 ):
     title = data.get('title', '新简历')
     title = clean_string(title, 200)
     resume_data = data.get('resumeData', {})
-    cleaned_resume_data, err = clean_resume_payload(resume_data)
+    cleaned_resume_data, err = clean_resume_payload(
+        resume_data,
+        logger=logger,
+    )
     if err:
         return {'error': err}, 400
     if not is_resume_eligible_for_library(cleaned_resume_data):
@@ -91,6 +95,7 @@ def update_resume_record(
     data,
     clean_resume_payload,
     storage_context,
+    logger=None,
 ):
     title = data.get('title')
     resume_data = data.get('resumeData')
@@ -100,7 +105,17 @@ def update_resume_record(
     if title is not None:
         update_data['title'] = title
     if resume_data is not None:
-        cleaned_resume_data, err = clean_resume_payload(resume_data)
+        existing_resume = storage_context.get_resume(current_user_id, resume_id)
+        existing_resume_data = (
+            (existing_resume or {}).get('resume_data')
+            if isinstance(existing_resume, dict)
+            else None
+        )
+        cleaned_resume_data, err = clean_resume_payload(
+            resume_data,
+            existing_resume_data=existing_resume_data,
+            logger=logger,
+        )
         if err:
             return {'error': err}, 400
         if not is_resume_eligible_for_library(cleaned_resume_data):

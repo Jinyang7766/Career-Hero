@@ -563,6 +563,7 @@ def create_resume(current_user_id):
             normalize_resume_id=_normalize_resume_id,
             find_existing_optimized_resume=_find_existing_optimized_resume,
             storage_context=storage_context,
+            logger=logger,
         )
         return jsonify(body), status
     except Exception:
@@ -591,6 +592,7 @@ def update_resume(current_user_id, resume_id):
             data=request.get_json() or {},
             clean_resume_payload=clean_resume_payload,
             storage_context=storage_context,
+            logger=logger,
         )
         return jsonify(body), status
     except Exception:
