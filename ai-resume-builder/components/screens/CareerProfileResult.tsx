@@ -87,7 +87,7 @@ const CareerProfileResult: React.FC = () => {
         </div>
       </header>
 
-      <main className={`pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
+      <main className={`flex-1 overflow-y-auto pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
 
 
         {!loading && (
