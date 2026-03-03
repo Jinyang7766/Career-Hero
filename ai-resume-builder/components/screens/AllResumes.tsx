@@ -528,15 +528,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                 </button>
               </>
             ) : (
-              <button
-                onClick={() => {
-                  setResumeData(createEmptyResumeData());
-                  navigateToView(View.TEMPLATES);
-                }}
-                className="flex size-10 items-center justify-center rounded-full text-primary hover:bg-primary/10 transition-colors"
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: '28px' }}>add</span>
-              </button>
+              <div className="w-10" />
             )}
           </div>
         </div>
@@ -569,7 +561,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
               <p className="text-slate-900 dark:text-white font-medium mb-1">简历库中还没有简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">点击右上角“+”新建一份简历吧</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">请前往AI诊断生成专属简历</p>
             </div>
           ) : filteredResumes.length === 0 && (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">

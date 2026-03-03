@@ -6,13 +6,14 @@ type StageCandidate = { status: StageStatus; updatedAt: number };
 const getTypeIndex = (type: string) => {
   if (type === 'general') return 0;
   if (type === 'technical') return 1;
-  if (type === 'hr') return 2;
+  if (type === 'pressure') return 2;
   return -1;
 };
 
 const normalizeType = (value: any) => {
   const t = String(value || '').trim().toLowerCase();
-  if (t === 'general' || t === 'technical' || t === 'hr') return t;
+  if (t === 'general' || t === 'technical') return t;
+  if (t === 'pressure' || t === 'hr') return 'pressure';
   return '';
 };
 

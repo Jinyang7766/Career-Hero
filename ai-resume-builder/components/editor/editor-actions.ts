@@ -29,11 +29,15 @@ export const updateResumePersonalField = (
   };
 };
 
-export const addResumeSectionItem = (resumeData: ResumeData, section: EditableSection): ResumeData => ({
+export const addResumeSectionItem = (
+  resumeData: ResumeData,
+  section: EditableSection,
+  itemId: number = Date.now()
+): ResumeData => ({
   ...resumeData,
   [section]: [
     ...resumeData[section],
-    { id: Date.now(), title: '', subtitle: '', date: '', description: '' }
+    { id: itemId, title: '', subtitle: '', date: '', description: '' }
   ]
 });
 

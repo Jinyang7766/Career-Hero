@@ -2,12 +2,14 @@ import React from 'react';
 import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
 import ReportFeedback from '../ReportFeedback';
+import { buildActionableAdvice } from './final-report-advice';
 
 type Props = {
   score: number;
   summary: string;
   advice: string[];
   onBack: () => void;
+  onBackToJdInput: () => void;
   onStartInterview: () => void;
   onGoToComparison: () => void;
   getScoreColor: (s: number) => string;
@@ -19,21 +21,13 @@ const FinalResumeReportPage: React.FC<Props> = ({
   summary,
   advice,
   onBack,
+  onBackToJdInput,
   onStartInterview,
   onGoToComparison,
   getScoreColor,
   onFeedback,
 }) => {
-  const candidateAdvice = (advice || [])
-    .map((item) =>
-      String(item || '')
-        .replace(/再进入下一轮面试[。！!]?/g, '')
-        .replace(/\s+/g, ' ')
-        .trim()
-    )
-    .filter(Boolean)
-    .filter((item) => !/(简历|排版|版式|字体|模块|措辞)/.test(item))
-    .slice(0, 6);
+  const candidateAdvice = React.useMemo(() => buildActionableAdvice(advice), [advice]);
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
@@ -68,7 +62,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
         <ReportFeedback onFeedback={onFeedback} showTitle={false} />
 
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 border border-slate-200 dark:border-white/5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">候选人后续建议</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">候选人后续行动建议</h3>
           <div className="space-y-2">
             {candidateAdvice.map((item, idx) => (
               <p key={`${idx}-${item}`} className="text-sm text-slate-600 dark:text-slate-300">• {item}</p>
@@ -84,11 +78,13 @@ const FinalResumeReportPage: React.FC<Props> = ({
         </div>
         <ReportFeedback onFeedback={onFeedback} showTitle={false} />
 
-        <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/30 bg-emerald-50/60 dark:bg-emerald-900/10 p-4">
-          <p className="text-sm text-emerald-800 dark:text-emerald-300">
-            已完成保存。现在可以去模拟面试，检验简历与岗位匹配表达。
-          </p>
-        </div>
+        <button
+          onClick={onBackToJdInput}
+          className="w-full h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
+          type="button"
+        >
+          重新填写岗位/JD
+        </button>
 
         <div className="grid grid-cols-2 gap-3">
           <button
@@ -96,7 +92,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
             className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
             type="button"
           >
-            查看优化简历
+            查看生成简历
           </button>
           <button
             onClick={onStartInterview}

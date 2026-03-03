@@ -1,6 +1,8 @@
 import { DatabaseService } from '../../../../src/database-service';
 import type { ResumeData } from '../../../../types';
 import type { Suggestion } from '../types';
+import { normalizeAnalysisMode } from '../analysis-mode';
+import { resolveAnalysisTargetValue, shouldPersistTargetRole } from '../target-role';
 
 type AnalysisReportLike = {
   summary: string;
@@ -71,6 +73,17 @@ export const useAnalysisPersistence = ({
         }
       : data) as ResumeData;
 
+    const effectiveMode = normalizeAnalysisMode(
+      baseResumeData.analysisMode || data.analysisMode
+    );
+    const effectiveTargetCompany = resolveAnalysisTargetValue({
+      analysisMode: effectiveMode,
+      stateTargetCompany: targetCompany,
+      resumeTargetCompany: '',
+      resumeTargetRole: baseResumeData.targetRole,
+      resumeHasTargetRole: Object.prototype.hasOwnProperty.call(baseResumeData || {}, 'targetRole'),
+    });
+
     const snapshot = {
       score: scoreValue,
       summary: reportData.summary || '',
@@ -81,8 +94,15 @@ export const useAnalysisPersistence = ({
       suggestions: suggestionItems || [],
       updatedAt: new Date().toISOString(),
       jdText: jdText || baseResumeData.lastJdText || '',
-      targetCompany: targetCompany || baseResumeData.targetCompany || ''
+      targetCompany: effectiveTargetCompany || '',
+      targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
     };
+    const nextTargetRole = shouldPersistTargetRole({
+      isInterviewMode: false,
+      analysisMode: effectiveMode,
+    })
+      ? (effectiveTargetCompany || baseResumeData.targetRole || '')
+      : (baseResumeData.targetRole || '');
     const nextSuggestions = Array.isArray(suggestionItems) ? suggestionItems : [];
     const dossier = {
       id: `dossier_${Date.now()}`,
@@ -90,6 +110,7 @@ export const useAnalysisPersistence = ({
       score: scoreValue,
       summary: reportData.summary || '',
       targetCompany: snapshot.targetCompany || '',
+      targetRole: snapshot.targetRole || '',
       jdText: snapshot.jdText || '',
       scoreBreakdown: snapshot.scoreBreakdown,
       suggestionsOverview: {
@@ -109,7 +130,8 @@ export const useAnalysisPersistence = ({
       analysisDossierLatest: dossier,
       analysisDossierHistory: [dossier, ...previousHistory].slice(0, 20),
       lastJdText: snapshot.jdText || baseResumeData.lastJdText || '',
-      targetCompany: snapshot.targetCompany || baseResumeData.targetCompany || '',
+      targetCompany: snapshot.targetCompany || '',
+      targetRole: nextTargetRole,
     };
     if (setResumeData) {
       setResumeData(updatedResumeData);

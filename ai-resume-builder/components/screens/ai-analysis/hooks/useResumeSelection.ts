@@ -3,6 +3,8 @@ import { DatabaseService } from '../../../../src/database-service';
 import { supabase } from '../../../../src/supabase-client';
 import { deriveLatestAnalysisStep } from '../../../../src/diagnosis-progress';
 import type { ResumeData, ResumeSummary } from '../../../../types';
+import { normalizeAnalysisMode } from '../analysis-mode';
+import { resolveStep3TargetInputValue } from '../target-role';
 
 export type ResumeReadState = {
   status: 'idle' | 'loading' | 'success' | 'error';
@@ -27,6 +29,7 @@ type Params = {
     resumeId: string | number;
     jdText: string;
     targetCompany?: string;
+    targetRole?: string;
     snapshot: any;
     updatedAt: string;
     analysisReportId?: string;
@@ -40,7 +43,7 @@ type Params = {
 export const shouldRestoreJdInputFromResume = (
   preferReport: boolean,
   isInterviewMode?: boolean,
-  inferredTarget?: 'jd_input' | 'final_report'
+  inferredTarget?: 'jd_input' | 'interview_scene' | 'final_report'
 ) => {
   if (isInterviewMode) return false;
   if (preferReport) return true;
@@ -57,6 +60,7 @@ export const buildResumeDataForJdEntry = <T extends Record<string, any>>(
       ...rawResumeData,
       lastJdText: '',
       targetCompany: '',
+      targetRole: '',
     } as T)
 );
 
@@ -72,6 +76,7 @@ const normalizeAnalysisStep = (step: any) => {
   const v = String(step || '').trim().toLowerCase();
   return [
     'jd_input',
+    'interview_scene',
     'analyzing',
     'report',
     'chat',
@@ -99,7 +104,7 @@ export const inferDiagnosisTargetStep = (
     normalizeAnalysisStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
   if (rawLatestStep === 'final_report' || rawLatestStep === 'interview_report') return 'final_report';
   if (rawLatestStep === 'comparison' || rawLatestStep === 'report' || rawLatestStep === 'chat') return 'final_report';
-  if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
+  if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input' || rawLatestStep === 'interview_scene') return 'jd_input';
 
   const rowSnapshotScore = Number((resumeRow as any)?.resume_data?.analysisSnapshot?.score || 0);
   const summarySnapshotScore = Number((resumeSummary as any)?.resume_data?.analysisSnapshot?.score || 0);
@@ -119,7 +124,7 @@ export const inferDiagnosisTargetStep = (
   const sessionStep = normalizeAnalysisStep(deriveLatestAnalysisStep(sessionsSource));
   if (sessionStep === 'final_report' || sessionStep === 'interview_report') return 'final_report';
   if (sessionStep === 'comparison' || sessionStep === 'report' || sessionStep === 'chat') return 'final_report';
-  if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
+  if (sessionStep === 'analyzing' || sessionStep === 'jd_input' || sessionStep === 'interview_scene') return 'jd_input';
 
   const progress = Math.max(0, Math.min(100, Math.round(Number(
     (resumeSummary as any)?.diagnosisProgress ??
@@ -248,7 +253,7 @@ export const useResumeSelection = ({
         const shouldRestoreJdFromResume = shouldRestoreJdInputFromResume(
           effectivePreferReport,
           !!isInterviewMode,
-          inferredTarget as 'jd_input' | 'final_report'
+          inferredTarget as 'jd_input' | 'interview_scene' | 'final_report'
         );
         const finalResumeData = buildResumeDataForEntry(rawResumeData as Record<string, any>, {
           isInterviewMode,
@@ -265,11 +270,19 @@ export const useResumeSelection = ({
           ((finalResumeData as any).optimizationStatus === 'optimized' ? resume.id : null)
         );
         const restoredJdText = String((rawResumeData as any).lastJdText || '').trim();
-        const restoredTargetCompany = String((rawResumeData as any).targetCompany || '').trim();
+        const restoredTargetRole = String((rawResumeData as any).targetRole || '').trim();
+        const restoredStep3Target = resolveStep3TargetInputValue({
+          isInterviewMode,
+          analysisMode: normalizeAnalysisMode((rawResumeData as any).analysisMode),
+          stateTargetCompany: '',
+          resumeTargetCompany: '',
+          resumeTargetRole: restoredTargetRole,
+          resumeHasTargetRole: Object.prototype.hasOwnProperty.call((rawResumeData as any) || {}, 'targetRole'),
+        });
         const restoredInterviewFocus = String((rawResumeData as any).interviewFocus || '').trim();
         if (isInterviewMode) {
           setJdText(restoredJdText);
-          setTargetCompany(restoredTargetCompany);
+          setTargetCompany(restoredStep3Target);
           try {
             const uid = String(user?.id || '').trim();
             if (uid) localStorage.setItem(`ai_interview_focus:${uid}`, restoredInterviewFocus);
@@ -283,8 +296,8 @@ export const useResumeSelection = ({
           } else if (!shouldRestoreJdFromResume) {
             setJdText('');
           }
-          if (shouldRestoreJdFromResume && restoredTargetCompany) {
-            setTargetCompany(restoredTargetCompany);
+          if (shouldRestoreJdFromResume && restoredStep3Target) {
+            setTargetCompany(restoredStep3Target);
           } else if (!shouldRestoreJdFromResume) {
             setTargetCompany('');
           }
@@ -297,7 +310,8 @@ export const useResumeSelection = ({
             saveLastAnalysis({
               resumeId: resume.id,
               jdText: restoredJdText,
-              targetCompany: (finalResumeData as any).targetCompany || '',
+              targetCompany: String((finalResumeData as any).targetRole || ''),
+              targetRole: String((finalResumeData as any).targetRole || ''),
               snapshot: (finalResumeData as any).analysisSnapshot,
               updatedAt: (finalResumeData as any).analysisSnapshot.updatedAt || new Date().toISOString(),
             });
@@ -308,7 +322,7 @@ export const useResumeSelection = ({
         if (!isInterviewMode) {
           navigateToStep(inferredTarget);
         } else {
-          navigateToStep('jd_input');
+          navigateToStep('interview_scene');
         }
       }
     } catch (error) {
@@ -322,7 +336,7 @@ export const useResumeSelection = ({
   };
 
   useEffect(() => {
-    if (currentStep !== 'jd_input') return;
+    if (currentStep !== 'jd_input' && currentStep !== 'interview_scene') return;
     if (resumeReadState.status !== 'idle') return;
     if (!resumeData?.id) return;
     const fallbackLabel =

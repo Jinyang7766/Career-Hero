@@ -100,6 +100,8 @@ export interface ResumeData {
   analysisReportId?: string;
   lastJdText?: string;
   targetCompany?: string;
+  targetRole?: string;
+  analysisMode?: 'generic' | 'targeted';
   interviewFocus?: string;
   analysisBindings?: Record<string, {
     analysisReportId: string;

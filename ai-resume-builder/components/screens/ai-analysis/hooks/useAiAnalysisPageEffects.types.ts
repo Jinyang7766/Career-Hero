@@ -7,6 +7,7 @@ export type AiAnalysisPageEffectsParams = {
   setIsNavHidden?: (hidden: boolean) => void;
   prevStepRef: React.MutableRefObject<AiAnalysisStep | null>;
   setTargetCompany: (v: string) => void;
+  setJdText: (v: string) => void;
   setInterviewPlan: React.Dispatch<React.SetStateAction<string[]>>;
   interviewPlanLength: number;
   isInterviewMode?: boolean;
@@ -28,4 +29,3 @@ export type AiAnalysisPageEffectsParams = {
   setOptimizedResumeId: (v: string | number | null) => void;
   setAnalysisResumeId: (v: string | number | null) => void;
 };
-

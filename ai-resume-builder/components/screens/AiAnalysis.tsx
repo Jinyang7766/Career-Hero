@@ -25,6 +25,7 @@ import { useAiAnalysisInteractionBundle } from './ai-analysis/hooks/useAiAnalysi
 import { useAiAnalysisFeedback } from './ai-analysis/hooks/useAiAnalysisFeedback';
 import { useInterviewSceneReset } from './ai-analysis/hooks/useInterviewSceneReset';
 import { usePersistedInterviewSummaryHydration } from './ai-analysis/hooks/usePersistedInterviewSummaryHydration';
+import { useAnalysisModeState } from './ai-analysis/hooks/useAnalysisModeState';
 import {
   formatInterviewQuestion,
   isSelfIntroQuestion,
@@ -34,6 +35,7 @@ import { getRagEnabledFlag } from './ai-analysis/analysis-config';
 import { isSameResumeId, normalizeResumeId } from './ai-analysis/id-utils';
 import { useAppStore } from '../../src/app-store';
 import { useUserProfile } from '../../src/useUserProfile';
+import { isCareerProfileComplete, isGuidedFlowActive, isGuidedFlowEnabled } from '../../src/guided-flow';
 import {
   parseReferenceReply,
   splitNextQuestion,
@@ -50,11 +52,22 @@ import {
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AiAnalysisStep } from './ai-analysis/step-types';
 import { buildAiAnalysisRenderProps } from './ai-analysis/build-ai-analysis-render-props';
+import {
+  resolveStep3TargetInputValue,
+  shouldPersistTargetRole,
+} from './ai-analysis/target-role';
 
 const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const currentUser = useAppContext((s) => s.currentUser);
+  const currentUserId = String(currentUser?.id || '').trim();
   const { userProfile } = useUserProfile(currentUser?.id, currentUser);
+  const guidedFlowEnabled = isGuidedFlowEnabled();
+  const isProfileReadyForGuidedFlow = React.useMemo(
+    () => isCareerProfileComplete(userProfile),
+    [userProfile]
+  );
+  const legacySoftGatePromptedRef = React.useRef(false);
   const goBack = useAppContext((s) => s.goBack);
   const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
@@ -91,8 +104,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setReport,
     postInterviewSummary,
     setPostInterviewSummary,
-    showJdEmptyModal,
-    setShowJdEmptyModal,
     chatMessages,
     setChatMessages,
     chatMessagesRef,
@@ -169,8 +180,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setCurrentStep: setCurrentStep as any,
     restoreInterviewSession: restoreInterviewSession as any,
     setIsInterviewEntry,
+    isInterviewMode,
     goBack: goBack as any,
   });
+  const suppressDiagnosisChatNormalizationRef = React.useRef(false);
+  const suppressDiagnosisSessionRecoveryRef = React.useRef(false);
   const { showToast, ToastOverlay } = useToastOverlay();
   const { isUploading, handleScreenshotUpload } = useJdScreenshotUpload({
     getBackendAuthToken,
@@ -253,12 +267,63 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     navigate,
   });
 
+  const { analysisMode, setAnalysisMode } = useAnalysisModeState({
+    resumeData: resumeData as any,
+    setResumeData: setResumeData as any,
+    isInterviewMode,
+  });
+
+  React.useEffect(() => {
+    if (!isInterviewMode) return;
+    if (String(targetCompany || '').trim()) return;
+    const resumeHasTargetRole = Object.prototype.hasOwnProperty.call((resumeData as any) || {}, 'targetRole');
+    const resolvedTarget = resolveStep3TargetInputValue({
+      isInterviewMode,
+      analysisMode,
+      stateTargetCompany: '',
+      resumeTargetCompany: String((resumeData as any)?.targetCompany || ''),
+      resumeTargetRole: String((resumeData as any)?.targetRole || ''),
+      resumeHasTargetRole,
+    });
+    if (!resolvedTarget) return;
+    setTargetCompany(resolvedTarget);
+  }, [
+    analysisMode,
+    isInterviewMode,
+    targetCompany,
+    resumeData?.id,
+    (resumeData as any)?.targetCompany,
+    (resumeData as any)?.targetRole,
+    setTargetCompany,
+  ]);
+
+  React.useEffect(() => {
+    if (
+      !shouldPersistTargetRole({
+        isInterviewMode,
+        analysisMode,
+      })
+    ) {
+      return;
+    }
+    const normalizedRole = String(targetCompany || '').trim();
+    setResumeData((prev: any) => {
+      if (!prev || typeof prev !== 'object') return prev;
+      if (String((prev as any)?.targetRole || '').trim() === normalizedRole) return prev;
+      return {
+        ...prev,
+        targetRole: normalizedRole,
+      };
+    });
+  }, [analysisMode, isInterviewMode, setResumeData, targetCompany]);
+
   useAiAnalysisPageEffects({
     currentStep,
     setCurrentStep: setCurrentStep as (step: AiAnalysisStep) => void,
     setIsNavHidden,
     prevStepRef,
     setTargetCompany,
+    setJdText,
     setInterviewPlan,
     interviewPlanLength: interviewPlan.length,
     isInterviewMode,
@@ -302,6 +367,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     allResumes,
     jdText,
     targetCompany,
+    analysisMode,
     isSameResumeId,
     normalizeResumeId,
   });
@@ -340,6 +406,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
   // --- Handlers ---
   const { cancelInFlightAnalysis, startAnalysis, handleStartAnalysisClick } = useAnalysisExecution({
     resumeData,
+    analysisMode,
     setResumeData: setResumeData as any,
     jdText,
     targetCompany,
@@ -372,7 +439,6 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     getBackendAuthToken,
     buildApiUrl,
     getRagEnabledFlag,
-    setShowJdEmptyModal,
     isInterviewMode,
     openChat,
     consumeUsageQuota,
@@ -390,6 +456,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setChatMessages: setChatMessages as any,
     resumeData,
     jdText,
+    analysisMode,
     chatEntrySource,
     score,
     suggestionsLength: suggestions.length,
@@ -429,6 +496,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     isAnalysisStillInProgress,
     inprogressAtKey: INPROGRESS_AT_KEY,
     cancelInFlightAnalysis,
+    suppressDiagnosisSessionRecoveryRef: suppressDiagnosisSessionRecoveryRef as any,
     setSelectedResumeId,
     setOptimizedResumeId,
     setForceReportEntry,
@@ -508,17 +576,11 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     reportSummary: report?.summary,
     score,
     weaknesses: report?.weaknesses || [],
+    reportGeneratedResume: (report as any)?.generatedResumeData || null,
     jdText,
     makeJdKey,
-    userProfile,
-    getRagEnabledFlag,
-    getBackendAuthToken,
-    buildApiUrl,
-    chatMessagesRef: chatMessagesRef as any,
     currentUserId: currentUser?.id,
     showToast,
-    consumeUsageQuota,
-    refundUsageQuota,
     sourceResumeIdRef: sourceResumeIdRef as any,
     targetCompany,
     allResumes: allResumes as any,
@@ -569,8 +631,40 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setPostInterviewSummary,
   });
 
+  const handleBackToJdInputFromFinalReport = React.useCallback(() => {
+    if (!isInterviewMode) {
+      suppressDiagnosisSessionRecoveryRef.current = true;
+      navigateToStep('jd_input', true);
+      return;
+    }
+    navigateToStep('jd_input', true);
+  }, [isInterviewMode, navigateToStep]);
+
+  const handleBackFromFinalReport = React.useCallback(() => {
+    if (!isInterviewMode) {
+      suppressDiagnosisSessionRecoveryRef.current = true;
+      navigateToStep('jd_input', true);
+      return;
+    }
+    handleStepBack();
+  }, [handleStepBack, isInterviewMode, navigateToStep]);
+
+  const handleGoToComparisonFromFinalReport = React.useCallback(() => {
+    if (!isInterviewMode) {
+      suppressDiagnosisChatNormalizationRef.current = true;
+      suppressDiagnosisSessionRecoveryRef.current = true;
+    }
+    navigateToStep('comparison');
+  }, [isInterviewMode, navigateToStep]);
+
   React.useEffect(() => {
     if (isInterviewMode) return;
+    if (currentStep === 'chat' && suppressDiagnosisChatNormalizationRef.current) {
+      // User explicitly navigated out from legacy diagnosis-chat report view.
+      // Consume once to prevent auto-normalization from forcing back to final_report.
+      suppressDiagnosisChatNormalizationRef.current = false;
+      return;
+    }
     if (
       currentStep === 'chat' ||
       currentStep === 'interview_report' ||
@@ -579,6 +673,23 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       navigateToStep('final_report', true);
     }
   }, [isInterviewMode, currentStep, navigateToStep]);
+
+  React.useEffect(() => {
+    if (isInterviewMode) return;
+    if (!guidedFlowEnabled) return;
+    if (!currentUserId) return;
+    if (isGuidedFlowActive(currentUserId)) return;
+    if (isProfileReadyForGuidedFlow) return;
+    if (legacySoftGatePromptedRef.current) return;
+    legacySoftGatePromptedRef.current = true;
+    showToast('建议先补全专属职业画像，再进行诊断；你也可以直接继续进行当前分析。', 'info', 3200);
+  }, [
+    currentUserId,
+    guidedFlowEnabled,
+    isInterviewMode,
+    isProfileReadyForGuidedFlow,
+    showToast,
+  ]);
 
   return renderAiAnalysisStep(buildAiAnalysisRenderProps({
     currentStep,
@@ -601,13 +712,16 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setTargetCompany,
     jdText,
     setJdText,
+    analysisMode,
+    setAnalysisMode,
     isUploading,
     handleScreenshotUpload,
     handleStepBack,
+    handleFinalReportBack: handleBackFromFinalReport,
+    handleBackToJdInputFromFinalReport,
+    navigateToStep: navigateToStep as any,
     setCurrentStep: setCurrentStep as any,
     handleStartAnalysisClick,
-    showJdEmptyModal,
-    setShowJdEmptyModal,
     startAnalysis,
     onRestartCompletedInterviewScene: handleRestartCompletedInterviewScene,
     interviewEntryConfirmPendingRef: interviewEntryConfirmPendingRef as any,
@@ -679,9 +793,8 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportOverride,
     isFinalReportGenerating,
     handleStartInterviewFromFinalReport,
-    handleGoToComparisonFromFinalReport: () => navigateToStep('comparison'),
+    handleGoToComparisonFromFinalReport,
   }));
 };
 
 export default AiAnalysis;
-

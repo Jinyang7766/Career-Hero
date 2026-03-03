@@ -3,17 +3,16 @@ import { View, ScreenProps } from '../../types';
 import { AuthService } from '../../src/auth-service';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
+import { toast } from '../../src/ui/dialogs';
 
 const Signup: React.FC<ScreenProps> = () => {
   const login = useAppContext((s) => s.login);
   const navigateToView = useAppContext((s) => s.navigateToView);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
 
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const name = formData.get('name') as string;
@@ -28,7 +27,7 @@ const Signup: React.FC<ScreenProps> = () => {
       const hasLetter = /[a-zA-Z]/.test(password);
       const hasNumber = /\d/.test(password);
       if (password.length < 8 || !hasLetter || !hasNumber) {
-        setError('密码需至少8位，且同时包含字母和数字');
+        toast('密码需至少8位，且同时包含字母和数字', 'error');
         setIsLoading(false);
         return;
       }
@@ -55,7 +54,7 @@ const Signup: React.FC<ScreenProps> = () => {
           errorMessage = `注册失败: ${result.error?.message || '未知错误'}`;
         }
 
-        setError(errorMessage);
+        toast(errorMessage, 'error');
         return;
       }
 
@@ -69,18 +68,18 @@ const Signup: React.FC<ScreenProps> = () => {
           localStorage.setItem('user', JSON.stringify(result.data.user));
 
           console.log('Signup and login successful:', result.data.user);
-          login(result.data.user);
+          login(result.data.user, { isNewUser: true });
         } else {
           // 需要邮箱验证
           console.log('Signup successful, email verification required');
-          setError('注册成功！请检查邮箱并点击验证链接以完成注册');
+          toast('注册成功！请检查邮箱并点击验证链接以完成注册', 'success');
           setTimeout(() => {
             navigateToView(View.LOGIN, { replace: true });
           }, 3000);
         }
       } else {
         console.error('No user data returned from signup');
-        setError('注册失败：未返回用户信息，请重试');
+        toast('注册失败：未返回用户信息，请重试', 'error');
       }
     } catch (err) {
       console.error('Unexpected signup error:', {
@@ -88,7 +87,7 @@ const Signup: React.FC<ScreenProps> = () => {
         message: err instanceof Error ? err.message : 'Unknown error',
         stack: err instanceof Error ? err.stack : 'No stack trace'
       });
-      setError(`网络错误: ${err instanceof Error ? err.message : '未知错误'}`);
+      toast(`网络错误: ${err instanceof Error ? err.message : '未知错误'}`, 'error');
     } finally {
       setIsLoading(false);
     }
@@ -200,14 +199,7 @@ const Signup: React.FC<ScreenProps> = () => {
                   </label>
                 </div>
 
-                {error && (
-                  <div className="mb-4 flex items-center gap-3 p-4 bg-red-500/10 backdrop-blur-md border border-red-400/20 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="size-6 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-red-500 text-[16px]">error</span>
-                    </div>
-                    <p className="text-sm text-red-600 dark:text-red-400 font-bold leading-tight">{error}</p>
-                  </div>
-                )}
+
 
                 <div className="pt-2">
                   <button

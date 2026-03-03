@@ -13,43 +13,27 @@ type Params = {
 export type QuotaKind =
   | 'analysis'
   | 'final_report'
-  | 'interview'
-  | 'interview_simple'
-  | 'interview_comprehensive';
+  | 'interview';
 
 export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Params) => {
   const normalizeScenario = (raw?: string) => {
     const s = String(raw || '').trim().toLowerCase();
     if (s === 'technical') return 'technical';
-    if (s === 'hr') return 'hr';
+    if (s === 'pressure' || s === 'hr') return 'pressure';
     return 'general';
-  };
-  const normalizeMode = (raw?: string) => {
-    const m = String(raw || '').trim().toLowerCase();
-    if (m === 'simple') return 'simple';
-    if (m === 'comprehensive') return 'comprehensive';
-    return '';
   };
   const getScenarioLabel = (scenario?: string) => {
     const s = normalizeScenario(scenario);
     if (s === 'technical') return '复试';
-    if (s === 'hr') return 'HR面';
+    if (s === 'pressure') return '压力面';
     return '初试';
-  };
-  const getModeLabel = (mode?: string) => {
-    const m = normalizeMode(mode);
-    if (m === 'simple') return '简单';
-    if (m === 'comprehensive') return '全面';
-    return '';
   };
   const buildLedgerContext = (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => {
     const scenario = normalizeScenario(context?.scenario);
-    const mode = normalizeMode(context?.mode);
     const isInterview = kind !== 'analysis' && kind !== 'final_report';
     const parts: string[] = [];
     if (isInterview) {
       parts.push(`${getScenarioLabel(scenario)}`);
-      if (mode) parts.push(`${getModeLabel(mode)}`);
     }
     return {
       noteSuffix: parts.join(' '),
@@ -57,7 +41,7 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
         ? {
           kind,
           scenario,
-          mode: mode || null,
+          mode: null,
         }
         : {
           kind,
@@ -68,8 +52,6 @@ export const useUsageQuota = ({ currentUserId, navigateToView, showToast }: Para
   const resolveNeededPoints = (kind: QuotaKind) => {
     if (kind === 'analysis') return USAGE_POINT_COST.analysis;
     if (kind === 'final_report') return USAGE_POINT_COST.final_report;
-    if (kind === 'interview_simple') return USAGE_POINT_COST.interview_simple;
-    if (kind === 'interview_comprehensive') return USAGE_POINT_COST.interview_comprehensive;
     return USAGE_POINT_COST.interview;
   };
   const isInterviewKind = (kind: QuotaKind) =>

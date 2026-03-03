@@ -18,7 +18,6 @@ try:
     from services.ai_endpoint_shared_service import (
         PIIMasker,
         _normalize_company_confidence,
-        _fallback_extract_company_with_confidence,
     )
 except ImportError:
     from backend.services.ai_endpoint_prompt_service import (
@@ -36,7 +35,6 @@ except ImportError:
     from backend.services.ai_endpoint_shared_service import (
         PIIMasker,
         _normalize_company_confidence,
-        _fallback_extract_company_with_confidence,
     )
 
 def analyze_resume_core(current_user_id, data, deps):
@@ -356,11 +354,16 @@ def analyze_resume_core(current_user_id, data, deps):
             ai_result = deps['parse_ai_response'](response.text)
             if pii_masker:
                 ai_result = pii_masker.unmask_object(ai_result)
-            model_target_company = str(ai_result.get('targetCompany') or '').strip()
-            fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
-            model_confidence = _normalize_company_confidence(ai_result.get('targetCompanyConfidence'), default=0.0)
-            extracted_target_company = model_target_company or fallback_target_company
-            target_company_confidence = model_confidence if model_target_company else fallback_confidence
+            requested_target_role = str((data or {}).get('targetRole') or '').strip()
+            model_target_role = str(ai_result.get('targetRole') or '').strip()
+            model_role_confidence = _normalize_company_confidence(ai_result.get('targetRoleConfidence'), default=0.0)
+            extracted_target_role = model_target_role or requested_target_role
+            if model_target_role:
+                target_role_confidence = model_role_confidence
+            elif requested_target_role:
+                target_role_confidence = 1.0
+            else:
+                target_role_confidence = 0.0
             raw_suggestions = ai_result.get('suggestions', [])
             filtered_suggestions = []
             dropped_gender_suggestions = 0
@@ -424,8 +427,10 @@ def analyze_resume_core(current_user_id, data, deps):
                 'weaknesses': ai_result.get('weaknesses', []),
                 'missingKeywords': ai_result.get('missingKeywords', []),
                 'analysisStage': analysis_stage,
-                'targetCompany': extracted_target_company,
-                'targetCompanyConfidence': _normalize_company_confidence(target_company_confidence),
+                'targetRole': extracted_target_role,
+                'targetRoleConfidence': _normalize_company_confidence(target_role_confidence),
+                'targetCompany': '',
+                'targetCompanyConfidence': 0.0,
                 'reference_cases': reference_cases,
                 'rag_enabled': rag_enabled,
                 'rag_requested': rag_requested,
@@ -440,7 +445,7 @@ def analyze_resume_core(current_user_id, data, deps):
             logger.error("Full traceback: %s", traceback.format_exc())
             score = deps['calculate_resume_score'](resume_data)
             suggestions = deps['generate_enhanced_suggestions'](resume_data, score, job_description)
-            fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
+            requested_target_role = str((data or {}).get('targetRole') or '').strip()
             if analysis_stage == 'pre_interview':
                 suggestions = []
             else:
@@ -476,8 +481,10 @@ def analyze_resume_core(current_user_id, data, deps):
                 'weaknesses': ['智能分析暂不可用', '请稍后重试以获取更详细分析'],
                 'missingKeywords': [] if not job_description else ['智能分析暂不可用'],
                 'analysisStage': analysis_stage,
-                'targetCompany': fallback_target_company,
-                'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
+                'targetRole': requested_target_role,
+                'targetRoleConfidence': 1.0 if requested_target_role else 0.0,
+                'targetCompany': '',
+                'targetCompanyConfidence': 0.0,
                 'reference_cases': reference_cases,
                 'rag_enabled': rag_enabled,
                 'rag_requested': rag_requested,
@@ -491,7 +498,7 @@ def analyze_resume_core(current_user_id, data, deps):
 
     score = deps['calculate_resume_score'](resume_data)
     suggestions = [] if analysis_stage == 'pre_interview' else deps['generate_suggestions'](resume_data, score)
-    fallback_target_company, fallback_confidence = _fallback_extract_company_with_confidence(job_description)
+    requested_target_role = str((data or {}).get('targetRole') or '').strip()
     if analysis_stage != 'pre_interview':
         suggestions = [
             suggestion for suggestion in (suggestions or [])
@@ -524,8 +531,10 @@ def analyze_resume_core(current_user_id, data, deps):
         'weaknesses': ['缺少量化结果', '技能描述过于笼统'],
         'missingKeywords': [] if not job_description else ['正在分析关键词...'],
         'analysisStage': analysis_stage,
-        'targetCompany': fallback_target_company,
-        'targetCompanyConfidence': _normalize_company_confidence(fallback_confidence),
+        'targetRole': requested_target_role,
+        'targetRoleConfidence': 1.0 if requested_target_role else 0.0,
+        'targetCompany': '',
+        'targetCompanyConfidence': 0.0,
         'reference_cases': reference_cases,
         'rag_enabled': rag_enabled,
         'rag_requested': rag_requested,

@@ -37,7 +37,8 @@ export const buildInterviewSessionStorageKey = ({
   resumeId?: string | number | null;
   chatMode: 'interview' | 'analysis';
 }) => {
-  const baseKey = makeInterviewSessionKey(jdText, interviewType, interviewMode);
+  // New keys are mode-agnostic. Keep interviewMode param only for legacy call-site compatibility.
+  const baseKey = makeInterviewSessionKey(jdText, interviewType);
   if (chatMode !== 'interview') return baseKey;
   const signature = [
     `rid=${String(resumeId ?? '').trim() || 'unknown'}`,
@@ -58,14 +59,18 @@ export const buildAnalysisSessionStorageKey = ({
   interviewType: any;
   interviewMode?: any;
   chatMode: 'interview' | 'analysis';
-}) => `${makeInterviewScopedKey(jdKey, interviewType, interviewMode)}__${chatMode}`;
+}) => {
+  // New analysis-session keys are mode-agnostic.
+  void interviewMode;
+  return `${makeInterviewScopedKey(jdKey, interviewType)}__${chatMode}`;
+};
 
 export const isSessionModeMatched = (session: any, desiredMode: string) => {
-  const current = String(desiredMode || '').trim().toLowerCase();
-  const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
-  if (!current) return true;
-  if (!sessionMode) return false;
-  return sessionMode === current;
+  // Interview mode selection has been removed. Keep this helper permissive so
+  // both legacy mode-tagged rows and mode-less rows can be restored.
+  void session;
+  void desiredMode;
+  return true;
 };
 
 export const isSessionChatModeMatched = (session: any, expectedMode: string) => {

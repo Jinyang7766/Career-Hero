@@ -1,13 +1,11 @@
 import { useMemo } from 'react';
+import type { MutableRefObject } from 'react';
 import type { ResumeData } from '../../../../types';
-import type React from 'react';
-import { useFinalDiagnosisReportGenerator } from './useFinalDiagnosisReportGenerator';
 import { usePostInterviewFeedback } from './usePostInterviewFeedback';
 import { usePostInterviewFinalize } from './usePostInterviewFinalize';
 import { usePostInterviewReportData } from './usePostInterviewReportData';
 import { fillGeneratedResumeTimeline, repairGeneratedContacts } from './postInterviewResumeRepair';
 import { usePostInterviewFinalReportPersistence } from './usePostInterviewFinalReportPersistence';
-import type { QuotaKind } from './useUsageQuota';
 
 type Params = {
   currentStep: string;
@@ -18,18 +16,12 @@ type Params = {
   reportSummary?: string;
   score: number;
   weaknesses: string[];
+  reportGeneratedResume?: any;
   jdText: string;
   makeJdKey: (v: string) => string;
-  userProfile: any;
-  getRagEnabledFlag: () => boolean;
-  getBackendAuthToken: () => Promise<string>;
-  buildApiUrl: (path: string) => string;
-  chatMessagesRef: React.MutableRefObject<any[]>;
   currentUserId?: string;
   showToast: (msg: string, type?: 'info' | 'success' | 'error', ms?: number) => void;
-  consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
-  refundUsageQuota?: (kind: QuotaKind, note?: string) => Promise<boolean>;
-  sourceResumeIdRef: React.MutableRefObject<string | number | null>;
+  sourceResumeIdRef: MutableRefObject<string | number | null>;
   targetCompany: string;
   allResumes: any[];
   isSameResumeId: (a: any, b: any) => boolean;
@@ -48,17 +40,11 @@ export const useAiAnalysisPostInterviewFlow = ({
   reportSummary,
   score,
   weaknesses,
+  reportGeneratedResume,
   jdText,
   makeJdKey,
-  userProfile,
-  getRagEnabledFlag,
-  getBackendAuthToken,
-  buildApiUrl,
-  chatMessagesRef,
   currentUserId,
   showToast,
-  consumeUsageQuota,
-  refundUsageQuota,
   sourceResumeIdRef,
   targetCompany,
   allResumes,
@@ -86,36 +72,72 @@ export const useAiAnalysisPostInterviewFlow = ({
     finalReportAdvice: baseFinalAdvice,
   } = baseData;
 
-  const { override: finalReportOverride, isGenerating: isFinalReportGenerating } = useFinalDiagnosisReportGenerator({
-    currentUserId,
-    currentStep,
-    resumeData,
-    postInterviewGeneratedResume: baseGeneratedResume,
-    jdText,
-    effectivePostInterviewSummary: baseSummary,
-    finalReportSummary: baseFinalSummary,
-    finalReportScore: baseFinalScore,
-    finalReportAdvice: baseFinalAdvice,
-    makeJdKey,
-    userProfile,
-    getRagEnabledFlag,
-    getBackendAuthToken,
-    buildApiUrl,
-    chatMessagesRef: chatMessagesRef as any,
-    consumeUsageQuota,
-    refundUsageQuota,
-  });
-
-  const resolvedFinalReport = finalReportOverride
-    ? {
-      score: finalReportOverride.score,
-      summary: finalReportOverride.summary,
-      advice: finalReportOverride.advice,
-      weaknesses: finalReportOverride.weaknesses,
-      suggestions: finalReportOverride.suggestions,
-      generatedResume: finalReportOverride.generatedResume || null,
+  const resolvedFinalReport = useMemo(() => {
+    const persisted = (resumeData as any)?.postInterviewFinalReport;
+    const persistedSummary = String(persisted?.summary || '').trim();
+    const persistedJdText = String(persisted?.jdText || '').trim();
+    const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
+    const jdMatched =
+      !effectiveJdText ||
+      makeJdKey(persistedJdText || '') === makeJdKey(effectiveJdText || '');
+    if (persistedSummary && jdMatched) {
+      const persistedScoreNum = Number(persisted?.score);
+      const persistedWeaknesses = Array.isArray(persisted?.weaknesses)
+        ? persisted.weaknesses.map((item: any) => String(item || '').trim()).filter(Boolean)
+        : [];
+      const persistedAdvice = Array.isArray(persisted?.advice)
+        ? persisted.advice.map((item: any) => String(item || '').trim()).filter(Boolean)
+        : persistedWeaknesses;
+      return {
+        score: Number.isFinite(persistedScoreNum)
+          ? Math.max(0, Math.min(100, Math.round(persistedScoreNum)))
+          : baseFinalScore,
+        summary: persistedSummary,
+        advice: persistedAdvice.slice(0, 8),
+        weaknesses: persistedWeaknesses.slice(0, 8),
+        suggestions: Array.isArray(persisted?.suggestions) ? persisted.suggestions : (suggestions || []),
+        generatedResume:
+          persisted?.generatedResume && typeof persisted.generatedResume === 'object'
+            ? persisted.generatedResume
+            : (reportGeneratedResume && typeof reportGeneratedResume === 'object'
+              ? reportGeneratedResume
+              : null),
+      };
     }
-    : null;
+
+    const fallbackSummary = String(baseSummary || baseFinalSummary || '').trim() || '诊断完成，请查看生成简历。';
+    const fallbackAdvice = (Array.isArray(baseFinalAdvice) ? baseFinalAdvice : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 8);
+    const fallbackWeaknesses = (Array.isArray(weaknesses) ? weaknesses : [])
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .slice(0, 8);
+
+    return {
+      score: Math.max(0, Math.min(100, Math.round(Number(baseFinalScore || 0)))),
+      summary: fallbackSummary,
+      advice: fallbackAdvice.length > 0 ? fallbackAdvice : fallbackWeaknesses,
+      weaknesses: fallbackWeaknesses,
+      suggestions: Array.isArray(suggestions) ? suggestions : [],
+      generatedResume:
+        reportGeneratedResume && typeof reportGeneratedResume === 'object'
+          ? reportGeneratedResume
+          : null,
+    };
+  }, [
+    baseFinalAdvice,
+    baseFinalScore,
+    baseFinalSummary,
+    baseSummary,
+    jdText,
+    makeJdKey,
+    reportGeneratedResume,
+    resumeData,
+    suggestions,
+    weaknesses,
+  ]);
 
   const comparisonData = usePostInterviewReportData({
     originalResumeData,
@@ -132,11 +154,12 @@ export const useAiAnalysisPostInterviewFlow = ({
     postInterviewGeneratedResume: baseComparisonGeneratedResume,
     postInterviewAnnotations,
   } = comparisonData;
+
   const postInterviewGeneratedResume = useMemo(() => {
     const sourceResume = ((postInterviewOriginalResume as any) || (resumeData as any));
     const aiGenerated = resolvedFinalReport?.generatedResume;
     if (!aiGenerated || typeof aiGenerated !== 'object') {
-      return baseComparisonGeneratedResume;
+      return baseComparisonGeneratedResume || baseGeneratedResume;
     }
     const normalized: any = fillGeneratedResumeTimeline({ ...aiGenerated }, sourceResume);
     const contactRepaired: any = repairGeneratedContacts(normalized, sourceResume, resumeData as any);
@@ -144,19 +167,29 @@ export const useAiAnalysisPostInterviewFlow = ({
     contactRepaired.optimizedFromId = String((sourceResume as any)?.id || '');
     delete contactRepaired.id;
     return contactRepaired;
-  }, [resolvedFinalReport?.generatedResume, postInterviewOriginalResume, resumeData, baseComparisonGeneratedResume]);
+  }, [
+    baseComparisonGeneratedResume,
+    baseGeneratedResume,
+    postInterviewOriginalResume,
+    resumeData,
+    resolvedFinalReport?.generatedResume,
+  ]);
 
-  const finalReportScore = resolvedFinalReport?.score ?? 0;
+  const finalReportScore = Math.max(
+    0,
+    Math.min(100, Math.round(Number(resolvedFinalReport?.score || 0)))
+  );
   const finalReportSummary = String(resolvedFinalReport?.summary || '').trim();
-  const finalReportAdvice = Array.isArray(resolvedFinalReport?.advice) ? resolvedFinalReport!.advice : [];
+  const finalReportAdvice = Array.isArray(resolvedFinalReport?.advice)
+    ? resolvedFinalReport.advice
+    : [];
   const effectivePostInterviewSummary = finalReportSummary;
+  const isFinalReportGenerating = false;
 
   const { handlePostInterviewFeedback } = usePostInterviewFeedback({
     currentUserId,
     showToast,
-    effectivePostInterviewSummary: resolvedFinalReport
-      ? effectivePostInterviewSummary
-      : '分析报告生成中，请稍候…',
+    effectivePostInterviewSummary,
     postInterviewGeneratedResume,
     postInterviewOriginalResume,
     resumeId: resumeData?.id,
@@ -177,17 +210,15 @@ export const useAiAnalysisPostInterviewFlow = ({
     setAnalysisResumeId,
     setOptimizedResumeId,
     showToast,
-    finalReportSnapshot: resolvedFinalReport
-      ? {
-        score: resolvedFinalReport.score,
-        summary: resolvedFinalReport.summary,
-        advice: resolvedFinalReport.advice,
-        weaknesses: resolvedFinalReport.weaknesses,
-        suggestions: resolvedFinalReport.suggestions,
-        generatedResume: resolvedFinalReport.generatedResume || null,
-      }
-      : null,
-    finalAnalysisReady: !!resolvedFinalReport && !isFinalReportGenerating,
+    finalReportSnapshot: {
+      score: finalReportScore,
+      summary: finalReportSummary,
+      advice: finalReportAdvice,
+      weaknesses: Array.isArray(resolvedFinalReport?.weaknesses) ? resolvedFinalReport.weaknesses : [],
+      suggestions: Array.isArray(resolvedFinalReport?.suggestions) ? resolvedFinalReport.suggestions : [],
+      generatedResume: resolvedFinalReport?.generatedResume || null,
+    },
+    finalAnalysisReady: true,
   });
 
   usePostInterviewFinalReportPersistence({
@@ -205,12 +236,10 @@ export const useAiAnalysisPostInterviewFlow = ({
     postInterviewOriginalResume,
     postInterviewGeneratedResume,
     postInterviewAnnotations,
-    effectivePostInterviewSummary: resolvedFinalReport
-      ? effectivePostInterviewSummary
-      : '',
-    finalReportScore: resolvedFinalReport ? finalReportScore : 0,
-    finalReportSummary: resolvedFinalReport ? finalReportSummary : '报告生成中，请稍候…',
-    finalReportAdvice: resolvedFinalReport ? finalReportAdvice : [],
+    effectivePostInterviewSummary,
+    finalReportScore,
+    finalReportSummary,
+    finalReportAdvice,
     finalReportOverride: resolvedFinalReport,
     isFinalReportGenerating,
     handlePostInterviewFeedback,

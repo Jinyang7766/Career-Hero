@@ -120,6 +120,40 @@ pwsh -File scripts/test-online.ps1 `
   -BackendUrl "https://your-backend.up.railway.app"
 ```
 
+### 6. Agent Smoke（可选）
+
+```powershell
+# Agent API smoke（需要 AGENT_API_ENABLED=1）
+python scripts/agent_api_smoke.py `
+  --backend-url "https://your-backend.up.railway.app" `
+  --token "<bearer-token>"
+
+# Agent DB smoke（需要可用 Supabase URL/KEY 和 existing users.id）
+python scripts/agent_db_smoke.py `
+  --user-id "<existing-users-id-uuid>"
+```
+
+可选：演示 run 生命周期（仅开发环境，需开启 mock worker）：
+
+```powershell
+$env:AGENT_MOCK_WORKER_ENABLED="1"
+python scripts/agent_api_smoke.py `
+  --backend-url "https://your-backend.up.railway.app" `
+  --token "<bearer-token>" `
+  --simulate-lifecycle
+```
+
+也可通过 step 流程串行触发（local + online + agent smoke）：
+
+```powershell
+pwsh -File scripts/test-step.ps1 `
+  -FrontendUrl "https://your-frontend.vercel.app/" `
+  -BackendUrl "https://your-backend.up.railway.app" `
+  -RunAgentApiSmoke `
+  -RunAgentDbSmoke `
+  -AgentSmokeUserId "<existing-users-id-uuid>"
+```
+
 ---
 
 ## 📝 更新日志

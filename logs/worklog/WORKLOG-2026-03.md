@@ -1,0 +1,3973 @@
+# WORKLOG Archive 2026-03
+
+Source: WORKLOG.md
+
+---
+
+## [2026-03-01 01:26] FE Bugfix: 简历批改保存后不跳转，改为成功弹窗
+- Agent: A + B-FE + C
+- Goal:
+  - 修复“简历批改页点击保存后误跳转到最终分析过程页”的问题。
+  - 保存成功后提供弹窗选择：留在当前页或前往“我的简历”。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts`
+    - 移除保存成功后的 `navigateToStep('final_report', true)` 强制跳转。
+    - 失败分支改为抛错（同时保留已有错误/提示 toast），供页面层判断是否显示成功弹窗。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useEditablePostInterviewResume.ts`
+    - `handleCompleteAndSaveClick` 改为返回布尔结果：成功 `true`，失败 `false`。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/PostInterviewReportPage.tsx`
+    - 保存按钮改为调用保存结果回调，仅保存成功时弹出“保存成功”弹窗。
+    - 新增弹窗动作：`留在本页面`（关闭弹窗）/`去我的简历查看`（跳转 `View.ALL_RESUMES`）。
+    - 按钮文案保持“保存为新简历（原简历不变）”。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPostInterviewFlow.impl.ts`
+    - 清理 `usePostInterviewFinalize` 已不再需要的 `navigateToStep` 传参。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 同步移除上述无用参数透传。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `rg -n "navigateToStep\('final_report'|handleSaveAsNewResumeClick|保存成功|去我的简历查看|留在本页面" ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts ai-resume-builder/components/screens/ai-analysis/pages/PostInterviewReportPage.tsx`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 52 passed, backend 18 passed）。
+  - targeted flow static check: PASS（保存链路无 `usePostInterviewFinalize -> final_report` 跳转残留，且弹窗与双按钮文案存在）。
+- Risks/Notes:
+  - 该修复依赖页面层弹窗反馈，保存成功时不再额外触发 success toast，避免重复反馈。
+
+## [2026-03-01 01:29] FE Bugfix: 新生成优化简历同步修改时间
+- Agent: B-FE + C
+- Goal:
+  - 修复“保存为新简历后，列表修改时间未同步为当前时间”的问题。
+- Root cause:
+  - 列表展示日期优先读取 `resume_data.contentUpdatedAt`，而新优化简历保存时沿用了旧值，导致显示旧时间。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts`
+    - 在保存新优化简历 payload 时，新增 `contentUpdatedAt: new Date().toISOString()`，强制同步为本次保存时间。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 52 passed, backend 18 passed）。
+- Risks/Notes:
+  - 日期显示仍遵循现有规则（优先 `contentUpdatedAt`）；本次修复确保新优化简历该字段为最新保存时间。
+
+## [2026-03-01 01:34] FE Test: 覆盖“保存后不跳转，仅弹窗”回归用例
+- Agent: B-FE + C
+- Goal:
+  - 新增自动化测试，锁定简历批改页保存后的预期行为：保存成功不自动跳转，仅展示成功弹窗。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/PostInterviewReportPage.tsx`
+    - 新增可测试决策函数 `resolvePostInterviewSaveResult(saveSucceeded)`，显式约束：
+      - `shouldOpenSuccessModal = saveSucceeded`
+      - `shouldNavigateImmediately = false`
+    - `handleSaveAsNewResumeClick` 改为调用该决策函数驱动弹窗展示。
+  - `ai-resume-builder/src/__tests__/post-interview-save-flow.test.ts`
+    - 新增 2 条用例：
+      - 保存成功：仅开弹窗，不导航。
+      - 保存失败：不弹成功弹窗，不导航。
+- Commands:
+  - `cd ai-resume-builder; npx vitest run src/__tests__/post-interview-save-flow.test.ts`
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（2/2）。
+  - type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 该用例目前为流程决策层测试，能稳定防止“保存后自动跳转”逻辑回归；若后续引入组件级测试库，可再补端到端交互断言。
+
+## [2026-03-01 01:39] FE Bugfix: 解决保存后误回“最终报告生成中”页面
+- Agent: A + B-FE + C
+- Goal:
+  - 修复简历批改页点击保存后，页面仍回到“最终报告生成中”过程页的问题。
+- Root cause:
+  - 保存成功后会切换当前 `resumeData` 到新建简历 ID。
+  - 新简历若未携带 `postInterviewFinalReport`，`useFinalDiagnosisReportGenerator` 会把它视为需重新生成，导致 `comparison` 页面显示 loading。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts`
+    - 新增 `finalReportSnapshot` 参数。
+    - 保存 payload 时同步写入 `postInterviewFinalReport`（优先使用当前最终报告快照，兜底使用现有 resumeData 上的报告对象），避免切换到新简历后触发二次生成。
+    - 同步对齐 `jdText/targetCompany/updatedAt`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPostInterviewFlow.impl.ts`
+    - 调用 `usePostInterviewFinalize` 时传入 `resolvedFinalReport` 快照。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `cd ai-resume-builder; npx vitest run src/__tests__/post-interview-save-flow.test.ts`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - targeted test: PASS（2/2）。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 若后续更改最终报告存储结构，需要同步更新 `finalReportSnapshot -> postInterviewFinalReport` 的映射字段。
+
+## [2026-03-01 01:44] FE Simplify: 移除 AI 诊断简历选择页三点菜单与“重新分析”入口
+- Agent: A + B-FE + C
+- Goal:
+  - 在 AI 诊断的简历选择列表中删除右上角三点菜单，并移除“重新分析”动作入口。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`
+    - 删除 `onRediagnoseResume` props。
+    - 删除菜单状态与外部点击关闭逻辑（`openMenuResumeId/menuWrapperRef`）。
+    - 删除列表项右上角 `more_vert` 按钮及“重新分析”菜单项。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - 删除 `onRediagnoseResume` 参数定义与传参（`resume_select` 与 fallback 分支）。
+  - `ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`
+    - 删除 `onRediagnoseResume` 透传。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 删除 `useAnalysisResetActions` 导入与 `handleRediagnoseFromResumeSelect` 接线。
+    - 删除 render props 中 `onRediagnoseResume` 注入。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - “重新分析”能力仅从该页面入口移除；若后续需要完全删除底层 reset 逻辑，可在下一轮清理 `useAnalysisResetActions` 中相关导出。
+
+## [2026-03-01 01:53] FE UX: 用户画像页透出“至少20字”前端校验信息
+- Agent: B-FE + C
+- Goal:
+  - 修复用户反馈“前端没有透传最少 20 字限制信息”的问题，让用户在输入阶段就能明确看到门槛与剩余字数。
+- Changes:
+  - `ai-resume-builder/components/screens/CareerProfile.tsx`
+    - 新增前端计算：`trimmedInputLength / remainingChars / isInputTooShort`。
+    - 输入区右上角文案从“也支持长文本粘贴哦”改为“至少输入 20 个字”。
+    - 字数统计下方新增动态提示：
+      - 未达标：`还差 X 个字才可保存`（warning 色）
+      - 达标：`字数已达标，可以保存`（success 色）
+    - 保存按钮禁用条件改为复用 `isInputTooShort`。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 后端 20 字校验仍保留，前端提示仅用于提前反馈，不替代服务端校验。
+
+## [2026-03-01 02:06] FE Feature: 用户可查看并编辑 AI 整理的职业画像
+- Agent: A + B-FE + C
+- Goal:
+  - 在职业画像页面展示 AI 结构化整理结果，并支持用户逐项编辑后保存。
+- Changes:
+  - `ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`
+    - 新增“结构化画像编辑器”组件。
+    - 展示并可编辑字段：`summary`、`careerHighlights`、`coreSkills`、`constraints`、`experiences`（含时间/组织/动作/结果/技能/是否写入简历/置信度）。
+    - 支持经历条目新增与删除。
+    - 新增“保存当前画像编辑”按钮。
+  - `ai-resume-builder/components/screens/dashboard/useCareerProfileComposer.ts`
+    - 新增 `saveStructuredCareerProfile(draftProfile, rawInputText?)`。
+    - 对编辑稿进行 `normalizeCareerProfile` 归一化后持久化到用户画像字段。
+    - 写回本地缓存与提示文案。
+  - `ai-resume-builder/components/screens/CareerProfile.tsx`
+    - 接入 `CareerProfileStructuredEditor`。
+    - 将当前画像 `profile` 传入展示。
+    - 将编辑保存回调接到 `saveStructuredCareerProfile`。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 当前编辑器以“文本/列表输入”方式编辑结构化字段，未引入差异审阅流程；后续可加“仅保存变更字段”与历史对比。
+
+## [2026-03-01 02:14] FE Flow Update: AI 整理结果改为独立跳转页
+- Agent: A + B-FE + C
+- Goal:
+  - 将“AI 整理结果编辑”从 `CareerProfile` 主页面拆出，改为独立跳转页，避免页面集成过重。
+- Changes:
+  - `ai-resume-builder/types.ts`
+    - 新增视图枚举：`View.CAREER_PROFILE_RESULT`。
+  - `ai-resume-builder/src/app-routing.ts`
+    - 新增路由映射：`/career-profile/result <-> View.CAREER_PROFILE_RESULT`。
+    - 在 `pathToView` 中将 `/career-profile/result` 判断放在 `/career-profile` 之前。
+  - `ai-resume-builder/src/__tests__/app-routing.test.ts`
+    - 新增新视图与新路径的双向映射断言。
+  - `ai-resume-builder/components/screens/CareerProfileResult.tsx`
+    - 新增独立页面，展示并编辑 AI 结构化画像（接入 `CareerProfileStructuredEditor`）。
+  - `ai-resume-builder/App.tsx`
+    - 注册新懒加载页面并接入 `switch(currentView)` 渲染。
+  - `ai-resume-builder/components/screens/CareerProfile.tsx`
+    - 移除内嵌 `CareerProfileStructuredEditor`。
+    - 新增“查看/编辑 AI 整理结果”按钮，跳转到独立结果页。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 新页面入口目前放在职业画像首页进度卡内；若后续需要可在 Dashboard 卡片直接增加二级入口。
+
+## [2026-03-01 02:18] FE UX/Privacy: 保存职业画像后清空输入框并停止持久化原始输入
+- Agent: B-FE + C
+- Goal:
+  - 用户保存并生成职业画像后，清空“原始输入”文本框，不再长期保留旧输入内容。
+- Changes:
+  - `ai-resume-builder/components/screens/dashboard/useCareerProfileComposer.ts`
+    - 新增 `stripRawInput`，对画像对象统一清空 `rawInput`。
+    - `profile` 读取时先 strip，避免历史 `rawInput` 回填输入框。
+    - `initialText` 固定为空字符串，不再用 `rawInput/summary` 自动回填。
+    - `saveCareerProfile` 与 `saveStructuredCareerProfile` 在持久化前清空 `rawInput`。
+    - 两个保存函数改为返回 `boolean` 表示保存成功/失败。
+  - `ai-resume-builder/components/screens/CareerProfile.tsx`
+    - 提交成功后执行 `setInputText('')`，立即清空输入框。
+  - `ai-resume-builder/components/screens/CareerProfileResult.tsx`
+    - 对齐 `saveStructuredCareerProfile` 新签名调用。
+- Commands:
+  - `cd ai-resume-builder; npx tsc --noEmit`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Type check: PASS。
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+- Risks/Notes:
+  - 历史库中已存在的 `rawInput` 仅在用户下次保存画像后被覆盖为 `''`；本次已确保前端不再继续持久化新原文输入。
+
+## [2026-03-01 14:09] FE Chat UX: 面试开场总结合并为单个 AI 气泡
+- Agent: B-FE + C
+- Goal:
+  - 修复开场话术被拆成多个 AI 气泡的问题，改为单个 summary 气泡展示。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts`
+    - 移除 summary 的分句/分段发送与多定时器逻辑。
+    - 将开场总结统一写入单条消息 `ai-summary`，避免 `ai-summary-0/1...` 分裂气泡。
+    - 保留并兼容历史 `ai-summary-*` 数据，在写入 `ai-summary` / `ai-ask` 时自动过滤旧分段消息。
+    - 修复“仅 intro 消息”自愈逻辑，统一重建为 `[ai-summary, ai-ask]`。
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s test -- src/__tests__/interview-entry-checkpoint.test.ts`
+  - `cd ai-resume-builder; npx tsc --noEmit`
+- Verification:
+  - local baseline: PASS（frontend 54 passed, backend 18 passed）。
+  - targeted flow check: PASS（interview entry checkpoint 定向测试 2 passed）。
+  - type check: PASS。
+- Risks/Notes:
+  - 该变更聚焦“开场 summary 气泡合并”，未改动后续提问/点评的气泡分发策略。
+
+## [2026-03-01 14:57] FE 文案清理：移除“最终”加载提示
+- Agent: B-FE
+- Goal:
+  - 删除 AI 诊断加载与兜底文案中的“最终”措辞，统一为中性表述。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/FinalAnalysisLoadingPage.tsx`: `正在生成最终分析报告...` -> `正在生成分析报告...`；`生成最终评分和优化建议` -> `生成评分和优化建议`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPostInterviewFlow.impl.ts`: 两处兜底提示移除“最终”。
+  - `ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`: `最终报告生成中，请稍候…` -> `报告生成中，请稍候…`。
+- Commands:
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `rg -n "正在生成最终分析报告|生成最终评分和优化建议|最终报告生成中，请稍候|最终分析报告生成中，请稍候" ai-resume-builder/components/screens/ai-analysis -S`
+  - `rg -n "正在生成分析报告|生成评分和优化建议|分析报告生成中，请稍候|报告生成中，请稍候" ai-resume-builder/components/screens/ai-analysis -S`
+- Verification:
+  - local result: PASS（frontend 54 passed, backend 18 passed）。
+  - online result: 未执行（未请求线上验证）。
+- Risks/Notes:
+  - 仅修改展示文案，不影响分析流程与状态机逻辑。
+
+## [2026-03-01 15:04] 文档交付：AI Agent 全链路重构计划书
+- Agent: A
+- Goal:
+  - 将“AI Job Search Agent 重构路线”整理为可执行的单一 Markdown 计划书。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`: 新增完整计划书（目标、架构、分阶段路线、KPI、风险与首周任务）。
+- Commands:
+  - `Test-Path docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 40`
+  - `rg -n "^## 5\. 分阶段实施路线|^## 8\. 成本控制策略|^## 11\. 12 周执行排期" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - local result: PASS（文档存在、关键章节可检索、头部内容正确）。
+  - online result: 未执行（本步骤为文档交付，不涉及线上变更）。
+- Risks/Notes:
+  - 本步骤未改动业务代码，故未运行代码测试套件。
+
+## [2026-03-01 16:03] 文档修订：AI Agent 计划书 v1.1
+- Agent: A
+- Goal:
+  - 根据新增建议完善计划书的可执行性与一致性（排期、异步运行、预算、门禁、标题结构）。
+- Changes:
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级为 1.1。
+    - 修复 12 周排期中的 Sprint 编排冲突（Sprint 0.5 改为 Sprint 0 子阶段）。
+    - 异步执行选型改为 Python 优先（Celery/RQ），pg-boss 改为后续可选。
+    - run 状态机补充 	imed_out/expired，新增 waiting_confirm TTL 约束与 confirm_expires_at 字段。
+    - 新增最低约束与索引要求（FK/唯一约束/核心索引/trace_id 索引）。
+    - Router 回归门禁改为仅阻断 Agent 相关变更，不影响无关改动。
+    - 章节层级规范化（4.x/5.x/7.1/10.1 统一为三级标题）。
+- Commands:
+  - 
+g -n "^## 4\.[1-5]|^## 5\.[1-5]|^## 7\.1|^## 10\.1" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+  - 
+g -n "Celery/RQ|waiting_confirm|timed_out|expired|confirm_expires_at|UNIQUE\(tool_name, idempotency_key\)|agent-ci" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+  - 
+g -n "Sprint 0\.5|Sprint 0（W1-W2）|W1-W2|W11-W12" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+  - Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 6
+- Verification:
+  - local result: PASS（关键关键词与结构检索符合预期；冲突排期已消除）。
+  - online result: 未执行（仅文档修订）。
+- Risks/Notes:
+  - 本次为文档层变更，尚未落地数据库迁移与 API，实现时需与真实代码契约再做一次对齐评审。
+
+## [2026-03-01 16:24] 文档修订：AI Agent 计划书 v1.3
+- Agent: A
+- Goal:
+  - 根据评审结论补齐 v1.2 的关键落地缺口（plans 实体、cancel API、异步执行细则、记忆分级、术语修正）。
+- Changes:
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本从 1.2 升级到 1.3。
+    - 新增 gent_plans SQL 草案，并补充 gent_tasks.plan_id / gent_plans.goal_id 外键要求。
+    - API 新增 POST /api/agent/runs/{run_id}/cancel。
+    - 新增 Celery 最小运行配置（broker/result backend、重试、死信、任务去重）。
+    - 将 nalysis_router_service 定位改为 Tool 内模型路由，不承担意图识别职责。
+    - 消息保留策略改为按意图分级窗口（simple_qa / diagnosis / interview）。
+    - 修正 typo：梅理 -> 梳理、预算超限保护生效率 -> 预算超限保护触发率。
+- Commands:
+  - 
+g -n "版本：1\.3|agent_plans\(|/runs/\{run_id\}/cancel|Celery 最小运行配置|短期记忆窗口按意图分级|预算超限保护触发率|梳理 36 个" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+  - 
+g -n "analysis_router_service\.py|不承担用户意图识别职责|agent_tasks\.plan_id|agent_plans\.goal_id" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+  - Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -First 40
+- Verification:
+  - local result: PASS（关键修订项均可检索命中，文档头部版本信息正确）。
+  - online result: 未执行（仅文档改动）。
+- Risks/Notes:
+  - 当前为规划文档更新，尚未落实迁移 SQL 与 API 实现；建议下个步骤直接产出 migration 草案与接口 OpenAPI 草案。
+
+## [2026-03-01 17:31] 文档修订：AI Agent 计划书 v1.6 收尾一致性修复
+- Agent: A + C
+- Goal:
+  - 完成 v1.6 末轮一致性修订，收敛 API 路径、SQL 约束与评审遗留问题。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 统一 `confirm` 路径为 `POST /api/agent/runs/{run_id}/confirm`（API 矩阵与 JSON 示例同步）。
+    - 在可执行 SQL 样例中新增 `agent_events` 归属锚点约束：`run_id` 与 `thread_id` 至少一项非空。
+    - 在可执行 SQL 样例中新增 `agent_token_usage` 非负约束：`prompt_tokens`、`completion_tokens`、`cost_usd`。
+    - 在可执行 SQL 样例中新增 `agent_runs.budget_cost_usd` 非负约束。
+    - 在“最低约束与索引”条款中补齐对应规范说明，避免文档层与 SQL 样例不一致。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.v1.6.final.md`
+    - 新增 v1.6 收尾快照备份。
+- Commands:
+  - `rg -n "POST /api/agent/confirm|POST /api/agent/runs/\{run_id\}/confirm" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "ck_agent_events_anchor|run_id is not null or thread_id is not null|prompt_tokens int check|completion_tokens int check|cost_usd numeric check|ck_agent_runs_budget_cost_non_negative|budget_cost_usd >= 0|agent_events.*至少一项非空|agent_token_usage\.prompt_tokens/completion_tokens/cost_usd" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "1-2 Sprint|\(1-2 Sprint\)" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - local targeted verification: PASS（关键字回归校验通过，旧 `POST /api/agent/confirm` 无残留；新约束可检索命中）。
+  - local baseline tests: 未执行（本步骤仅文档与备份文件改动，无运行时代码变更）。
+- Risks/Notes:
+  - 当前为规划文档修订，尚未将新增约束落地到真实 migration；进入实施阶段时需按此约束同步数据库迁移脚本。
+
+## [2026-03-01 17:39] 文档复核：事件锚点约束与线程删除语义冲突修复
+- Agent: A + C
+- Goal:
+  - 继续重复评审并清理新增约束引入的潜在冲突，确保文档内部一致性。
+- Findings:
+  - `agent_events` 已新增锚点约束 `run_id/thread_id` 至少一项非空，但线程 FK 仍为 `ON DELETE SET NULL`，会在删除 thread 时触发约束冲突。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - `fk_agent_events_thread` 从 `on delete set null` 改为 `on delete restrict`。
+    - 在 FK 设计说明中补充该决策原因，避免后续实现回退到冲突配置。
+- Commands:
+  - `rg -n "fk_agent_events_thread|ck_agent_events_anchor|ON DELETE RESTRICT|ON DELETE SET NULL" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "POST /api/agent/confirm|POST /api/agent/runs/\{run_id\}/confirm|1-2 Sprint" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - local targeted verification: PASS（删除语义冲突已消除；路径与排期关键字无回归）。
+  - local baseline tests: 未执行（仅文档改动）。
+- Risks/Notes:
+  - 实施 SQL 时应同步落实 `RESTRICT` 语义，避免迁移脚本与计划文档偏离。
+
+## [2026-03-01 18:01] 文档复核：v1.7 契约一致性补强（再评审）
+- Agent: A + C
+- Goal:
+  - 按“重复 review 直到没问题”要求，继续清理 API/SQL 语义不一致，确保文档可直接指导实现。
+- Findings:
+  - `confirm_token` 机制说明与 `execute` 响应字段不一致。
+  - `cancel/retry/confirm` 契约要求返回状态前后值，但矩阵/示例未落地。
+  - Timeline 查询按 `thread_id`，但 `agent_events` 缺少线程维度索引。
+  - `agent_events` 触发器缺少 `run_id + thread_id` 共存时的链路一致性校验。
+  - `plans/generate` 错误码使用 `AGENT_RUN_NOT_FOUND` 语义不准确。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 新增约束条款：`agent_events.run_id` 与 `thread_id` 共存时必须匹配同一 run 链路。
+    - 新增查询索引要求：`agent_events(thread_id, created_at desc)`。
+    - SQL 样例新增索引：`idx_agent_events_thread_created_at`。
+    - SQL 触发器新增一致性校验：`agent_events.thread_id must match agent_runs.thread_id when both are set`。
+    - API 契约矩阵补齐：
+      - `cancel/retry/confirm` 返回 `prev_state` / `next_state`。
+      - `execute` 返回 `requires_confirm` 与条件字段 `confirm_token?` / `confirm_expires_at?`。
+    - JSON 示例同步：`retry` 与 `confirm` 响应新增 `prev_state/next_state`；`execute` 响应新增 `requires_confirm/confirm_token/confirm_expires_at`。
+    - `confirm_token` 机制说明改为“仅当 `requires_confirm=true` 且 `dry_run=true` 返回”。
+    - 错误码矩阵新增 `AGENT_GOAL_NOT_FOUND`，并将 `POST /api/agent/plans/generate` 的关键错误码改为该值。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.v1.6.before-v1.7.md`
+    - 新增修订前备份。
+- Commands:
+  - `rg -n -F 'prev_state' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'next_state' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'requires_confirm' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'idx_agent_events_thread_created_at' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'agent_events.thread_id must match agent_runs.thread_id when both are set' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'AGENT_GOAL_NOT_FOUND' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - local targeted verification: PASS（上述关键契约/索引/触发器字段均检索命中；旧 `POST /api/agent/confirm` 无残留）。
+  - local baseline tests: 未执行（仅文档改动）。
+- Risks/Notes:
+  - 当前为文档层修订；落地到真实 migration/OpenAPI 时仍需做一次“实现对齐 review”。
+
+## [2026-03-01 18:03] 文档复核：trace_id 与错误码语义再收敛
+- Agent: A + C
+- Goal:
+  - 继续重复评审，消除剩余契约歧义，确保 7.x API 章节内部完全一致。
+- Findings:
+  - 契约要求“所有响应返回 trace_id”，但 7.4 矩阵中部分接口成功字段未显式包含 trace_id。
+  - `POST /api/agent/plans/generate` 在 goal 不存在时仍写 `AGENT_RUN_NOT_FOUND`，语义不准确。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 7.4 API 矩阵为 `GET run`、`cancel/retry/execute/confirm`、`GET runs/{run_id}/events` 成功字段补齐 `trace_id`。
+    - 7.3 错误码矩阵新增 `AGENT_GOAL_NOT_FOUND`。
+    - 7.4 `POST /api/agent/plans/generate` 关键错误码改为 `AGENT_GOAL_NOT_FOUND`。
+- Commands:
+  - `rg -n -F 'AGENT_GOAL_NOT_FOUND' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'trace_id' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n -F 'POST /api/agent/confirm' docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - local targeted verification: PASS（关键字段与错误码可检索命中；旧 confirm 路径无残留）。
+  - local baseline tests: 未执行（仅文档改动）。
+- Risks/Notes:
+  - 进入实现阶段时建议以本章为源生成 OpenAPI，避免再次出现矩阵与示例漂移。
+
+## [2026-03-01 18:42] BE Sprint1 入口：Agent Run 只读接口骨架 + 基础门禁测试
+- Agent: A + B-BE + C
+- Goal:
+  - 在不影响现有 AI 主链路的前提下，接入可灰度的 Agent run 只读接口骨架，并补齐状态机/预算护栏最小回归。
+- Changes:
+  - `backend/routes/agent_routes.py`
+    - 新增 `GET /api/agent/runs/<run_id>` 路由注册函数（依赖注入 `token_required` 与 `run_service`）。
+    - 统一错误体最小结构：`error.code/message/retryable/run_id/trace_id`。
+    - 支持 `X-Client-Trace-Id` 透传；未提供时自动生成 `trace_id`。
+  - `backend/app_monolith.py`
+    - 新增 `AgentRunService`、`register_agent_routes` 导入（含 fallback import）。
+    - 新增 `AGENT_API_ENABLED` 开关（默认关闭）；开启时注册 Agent 路由。
+    - 默认关闭时仅打印日志，不改变现有路由行为。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增状态机核心转移测试。
+    - 新增预算护栏 warn/reject 两种模式测试。
+    - 新增 Agent run 查询接口测试：invalid run_id -> 404；命中快照 -> 200。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，5 passed）。
+  - syntax check: PASS（`backend/agent` 与 `backend/routes/agent_routes.py` 编译通过）。
+  - local baseline: PASS（frontend 54 passed，backend 23 passed）。
+- Risks/Notes:
+  - 当前 `AgentRunService` 仍为占位实现，未连接真实数据库仓储；接口在默认配置下通过 `AGENT_API_ENABLED=0` 保持关闭。
+  - pytest_asyncio 给出配置弃用告警（不影响本次功能）。
+
+## [2026-03-01 18:44] BE Sprint1 入口续作：Agent run 实表仓储 + Create/Get 契约打通
+- Agent: A + B-BE + C
+- Goal:
+  - 将 Agent run 从占位读接口升级为最小可读写闭环：支持 `POST /api/agent/runs` 创建、`GET /api/agent/runs/{id}` 查询、幂等键重放。
+- Changes:
+  - `backend/agent/run_service.py`
+    - 扩展 `RunRepository` 协议：新增 `get_by_request_idempotency`。
+    - `create_run` 增加幂等重放逻辑：同 user + key 直接返回已有 run。
+  - `backend/agent/run_repository.py`
+    - 新增仓储实现：`SupabaseRunRepository`（读写 `agent_runs`）与 `InMemoryRunRepository`（mock/dev）。
+    - 新增工厂 `create_run_repository(storage_context, logger)`，按运行模式自动选择仓储。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/runs`。
+    - 校验 `intent`、可选 UUID 字段（`thread_id/goal_id`）。
+    - 幂等键支持 `Idempotency-Key` header 与 body 字段；冲突返回 `AGENT_IDEMPOTENCY_CONFLICT`。
+    - 为 create/get 增加结构化 500 错误返回（`AGENT_INTERNAL_ERROR`）。
+  - `backend/routes/agent_route_deps.py`
+    - 新增 Agent 路由依赖构建器，保持与 AI route deps 一致风格。
+  - `backend/app_monolith.py`
+    - Agent 路由接入改为：`AgentRunService(repository=create_run_repository(...))`。
+    - 继续由 `AGENT_API_ENABLED` 控制开关，默认关闭。
+  - `backend/tests/test_agent_foundation.py`
+    - 扩展到 9 个测试：新增 create 成功、请求体校验、幂等冲突、幂等重放（同 key 同 run_id）。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，9 passed）。
+  - syntax check: PASS（新增/变更 Agent 模块编译通过）。
+  - local baseline: PASS（frontend 54 passed，backend 27 passed）。
+- Risks/Notes:
+  - `POST /api/agent/runs` 当前仅落最小契约字段，`budget_profile` 还未接预算策略执行。
+  - `AGENT_INTERNAL_ERROR` / `AGENT_INVALID_REQUEST` 为当前最小实现错误码，后续可再按契约表精细化拆分。
+
+## [2026-03-01 18:45] BE Follow-up: run_service 幂等仓储能力兼容守卫
+- Agent: B-BE + C
+- Goal:
+  - 防止历史仓储实现未提供 `get_by_request_idempotency` 时触发运行时错误，提升兼容性。
+- Changes:
+  - `backend/agent/run_service.py`
+    - `create_run` 在调用幂等查询前增加 `hasattr(self._repository, "get_by_request_idempotency")` 守卫。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（9 passed）。
+  - local baseline: PASS（frontend 54 passed，backend 27 passed）。
+- Risks/Notes:
+  - 无新增风险；仅增强兼容性。
+
+## [2026-03-01 18:49] BE Sprint1 续作：Retry 接口 + 事件落库 + 仓储修复
+- Agent: A + B-BE + C
+- Goal:
+  - 完成 run 生命周期的最小重试闭环（`retry`），并补充 `agent_events` 写入；修复 run 仓储已发现的幂等查询方法缩进缺陷。
+- Changes:
+  - `backend/agent/run_repository.py`
+    - 修复 `get_by_request_idempotency` 方法缩进错误（恢复为 `SupabaseRunRepository` 成员方法）。
+    - `save` 从 `insert` 改为 `upsert(on_conflict='id')`，支持状态更新场景（如 retry）。
+  - `backend/agent/run_service.py`
+    - 新增 `EventRepository` 协议与事件发射逻辑。
+    - `create_run` 成功后写 `run_created` 事件。
+    - `retry_run` 成功后写 `run_retried` 事件（含 `prev_state/next_state/attempt_no`）。
+    - 事件写入失败降级为告警，不阻断主流程。
+  - `backend/agent/event_repository.py`
+    - 新增 `InMemoryEventRepository` 与 `SupabaseEventRepository`。
+    - 新增 `create_event_repository(storage_context)` 工厂。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/runs/<run_id>/retry`。
+    - 覆盖 404（run 不存在）、409（非法状态迁移）、500（内部失败）语义。
+  - `backend/app_monolith.py`
+    - Agent 路由启用时接入 `event_repository`，构造 `AgentRunService(repository, event_repository, logger)`。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 retry 路由测试：not found / invalid transition / failed->queued 成功转移。
+    - 新增 run service 事件发射测试（`run_created` + `run_retried`）。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，13 passed）。
+  - syntax check: PASS（agent 模块与 app_monolith 编译通过）。
+  - local baseline: PASS（frontend 54 passed，backend 31 passed）。
+- Risks/Notes:
+  - `agent_events` 目前采用 best-effort 写入（失败仅告警），后续可结合告警面板做失败率监控。
+  - 重试接口暂未落地“retry 幂等键去重语义”，当前以状态机约束为主。
+
+## [2026-03-01 18:52] BE Sprint1 续作：Cancel 接口闭环 + 状态机幂等取消语义
+- Agent: A + B-BE + C
+- Goal:
+  - 在 create/get/retry 基础上补齐 run 控制接口 `cancel`，并实现终态幂等取消语义（不二次状态写入）。
+- Changes:
+  - `backend/agent/run_service.py`
+    - 新增 `RunCancelResult`。
+    - 新增 `cancel_run(run, reason?)`：
+      - 终态（`succeeded/failed/canceled/timed_out/expired`）返回幂等成功（`idempotent=true`）。
+      - 非终态按状态机转移到 `canceled`，并写 `run_canceled` 事件。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/runs/<run_id>/cancel`。
+    - 覆盖请求体校验、幂等键冲突校验、404/409/500 错误语义。
+    - 成功响应返回 `run_id/prev_state/next_state/idempotent/trace_id`。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 cancel 路由测试：not found、running->canceled、terminal 幂等成功、reason 类型校验。
+    - 新增 service 级事件测试：`run_canceled` 写入。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，18 passed）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 36 passed）。
+- Risks/Notes:
+  - `cancel` 的请求级幂等键目前仅做 header/body 一致性校验，尚未做“同 key 重放返回同结果”的持久化去重。
+
+## [2026-03-01 18:59] BE Sprint1 续作：retry/cancel 请求级幂等重放 + run events 查询接口
+- Agent: A + B-BE + C
+- Goal:
+  - 为 `retry/cancel` 增加请求级幂等重放（同 `Idempotency-Key` 返回同结果），并提供 `GET /api/agent/runs/{run_id}/events` 最小查询接口。
+- Changes:
+  - `backend/agent/run_service.py`
+    - 扩展 `EventRepository` 协议：`save_event` 支持 `event_idempotency_key`，新增 `get_by_idempotency` 与 `list_by_run`。
+    - `retry_run` 支持传入 `request_idempotency_key`，写 `run_retried` 时带幂等键。
+    - `cancel_run` 支持传入 `request_idempotency_key`，终态幂等取消也会写 `run_canceled`（`idempotent=true`）。
+  - `backend/agent/event_repository.py`
+    - `InMemoryEventRepository`/`SupabaseEventRepository` 实现 `get_by_idempotency` 与 `list_by_run`。
+    - `save_event` 增加幂等键去重逻辑（重复 key 返回已存在事件）。
+  - `backend/routes/agent_routes.py`
+    - 新增 `idempotency_key` 统一提取 helper。
+    - `retry/cancel` 在执行前支持按幂等键重放历史成功结果；跨 run 或跨 action 复用同 key 返回 `AGENT_IDEMPOTENCY_CONFLICT`。
+    - 新增 `GET /api/agent/runs/<run_id>/events`（limit 参数，默认 50，上限 200）。
+  - `backend/routes/agent_route_deps.py`
+    - 依赖构建器新增 `event_repository` 透传。
+  - `backend/app_monolith.py`
+    - Agent 路由注入 `event_repository`（与 `run_service` 共用同一仓储实例）。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增幂等重放测试：retry/cancel 同 key 二次请求返回同 payload。
+    - 新增幂等冲突测试：同 key 跨 run 使用返回 409。
+    - 新增 events 查询测试：`GET /runs/{id}/events` 返回 `run_created/run_retried`。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，22 passed）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 40 passed）。
+- Risks/Notes:
+  - 当前 events 接口暂未实现 cursor 分页，仅支持 limit；后续可补 cursor 语义与 SSE 对齐。
+
+## [2026-03-01 19:04] BE Sprint1 续作：events cursor 分页落地
+- Agent: A + B-BE + C
+- Goal:
+  - 将 `GET /api/agent/runs/{run_id}/events` 从仅 limit 查询升级为 cursor 分页，支持稳定翻页与非法 cursor 拒绝。
+- Changes:
+  - `backend/agent/run_service.py`
+    - `EventRepository` 协议更新：
+      - `save_event` 返回事件记录对象；
+      - `list_by_run` 签名扩展为 `(..., limit, cursor) -> (events, next_cursor)`。
+  - `backend/agent/event_repository.py`
+    - 新增 cursor 编解码（urlsafe base64 JSON）。
+    - `InMemoryEventRepository.list_by_run` 支持 keyset 分页并返回 `next_cursor`。
+    - `SupabaseEventRepository.list_by_run` 支持 cursor 分页（`created_at/id` 双键），返回 `(events, next_cursor)`。
+  - `backend/routes/agent_routes.py`
+    - `GET /api/agent/runs/<run_id>/events` 支持 `cursor` 参数，响应增加 `next_cursor`。
+    - 非法 cursor 返回 `AGENT_INVALID_REQUEST`（422）。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 events 分页测试：`limit=1` 连翻两页不重复。
+    - 新增非法 cursor 测试：422。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，24 passed）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 42 passed）。
+- Risks/Notes:
+  - 当前 cursor 以 `created_at/id` 作为 keyset，已满足最小稳定分页；后续如需跨存储强一致可增加服务器签名校验。
+
+## [2026-03-01 19:07] BE Sprint1 续作：新增 /api/agent/intent 规则路由接口
+- Agent: A + B-BE + C
+- Goal:
+  - 落地计划书首周项 `POST /api/agent/intent`（规则+小模型中的规则层最小实现），并保持可回滚与低侵入。
+- Changes:
+  - `backend/agent/intent_router.py`
+    - 新增 `RuleIntentRouter` 与 `IntentDecision`。
+    - 覆盖高频意图规则：`update_career_profile` / `apply_suggestion` / `resume_optimize` / `mock_interview` / `job_match_advice`。
+    - 增加角色 slot 抽取（`target_role`：backend/frontend/fullstack/...）。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/intent`。
+    - 校验：`text` 必填字符串、`thread_id` 可选 UUID、`context` 可选 object。
+    - 低置信度返回 `AGENT_CONFIDENCE_TOO_LOW`（422）。
+  - `backend/routes/agent_route_deps.py`
+    - 增加 `intent_router` 与 `intent_confidence_threshold` 依赖透传。
+  - `backend/app_monolith.py`
+    - Agent 路由启用时注入 `RuleIntentRouter()`。
+    - 新增阈值配置：`AGENT_INTENT_CONFIDENCE_THRESHOLD`（默认 0.45）。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 intent 路由测试：resume_optimize 命中、mock_interview 命中、低置信度拒绝、thread_id 非法校验。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，28 passed）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 46 passed）。
+- Risks/Notes:
+  - 当前 intent 为规则版基线，尚未接入小模型分类；后续可按 Feature Flag 引入并与规则路由做 A/B 对比。
+
+## [2026-03-01 19:10] BE Sprint0.5 实证交付：数据库 smoke 脚本 + 执行 Runbook
+- Agent: A + B-BE + C
+- Goal:
+  - 在缺少当前会话 DB 凭证的情况下，交付可直接执行的“测试库实证”能力：一键跑 agent_* 表的最小 CRUD + 幂等索引验证。
+- Changes:
+  - `scripts/agent_db_smoke.py`
+    - 新增 Supabase DB smoke 脚本。
+    - 覆盖校验：
+      - `agent_runs` insert/select/update
+      - `agent_events` insert + 重复 `event_idempotency_key` 冲突
+      - `agent_tool_runs` insert
+      - `agent_token_usage` insert
+      - `agent_events` 按 run 查询
+      - `agent_runs` 删除与级联清理
+    - 参数：`--user-id`、`--keep-data`。
+    - 依赖 env：`SUPABASE_URL` + service/anon key + 有效 `users.id`。
+  - `docs/implementation/AGENT_SPRINT0_5_DB_SMOKE_RUNBOOK.md`
+    - 新增完整执行文档（前置条件、命令、成功标准、失败排查、上线前 gate 建议）。
+- Commands:
+  - `python scripts/agent_db_smoke.py --help`
+  - `python scripts/agent_db_smoke.py`（无 user-id 预期失败，验证参数门禁）
+  - `python -m compileall scripts/agent_db_smoke.py backend/agent backend/routes/agent_routes.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - smoke script help: PASS。
+  - smoke script 参数门禁: PASS（缺 `--user-id` 时按预期退出并提示）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 46 passed）。
+- Risks/Notes:
+  - 当前 shell 环境未注入 `SUPABASE_URL/KEY`，因此本轮未执行真实远端 DB smoke；脚本和 runbook 已就绪，填入凭证即可执行。
+
+## [2026-03-01 19:14] BE 实证增强：test-step 可选 Agent smoke 开关 + API smoke 脚本
+- Agent: A + B-BE + C
+- Goal:
+  - 将 Agent DB/API smoke 校验接入现有 step 验证链路（可选触发），并提供可执行 API smoke 脚本与 runbook。
+- Changes:
+  - `scripts/test-step.ps1`
+    - 新增可选参数：
+      - `-RunAgentDbSmoke`
+      - `-AgentSmokeUserId`
+      - `-AgentDbKeepData`
+      - `-RunAgentApiSmoke`
+      - `-AgentApiToken`
+    - 在 local + online 之后按开关触发：
+      - `python scripts/agent_db_smoke.py ...`
+      - `python scripts/agent_api_smoke.py ...`
+  - `scripts/agent_api_smoke.py`
+    - 新增 Agent API 生命周期 smoke 脚本。
+    - 支持两种鉴权：
+      - 直接传 token（`--token` / `AGENT_API_SMOKE_TOKEN`）
+      - 邮箱密码登录拿 token（`--email --password`）
+    - 覆盖接口：intent/create/get/retry(409 expected)/cancel/idempotent-cancel/events(+cursor)。
+  - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+    - 新增 API smoke 执行文档（前置条件、命令、成功标准、排障、一步 gate 示例）。
+- Commands:
+  - `python scripts/agent_api_smoke.py --help`
+  - `python scripts/agent_api_smoke.py`（缺 backend-url 参数门禁验证）
+  - `pwsh -File scripts/test-step.ps1`（缺 mandatory 参数门禁验证）
+  - `python -m compileall scripts/agent_api_smoke.py scripts/agent_db_smoke.py backend/agent backend/routes/agent_routes.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - API smoke help: PASS。
+  - API smoke 参数门禁: PASS（缺 `--backend-url` 时按预期退出）。
+  - step 脚本参数门禁: PASS（缺 FrontendUrl/BackendUrl 按预期报错）。
+  - syntax check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 46 passed）。
+- Risks/Notes:
+  - 当前 shell 会话无线上测试环境参数，未执行真实 API smoke；脚本已就绪，补齐 `backend-url + token/账号` 后可直接执行。
+
+## [2026-03-01 19:16] Release Gate 文档化：Agent 上线 Checklist + README smoke 指引
+- Agent: A + C
+- Goal:
+  - 固化 Agent 发布前置门禁，提供可执行的灰度/回滚 checklist，并将 smoke 命令纳入 README 快速入口。
+- Changes:
+  - `docs/implementation/AGENT_RELEASE_CHECKLIST.md`
+    - 新增发布检查清单（配置、迁移、DB/API smoke、灰度步骤、回滚步骤、退出标准）。
+  - `README.md`
+    - 新增“Agent Smoke（可选）”章节，补充 `agent_api_smoke.py` / `agent_db_smoke.py` 命令与 `test-step.ps1` 联动示例。
+- Commands:
+  - `rg -n "AGENT_API_ENABLED|AGENT_INTENT_CONFIDENCE_THRESHOLD|Rollout Plan|Rollback Procedure|Exit Criteria|Combined Step Gate" docs/implementation/AGENT_RELEASE_CHECKLIST.md`
+  - `rg -n "Agent Smoke|agent_api_smoke.py|agent_db_smoke.py|RunAgentApiSmoke|RunAgentDbSmoke" README.md`
+  - `python -m compileall scripts/agent_api_smoke.py scripts/agent_db_smoke.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - docs key sections check: PASS。
+  - compile check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 46 passed）。
+- Risks/Notes:
+  - 本步为文档与流程固化，不改业务行为；真实线上 smoke 仍需环境变量与目标地址支持。
+
+## [2026-03-01 19:17] 文档对齐：API_CONTRACT 与当前实现同步
+- Agent: A + C
+- Goal:
+  - 消除 API 契约文档与当前后端实现的漂移，补齐 `cancel/events` 与新增错误码。
+- Changes:
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - 版本更新为 `v0-draft+impl-20260301`。
+    - 错误码最小集补充：`AGENT_IDEMPOTENCY_CONFLICT`、`AGENT_INVALID_REQUEST`、`AGENT_INTERNAL_ERROR`。
+    - 新增接口章节：
+      - `POST /api/agent/runs/{id}/cancel`
+      - `GET /api/agent/runs/{id}/events`（含 cursor/next_cursor）
+    - 状态语义补充：终态二次 cancel 幂等成功。
+- Commands:
+  - `rg -n "v0-draft\+impl-20260301|POST /api/agent/runs/\{id\}/cancel|GET /api/agent/runs/\{id\}/events|AGENT_IDEMPOTENCY_CONFLICT|AGENT_INVALID_REQUEST|AGENT_INTERNAL_ERROR|终态二次取消返回幂等成功" docs/implementation/API_CONTRACT_SPRINT0_5.md`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - docs key fields check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 46 passed）。
+- Risks/Notes:
+  - 文档层对齐完成；若后续新增 `confirm` 语义，需同步更新本契约文件。
+
+## [2026-03-01 19:26] BE 续作：新增 /api/agent/feedback 与 smoke/契约联动
+- Agent: A + B-BE + C
+- Goal:
+  - 补齐用户反馈闭环接口 `POST /api/agent/feedback`，支持反馈写入、幂等重放与冲突保护，并同步到 API smoke 与契约文档。
+- Changes:
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/feedback`。
+    - 校验：`run_id` 必填 UUID，`event_type` 仅允许 `accept|ignore|correct`（或 `user_feedback_*`），`payload` 可选 object。
+    - 支持幂等重放：同 key 同 action 返回已有 event（`replayed=true`）；跨 action/key 冲突返回 `AGENT_IDEMPOTENCY_CONFLICT`。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 feedback 路由测试：成功写入、幂等重放、非法 event_type、未知 run 404。
+  - `scripts/agent_api_smoke.py`
+    - 在 create/get 后新增 feedback smoke 验证。
+  - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+    - smoke 覆盖项补充 feedback。
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - 新增 `POST /api/agent/feedback` 契约章节与示例。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall scripts/agent_api_smoke.py backend/agent backend/routes/agent_routes.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，32 passed）。
+  - compile check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 50 passed）。
+- Risks/Notes:
+  - 当前 feedback 最小实现要求 `run_id`，未支持 thread-only 反馈；如后续需要 thread 级反馈，需扩展 event 仓储接口签名。
+
+## [2026-03-01 19:34] BE Sprint1 续作：thread 反馈与 timeline 事件流闭环
+- Agent: A + B-BE + C
+- Goal:
+  - 补齐 thread 维度事件链路，支持 thread-only 反馈与 timeline 分页查询；修复 run_service 与 event_repository 协议失配导致的事件写入丢失。
+- Changes:
+  - `backend/agent/event_repository.py`
+    - `save_event` 对齐为 `run_id/thread_id` 双锚点（至少一个必填）。
+    - 事件记录新增 `thread_id` 字段。
+    - 新增 `list_by_thread`（InMemory + Supabase）并复用 cursor 分页语义。
+  - `backend/routes/agent_routes.py`
+    - 新增 `GET /api/agent/timeline`（`thread_id + limit + cursor`）。
+    - `POST /api/agent/feedback` 扩展为支持 `run_id` 或 `thread_id`，并增加 run/thread/type 三元幂等冲突校验。
+    - run events 响应补充 `thread_id` 字段。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 5 个用例：thread-only feedback 成功/重放/冲突，timeline 分页与非法 cursor。
+  - `scripts/agent_api_smoke.py`
+    - smoke 流程新增 thread-level feedback 与 `GET /api/agent/timeline` 校验。
+  - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+    - 覆盖接口列表与验收项同步 timeline/thread feedback。
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - 契约同步为 8 个接口；`feedback` 支持 run/thread；新增 `timeline` 章节与示例。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python scripts/agent_api_smoke.py --help`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/app_monolith.py scripts/agent_api_smoke.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，37 passed）。
+  - smoke script CLI check: PASS（help 输出正常）。
+  - compile check: PASS。
+  - local baseline: PASS（frontend 54 passed，backend 55 passed）。
+- Risks/Notes:
+  - 目前验证基于本地 InMemory/单测链路；Supabase 真库上的 `thread_id` 事件检索仍建议按 runbook 执行一次线上 smoke。
+
+## [2026-03-01 19:44] BE Sprint1 续作：mock worker 生命周期演示闭环（queued -> running -> succeeded）
+- Agent: A + B-BE + C
+- Goal:
+  - 交付受开关保护的 run 生命周期演示能力，支持在开发环境快速验证 `queued -> running -> succeeded` 全链路（含事件写入）。
+- Changes:
+  - `backend/agent/run_service.py`
+    - 新增 `RunTransitionResult`。
+    - 新增 `start_run`（`queued -> running`，写 `run_started` 事件）。
+    - 新增 `succeed_run`（`running -> succeeded`，写 `run_succeeded` 事件）。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/runs/{run_id}/simulate`。
+    - 仅在 `mock_worker_enabled=true` 时可用；否则返回 `AGENT_RUN_NOT_FOUND`（404）。
+    - 支持 `queued/running` 进入 `succeeded`，对 `succeeded` 返回幂等成功，对其他状态返回 `AGENT_INVALID_STATE_TRANSITION`（409）。
+  - `backend/routes/agent_route_deps.py`
+    - 新增依赖透传：`mock_worker_enabled`。
+  - `backend/app_monolith.py`
+    - 新增环境变量：`AGENT_MOCK_WORKER_ENABLED`（默认 `0`）。
+    - Agent 路由注册时注入 `mock_worker_enabled`。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 5 个 simulate 用例：开关关闭、queued->succeeded、running->succeeded、succeeded 幂等、failed 拒绝。
+  - `scripts/agent_api_smoke.py`
+    - 新增可选参数：`--simulate-lifecycle`，用于调用 simulate 接口做生命周期演示。
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - 新增 dev-only 接口契约：`POST /api/agent/runs/{id}/simulate`。
+  - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+    - 补充 simulate 可选运行说明。
+  - `docs/implementation/AGENT_RELEASE_CHECKLIST.md`
+    - 补充 `feedback/timeline` 覆盖与 `AGENT_MOCK_WORKER_ENABLED` 建议值。
+  - `README.md`
+    - Agent smoke 章节补充 simulate 演示命令。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `python scripts/agent_api_smoke.py --help`
+  - `python -m compileall scripts/agent_api_smoke.py backend/routes/agent_routes.py backend/agent/run_service.py`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，42 passed）。
+  - local baseline: PASS（frontend 54 passed，backend 60 passed）。
+  - smoke script CLI check: PASS（`--simulate-lifecycle` 参数可见）。
+  - compile check: PASS。
+- Risks/Notes:
+  - `simulate` 为 dev-only 能力，默认关闭；若在非开发环境开启，需确保仅白名单/受控场景可访问。
+
+## [2026-03-01 19:56] BE Sprint2 起步：落地 dry_run -> confirm 最小执行链（execute/confirm）
+- Agent: A + B-BE + C
+- Goal:
+  - 在现有 run/event 基础上补齐工具执行最小闭环：`POST /api/agent/execute` + `POST /api/agent/runs/{run_id}/confirm`，并保持默认低侵入。
+- Changes:
+  - `backend/agent/tool_runtime.py`
+    - 新增 `AgentToolRuntimeService`。
+    - 定义 `ToolRunSnapshot`、`ToolExecuteResult`、`ToolConfirmResult`。
+    - 实现 execute（支持 dry_run、确认 token、execute 幂等重放）与 confirm（token 校验、过期校验、提交后恢复 run）。
+    - 新增 runtime 异常族：`ToolRunStateError`、`ToolIdempotencyConflictError`、`ToolConfirmExpiredError` 等。
+  - `backend/agent/tool_run_repository.py`
+    - 新增 `InMemoryToolRunRepository` / `SupabaseToolRunRepository`。
+    - 支持 `save/get/get_by_idempotency`。
+    - 新增工厂：`create_tool_run_repository(storage_context)`。
+  - `backend/agent/run_service.py`
+    - 新增 `wait_for_confirmation` 状态转移（`running -> waiting_confirm`）并写 `run_waiting_confirm` 事件。
+  - `backend/routes/agent_routes.py`
+    - 新增 `POST /api/agent/execute`：校验 `run_id/tool_name/dry_run/input`，返回 `tool_run_id/requires_confirm/confirm_token`。
+    - 新增 `POST /api/agent/runs/{run_id}/confirm`：校验 `tool_run_id/confirm_token`，返回 `prev_state/next_state/committed`。
+    - 映射异常到统一错误码：`AGENT_IDEMPOTENCY_CONFLICT`、`AGENT_CONFIRMATION_REQUIRED`、`AGENT_CONFIRMATION_EXPIRED`、`AGENT_INVALID_STATE_TRANSITION`。
+  - `backend/routes/agent_route_deps.py`
+    - 新增依赖透传：`tool_runtime_service`。
+  - `backend/app_monolith.py`
+    - 接入 `create_tool_run_repository` 与 `AgentToolRuntimeService`。
+    - Agent 路由注册时注入 `tool_runtime_service`。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 execute/confirm 核心用例（7 条）：
+      - execute dry_run 成功并进入 waiting_confirm
+      - execute 幂等重放
+      - execute 幂等冲突
+      - execute 非法状态
+      - confirm 成功恢复 run
+      - confirm 重放幂等成功
+      - confirm token 错误
+    - 更新 `_build_app` 以注入 `InMemoryToolRunRepository` 与 `AgentToolRuntimeService`。
+  - `scripts/agent_api_smoke.py`
+    - smoke 流程新增 execute + confirm 校验。
+  - 文档同步：
+    - `docs/implementation/API_CONTRACT_SPRINT0_5.md` 增加 execute/confirm 契约与错误码。
+    - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md` 更新覆盖接口与验收项。
+    - `docs/implementation/AGENT_RELEASE_CHECKLIST.md` 更新 scope 与成功标准。
+- Commands:
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python -m compileall backend/agent backend/routes/agent_routes.py backend/routes/agent_route_deps.py backend/app_monolith.py scripts/agent_api_smoke.py`
+  - `python scripts/agent_api_smoke.py --help`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - targeted test: PASS（`backend/tests/test_agent_foundation.py`，49 passed）。
+  - compile check: PASS。
+  - smoke CLI check: PASS（包含 execute/confirm 相关流程支持）。
+  - local baseline: PASS（frontend 54 passed，backend 67 passed）。
+- Risks/Notes:
+  - 当前 execute 为最小 mock runtime：`tool_name` 仅做登记与预览回包，尚未接真实 tool dispatcher。
+  - confirm 依赖 `output_payload.confirm_token/confirm_expires_at` 存储；后续可升级为独立确认票据表以强化审计与撤销能力。
+
+## [2026-03-01 22:47] 规划重置：重写 Agent 计划为“强引导主流程 + 对话辅助”
+- Agent: A + B-BE + C
+- Goal:
+  - 基于用户已确认方向，重写重构计划文档，明确“强引导为主、对话为辅”，并将自动抓取 JD/自动投递下沉为未来阶段。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 全文重写为 v2.0，聚焦 V1 单主线流程：画像 -> JD 匹配 -> 多版本简历 -> 对话精修 -> 模拟面试。
+    - 增加低匹配兜底策略（>=70 / 50-69 / <50）和事实真源约束。
+    - 明确当前边界：手动 JD 输入，不做自动抓取、不做自动投递。
+    - 给出 4 周执行排期、Feature Flag、验收指标和回滚策略。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260301-224557.bak`
+    - 编辑前备份原计划文档，便于快速回滚。
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...bak`
+  - `rg -n "强引导为主|手动输入 JD|dry_run|GUIDED_FLOW_ENABLED|match_score < 50|自动抓取|自动投递" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 120`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -Tail 80`
+- Verification:
+  - targeted doc check: PASS（关键策略、边界、阈值、开关字段均可检索到）。
+  - local baseline tests: NOT RUN（本步仅文档重写，无代码执行路径变更）。
+- Risks/Notes:
+  - 文档已切到执行导向，但尚未同步拆分为具体 issue/task；进入实现前建议按 Sprint G1 拆成可跟踪工单。
+
+
+## [2026-03-01 22:59] 计划细化：画像阶段改为“语音/文字输入 -> AI 整理 -> 用户确认入库”
+- Agent: A + B-BE + C
+- Goal:
+  - 响应产品策略修正，移除“表单优先/对话永远可用”的歧义，明确画像阶段以语音或文字自由输入为主。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - `2.2 每一步的交互模式`：改为 `Step 1-2` 语音/文字叙述输入优先，AI 结构化抽取，确认后入库。
+    - `3.1 引导优先规则`：将“结构化问答”调整为“AI 定向追问（语音/文字均可）”。
+    - `6.1 画像阶段接口`：由 `start/answer/confirm` 调整为 `start/intake/facts-preview/confirm`。
+    - `Sprint G1` 与“本周执行清单”同步为四接口骨架。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260301-225815.bak`
+    - 编辑前备份。
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...bak`
+  - `rg -n "语音|文字|intake|facts/preview|确认后入库|绕过当前步骤|定向追问" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 140`
+- Verification:
+  - targeted doc check: PASS（画像输入模式、接口命名、门禁规则一致）。
+  - local baseline tests: NOT RUN（本步为文档变更，无代码执行路径变更）。
+- Risks/Notes:
+  - 接口命名已更新，后续实现时需同步 `API_CONTRACT_SPRINT0_5.md` 与 smoke 脚本步骤描述，避免文档间术语漂移。
+
+## [2026-03-01 23:03] 计划收敛：对话仅在 Step3-6 显示，职业规划咨询独立入口
+- Agent: A + B-BE + C
+- Goal:
+  - 将对话能力从“全流程可见”收敛为“主流程限权使用”，避免强引导路径被对话绕开。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - `2.2`：明确主流程业务对话组件仅在 `Step 3-6` 显示；`Step 1-2` 继续语音/文字经历输入 + AI 结构化抽取。
+    - `2.2`：新增“职业规划咨询”独立对话入口，且不绑定主流程推进。
+    - `3.2`：新增限权规则（Step1-2 无业务对话框、Step3 仅解释报告、Step4-5 选区改写/Canvas 编辑仍走确认链）。
+    - `6.4`：简历修订接口说明升级为“选区定点改写 + Canvas 直接编辑”。
+    - `Sprint G3/G4`：同步加入 Canvas 改写能力与“对话限权命中率”观测。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260301-230318.bak`
+    - 编辑前备份。
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...bak`
+  - `rg -n "Step 3-6|职业规划咨询|Step 1-2 不展示业务对话框|选中句子|Canvas|限权" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 210`
+- Verification:
+  - targeted doc check: PASS（对话出现范围、限权策略、简历改写模式均已落文档）。
+  - local baseline tests: NOT RUN（文档改动，无代码执行路径变化）。
+- Risks/Notes:
+  - 后续前端实现时需把“职业规划咨询”与“业务流程对话”做两个不同入口和权限域，避免交叉污染。
+
+## [2026-03-01 23:13] 计划修正：Step3 支持“通用简历”跳过 JD
+- Agent: A + B-BE + C
+- Goal:
+  - 响应产品策略，避免将 JD 设为强制输入；支持用户直接生成通用简历。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - `1.2 当前阶段边界`：改为“定向简历需要手动 JD，通用简历可跳过 JD”。
+    - `2.1 Step 3`：改为“双模式选择（generic/targeted）”。
+    - `2.2/3.2`：`Step 3` 报告解释对话仅在定向模式显示。
+    - `3.3`：低匹配兜底明确为“定向模式必做”；通用模式走事实完整度与表达质量门禁。
+    - `4.x/5.x`：数据对象和服务定义增加“JD 可选”语义。
+    - `6.3`：新增 `POST /api/guided/target/select`，并将 `jd/analyze` 与 `match-report` 限定为定向模式。
+    - `Sprint G2`、验收指标和环境变量说明同步为“可选 JD”模型。
+- Commands:
+  - `rg -n "通用简历|定向简历|可跳过 JD|target/select|仅定向模式|通用模式" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 235`
+- Verification:
+  - targeted doc check: PASS（Step3 双模式、门禁与指标口径一致）。
+  - local baseline tests: NOT RUN（文档改动，无代码执行路径变化）。
+- Risks/Notes:
+  - 接口新增 `target/select` 后，后续需要同步 `API_CONTRACT_SPRINT0_5.md`、`agent_api_smoke.py` 和前端路由文案，避免契约偏差。
+
+## [2026-03-01 23:22] 现状扫描后重写计划：v3.0 扫描版（强引导最小侵入）
+- Agent: A + B-BE + C
+- Goal:
+  - 按用户要求先扫描全应用真实逻辑，再输出与现状一致的新重构计划，避免理想化接口设计与当前代码脱节。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 全文重写为 v3.0“现状扫描版”。
+    - 增加“扫描范围与事实基线”，明确当前已实现能力与主流程 As-Is。
+    - 将策略收敛为“复用现有模块、统一步骤壳层、Step3 双模式（generic/targeted）”。
+    - 明确对话边界：Step1-2 关闭业务对话，Step3-6限权开放，职业规划咨询独立入口。
+    - 后端策略改为“先复用 `/api/ai/*`，后桥接 Agent 运行时”。
+    - 重新给出 4 周最小侵入排期与验收指标。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260301-232040.bak`
+    - 编辑前备份。
+- Commands:
+  - `Get-Content` / `rg -n` 扫描前后端入口、路由、服务与数据结构。
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...bak`
+  - `Set-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "现状扫描版|Step 1-2|Step 3|generic|targeted|JdInputPage|/api/ai/analyze|AGENT_API_ENABLED|VITE_GUIDED_FLOW_ENABLED|不做自动抓取" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 220`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -Tail 120`
+- Verification:
+  - targeted doc check: PASS（扫描事实、双模式策略、对话边界、排期与开关定义一致）。
+  - local baseline tests: NOT RUN（本步仅文档重写，无代码执行路径变更）。
+- Risks/Notes:
+  - 新计划与现有代码已对齐，但 `API_CONTRACT_SPRINT0_5.md` 和 smoke runbook 术语仍需后续同步（guided 壳层命名、generic/targeted 口径）。
+
+## [2026-03-01 23:27] 全链路扫描后重编计划：v4.0（强引导主线 + 对话限定）
+- Agent: A + B-FE + B-BE
+- Goal:
+  - 按用户要求重新扫描当前应用真实逻辑，并输出一版可执行的新计划文档，明确“强引导为主、对话为辅”的落地边界。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 重写为 v4.0“全链路扫描重编版”。
+    - 明确 Step1-2 不放业务聊天框，仅保留语音/文字输入与内嵌定向追问。
+    - 明确 Step3 双模式：`generic`（不强制 JD）/`targeted`（JD 定向评分）。
+    - 明确 Step4-6 才开放业务对话（报告解释、简历改写、面试对话）。
+    - 基于当前代码给出最小侵入落地映射（GuidedFlow 壳层 + 复用现有 `/api/ai/*`）。
+    - 更新 2026-03-02 至 2026-03-29 的 4 周排期、测试门禁、开关和回滚策略。
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260301-232456.bak`
+    - 编辑前备份。
+- Commands:
+  - `Get-Content` / `rg -n` 扫描前后端关键入口与服务。
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...bak`
+  - `Set-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `git status --short --untracked-files=all`
+- Verification:
+  - targeted doc check: PASS（流程边界、模式策略、排期与开关定义一致）。
+  - local baseline tests: NOT RUN（本次为文档重编，无代码执行路径变更）。
+- Risks/Notes:
+  - 下一步开始代码落地前，应同步 `API_CONTRACT_SPRINT0_5.md` 与 smoke runbook 术语，避免“generic/targeted”口径漂移。
+
+## [2026-03-01 23:34] 计划补充：多 JD 循环复用机制（v4.1）
+- Agent: A + B-FE
+- Goal:
+  - 将“用户反复带新 JD 生成新简历”的高频场景正式纳入主计划，明确重入点、版本策略和最小数据约束。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本从 `v4.0` 更新为 `v4.1`。
+    - 新增 `3.1 多 JD 循环机制`：
+      - Step1-2 完成一次后，后续可直接从 Step3 重入。
+      - 同 JD 支持“复用上次结果 / 基于最新画像重新生成”两种动作。
+      - 明确复用现有键：`analysisSessionByJd`、`optimizationJdKey`、`optimizedFromId`。
+    - 扩展 `4.4 后端与数据策略`，将多 JD 分桶纳入最小侵入落地原则。
+    - 扩展 `7.1 Smoke`，新增“多 JD 循环”和“同 JD 回访”两条必测路径。
+    - 更新 `10. 下一步执行清单`，纳入“多 JD 回访入口”与“复用/重生成”文案工作。
+- Commands:
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -TotalCount 280`
+  - `apply_patch`（更新计划文档）
+  - `Get-Content WORKLOG.md -Tail 30`
+- Verification:
+  - targeted doc check: PASS（多 JD 循环、重入路径、数据键与测试门禁口径一致）。
+  - local baseline tests: NOT RUN（本步仅文档更新，无业务代码执行路径变更）。
+- Risks/Notes:
+  - 后续实现时需在 UI 上明确“复用 vs 重新生成”差异，避免用户误以为每次都会覆盖旧版本。
+
+## [2026-03-01 23:45] 计划复审修订：v4.2（口径收敛与执行防歧义）
+- Agent: A + C
+- Goal:
+  - 按用户要求再次 review 计划文档，消除执行歧义并修到“无明显阻塞项”。
+- Findings fixed:
+  - Smoke 口径不一致：`7.1` 列 5 条，而执行清单写 4 条。
+  - 强引导缺少硬/软门禁定义，存在“是否强制卡死流程”的解释风险。
+  - 同 JD “重新生成”未约束数据策略，可能被默认复用逻辑吞掉。
+  - 新开关默认值过激进（默认开启），不利于灰度与回滚。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新为 `v4.2`。
+    - 新增 `3.2 强引导门禁等级`（Hard/Soft Gate + 禁阻断规则 + 续跑规则）。
+    - 在 `4.2/4.4` 增加同 JD “复用/重新生成”的策略映射，并明确 `create_new` 语义。
+    - 将 `VITE_GUIDED_FLOW_ENABLED` 与 `VITE_CAREER_PLANNING_CHAT_ENABLED` 默认值改为 `0`（灰度开启）。
+    - 将执行清单 smoke 调整为 5 条，与 `7.1` 一致。
+- Commands:
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|3.2 强引导门禁等级|create_new|VITE_GUIDED_FLOW_ENABLED|VITE_CAREER_PLANNING_CHAT_ENABLED|五条 smoke|targeted 低匹配" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `rg -n "四条 smoke|VITE_GUIDED_FLOW_ENABLED=1|VITE_CAREER_PLANNING_CHAT_ENABLED=1" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+- Verification:
+  - targeted doc consistency check: PASS（门禁定义、开关默认值、多 JD 策略、Smoke 条数一致）。
+  - local baseline tests: NOT RUN（文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 当前无文档级硬阻塞；后续代码实现阶段仍需把“复用/重新生成”策略落到前端动作与 `DatabaseService` 调用参数，避免实现偏差。
+
+## [2026-03-02 00:04] 残余风险修正：策略字段落地 + 契约/Smoke 同步
+- Agent: A + B-BE + C
+- Goal:
+  - 关闭上轮残余风险：
+    1) “复用/重新生成”策略必须可透传并可校验。
+    2) API 契约与 smoke 术语/行为保持一致。
+- Changes:
+  - `backend/routes/agent_routes.py`
+    - `POST /api/agent/runs` 新增并校验可选字段：
+      - `analysis_mode` (`generic|targeted`)
+      - `generation_strategy` (`reuse|create_new|overwrite`)
+      - `jd_key`（非空字符串可选）
+      - `slots`（JSON object 可选）
+    - 非法值返回 `422 AGENT_INVALID_REQUEST`。
+  - `backend/agent/run_service.py`
+    - `RunCreateCommand` 增加 `slots/analysis_mode/generation_strategy/jd_key`。
+    - `run_created` 事件 payload 透传上述字段，供链路追踪与 smoke 验证。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增测试：
+      - create_run 元数据透传入 `run_created` 事件。
+      - invalid `analysis_mode` 返回 422。
+      - invalid `generation_strategy` 返回 422。
+  - `scripts/agent_api_smoke.py`
+    - 新增参数：`--analysis-mode`、`--generation-strategy`、`--jd-key`。
+    - create_run 请求携带对应字段。
+    - 新增 `run_created_metadata` 校验步骤（核对事件 payload 的 mode/strategy/jd_key）。
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - 新增 `POST /api/agent/runs` 的 Step3 对齐字段约束。
+    - 修正文档与实现的状态码/响应字段口径（create/get/retry 示例）。
+    - 新增“Step3 对齐字段”章节。
+  - `docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+    - 同步 smoke 命令参数和 `run_created_metadata` 成功标记。
+- Backups:
+  - `backup/docs/implementation/API_CONTRACT_SPRINT0_5.md.20260301-235656.bak`
+  - `backup/docs/implementation/AGENT_API_SMOKE_RUNBOOK.md.20260301-235656.bak`
+  - `backup/scripts/agent_api_smoke.py.20260301-235656.bak`
+  - `backup/backend/agent/run_service.py.20260301-235656.bak`
+  - `backup/backend/routes/agent_routes.py.20260301-235656.bak`
+  - `backup/backend/tests/test_agent_foundation.py.20260301-235656.bak`
+- Commands:
+  - `python -m compileall backend/agent backend/routes scripts/agent_api_smoke.py`
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - `python scripts/agent_api_smoke.py --help`
+  - `rg -n ...`（契约、runbook、route、service、tests 关键字对齐检查）
+- Verification:
+  - syntax compile: PASS
+  - targeted tests: PASS（`52 passed`）
+  - smoke cli args parse/help: PASS
+- Risks/Notes:
+  - 当前残余风险已从“文档约定”转为“后端校验 + 事件透传 + 脚本校验 + 单测覆盖”。
+
+## [2026-03-02 00:20] 清理无用文档（高置信度）
+- Agent: A + C
+- Goal:
+  - 在确认“强引导主线 + Agent 治理层”方向后，删除已过期且无引用的文档，降低口径噪音。
+- Deleted:
+  - `docs/implementation/WORKSTREAMS_AND_OWNERS.md`
+  - `docs/reports/AI_TOOL_SHAPE_AND_CAREER_HERO_STRATEGY_2026-03-01.md`
+- Backup:
+  - `backup/docs/implementation/WORKSTREAMS_AND_OWNERS.md.20260302-001839.bak`
+  - `backup/docs/reports/AI_TOOL_SHAPE_AND_CAREER_HERO_STRATEGY_2026-03-01.md.20260302-001839.bak`
+- Commands:
+  - `apply_patch` delete files
+  - `rg -n "WORKSTREAMS_AND_OWNERS|AI_TOOL_SHAPE_AND_CAREER_HERO_STRATEGY_2026-03-01" -S README.md docs scripts backend`
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+- Verification:
+  - reference scan: PASS（无残留引用）
+  - targeted tests: PASS（52 passed）
+- Risks/Notes:
+  - 本轮仅做高置信度删除；`AGENT_RELEASE_CHECKLIST` / `AGENT_SPRINT0_5_DB_SMOKE_RUNBOOK` 仍保留，因其仍属于可执行运维文档。
+
+## [2026-03-02 00:33] 复审第2轮：发现2个create_run边界问题（可复现）
+- Agent: C
+- Goal:
+  - 对当前 Agent 改动做一轮额外 review，确认是否仍有契约/实现边界风险。
+- Findings:
+  1) create_run 对同一 idempotency key 的“不同 payload”未做冲突校验，会静默返回旧 run。
+  2) create_run 的 `slots` 类型校验可被 falsy 非 dict 值绕过（如 `[]`）。
+- Repro:
+  - `slots=[]` 请求返回 200（预期应为 422）。
+  - 相同 `Idempotency-Key`，`analysis_mode=targeted` 后再传 `analysis_mode=generic`，第二次仍返回 200 且同 run_id。
+- Command:
+  - inline python via `backend.tests.test_agent_foundation._build_app` test client
+- Verification:
+  - repro check: PASS（问题可稳定复现）
+- Notes:
+  - 本次仅评审，无代码修复。
+
+## [2026-03-02 00:41] 修复复审问题：create_run 幂等冲突与 slots 类型绕过
+- Agent: B-BE + C
+- Goal:
+  - 修复二轮评审中发现的 2 个 create_run 边界问题，并补测试防回归。
+- Fixed:
+  1) 同 `Idempotency-Key` + 不同 payload 现在返回 `409 AGENT_IDEMPOTENCY_CONFLICT`。
+  2) `slots=[]` 不再被吞掉，严格返回 `422 AGENT_INVALID_REQUEST`。
+- Changes:
+  - `backend/routes/agent_routes.py`
+    - 新增 create_run 请求签名构建与比对逻辑。
+    - 对已有 idempotency run 做 payload 一致性校验（不一致返回 409）。
+    - 修复 slots 校验：仅 `dict|None` 合法，`[]` 等非法值直接 422。
+    - 增加容错：事件仓储异常时回退到基础签名比对，不导致 500。
+  - `backend/agent/run_service.py`
+    - `run_created` 事件 payload 补充 `intent/thread_id/goal_id`，用于签名比对。
+    - 新增 `get_run_by_request_idempotency` 查询方法供路由层复用。
+  - `backend/tests/test_agent_foundation.py`
+    - 新增 `slots` 非法类型测试。
+    - 新增同幂等键不同 payload 冲突测试（期望 409）。
+  - `docs/implementation/API_CONTRACT_SPRINT0_5.md`
+    - `POST /api/agent/runs` 错误示例更新为 409 幂等冲突（与实现一致）。
+- Commands:
+  - `python -m compileall backend/routes/agent_routes.py backend/agent/run_service.py backend/tests/test_agent_foundation.py`
+  - `python -m pytest backend/tests/test_agent_foundation.py -q`
+  - inline repro script via flask test client
+- Verification:
+  - compile: PASS
+  - tests: PASS（54 passed）
+  - repro: PASS（`slots=[] -> 422`，`same idem + diff payload -> 409`）
+- Risks/Notes:
+  - 当前冲突比对依赖 run_created 事件 payload；若历史旧 run 无该字段，会回退基础签名（intent/thread/goal）比对。
+
+## [2026-03-02 00:39] 计划文档复审修正：v4.7（映射/门禁/判定前置统一）
+- Agent: A + C
+- Goal:
+  - 按上一轮复审结论，修复计划文档剩余的 3 个一致性问题：chat 步骤映射冲突、门禁口径冲突、画像完成判定定义顺序冲突。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v4.6 -> v4.7`。
+    - 新增 `§3.3 画像完成判定标准`，将门禁判定前置到策略定义区，供 Sprint A 直接引用。
+    - 修订 `§3.2`：明确硬门禁仅作用于 GuidedFlow 主流程；旧入口 `/ai-analysis` 保持软提示兼容。
+    - 修订状态映射：`chat` 改为条件映射（`isInterviewMode=false -> Step4`，`isInterviewMode=true -> Step6`）。
+    - 修订 Sprint A 验收与 Smoke 文案：硬门禁验证均限定在 GuidedFlow 主流程内。
+    - 修订 Sprint B：删除重复门禁定义，改为引用 `§3.3`，并明确 Sprint B 仅做 JSON Schema 校验加固。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-003831.bak`
+  - `backup/WORKLOG.md.20260302-003831.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|3.2 强引导门禁等级|3.3 画像完成判定标准|chat -> Step 4|isInterviewMode|GuidedFlow 主流程内|兼容旧入口|门禁口径说明" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `rg -n "analyzing、chat、final_report|画像完成判定标准（用于门禁，新增）" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+- Verification:
+  - targeted doc consistency check: PASS（3 个冲突项均已收敛，且无旧版冲突短语残留）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 计划口径已统一；后续进入代码实现时，需按 `§3.3` 把 GuidedFlow 主流程硬门禁落到实际守卫函数。
+
+## [2026-03-02 00:44] 计划文档复审修正：v4.8（门禁分层 + 恢复上下文 + 软门禁用例）
+- Agent: A + C
+- Goal:
+  - 按本轮评审结果修复 3 个残余风险：Step3 门禁歧义、`guided_flow_state` 恢复上下文不足、缺少旧入口软门禁 smoke。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v4.7 -> v4.8`。
+    - 修订 `§3.2`：硬门禁分层定义明确为“Step3 仅需画像完成；Step4-6 需画像完成+已选简历”。
+    - 修订 `§3.3`：加入“已完成画像但未选简历仅可停留 Step3，不可进入 Step4+”规则。
+    - 修订 `§4.4`：`guided_flow_state` 最小结构补充 `resume_id/jd_key/analysis_mode`，并新增恢复顺序规则（上下文优先，缺失时回退 step 级恢复）。
+    - 修订 Sprint A 验收：将阻断断言拆分为 Step3+ 与 Step4+ 两类。
+    - 修订 `§7.1`：新增第 7 条 smoke（旧入口软门禁验证）。
+    - 修订 `§10`：执行清单同步为“跑通七条 smoke”。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-004320.bak`
+  - `backup/WORKLOG.md.20260302-004320.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|Step3+|Step4+|字段最小结构建议|resume_id|旧入口软门禁验证|跑通七条 smoke" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（分段复核）
+- Verification:
+  - targeted doc consistency check: PASS（门禁分层、恢复字段、smoke 条目和执行清单口径一致）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 文档级阻塞项已清理；后续代码实现时需把 “Step3 gate / Step4+ gate” 落到守卫函数，避免只做单层 gate。
+
+## [2026-03-02 00:52] 计划文档复审修正：v4.9（验收链路对齐 + 状态真值 + 并发时间戳 + 旧入口UI边界）
+- Agent: A + C
+- Goal:
+  - 按第三轮评审结论修复 4 个执行风险：主链路 smoke 偏移、analysis_mode 双写冲突、updated_at 时间源不一致、旧入口 overlay 边界不清。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v4.8 -> v4.9`。
+    - 在 `§4.1` 补充旧入口兼容模式 UI 规则：绕过 GuidedFlow 时不显示进度条、不开放步骤跳转。
+    - 在 `§4.4` 明确 `analysis_mode` 真值规则：以 `resume_data.analysisMode` 为准，`guided_flow_state.analysis_mode` 仅作恢复 hint；冲突时回写纠正。
+    - 在 `§4.4` 并发策略补充时间源约束：`updated_at` 仅服务端/数据库生成，客户端不得直写。
+    - 在 `§7.2` 将自动化拆分为两层：`/api/ai/*` 主链路 smoke（基于 `scripts/e2e_full_flow.py`）与 `/api/agent/*` 治理层 smoke（`scripts/agent_api_smoke.py`）。
+    - 在 `§10` 同步文档清单：新增/更新 `AI_MAINFLOW_SMOKE_RUNBOOK`，并限定 `AGENT_API_SMOKE_RUNBOOK` 为治理层。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-005152.bak`
+  - `backup/WORKLOG.md.20260302-005152.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|旧入口兼容模式|analysis_mode|真值规则|冲突处理|updated_at 必须由服务端|/api/ai/*|/api/agent/*|AI_MAINFLOW_SMOKE_RUNBOOK" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（关键段落复核）
+- Verification:
+  - targeted doc consistency check: PASS（四项口径已收敛且执行清单同步）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 下一步代码落地时，需优先实现 GuidedFlow 守卫和主链路 smoke 脚本扩展，避免“文档对齐、实现未对齐”。
+
+## [2026-03-02 01:00] 计划文档复审修正：v5.0（generic键对齐 + 验收载体分层 + 时间源约束落地）
+- Agent: A + C
+- Goal:
+  - 修复上一轮评审剩余问题：generic JD key 口径不一致、GuidedFlow 门禁验收载体错误、`updated_at` 规则缺落地动作、主链路契约文档归属不清、缺少 analysis_mode 冲突回写验收项。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v4.9 -> v5.0`。
+    - `§4.4` 将 generic 无 JD 默认键改为 `makeJdKey('__no_jd__')`，并声明读取兼容历史 `jd_default`。
+    - `§4.4` 并发写入补充明确落地动作：前端 `src/database/user-repository.ts` 更新 users 不再主动写 `updated_at`。
+    - `§7.1` 新增第 8 条 smoke：`analysis_mode` 冲突回写验证。
+    - `§7.2` 自动化拆分为三层：前端 Playwright UI e2e、`/api/ai/*` 后端 API smoke、`/api/agent/*` 治理层 smoke。
+    - `§10` 执行清单改为“跑通八条 smoke”，并明确文档拆分：`API_CONTRACT_SPRINT0_5` 仅 agent，新增 `AI_MAINFLOW_API_CONTRACT` 对齐 `/api/ai/*`。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-010013.bak`
+  - `backup/WORKLOG.md.20260302-010013.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|__no_jd__|analysis_mode 冲突回写验证|八条 smoke|AI_MAINFLOW_API_CONTRACT|Playwright" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（关键段落复核）
+- Verification:
+  - targeted doc consistency check: PASS（5 项问题口径全部收敛）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 下一步应把文档中的“前端去除 users.updated_at 主动写入”落到代码，避免计划与实现偏离。
+
+## [2026-03-02 01:09] 计划文档复审修正：v5.1（key归一强约束 + 测试归属 + 命令接线 + 迁移必做）
+- Agent: A + C
+- Goal:
+  - 修复最新评审剩余项：generic key 仍可能分叉、analysis_mode 回写验收未指派、GuidedFlow UI smoke 未进入命令链、迁移落地动作未进入本周必做。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v5.0 -> v5.1`。
+    - `§4.4` 增加强约束：禁止直接调用 `makeJdKey('')`，无 JD 必须先归一为 `__no_jd__`。
+    - `§7.2` 明确 `analysis_mode` 冲突回写验证归属（后端集成测试 + API smoke 断言）。
+    - `§7.2` 明确门禁命令接线：`scripts/test-online.ps1` 和 `scripts/test-step.ps1` 增加 GuidedFlow UI smoke 执行入口。
+    - `§10` 本周清单新增 migration 必做项（创建并在测试库执行 `2026-03-02-guided-flow-state.sql`，含回滚验证）。
+    - `§10` 清单同步加入测试命令接线动作。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-010934.bak`
+  - `backup/WORKLOG.md.20260302-010934.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "版本：|makeJdKey('__no_jd__')|makeJdKey('')|RunGuidedFlowUiSmoke|analysis_mode 冲突回写验证|2026-03-02-guided-flow-state.sql|跑通八条 smoke" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md -S`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（关键段落复核）
+- Verification:
+  - targeted doc consistency check: PASS（四项残余风险均已加执行约束与清单动作）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无代码执行路径变更）。
+- Risks/Notes:
+  - 下一步代码执行应优先实现 `scripts/test-online.ps1` 与 `scripts/test-step.ps1` 的 GuidedFlow UI smoke 接线。
+
+## [2026-03-02 01:11] 计划文档复审修正：v5.2（执行层口径收敛 + 文档产物补齐）
+- Agent: A + C
+- Goal:
+  - 修复最新评审发现的执行层偏差：analysis_mode 回写归属、updated_at 时间源口径、GuidedFlow UI smoke 命令接线、缺失实现文档未落地。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新 `v5.1 -> v5.2`。
+    - `§4.4` 新增执行层说明：本期 guided_flow_state 回写沿用前端直连 Supabase 路径；`/api/user/profile` 仍仅处理 name/phone。
+    - `§4.4` updated_at 口径修正为“数据库触发器统一覆盖”，并增加缺触发器阻断发布条款。
+    - Sprint A 验收新增脚本接线标准：`test-online.ps1` 与 `test-step.ps1 -RunGuidedFlowUiSmoke` 可执行。
+    - `§7.2` 将 analysis_mode 冲突回写验证归属改为“前端集成 + 数据层回读断言”。
+    - `§10` 本周清单补充：实现冲突回写、测试脚本接线、迁移执行与回滚验证。
+  - `docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+    - 新建 GuidedFlow 技术规格，定义步骤映射、门禁、数据写回与命令接线。
+  - `docs/implementation/AI_MAINFLOW_API_CONTRACT.md`
+    - 新建 `/api/ai/*` 主链路契约文档，和 `/api/agent/*` 契约解耦。
+  - `docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md`
+    - 新建主链路 smoke runbook，覆盖 8 条 smoke 与执行顺序。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-010934.bak`
+  - `backup/WORKLOG.md.20260302-010934.bak`
+- Commands:
+  - `Copy-Item docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md backup/docs/...`
+  - `Copy-Item WORKLOG.md backup/WORKLOG...`
+  - `apply_patch docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `Set-Content docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+  - `Set-Content docs/implementation/AI_MAINFLOW_API_CONTRACT.md`
+  - `Set-Content docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md`
+  - `rg -n ...`（口径与产物一致性扫描）
+- Verification:
+  - targeted doc consistency check: PASS（执行层口径与验收清单一致，缺失文档已落地）。
+  - local baseline tests: NOT RUN（本步仅文档修订/新增，无业务代码执行路径变更）。
+- Risks/Notes:
+  - 计划已可执行；下一步应把 `test-online.ps1`/`test-step.ps1` 的 GuidedFlow UI smoke 参数与调用实现补到代码。
+
+## [2026-03-02 01:38] 评审修补闭环：主链路契约纠偏 + 脚本接线 + migration 补齐
+- Agent: B-BE + C
+- Goal:
+  - 关闭上一轮评审残余项：`/api/ai/*` 契约字段偏差、主链路 smoke 命令失真、GuidedFlow/UI 门禁命令未接线、`guided_flow_state` migration 缺失、`users.updated_at` 客户端写入未清理。
+- Backup:
+  - `backup/docs/implementation/AI_MAINFLOW_API_CONTRACT.md.20260302-012827.bak`
+  - `backup/docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md.20260302-012827.bak`
+  - `backup/docs/implementation/GUIDED_FLOW_TECH_SPEC.md.20260302-012827.bak`
+  - `backup/scripts/test-online.ps1.20260302-012827.bak`
+  - `backup/scripts/test-step.ps1.20260302-012827.bak`
+  - `backup/ai-resume-builder/src/database/user-repository.ts.20260302-012827.bak`
+  - `backup/WORKLOG.md.20260302-012827.bak`
+- Changes:
+  - `docs/implementation/AI_MAINFLOW_API_CONTRACT.md`
+    - 修正 `/api/ai/organize-career-profile` 入参/出参：`rawExperienceText` + `success/profile`。
+    - 新增 `/api/ai/transcribe` 契约与示例。
+    - 保留 `/api/ai/analyze|generate-resume|chat|chat/stream` 最小契约。
+  - `docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md`
+    - API smoke 命令改为 `python scripts/ai_mainflow_api_smoke.py --backend-url ...`。
+    - 明确 `scripts/e2e_full_flow.py` 仅本地 `test_client` 回归，不计入在线门禁。
+    - 一键门禁命令增加 `-RunAiMainflowApiSmoke` + `-RunGuidedFlowUiSmoke`。
+  - `scripts/ai_mainflow_api_smoke.py`（新建）
+    - 新增 `/api/ai/*` 在线 smoke：`organize -> transcribe(validation) -> analyze(generic+targeted) -> generate-resume -> chat`。
+  - `scripts/test-online.ps1`
+    - 新增 `-RunAiMainflowApiSmoke`、`-AiMainflowToken`、`-RunGuidedFlowUiSmoke`。
+    - 新增主链路 API smoke 执行路径与 GuidedFlow UI smoke 执行路径（Playwright CLI）。
+  - `scripts/test-step.ps1`
+    - 透传 `-RunAiMainflowApiSmoke` / `-RunGuidedFlowUiSmoke` / `-AiMainflowToken` 到 `test-online.ps1`。
+  - `database/migrations/2026-03-02-guided-flow-state.sql`（新建）
+    - 新增 `users.guided_flow_state JSONB` migration（含 rollback SQL 注释）。
+    - 缺失时补 `update_users_updated_at` 触发器（基于 `updated_at` 字段存在性检测）。
+  - `ai-resume-builder/src/database/user-repository.ts`
+    - 移除 `users` 写路径中的客户端 `updated_at` 赋值（create/update 均不再直写）。
+  - `docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+    - 计划对齐版本 `v5.2 -> v5.3`。
+- Commands:
+  - `python -m compileall scripts/ai_mainflow_api_smoke.py`
+  - `python scripts/ai_mainflow_api_smoke.py --help`
+  - `pwsh Parser::ParseFile scripts/test-online.ps1`（语法检查）
+  - `pwsh Parser::ParseFile scripts/test-step.ps1`（语法检查）
+  - `python -m pytest backend/tests/test_career_profile_service.py -q`
+  - `Get-Command ./scripts/test-online.ps1`（参数回读）
+  - `Get-Command ./scripts/test-step.ps1`（参数回读）
+  - `rg -n ...`（契约字段与命令接线关键字扫描）
+- Verification:
+  - python syntax: PASS（`ai_mainflow_api_smoke.py` compileall 通过）
+  - powershell syntax: PASS（`test-online.ps1` / `test-step.ps1` ParseFile 通过）
+  - parameter wiring: PASS（两脚本均可读到新增参数）
+  - targeted backend tests: PASS（`backend/tests/test_career_profile_service.py` -> `2 passed`）
+- Risks/Notes:
+  - 本轮未执行真实在线地址的 end-to-end smoke（缺前后端在线 URL 与测试账号上下文），仅完成脚本与契约对齐及本地语法门禁。
+
+## [2026-03-02 01:50] 复审修正：覆盖口径收敛 + UI smoke 断言加固 + migration 回滚对称
+- Agent: A + C
+- Goal:
+  - 关闭上一轮复审发现的残余风险：UI smoke 断言过弱、8条 smoke 与自动化覆盖不一致、migration 回滚不对称、计划文档命令口径漂移。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-014619.bak`
+  - `backup/docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md.20260302-014619.bak`
+  - `backup/docs/implementation/GUIDED_FLOW_TECH_SPEC.md.20260302-014619.bak`
+  - `backup/scripts/test-online.ps1.20260302-014619.bak`
+  - `backup/database/migrations/2026-03-02-guided-flow-state.sql.20260302-014619.bak`
+  - `backup/WORKLOG.md.20260302-014619.bak`
+- Changes:
+  - `scripts/test-online.ps1`
+    - GuidedFlow UI smoke 增加路由级断言：`/career-profile` 与 `/ai-analysis` 均需保持在预期路径，且页面正文不可为空。
+    - 避免“仅未跳登录即判定通过”的假阳性。
+  - `docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md`
+    - 明确“8条 smoke 是验收清单，不等于单脚本全自动”。
+    - 新增 `2.4 覆盖矩阵`，将自动化覆盖与手工/集成断言边界写清。
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 同步命令口径：`test-step` 串联 `-RunAiMainflowApiSmoke -RunGuidedFlowUiSmoke`。
+    - 新增自动化覆盖边界条款，避免把手工项误判为自动化已通过。
+    - 修正 `7.2` 编号重复（原第 7 条顺延为第 8 条）。
+  - `docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+    - 命令链接线同步 `-RunAiMainflowApiSmoke`。
+    - 验收补充“遵循 runbook 覆盖矩阵”。
+  - `database/migrations/2026-03-02-guided-flow-state.sql`
+    - 触发器/函数改为 migration 专用命名：`update_users_updated_at_guided_flow` / `set_users_updated_at_guided_flow`。
+    - 回滚 SQL 增加 trigger/function 清理，保证回滚对称。
+- Commands:
+  - `rg -n ...`（门禁口径与参数接线扫描）
+  - `pwsh Parser::ParseFile scripts/test-online.ps1`（语法检查）
+  - `python -m compileall scripts/ai_mainflow_api_smoke.py`
+  - `rg -n ...`（更新后关键字复核）
+- Verification:
+  - powershell syntax: PASS（`test-online.ps1` 解析通过）
+  - python syntax: PASS（`ai_mainflow_api_smoke.py` compileall 通过）
+  - doc consistency: PASS（计划/tech spec/runbook 三份口径一致）
+- Risks/Notes:
+  - 当前 hard gate、低匹配、多JD回访、analysis_mode 冲突回写仍需依赖后续 GuidedFlow 壳层实现后的手工/集成验证；已在覆盖矩阵中显式标注，避免误报。
+
+## [2026-03-02 12:40] 计划文档复审收口：v5.4 一致性核验 + 责任签收口径确认
+- Agent: A + C
+- Goal:
+  - 对 v5.4 计划文档进行跨文档一致性复核，确认版本、回滚对称性与 8 条 smoke 责任签收矩阵均可执行且无口径漂移。
+- Changes:
+  - `WORKLOG.md`
+    - 追加本轮复核记录与验证证据。
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 复核结果：本轮不再新增改动（v5.4 现状可继续落地）。
+- Backup:
+  - `backup/WORKLOG.md.20260302-124014.bak`
+- Commands:
+  - `git status --short --untracked-files=all`
+  - `rg -n "v5\.4|guid(ed)?_flow_state|DROP TRIGGER|DROP FUNCTION|DROP COLUMN|跑通并签收|责任矩阵|smoke" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（分段：1-40, 240-270, 388-430）
+  - `rg -n "RunAiMainflowApiSmoke|RunGuidedFlowUiSmoke|AiMainflowToken" scripts/test-online.ps1 scripts/test-step.ps1`
+  - `rg -n "八条 smoke|覆盖矩阵|analysis_mode" docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md docs/implementation/GUIDED_FLOW_TECH_SPEC.md docs/implementation/AGENT_API_SMOKE_RUNBOOK.md`
+  - `rg -n "guided_flow_state|set_users_updated_at_guided_flow|update_users_updated_at_guided_flow|DROP TRIGGER|DROP FUNCTION|DROP COLUMN" database/migrations/2026-03-02-guided-flow-state.sql`
+- Verification:
+  - targeted doc consistency check: PASS（计划书 v5.4 与技术规格、runbook、脚本参数、migration 回滚条款一致）。
+  - numbering/acceptance alignment: PASS（`§10` 第 8 项“跑通并签收”与责任矩阵一致）。
+  - local baseline tests: NOT RUN（本轮为文档复核与记录更新，无业务代码变更）。
+- Risks/Notes:
+  - 当前剩余风险集中在“执行阶段”而非“文档阶段”：8 条 smoke 中手工/集成项需按责任矩阵实际签收，否则不能标记全通过。
+
+## [2026-03-02 12:48] WORKLOG治理修复：补齐月度归档机制并执行首轮归档
+- Agent: A + C
+- Goal:
+  - 修复 `WORKLOG.md` 持续膨胀问题，落地“根文件保留最新窗口 + 月度归档 + 索引”机制。
+- Changes:
+  - `scripts/archive-worklog.ps1`
+    - 新增归档脚本：按 `## [YYYY-MM-DD HH:mm]` 切分条目，默认仅保留根文件最新 10 条。
+    - 历史条目按月份写入 `logs/worklog/WORKLOG-YYYY-MM.md`，且按 heading 去重避免重复归档。
+    - 生成/更新 `WORKLOG_INDEX.md`，记录 active window 与月度归档映射。
+  - `WORKLOG.md`
+    - 执行首轮归档后，根文件由 113 条压缩为 10 条活动窗口。
+  - `logs/worklog/WORKLOG-2026-02.md`
+    - 新建 2026-02 归档，收纳历史 58 条。
+  - `logs/worklog/WORKLOG-2026-03.md`
+    - 新建 2026-03 归档，收纳历史 45 条（首轮归档时）。
+  - `WORKLOG_INDEX.md`
+    - 新建索引，记录 active window 与月度条目计数。
+- Backup:
+  - `backup/WORKLOG.md.20260302-124601.pre-archive.bak`
+- Commands:
+  - `pwsh -File scripts/archive-worklog.ps1`
+  - `rg -n "^## \\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\\]" WORKLOG.md`
+  - `rg -n "^## \\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\\]" logs/worklog/WORKLOG-2026-02.md`
+  - `rg -n "^## \\[[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}\\]" logs/worklog/WORKLOG-2026-03.md`
+  - `Get-Content WORKLOG_INDEX.md -TotalCount 40`
+- Verification:
+  - archival execution: PASS（首轮归档完成，根文件已保留 10 条）。
+  - idempotency check: PASS（再次执行显示 `No archive needed`，无重复追加）。
+  - index generation: PASS（`WORKLOG_INDEX.md` 已生成并包含月度映射）。
+- Risks/Notes:
+  - 当前归档为手动触发；若要彻底避免回涨，建议后续接入 `scripts/test-step.ps1` 或 pre-commit 流程自动执行。
+
+## [2026-03-02 12:56] WORKLOG归档策略重构：按天归档 + 每日一次触发
+- Agent: A + C
+- Goal:
+  - 将 WORKLOG 从“保留最新10条”切换为“按日期归档”，并在每天首次运行时自动执行跨天归档，避免每次都触发。
+- Changes:
+  - scripts/archive-worklog.ps1
+    - 归档规则改为：仅归档 date < local_today 的条目，保留当天条目在根 WORKLOG.md。
+    - 新增每日边界状态文件：logs/worklog/.archive-state.json，记录 last_archive_date，同一天重复运行自动跳过。
+    - 索引生成规则改为“按天归档”，并记录最近一次归档日期。
+  - scripts/test-step.ps1
+    - 在脚本启动阶段新增 WORKLOG 每日归档检查：自动调用 scripts/archive-worklog.ps1。
+  - WORKLOG.md
+    - 顶部组织说明更新为“当前天保留 + 跨天归档”口径。
+- Commands:
+  - pwsh -File scripts/archive-worklog.ps1
+  - pwsh -File scripts/archive-worklog.ps1（二次执行，验证同日跳过）
+  - Parser::ParseFile scripts/archive-worklog.ps1
+  - Parser::ParseFile scripts/test-step.ps1
+  - Get-Content logs/worklog/.archive-state.json -Raw
+  - Get-Content WORKLOG_INDEX.md -TotalCount 40
+- Verification:
+  - daily behavior: PASS（首次执行可归档/扫描，第二次同日执行返回 skip）。
+  - syntax check: PASS（scripts/archive-worklog.ps1、scripts/test-step.ps1 语法通过）。
+  - index/state: PASS（WORKLOG_INDEX.md 与 .archive-state.json 已按新规则更新）。
+- Risks/Notes:
+  - 当前自动触发挂在 scripts/test-step.ps1；若某天不跑该脚本则不会自动归档，但手动执行 pwsh -File scripts/archive-worklog.ps1 可补跑。
+
+## [2026-03-02 12:59] 归档脚本参数兼容修复：布尔参数改为开关参数
+- Agent: A + C
+- Goal:
+  - 修复 pwsh -File 场景下布尔参数传递不稳定的问题，确保 -Force 和边界开关可直接使用。
+- Changes:
+  - scripts/archive-worklog.ps1
+    - 参数改为：-Force（强制执行）与 -DisableDailyBoundary（关闭每日一次边界）。
+    - 内部统一通过 $forceRun 和 $checkDailyBoundary 控制流程。
+- Commands:
+  - pwsh -File scripts/archive-worklog.ps1
+  - pwsh -File scripts/archive-worklog.ps1 -Force
+  - pwsh -File scripts/archive-worklog.ps1 -DisableDailyBoundary
+  - Parser::ParseFile scripts/archive-worklog.ps1
+- Verification:
+  - default mode: PASS（同日第二次执行返回 skip）。
+  - force mode: PASS（可绕过同日 skip 执行归档扫描）。
+  - disable-boundary mode: PASS（按日期扫描执行，不读取同日状态短路）。
+- Risks/Notes:
+  - 默认建议保持每日边界开启，仅在排障/补跑时使用 -Force。
+
+## [2026-03-02 13:01] 归档状态刷新修正：同日 skip 分支也刷新 state
+- Agent: A + C
+- Goal:
+  - 让每日已处理状态在 skip 分支下也刷新 last_run_at，避免状态文件停留在旧时间。
+- Changes:
+  - scripts/archive-worklog.ps1
+    - 在“今日已处理且非强制”分支增加 Save-ArchiveState 调用，写入 forced=false 和当前时间。
+- Commands:
+  - pwsh -File scripts/archive-worklog.ps1
+  - Get-Content logs/worklog/.archive-state.json -Raw
+- Verification:
+  - skip state refresh: PASS（同日 skip 后 last_run_at 更新，forced=false）。
+- Risks/Notes:
+  - 无。
+
+## [2026-03-02 13:04] 技能规则同步：Step Test Worklog 更新为“按天归档”策略
+- Agent: A
+- Goal:
+  - 将项目已落地的 WORKLOG 归档规则同步到 step-test-worklog 技能规范，统一后续执行口径。
+- Changes:
+  - C:/Users/sunshine/.codex/skills/step-test-worklog/SKILL.md
+    - Worklog Size Control 改为“当前天保留 + 跨天首次触发归档 + 同日幂等跳过”。
+    - 明确禁止固定 keep latest N 截断规则。
+    - 增加状态文件、索引字段与 -Force 补跑约束。
+- Commands:
+  - 
+g -n "Worklog Size Control|first working run after local midnight|archive-state|forced archive" C:/Users/sunshine/.codex/skills/step-test-worklog/SKILL.md
+- Verification:
+  - doc sync check: PASS（技能规则与仓库已实现行为一致）。
+- Risks/Notes:
+  - 技能文件位于用户主目录，不受当前仓库 git 追踪。
+
+## [2026-03-02 13:23] 计划书复审修订：v5.5（验收分层收敛 + 口径对齐）
+- Agent: A + C
+- Goal:
+  - 关闭复审发现的 4 项口径问题：验收层级不一致、UI e2e脚本形态不一致、实施文档版本漂移、路径引用不精确。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本升级 `v5.4 -> v5.5`。
+    - 修正 `user-repository` 路径为 `ai-resume-builder/src/database/user-repository.ts`。
+    - `7.1` 新增“避免验收误判”补充口径：API smoke 不能替代 Step5/Step6 闭环签收。
+    - `7.2.1` 改为当前实现口径：先用 `test-online.ps1 -RunGuidedFlowUiSmoke` 内嵌场景，后续可外置独立脚本。
+    - `§10` 责任矩阵中 `generic/targeted` 改为“自动化 + 手工/集成”双签收，并明确 API 层/闭环层通过标准。
+  - `docs/implementation/AI_MAINFLOW_API_CONTRACT.md`
+    - 文档版本 `v0.2 -> v0.3`，对齐计划版本改为 `v5.5`。
+  - `docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md`
+    - 文档版本 `v0.2 -> v0.3`，对齐计划版本改为 `v5.5`。
+  - `docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+    - 文档版本 `v0.1 -> v0.2`，对齐计划版本改为 `v5.5`。
+- Backup:
+  - `backup/docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md.20260302-132010.bak`
+  - `backup/docs/implementation/AI_MAINFLOW_API_CONTRACT.md.20260302-132005.bak`
+  - `backup/docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md.20260302-132014.bak`
+  - `backup/docs/implementation/GUIDED_FLOW_TECH_SPEC.md.20260302-132014.bak`
+  - `backup/WORKLOG.md.20260302-132014.bak`
+- Commands:
+  - `rg -n "版本：|v5.5|ai-resume-builder/src/database/user-repository.ts|内嵌 Playwright CLI|补充口径（避免验收误判）|fullflow 测试记录" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "文档版本：|对齐计划：.*v5.5" docs/implementation/AI_MAINFLOW_API_CONTRACT.md docs/implementation/AI_MAINFLOW_SMOKE_RUNBOOK.md docs/implementation/GUIDED_FLOW_TECH_SPEC.md`
+  - `Get-Content docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（348-410 行段落复核）
+- Verification:
+  - doc consistency: PASS（计划书与 implementation 对齐到同一基线 `v5.5`）。
+  - acceptance alignment: PASS（`generic/targeted` 已改为 API 层 + 闭环层双签收，不再误判）。
+  - local baseline tests: NOT RUN（本步仅文档修订，无业务代码变更）。
+- Risks/Notes:
+  - 若后续将 GuidedFlow UI e2e 外置为独立脚本，需再次同步 `§7.2.1` 与 runbook，避免形态漂移复发。
+
+## [2026-03-02 13:52] GuidedFlow Sprint A-2：进度条上线 + Step4简历硬门禁 + 状态去重修复
+- Agent: A + B-FE + C
+- Goal:
+  - 在不改动既有业务主链路的前提下，补齐强引导可视进度与 Step4+ 门禁，并加固 guided_flow_state 持久化去重逻辑。
+- Changes:
+  - `ai-resume-builder/src/guided-flow/step-model.ts`
+    - 新增六步元数据、步骤索引、步骤比较、进度状态推导、步骤到主路由映射。
+  - `ai-resume-builder/src/guided-flow/profile-gate.ts`
+    - 新增 `isGuidedStepAtOrAfterStep4` 与 `hasGuidedFlowResumeSelection`，用于 Step4+ 简历门禁。
+  - `ai-resume-builder/src/guided-flow/state-storage.ts`
+    - 修复去重逻辑：去重依据改为稳定字段（step/resume_id/jd_key/analysis_mode/source），写库时再补 `updated_at`。
+  - `ai-resume-builder/src/guided-flow/index.ts`
+    - 导出新增步骤模型与门禁函数。
+  - `ai-resume-builder/components/guided-flow/GuidedFlowProgressBar.tsx`
+    - 新增顶部六步进度条（显示当前步骤，允许点击已完成步骤回跳）。
+  - `ai-resume-builder/App.tsx`
+    - 接入 GuidedFlow 进度条。
+    - 新增 Step4+ 硬门禁：在 GuidedFlow 主流程中，画像已完成但未选简历时，阻断进入报告/精修/面试并回退到 `/ai-analysis`。
+  - 新增测试：
+    - `ai-resume-builder/src/__tests__/guided-flow-step-model.test.ts`
+    - `ai-resume-builder/src/__tests__/guided-flow-profile-gate.test.ts`
+    - `ai-resume-builder/src/__tests__/guided-flow-route-map.test.ts`
+    - `ai-resume-builder/src/__tests__/guided-flow-state-storage.test.ts`
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- guided-flow`（workdir=`ai-resume-builder`，首次失败后修复并复跑通过）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - GuidedFlow targeted tests: PASS（4 files, 14 tests）。
+  - Repository local baseline: PASS（frontend 18 files/68 tests，backend 72 tests）。
+- Risks/Notes:
+  - 进度条当前仅支持“回跳已完成步骤”，未开放前跳（避免绕过门禁）；如需前跳需配套服务端态校验。
+  - Step4+ 门禁目前基于 `resumeData.id` 判定“已选简历”；若后续出现新的简历上下文来源，需要补统一判定函数。
+
+## [2026-03-02 14:04] GuidedFlow Sprint B-1：Step3 显式模式（generic/targeted）落地
+- Agent: A + B-FE + C
+- Goal:
+  - 将 Step3 从“隐式 generic”改为“显式模式切换”，保证 `generic` 可无 JD 直接开始，`targeted` 缺 JD 时触发明确交互。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/analysis-mode.ts`
+    - 新增分析模式模型与规则函数：`normalizeAnalysisMode`、`isJdRequiredForAnalysisMode`、`shouldPromptForMissingJd`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisModeState.ts`
+    - 新增模式状态 hook：随当前简历同步 `analysisMode`，并回写到 `resumeData.analysisMode`。
+  - `ai-resume-builder/types.ts`
+    - `ResumeData` 新增 `analysisMode?: 'generic' | 'targeted'`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - `handleStartAnalysisClick` 支持模式感知：仅在“非面试 + targeted + 缺 JD”时弹出缺失提示；generic 模式不阻断。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 接入 `useAnalysisModeState`，并将 `analysisMode` 传入执行链与渲染层。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+  - `ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`
+    - 扩展渲染参数：下发 `analysisMode/setAnalysisMode` 到 `JdInputPage`。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 新增 Step3 模式切换 UI（通用优化 / 定向优化）。
+    - 非面试模式下的 JD 区改为随模式显示“必填/可选”。
+    - 缺 JD 弹窗文案升级：targeted 下提示“切换为通用并继续”。
+- Tests:
+  - 新增 `ai-resume-builder/src/__tests__/analysis-mode.test.ts`（模式规则单测）。
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- analysis-mode guided-flow`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（5 files, 18 tests）。
+  - Repository local baseline: PASS（frontend 19 files/72 tests，backend 72 tests）。
+- Risks/Notes:
+  - `analysisMode` 当前优先保存在前端 `resumeData` 状态，跨会话持久化依赖后续简历保存链路（后续可加“切换即落库”增强）。
+  - 无 JD 键归一（`__no_jd__` 与 `jd_default` 兼容策略）仍有历史遗留，建议在下一步做键归一与兼容补丁，避免多处键比较偏差。
+
+## [2026-03-02 14:13] GuidedFlow Sprint B-2：同 JD 回访（复用/重生成）交互落地
+- Agent: A + B-FE + C
+- Goal:
+  - 在 Step3 支持“同 JD 回访”二选一：查看上次结果或基于最新画像重新生成，覆盖 generic/targeted 两种模式。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/analysis-reuse.ts`
+    - 新增复用判定与提取工具：
+      - `hasReusableAnalysisResultForJd`
+      - `extractReusableAnalysisSnapshotForJd`
+      - `hasReadyAnalysisSessionForJd`
+    - 统一 JD key 归一：`makeJdKey(jdText || '__no_jd__')`。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 新增“同 JD 历史结果”弹窗：`查看上次结果` / `基于最新画像重新生成`。
+    - 启动分析前加入复用提示判定（仅诊断模式，面试模式不触发）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - `handleStartAnalysisClick` 新增 action 选项：
+      - `reuse_existing`：尝试直接加载历史快照并跳转 `final_report`。
+      - `regenerate`：强制 `bypassCache` 重新分析。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - 扩展 `handleStartAnalysisClick` 类型签名，透传复用/重生成参数。
+- Tests:
+  - 新增 `ai-resume-builder/src/__tests__/analysis-reuse.test.ts`。
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- analysis-mode analysis-reuse guided-flow`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（6 files, 21 tests）。
+  - Repository local baseline: PASS（frontend 20 files/75 tests，backend 72 tests）。
+- Risks/Notes:
+  - 复用优先读取 `analysisSnapshot/postInterviewFinalReport`；若仅存在 session 元信息而无可渲染快照，页面将尝试跳转报告页，但可用性取决于历史数据完整度。
+  - 旧数据中 `jd_default` 与 `__no_jd__` 混用仍可能存在，下一步建议在 `id-utils` 统一无 JD key 并补兼容迁移。
+
+## [2026-03-02 14:15] GuidedFlow Sprint B-3：analysis_mode 恢复与冲突口径补齐
+- Agent: A + B-FE + C
+- Goal:
+  - 落地“resumeData.analysisMode 为真值、guided_flow_state.analysis_mode 仅作恢复 hint”的同步策略，减少跨会话模式漂移。
+- Changes:
+  - `ai-resume-builder/src/guided-flow/analysis-mode-sync.ts`
+    - 新增纯函数 `resolveAnalysisModeSync`，统一三种结果：`resume` / `guided_state` / `none`，并标记是否需要纠正 guided_state。
+  - `ai-resume-builder/src/guided-flow/index.ts`
+    - 导出 `resolveAnalysisModeSync`。
+  - `ai-resume-builder/App.tsx`
+    - 新增模式同步 memo 与恢复 effect：当 resumeData 缺少模式且 guided_flow_state 有模式时，自动注入 resumeData.analysisMode。
+    - 保持既有 guided_flow_state 持久化逻辑不变，继续由 resumeData.analysisMode 回写完成冲突收敛。
+- Tests:
+  - 新增 `ai-resume-builder/src/__tests__/guided-flow-analysis-mode-sync.test.ts`。
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- analysis-mode analysis-reuse guided-flow`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（7 files, 24 tests）。
+  - Repository local baseline: PASS（frontend 21 files/78 tests，backend 72 tests）。
+- Risks/Notes:
+  - 该恢复逻辑当前仅在 GuidedFlow 激活且用户已登录场景生效，符合“主流程内收敛、旧入口不强控”的策略。
+  - `shouldCorrectGuidedState` 当前作为可观测信号输出，尚未单独上报埋点；后续可在 observability Sprint 接入统计。
+
+## [2026-03-02 14:17] GuidedFlow Sprint B-4：无 JD key 兼容层（jd_default ↔ __no_jd__）
+- Agent: A + B-FE + C
+- Goal:
+  - 解决历史 `jd_default` 与新口径 `__no_jd__` 的比较漂移，保证 generic 场景下同 JD 复用判定稳定。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/id-utils.ts`
+    - 新增兼容工具：
+      - `NO_JD_SENTINEL`
+      - `LEGACY_NO_JD_KEY`
+      - `makeNormalizedJdKey`
+      - `normalizeStoredJdKey`
+      - `isEquivalentJdKey`
+  - `ai-resume-builder/components/screens/ai-analysis/analysis-reuse.ts`
+    - 复用判定切换到兼容 key 比较（统一处理 legacy/new key）。
+  - 新增测试：
+    - `ai-resume-builder/src/__tests__/jd-key-compat.test.ts`
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- analysis-mode analysis-reuse guided-flow jd-key-compat`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（8 files, 27 tests）。
+  - Repository local baseline: PASS（frontend 22 files/81 tests，backend 72 tests）。
+- Risks/Notes:
+  - 当前兼容层已用于“同 JD 回访”链路；其余老逻辑仍可能直接比较原始 jdKey，后续建议逐步替换为 `isEquivalentJdKey`。
+
+## [2026-03-02 14:23] GuidedFlow Sprint B-5：Step3 通用优化简化为“目标岗位单输入”
+- Agent: A + B-FE + C
+- Goal:
+  - 对齐产品意图：Step3 在 `generic` 模式下不再展示目标公司 + JD 大文本，改为仅保留“目标岗位”单输入。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/step3-ui.ts`
+    - 新增 Step3 UI 决策函数：
+      - `shouldShowJdSection`
+      - `getStep3TargetFieldLabel`
+      - `getStep3TargetFieldPlaceholder`
+      - `isGenericRoleRequired / isGenericRoleMissing`
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - `generic` 模式：隐藏 JD textarea 和截图上传，仅保留“目标岗位（必填）”。
+    - Start 按钮在 generic 且目标岗位为空时禁用，并给出字段级提示。
+    - 同 JD 回访弹窗在 generic 模式下暂不触发，避免无 JD key 场景误复用。
+  - 新增测试：
+    - `ai-resume-builder/src/__tests__/step3-ui.test.ts`
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- step3-ui analysis-mode analysis-reuse guided-flow jd-key-compat`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（9 files, 30 tests）。
+  - Repository local baseline: PASS（frontend 23 files/84 tests，backend 72 tests）。
+- Risks/Notes:
+  - generic 场景暂关闭同 JD 回访弹窗（保守策略），后续若要支持需先设计“目标岗位维度 key”再开启。
+
+## [2026-03-02 14:27] GuidedFlow Sprint B-6：targetCompany -> targetRole 兼容迁移（Phase 1）
+- Agent: A + B-FE + C
+- Goal:
+  - 在不破坏现有链路的前提下，引入 `targetRole` 语义字段，完成“先兼容后迁移”的第一阶段。
+- Changes:
+  - `ai-resume-builder/types.ts`
+    - `ResumeData` 新增 `targetRole?: string`。
+  - `ai-resume-builder/src/app-store.ts`
+    - `createEmptyResumeData` 增加 `targetRole` 默认值。
+  - `ai-resume-builder/components/screens/ai-analysis/target-role.ts`
+    - 新增兼容工具：
+      - `resolveStep3TargetInputValue`
+      - `shouldPersistTargetRole`
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 新增 Step3 目标输入恢复与同步 effect：
+      - generic 模式优先使用 `targetRole` 回填输入
+      - generic 模式下实时回写 `resumeData.targetRole`
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - 恢复 Step3 目标输入时增加 `targetRole` 回退兼容。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisPersistence.ts`
+    - persist snapshot 时：generic 模式写入 `targetRole`。
+- Tests:
+  - 新增 `ai-resume-builder/src/__tests__/target-role.test.ts`。
+- Commands:
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `npm test -- target-role step3-ui analysis-mode analysis-reuse guided-flow jd-key-compat`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（10 files, 33 tests）。
+  - Repository local baseline: PASS（frontend 24 files/87 tests，backend 72 tests）。
+- Risks/Notes:
+  - 当前仍保留 `targetCompany` 作为兼容字段；Phase 2 再逐步替换下游读取口径，避免一次性大改导致回归。
+
+## [2026-03-02 14:36] GuidedFlow Sprint B-7：targetRole 兼容迁移（Phase 2 - 执行链口径收敛）
+- Agent: A + B-FE + C
+- Goal:
+  - 将 Step3 通用模式下的目标字段读取口径统一到执行链：`targetRole` 优先、`targetCompany` 兼容回退，减少分散判断造成的行为漂移。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/target-role.ts`
+    - 新增 `resolveAnalysisTargetValue`，统一解析规则：
+      - interview：`stateTargetCompany -> resumeTargetCompany`
+      - generic：`stateTargetCompany -> resumeTargetRole -> resumeTargetCompany`
+      - targeted：`stateTargetCompany -> resumeTargetCompany`
+    - `resolveStep3TargetInputValue` 改为委托到统一解析函数。
+  - `ai-resume-builder/components/screens/ai-analysis/analysis-reuse.ts`
+    - 复用快照输出目标值时接入统一解析函数。
+    - `extractReusableAnalysisSnapshotForJd` / `hasReusableAnalysisResultForJd` 增加 `analysisMode` 可选参数，允许上游显式传入模式。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/analysis-execution-result.ts`
+    - 诊断结果快照的 `effectiveTargetCompany` 改为统一解析口径，generic 模式可落到 `targetRole`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - `startAnalysis` 中新增 `effectiveSessionTarget`（统一解析）。
+    - analyzing / paused / interview checkpoint 相关 session patch 统一使用该值。
+    - 复用分支调用 `extractReusableAnalysisSnapshotForJd` 时显式传入 `effectiveMode`。
+  - 测试更新：
+    - `ai-resume-builder/src/__tests__/analysis-reuse.test.ts`
+      - 新增 generic 模式下 `targetRole` 回退断言。
+    - `ai-resume-builder/src/__tests__/target-role.test.ts`
+      - 新增 `resolveAnalysisTargetValue` 分支行为断言。
+- Commands:
+  - `npx vitest run src/__tests__/analysis-reuse.test.ts src/__tests__/target-role.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `pwsh -File scripts/archive-worklog.ps1`
+- Verification:
+  - Targeted tests: PASS（2 files, 8 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 24 files/89 tests，backend 72 tests）。
+  - Worklog archive check: PASS（同日已归档，跳过重归档并更新 index）。
+- Risks/Notes:
+  - 访谈链路（`interview-*` 系列模块）仍以 `targetCompany` 为主，当前保持不动是有意策略，避免误改面试场景 key。
+  - 后续若推进 `targetRole` 全量收口，建议先按“诊断链 -> 报告链 -> 面试链”分批迁移，避免一次性改动过大。
+
+## [2026-03-02 14:43] GuidedFlow Sprint B-8：定向优化改为“缺 JD 禁用开始按钮”并移除弹窗触发
+- Agent: A + B-FE + C
+- Goal:
+  - 对齐交互策略：定向优化不再弹“缺少 JD”弹窗，改为与通用优化同风格的前置门禁（必填项满足后按钮点亮）。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/step3-ui.ts`
+    - 新增规则函数：
+      - `isTargetedJdMissing`
+      - `isStep3StartBlocked`
+    - 统一 Step3 开始按钮的阻断语义（generic 缺目标岗位 / targeted 缺 JD）。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 新增 `shouldBlockTargetedStart` / `shouldBlockStep3Start`。
+    - 定向优化 JD 文本框在缺失时显示红色错误态和提示文案。
+    - 开始按钮禁用条件扩展为 `isStarting || shouldBlockStep3Start`。
+    - 点击处理增加兜底 guard：阻断状态下直接 return，不进入启动流程。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - 保留执行层缺 JD 保护，但在 `targeted` 下改为 toast 提示并返回，不再 `setShowJdEmptyModal(true)`。
+    - 这样即使外部误触发 `onStart`，也不会再弹窗。
+  - `ai-resume-builder/src/__tests__/step3-ui.test.ts`
+    - 新增 targeted 缺 JD 时阻断、填写 JD 后放行断言。
+- Commands:
+  - `npx vitest run src/__tests__/step3-ui.test.ts src/__tests__/analysis-mode.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（2 files, 7 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 24 files/89 tests，backend 72 tests）。
+- Risks/Notes:
+  - `showJdEmptyModal` 组件分支仍在页面中，但定向优化路径不再触发；后续若确认不再需要，可做一次收尾清理以减少死分支。
+
+## [2026-03-02 14:50] GuidedFlow Sprint B-9：彻底移除 JD 缺失弹窗链路（无弹窗门禁收口）
+- Agent: A + B-FE + C
+- Goal:
+  - 在已实现“按钮门禁”基础上，删除已失效的 `showJdEmptyModal` 状态与渲染链路，避免无用分支和参数继续扩散。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - 删除 `setShowJdEmptyModal` 参数依赖。
+    - 缺 JD 的执行层兜底统一为 toast + return（不再弹窗）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageState.ts`
+    - 删除 `showJdEmptyModal` / `setShowJdEmptyModal` 状态与返回值。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 删除该状态的解构、传参与 `useAnalysisExecution` 注入。
+  - `ai-resume-builder/components/screens/ai-analysis/build-ai-analysis-render-props.tsx`
+    - 删除弹窗相关 props 映射。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - 删除弹窗相关参数类型及下发给 `JdInputPage` 的传参。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 删除弹窗相关 props。
+    - 删除页面底部“缺少职位描述”整段弹窗 UI 分支（已无触发源）。
+- Commands:
+  - `npx vitest run src/__tests__/step3-ui.test.ts src/__tests__/analysis-mode.test.ts src/__tests__/app-routing.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（3 files, 10 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 24 files/89 tests，backend 72 tests）。
+- Risks/Notes:
+  - 若后续产品希望“面试模式缺 JD 再次二次确认”，需独立实现 interview 专属轻提示，不建议恢复通用弹窗状态链。
+
+## [2026-03-02 14:59] GuidedFlow Sprint B-10：Phase 3 诊断/报告口径继续收敛 + 在线 Step3 分支 smoke
+- Agent: A + B-FE + C + D
+- Goal:
+  - 继续 Phase 3：仅在诊断/报告链将剩余 `targetCompany` 读取收敛到统一解析（generic 下优先 `targetRole`），不改 interview key 逻辑。
+  - 增强 `scripts/test-online.ps1`，对 Step3 generic/targeted UI 分支增加可执行断言。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisPersistence.ts`
+    - 接入 `resolveAnalysisTargetValue` + `normalizeAnalysisMode`。
+    - `analysisSnapshot.targetCompany` 与 `nextTargetRole` 基于统一解析结果，generic 模式优先落 `targetRole` 语义。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisStepCheckpoint.ts`
+    - 新增 `analysisMode` 参数。
+    - 新增 `effectiveTargetCompany`：
+      - diagnosis/report：统一解析（支持 `targetRole` 回退）
+      - interview：保持原先 `targetCompany` 口径（不动 scene key 语义）
+    - checkpoint key、trace、persist patch 全部使用该统一值。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveFlows.types.ts`
+    - 增加 `analysisMode?: AnalysisMode`，供被动数据流下发。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPassiveDataFlows.ts`
+    - 将 `analysisMode` 透传给 `useAnalysisStepCheckpoint`。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - `useAiAnalysisPassiveFlows` 与 `useOptimizedResumeStore` 调用下发 `analysisMode`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts`
+    - 接入统一目标解析，创建/更新 optimized resume 时诊断目标字段与标题生成统一口径（generic 可落 `targetRole`）。
+    - interview key 相关模块未改。
+  - `scripts/test-online.ps1`
+    - GuidedFlow UI smoke 增加 Step3 分支断言：
+      - generic：显示“目标岗位（必填）”、隐藏 JD 必填区、按钮空值禁用且填写岗位后启用。
+      - targeted：显示 JD 必填区、按钮空 JD 禁用且填写 JD 后启用。
+      - 无简历时直接报错，避免误判通过。
+- Commands:
+  - `npx vitest run src/__tests__/analysis-reuse.test.ts src/__tests__/target-role.test.ts src/__tests__/step3-ui.test.ts src/__tests__/resume-selection-jd-restore.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw 'scripts/test-online.ps1')) | Out-Null; Write-Host 'test-online.ps1 syntax ok'"`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（4 files, 20 tests）。
+  - TypeScript compile: PASS。
+  - Online smoke script syntax check: PASS。
+  - Repository local baseline: PASS（frontend 24 files/89 tests，backend 72 tests）。
+- Risks/Notes:
+  - `scripts/test-online.ps1` 的 Step3 分支 smoke 依赖测试账号至少存在 1 份简历；无简历会显式失败并提示原因。
+  - interview 相关 session key / 匹配逻辑保持原口径，未做行为变更。
+
+## [2026-03-02 15:06] GuidedFlow Sprint B-11：修复 Step3 目标字段“删不干净”回填问题
+- Agent: A + B-FE + C
+- Goal:
+  - 修复用户清空目标字段后被旧值自动回填的问题，确保 `targetCompany/targetRole` 可被稳定清空并保持空态。
+- Root Cause:
+  - generic 兼容回退逻辑在 `targetRole` 为空时会回退到 `targetCompany`，导致旧值复活。
+  - Step3 目标值恢复 effect 触发时机过宽，用户清空后在依赖变更时可能被再次恢复。
+  - `buildResumeDataForJdEntry` 仅清空 `targetCompany`，未同步清空 `targetRole`，导致“新一轮输入”仍残留旧 role。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/target-role.ts`
+    - `resolveAnalysisTargetValue` / `resolveStep3TargetInputValue` 新增 `resumeHasTargetRole`。
+    - generic 规则调整：当记录已存在 `targetRole` 字段时，不再回退到 `targetCompany`。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - Step3 目标恢复 effect 改为“仅在当前输入为空时恢复”。
+    - 移除对 `targetCompany` 自身变化的依赖，避免用户清空动作触发回填。
+    - 恢复时显式传入 `resumeHasTargetRole`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - `buildResumeDataForJdEntry` 同时清空 `targetRole`。
+    - 恢复 Step3 目标时改为调用 `resolveStep3TargetInputValue`（含 `resumeHasTargetRole`），统一口径。
+  - 统一解析调用点补齐 `resumeHasTargetRole`：
+    - `analysis-reuse.ts`
+    - `hooks/analysis-execution-result.ts`
+    - `hooks/useAnalysisExecution.impl.ts`
+    - `hooks/useAnalysisPersistence.ts`
+    - `hooks/useAnalysisStepCheckpoint.ts`
+    - `hooks/useOptimizedResumeStore.ts`
+- Tests:
+  - `ai-resume-builder/src/__tests__/target-role.test.ts`
+    - 新增：当 `targetRole` 字段存在但为空时，generic 不再回退 `targetCompany`。
+  - `ai-resume-builder/src/__tests__/resume-selection-jd-restore.test.ts`
+    - 新增断言：fresh JD entry 会清空 `targetRole`。
+- Commands:
+  - `npx vitest run src/__tests__/target-role.test.ts src/__tests__/resume-selection-jd-restore.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/step3-ui.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（4 files, 21 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 24 files/90 tests，backend 72 tests）。
+- Risks/Notes:
+  - 历史老数据若从未写入 `targetRole` 字段，generic 仍保留一次性兼容回退 `targetCompany`；这是有意保留的迁移兼容行为。
+
+## [2026-03-02 15:16] GuidedFlow Sprint B-12：分析入口仅展示“已生成简历”并移除 JD 页读取状态卡
+- Agent: A + B-FE + C
+- Goal:
+  - AI 分析/面试入口只展示“经过通用或定向分析后产出的简历”，不展示纯上传后仅用于画像融合的原始简历。
+  - 删除 Step3（JD 输入页）顶部“当前优化简历 + 读取状态”卡片，减少非必要提示。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx`
+    - 新增 `isGeneratedAnalysisResume` 统一判定函数（`optimizationStatus/analysisScore/diagnosisProgress/latestAnalysisStep` 组合信号）。
+    - 列表数据源改为 `generatedResumes`，搜索仅在该集合内执行。
+    - 新增空态：当简历库有数据但没有“分析生成简历”时，提示先完成通用/定向优化。
+    - 底部计数文案基于 `generatedResumes` 计算，避免把纯上传简历算入“已加载全部内容”。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 移除顶部“当前优化简历/读取状态”整块 UI。
+    - 删除与该卡片绑定的 props：`allResumes`、`selectedResumeId`、`isSameResumeId`、`resumeReadState`。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - `jd_input` 分支不再向 `JdInputPage` 透传上述已删除 props。
+  - `ai-resume-builder/src/__tests__/resume-select-click-prefer-report.test.ts`
+    - 新增 `isGeneratedAnalysisResume` 的覆盖测试（uploaded-only false / optimized true / progress true）。
+- Commands:
+  - `npx vitest run ai-resume-builder/src/__tests__/resume-select-click-prefer-report.test.ts`
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `pwsh -File scripts/archive-worklog.ps1`
+- Verification:
+  - Targeted test: PASS（1 file, 8 tests）。
+  - TypeScript compile: PASS（前端 tsconfig）。
+  - Repository local baseline: PASS（frontend 24 files/93 tests，backend 72 tests）。
+  - Worklog archive: PASS（当日已归档，脚本幂等跳过）。
+- Risks/Notes:
+  - “分析生成简历”当前采用前端信号推断；若历史数据字段缺失，可能出现少量“该显示但未显示”的边界样本。
+  - 未改动 interview key/session 匹配逻辑。
+
+## [2026-03-02 15:31] GuidedFlow Sprint B-13：JD页禁回填 + 面试场景页独立拆分
+- Agent: A + B-FE + C
+- Goal:
+  - JD 输入页不再承载任何面试配置逻辑，且不做字段自动回填。
+  - 面试入口改为独立场景页面，只配置面试类型/模式/重点，JD 与目标岗位从已优化简历上下文读取，不再让用户手填。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx`
+    - 重写为“仅分析”页面：保留分析模式切换、目标岗位、JD（仅 targeted）与截图上传。
+    - 移除全部 interview 分支 UI/状态（类型、模式、训练重点、继续面试/查看报告逻辑）。
+  - `ai-resume-builder/components/screens/ai-analysis/pages/InterviewScenePage.tsx`（新增）
+    - 新建独立面试场景页，包含面试类型、面试模式、自定义训练重点。
+    - 页面内只读显示简历上下文（目标岗位与 JD 是否关联），不提供 JD/目标岗位输入框。
+    - 保留继续面试/查看报告/重开确认等面试流程控制。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - `jd_input` 分支按模式拆分渲染：
+      - `isInterviewMode=true` -> `InterviewScenePage`
+      - `isInterviewMode=false` -> `JdInputPage`
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 将 Step3 目标回填 effect 限定为仅面试模式触发，避免非面试 JD 页被动回填目标字段。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiInterviewExternalEntry.ts`
+    - scene_select 入口不再清空 JD，统一恢复简历上下文；目标优先 `targetCompany`，缺失时回退 `targetRole`。
+    - 同步场景匹配口径使用该有效目标值。
+  - `ai-resume-builder/src/__tests__/interview-external-entry-jd-restore.test.ts`
+    - 调整断言：scene_select 入口应恢复 JD（true）。
+- Commands:
+  - `npx vitest run ai-resume-builder/src/__tests__/resume-selection-jd-restore.test.ts ai-resume-builder/src/__tests__/interview-external-entry-jd-restore.test.ts ai-resume-builder/src/__tests__/step3-ui.test.ts ai-resume-builder/src/__tests__/analysis-mode.test.ts`
+  - `npx vitest run ai-resume-builder/src/__tests__/resume-selection-jd-restore.test.ts ai-resume-builder/src/__tests__/interview-external-entry-jd-restore.test.ts`（附 Supabase env）
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（resume-selection-jd-restore + interview-external-entry-jd-restore 共 12 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 24 files/93 tests，backend 72 tests）。
+- Risks/Notes:
+  - 面试场景页现在依赖“简历中已有上下文”策略；若历史简历缺失 `lastJdText/targetCompany/targetRole`，将进入通用提问语义。
+  - 未改动 interview key 与 session 主存储结构，只调整入口读取与页面职责分离。
+
+## [2026-03-02 15:35] GuidedFlow Sprint B-13A：补充 Step3 入页清空 JD（非面试）
+- Agent: B-FE + C
+- Goal:
+  - 确保非面试模式进入 `jd_input` 时，JD 与目标岗位均不被历史上下文自动回填。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageEffects.types.ts`
+    - 为 UI effect 参数增加 `setJdText`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`
+    - 非面试模式进入 `jd_input` 且非同页切换时，同时执行 `setTargetCompany('')` 与 `setJdText('')`。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 透传 `setJdText` 到 `useAiAnalysisPageEffects`。
+- Commands:
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `npx vitest run ai-resume-builder/src/__tests__/resume-selection-jd-restore.test.ts ai-resume-builder/src/__tests__/interview-external-entry-jd-restore.test.ts`（附 Supabase env）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript compile: PASS。
+  - Targeted tests: PASS（2 files / 12 tests）。
+  - Repository local baseline: PASS（frontend 24 files/93 tests，backend 72 tests）。
+
+## [2026-03-02 15:59] GuidedFlow Sprint B-14：AI诊断入口去简历选择（画像+JD直达）
+- Agent: A + B-FE + C
+- Goal:
+  - AI诊断入口不再经过 `resume_select`，点击后直接进入 Step3（`jd_input`），走“职业画像 + JD/目标岗位”诊断路径。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`
+    - `/ai-analysis` 默认初始步改为 `jd_input`。
+    - 诊断路由同步将 `resume_select` 映射到 `/ai-analysis/jd`，默认兜底路径也改为 `/ai-analysis/jd`。
+    - `/ai-interview` 保持 `resume_select` 初始步，不影响面试入口。
+  - `ai-resume-builder/App.tsx`
+    - BottomNav 的 `View.AI_ANALYSIS` 入口改为 `navigate('/ai-analysis/jd')`。
+    - 不再设置 `ai_analysis_force_resume_select`，并把 `ai_analysis_step` 初始化为 `jd_input`。
+    - GuidedFlow Step4+ gate 从“必须已选简历”放宽为“已选简历或已有诊断活动（ai_analysis_has_activity）”。
+  - `ai-resume-builder/components/screens/Dashboard.tsx`
+    - `handleContinueDiagnosis` 改为直接跳 `/ai-analysis/jd`，移除 wait-resume-select 依赖。
+    - 外部诊断跳转步写入 `ai_result_step`（`final_report`/`jd_input`）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts`
+    - 诊断模式强制入口步统一为 `jd_input`（面试模式仍为 `resume_select`）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisRuntime.ts`
+    - 诊断模式 runtime 重置/冷启动默认步改为 `jd_input`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalyzeOtherResumeReset.ts`
+    - “分析其他简历”重置后落点改为 `jd_input`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisLifecycle.ts`
+    - 非面试生命周期 fallback 改为 `jd_input`。
+    - `ai_analysis_has_activity` 仅在离开 `jd_input` 后置位。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiDiagnosisExternalEntry.ts`
+    - 兼容旧的 `ai_result_wait_resume_select`，允许 `jd_input` 触发自动选简历。
+    - 写回 `ai_analysis_step` 默认值改为 `jd_input`。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - 诊断模式下如果出现 `resume_select`（旧状态/异常态），直接渲染 `JdInputPage`。
+    - 兜底 fallback：诊断模式回到 `JdInputPage`，面试模式仍回 `ResumeSelectPage`。
+  - `ai-resume-builder/src/__tests__/ai-analysis-route-sync-initial-step.test.ts`（新增）
+    - 覆盖 `/ai-analysis` -> `jd_input`，`/ai-analysis/jd` -> `jd_input`，`/ai-interview` -> `resume_select`。
+- Commands:
+  - `npx vitest run src/__tests__/ai-analysis-route-sync-initial-step.test.ts src/__tests__/ai-analysis-navigation-back.test.ts src/__tests__/analysis-session-recovery-guard.test.ts`（workdir=`ai-resume-builder`）
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+- Verification:
+  - Targeted tests: PASS（3 files / 13 tests）。
+  - Repository local baseline: PASS（frontend 25 files / 96 tests，backend 72 tests）。
+  - TypeScript compile: PASS（前端 tsconfig）。
+- Risks/Notes:
+  - 目前仍保留 `resume_select` 相关代码用于面试入口与历史兼容，不影响诊断链直达 `jd_input`。
+  - 历史本地存储中若残留 `ai_result_wait_resume_select`，现已在 `jd_input` 兼容处理，不会阻断进入。
+
+## [2026-03-02 16:00] GuidedFlow Sprint B-14A：修复新单测在 Node 环境下 window 缺失
+- Agent: C
+- Goal:
+  - 修复新增 `deriveInitialStepFromPath` 单测在非 jsdom 环境报错 `window is not defined`。
+- Failure:
+  - 命令：`npx vitest run src/__tests__/ai-analysis-route-sync-initial-step.test.ts ...`
+  - 错误：`ReferenceError: window is not defined`（3 case 全失败）。
+- Changes:
+  - `ai-resume-builder/src/__tests__/ai-analysis-route-sync-initial-step.test.ts`
+    - 使用 `globalThis.window` stub 注入 `location.pathname`。
+    - `afterEach` 恢复原始 `window`。
+- Commands:
+  - `npx vitest run src/__tests__/ai-analysis-route-sync-initial-step.test.ts src/__tests__/ai-analysis-navigation-back.test.ts src/__tests__/analysis-session-recovery-guard.test.ts`
+- Verification:
+  - Targeted tests rerun: PASS（3 files / 13 tests）。
+- Risks/Notes:
+  - 无新增功能风险，仅测试环境适配。
+
+## [2026-03-02 16:23] GuidedFlow Sprint B-15：面试内部步骤名语义化（jd_input -> interview_scene）
+- Agent: A + B-FE + C
+- Goal:
+  - 仅在面试模式内将内部步骤语义从 `jd_input` 重命名为 `interview_scene`。
+  - 保持用户可见流程不变，兼容历史会话中旧步骤值 `jd_input`。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/step-types.ts`
+    - 新增步骤类型 `interview_scene`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisNavigation.ts`
+    - 回退历史与 `final_report` 回退逻辑按模式分流：面试模式回到 `interview_scene`，诊断模式维持 `jd_input`。
+    - `interview_report` 返回入口改为模式感知。
+    - `popHistoryBackTarget` 新增可选参数 `isInterviewMode`，默认保持旧行为。
+  - `ai-resume-builder/components/screens/AiAnalysis.tsx`
+    - 透传 `isInterviewMode` 给 `useAiAnalysisNavigation`，启用模式化回退。
+  - `ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+    - 面试场景渲染条件改为 `interview_scene`，并保留 `jd_input + isInterviewMode` 兼容兜底。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiInterviewExternalEntry.ts`
+    - 外部 `scene_select` 入口落点改为 `interview_scene`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiRouteSync.ts`
+    - 路由同步类型加入 `interview_scene`，并映射到 `/ai-analysis/jd`（内部语义变更，不改用户可见路径）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewEntryActions.ts`
+    - 面试重开/从 final report 进入面试的内部目标步骤改为 `interview_scene`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts`
+    - 自动恢复跳过条件新增 `interview_scene`；保留 legacy `jd_input` 兼容。
+    - 会话恢复时将 `session.step=jd_input` 规范化映射为 `interview_scene`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisSessionRecovery.ts`
+    - `navigateToStep` 类型补充 `interview_scene`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisStepCheckpoint.ts`
+    - 新增 `interview_scene -> { state: 'jd_ready', step: 'interview_scene' }` checkpoint 映射。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`
+    - 面试模式选中简历后落点改为 `interview_scene`。
+    - 兼容 `latestAnalysisStep/interview_scene` 归一化读取与读态回显。
+  - `ai-resume-builder/src/__tests__/ai-analysis-navigation-back.test.ts`
+    - 新增面试模式下 `final_report -> analyzing` 回退到 `interview_scene` 的断言。
+  - `ai-resume-builder/src/__tests__/analysis-session-recovery-guard.test.ts`
+    - 补充 `interview_scene` 自动恢复守卫断言，并保留 legacy `jd_input` 兼容断言。
+- Commands:
+  - `npx vitest run src/__tests__/analysis-session-recovery-guard.test.ts src/__tests__/ai-analysis-navigation-back.test.ts`（workdir=`ai-resume-builder`）
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - Targeted tests: PASS（2 files / 12 tests）。
+  - TypeScript compile: PASS。
+  - Repository local baseline: PASS（frontend 25 files / 98 tests，backend 72 tests）。
+- Risks/Notes:
+  - 该改造是“面试模式内部语义化重命名”，诊断流程仍使用 `jd_input`；两套语义并存期需继续保持恢复兼容。
+  - 历史会话 `session.step=jd_input` 已在恢复逻辑中映射为 `interview_scene`，不影响旧数据可用性。
+
+## [2026-03-02 16:37] GuidedFlow Plan Refresh：计划书与当前实现对齐（含已完成/后续/残余风险）
+- Agent: A + C
+- Goal:
+  - 将“诊断直达 Step3 + 面试 interview_scene 语义化 + 强引导边界”同步到执行计划文档。
+  - 在计划书内明确：已完成步骤、后续开发优先级、旧逻辑残留与风险点。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本更新为 `v5.6`。
+    - 新增 `0.1 本轮确认后的逻辑边界`（诊断直达、Step3 输入口径、面试入口分离、`interview_scene` 内部语义）。
+    - 更新 As-Is、To-Be、Step 映射表与标准映射，修正 `Step3/Step6` 口径。
+    - 新增 `4.2.1 面试内部步骤语义化（已落地）`。
+    - 新增 `6.0 当前完成度`（已完成/部分完成/未完成分层清单）。
+    - 新增 `8.1 旧逻辑残留与风险点`（legacy 兼容分支、本地存储旧 key、字段语义债务、上传策略未闭环）。
+    - 重写 `10. 下一步开发步骤（按优先级）` 为 P0/P1/P2 与验收闸门。
+    - 修正门禁口径：Step4+ 阻断基于 Step3 必填信息完整性；Step6 阻断基于面试简历选择。
+- Commands:
+  - `rg -n "guided_flow_state|analysisMode|interview_scene|generic|targeted" ...`
+  - `rg -n "0.1 本轮确认后的逻辑边界|6.0 当前完成度|8.1 旧逻辑残留与风险点|10. 下一步开发步骤|interview_scene" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - 文档结构校验：PASS（关键新章节与关键字均可检索到）。
+  - 代码测试：本次未执行（仅文档更新，无代码逻辑改动）。
+- Risks/Notes:
+  - 计划书已明确残余风险，但代码层 legacy 清理仍需按 `10.1 P0` 执行。
+
+## [2026-03-02 16:45] GuidedFlow Plan v5.7：上传前置/仅诊断入库/编辑器融合纳入主计划
+- Agent: A + C
+- Goal:
+  - 将三项新约束写入执行计划主干：
+    1) 上传简历在画像前，可跳过，上传后 AI 引导补齐画像；
+    2) 上传不入库，只有诊断后简历入库；
+    3) 画像编辑器与简历编辑器融合改造。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本升级 `v5.7`。
+    - 重写 `2.1` 六步流程：Step1 上传（可跳过）-> Step2 补齐画像 -> Step3 画像确认编辑 -> Step4 诊断 -> Step5 报告精修 -> Step6 面试。
+    - 更新对话边界、门禁规则、步骤映射与 Sprint 口径（Step 编号整体对齐）。
+    - 在 `4.4 后端与数据策略` 增加“上传不入库、仅诊断产物入库”约束。
+    - 新增 `4.3.1 画像编辑器与简历编辑器融合改造`。
+    - 更新 `7.1` smoke 到 11 条，新增“上传可跳过路径 / 上传引导补齐路径 / 上传不入库验证”。
+    - 重排 `10` 为 P0/P1/P2，P0 首先落实上传前置、入库策略改造、编辑器融合一期。
+- Commands:
+  - `rg -n ... docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `Get-Content ... docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`（分段校对）
+- Verification:
+  - 文档一致性校验：PASS（流程、门禁、映射、排期、风险与后续步骤均与三条新约束一致）。
+  - 代码测试：未执行（仅计划书改动）。
+- Risks/Notes:
+  - 当前为计划收敛，代码层尚未实现“上传不入库”和“编辑器融合”，需按 `10.1 P0` 继续推进。
+
+## [2026-03-02 16:56] GuidedFlow Plan v5.8：面试场景收口（压力面 + 去模式 + 提示词真实化）
+- Agent: A + B-FE + B-BE + C
+- Goal:
+  - 在计划书中补充并冻结面试场景收口需求：`HR面 -> 压力面`、删除面试模式选择、后端提示词改造为真实面试场景口径。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本升级到 `v5.8`。
+    - 在 `0.1` 新增确认边界：压力面替换、去 `simple/comprehensive`、后端统一出题口径。
+    - 新增 `4.2.2 面试场景与提示词收口`（前端枚举、兼容映射、后端提示词规则、出题真实性约束）。
+    - 在“未完成项 / 7.1 Smoke / 7.2 自动化 / 8 风险 / 10.1 P0”同步新增对应执行与验收项。
+    - `7.2` 自动化覆盖边界从 11 条同步修正为 13 条 smoke。
+- Commands:
+  - `Get-Content -Raw docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "0.1 本轮确认后的逻辑边界|4.2.1 面试内部步骤语义化|未完成（后续必须推进）|7.1 必测路径|7.2 自动化建议|8. 风险与回滚|10.1 P0" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - `rg -n "v5.8|压力面|4.2.2|hr -> pressure|13 条 smoke" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+- Verification:
+  - 文档一致性校验：PASS（目标、实现、验收、风险、P0任务五处口径一致）。
+  - 代码测试：未执行（本次仅文档更新）。
+- Risks/Notes:
+  - 计划已加入兼容约束（`hr -> pressure`、历史 `interviewMode` 只读兼容）；代码实现时仍需逐处替换避免遗漏。
+
+## [2026-03-02 17:01] GuidedFlow Plan v5.9：入口收口为强引导（UI参考最近进展）
+- Agent: A + C
+- Goal:
+  - 按产品决策消除“最近进展”与“强引导”并列重复，计划书只保留强引导入口，并明确 UI 参考关系。
+- Changes:
+  - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+    - 版本升级为 `v5.9`。
+    - 在 `0.1` 新增“Dashboard 入口收口”条款：仅保留强引导入口，最近进展仅做视觉参考。
+    - 在 `3. 关键设计决策` 增补入口原则（不并列独立入口）。
+    - 在 `GuidedFlow 路由方案` 新增 Dashboard 呈现策略（样式复用、交互归一）。
+    - 在 `Sprint A` 验收标准新增断言：不出现与强引导并列的“最近进展”独立入口，并重排编号。
+- Commands:
+  - `rg -n "最近进展|强引导|Dashboard" docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+  - 分段 `Get-Content` 校对新增条款与验收编号。
+- Verification:
+  - 文档一致性校验：PASS（边界、设计、路由、验收四处口径一致）。
+  - 代码测试：未执行（本次仅文档更新）。
+- Risks/Notes:
+  - 当前仅冻结计划口径；前端实现阶段需同步删除并列渲染逻辑，避免 UI 层仍双卡并存。
+
+## [2026-03-02 17:31] Interview Flow 收口：压力面 + 去模式 + 后端提示词统一
+- Agent: A + B-FE + B-BE + C
+- Goal:
+  - 将计划书评审中最高优先级冲突落地：
+    1) 面试场景 `HR面 -> 压力面`；
+    2) 移除前端面试模式选择并统一单一流程；
+    3) 后端题单/聊天提示词去 `simple/comprehensive` 分叉并对齐真实压力面语义；
+    4) Dashboard 模块文案与强引导口径一致。
+- Changes:
+  - Frontend
+    - `ai-resume-builder/components/screens/ai-analysis/pages/InterviewScenePage.tsx`
+      - 面试类型改为 `general|technical|pressure`（兼容读取 `hr -> pressure`）。
+      - 删除“面试模式(simple/comprehensive)” UI 与对应 state。
+      - 会话匹配不再要求 `interviewMode` 相等，避免旧模式会话错配。
+      - 开始按钮积分改为统一 `USAGE_POINT_COST.interview`。
+    - `ai-resume-builder/components/screens/ai-analysis/interview-plan-utils.ts`
+      - `getActiveInterviewType()` 归一 `hr -> pressure`。
+      - `getActiveInterviewMode()` 固定返回 `comprehensive`（单一流程）。
+      - 新 plan key 去 mode；保留 legacy key 读取旧 mode。
+      - 面试官标题/暖场题/fallback 题库新增 `pressure` 口径。
+    - `ai-resume-builder/components/screens/ai-analysis/id-utils.ts`
+      - `normalizeInterviewType` 归一 `hr -> pressure`。
+      - `normalizeInterviewMode` 统一归一到 `comprehensive`。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useUsageQuota.ts`
+      - 场景标签改为 `压力面`；面试扣费统一走 `interview`。
+    - `ai-resume-builder/components/shared/DiagnosisProgressBar.tsx`
+      - 面试阶段名 `HR面 -> 压力面`。
+      - 旧 `simple/comprehensive` 双轨显示合并为单轨展示。
+    - `ai-resume-builder/components/screens/DashboardProgressModule.tsx`
+      - 卡片标签文案 `最近进展 -> 强引导`。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useChatIntroMessages.ts`
+      - 首句与暖场文案支持 `pressure`；历史 `hr` 兼容归一。
+      - 恢复匹配不再依赖 `interviewMode`。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useAiInterviewExternalEntry.ts`
+      - 严格匹配去掉 `interviewMode` 条件。
+    - `ai-resume-builder/components/screens/ai-analysis/analysis-execution-helpers.ts`
+      - 中断会话续跑判断改为 mode-agnostic。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+      - 面试积分消耗种类改为统一 `interview`。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewPlanLoader.ts`
+      - 题单最小数量与 fallback 逻辑去模式分叉（统一按标准流）。
+    - `ai-resume-builder/components/screens/ai-analysis/interview-stage-status.ts`
+      - 面试类型索引归一 `hr -> pressure`。
+    - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisResetActions.ts`
+      - 面试类型归一 `hr -> pressure`。
+    - `ai-resume-builder/components/screens/ai-analysis/chat-page/chat-page-utils.ts`
+      - 问候识别新增“压力面试官”关键词。
+  - Backend
+    - `backend/services/ai_endpoint_plan_service.py`
+      - 重写为单一标准流程：归一 `hr -> pressure`，去模式题量分叉。
+      - `pressure` 暖场题、fallback 题库、prompt 规则改为高压场景语义。
+    - `backend/services/ai_endpoint_chat_service.py`
+      - 请求归一 `hr -> pressure`；默认题量改为 12。
+      - 删除重复/不可达的 `if mode == 'interview_plan'` 死分支。
+      - 聊天 persona/style 规则改为 `pressure`，自我介绍规则同步更新。
+    - `backend/services/ai_endpoint_stream_service.py`
+      - 流式聊天 persona/style 同步 `pressure`，并归一 `hr -> pressure`。
+  - Script
+    - `scripts/e2e_interview_scene_suite.py`
+      - 场景列表由 `hr` 改为 `pressure`，样本回答分支同步更新。
+- Commands:
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `python -m compileall backend/services/ai_endpoint_chat_service.py backend/services/ai_endpoint_plan_service.py backend/services/ai_endpoint_stream_service.py`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+  - `npm --prefix ai-resume-builder run -s test -- src/__tests__/interview-external-entry-jd-restore.test.ts src/__tests__/analysis-reset-actions-retain-interview.test.ts`
+  - `python scripts/e2e_interview_scene_suite.py`（超时）
+  - 针对超时的替代验证：内联 Python 调用 `generate_interview_plan_response(...)` 断言 `hr` 输入可归一到压力面 fallback 题库。
+- Verification:
+  - TypeScript compile: PASS。
+  - Backend python compile: PASS。
+  - Local baseline tests: PASS（frontend 25 files / 98 tests；backend 72 tests）。
+  - Targeted frontend tests: PASS（2 files / 5 tests）。
+  - Targeted backend flow check（plan_service fallback path）: PASS。
+  - `scripts/e2e_interview_scene_suite.py`: TIMEOUT（184s），已记录并用可重复替代验证覆盖核心口径。
+- Risks/Notes:
+  - 代码层仍保留部分 legacy mode 字段与 key 结构用于历史数据兼容（读兼容、不再作为新配置入口）。
+  - 后续需补一条在线 UI smoke：断言 InterviewScenePage 无“面试模式”控件且第三类型为“压力面”。
+
+## [2026-03-02 17:40] Interview Key 去模式化（写入无 mode，读取兼容旧 mode）
+- Agent: A + B-FE + C
+- Goal:
+  - 收口面试链路存储口径：新写入不再以 `interviewMode` 作为 session/cache key 维度，同时保留历史带 mode 数据的恢复与清理兼容。
+- Changes:
+  - `ai-resume-builder/components/screens/ai-analysis/interview-session-key-utils.ts`
+    - `buildInterviewSessionStorageKey`/`buildAnalysisSessionStorageKey` 改为 mode-agnostic 写键。
+    - `isSessionModeMatched` 调整为宽松匹配（兼容旧 mode 与无 mode 会话）。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts`
+    - `analysisSessionByJd` 与 `interviewSessions` 的恢复/落库/清理逻辑去除 mode 作为硬匹配条件。
+    - 新写入 session 记录不再持久化 `interviewMode` 字段。
+    - 保留 legacy key 回溯与解析，避免旧数据丢失。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSceneReset.ts`
+    - 重置清理键匹配从 `..._<type>_<mode>_...` 收口为 `..._<type>_...`，兼容新旧缓存键删除。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewEntryActions.ts`
+    - 场景级题单缓存清理改为去 mode 口径，兼容新旧 key。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewPlanLoader.ts`
+    - 面试题单请求体不再传 `interviewMode`。
+    - 新缓存 payload 不再写入 `interviewMode`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useUsageQuota.ts`
+    - 删除 `interview_simple`/`interview_comprehensive` 旧配额类型，统一 `interview`。
+  - `ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts`
+    - 对齐配额类型定义，仅保留 `interview`。
+- Commands:
+  - `npx vitest run src/__tests__/analysis-reset-actions-retain-interview.test.ts src/__tests__/interview-external-entry-jd-restore.test.ts src/__tests__/jd-key-compat.test.ts src/__tests__/analysis-session-recovery-guard.test.ts src/__tests__/step3-ui.test.ts`
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向前端测试：PASS（5 files / 18 tests）。
+  - TypeScript 编译：PASS。
+  - 本地基线：PASS（frontend 25 files / 98 tests；backend 72 tests）。
+- Risks/Notes:
+  - 后端接口仍接受 `interviewMode`（兼容旧客户端）；后续可在 API 契约版本切换时正式移除。
+  - 少量历史工具函数仍保留 mode 解析逻辑用于数据兼容，需在清理窗口统一下线。
+
+## [2026-03-02 17:43] 补充定向单测：面试会话键去模式化回归保护
+- Agent: C
+- Goal:
+  - 为本轮“写键去 mode、读键兼容”改造补齐模块级单测，防止后续重构回滚到 mode 维度。
+- Changes:
+  - `ai-resume-builder/src/__tests__/interview-session-key-utils.test.ts`
+    - 断言 `buildAnalysisSessionStorageKey` 对 `simple/comprehensive/undefined` 输出同一键。
+    - 断言 `buildInterviewSessionStorageKey` 对不同 mode 输出同一 scene key。
+    - 断言 `isSessionModeMatched` 在兼容策略下始终宽松匹配。
+- Commands:
+  - `npx vitest run src/__tests__/interview-session-key-utils.test.ts`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向单测：PASS（1 file / 3 tests）。
+  - 本地基线：PASS（frontend 26 files / 101 tests；backend 72 tests）。
+- Risks/Notes:
+  - 当前仅覆盖 key 口径与匹配策略，后续可补一条 UI 层恢复链路测试（进入面试场景->重启->命中新 key）。
+
+## [2026-03-02 17:51] 去进度条模块：Dashboard 与 GuidedFlow 顶部进度条下线 + 计划书同步 v6.0
+- Agent: A + B-FE + C
+- Goal:
+  - 按产品决策下线“进度条模块”，并保持强引导门禁/状态恢复能力；同时将最新开发进度与口径同步到计划书。
+- Changes:
+  - Frontend:
+    - `ai-resume-builder/components/screens/Dashboard.tsx`
+      - 移除 `DashboardProgressModule` 依赖与分支逻辑。
+      - Dashboard 主入口统一为无进度条的“强引导卡片”（有简历时直达 Step4 诊断入口；无简历时创建首份简历）。
+      - 清理已无用的加载/预览函数与相关依赖导入。
+    - `ai-resume-builder/App.tsx`
+      - 移除 `GuidedFlowProgressBar` 顶部渲染、点击跳步逻辑及相关引用。
+      - 保留 GuidedFlow 的门禁与步骤状态同步，不再展示显式进度条。
+    - 删除：`ai-resume-builder/components/screens/DashboardProgressModule.tsx`
+    - 删除：`ai-resume-builder/components/guided-flow/GuidedFlowProgressBar.tsx`
+  - Docs:
+    - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+      - 版本升级到 `v6.0`。
+      - 新增边界：强引导不再展示浮层进度条，改为“入口卡片 + 状态恢复 + 门禁”。
+      - 更新 4.1 路由与状态描述，去除“点击进度条跳转”口径。
+      - 更新 6.0 当前完成度，补充“进度模块已下线”两项。
+      - 修正 Sprint A 验收标准：以“步骤状态恢复与流转”替代“进度条显示”。
+- Commands:
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript 编译：PASS。
+  - 本地基线：PASS（frontend 26 files / 101 tests；backend 72 tests）。
+- Risks/Notes:
+  - `guided-flow/step-model.ts` 中的 step status 计算目前主要用于状态同步与测试，不再用于前端可视进度条。
+  - 若后续要恢复可视步骤导航，应独立设计“非进度条”的步骤入口组件，避免回退到浮层条模式。
+
+## [2026-03-02 17:59] Step1 上传前置（可跳过）落地：CareerProfile 上传门禁 + 草稿预填
+- Agent: A + B-FE + C
+- Goal:
+  - 落地强引导 Step1：用户在画像输入前先完成“上传简历或跳过上传”选择；上传后自动生成画像草稿，辅助后续补齐。
+- Changes:
+  - Frontend:
+    - `ai-resume-builder/components/screens/CareerProfile.tsx`
+      - 新增 Step1 上传前置卡片（上传/跳过）。
+      - 强引导模式下，未完成上传选择时锁定文本输入、语音输入与提交按钮。
+      - 接入 `ResumeImportDialog`，上传后将简历结构化数据转为画像草稿文本，自动注入输入框。
+      - 增加用户级本地状态键：`guided_flow_step1_upload_choice:<userId>`。
+    - `ai-resume-builder/components/screens/career-profile/resume-upload-prefill.ts`
+      - 新增“简历结构化数据 -> 画像草稿文本”转换工具，提取基础信息、工作/教育/项目、技能关键词并生成引导补充文案。
+  - Tests:
+    - `ai-resume-builder/src/__tests__/resume-upload-prefill.test.ts`
+      - 覆盖预填文本构建与空数据回退。
+  - Docs:
+    - `docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md`
+      - 版本更新至 `v6.1`。
+      - 在“当前完成度”中新增 Step1 前端落地说明，并标注后端入库策略仍待收口。
+- Commands:
+  - `npx vitest run src/__tests__/resume-upload-prefill.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/guided-flow-step-model.test.ts src/__tests__/guided-flow-profile-gate.test.ts`
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - 定向测试：PASS（4 files / 13 tests）。
+  - TypeScript 编译：PASS。
+  - 本地基线：PASS（frontend 27 files / 103 tests；backend 72 tests）。
+- Risks/Notes:
+  - 当前上传前置是前端门禁与预填增强，尚未改变后端“上传不入简历库”的持久化策略；需在后续 P0 完成数据层闭环。
+
+## [2026-03-02 18:02] 首页入口对齐：强引导模式下新用户从 Dashboard 先进入职业画像（非编辑器）
+- Agent: A + B-FE + C
+- Goal:
+  - 将首页首份简历入口与“上传前置 + 画像优先”主流程对齐，避免新用户先落入 Editor 绕开 Step1/Step2。
+- Changes:
+  - `ai-resume-builder/components/screens/Dashboard.tsx`
+    - 新增 `guidedFlowActive` 判断（基于 `isGuidedFlowEnabled/isGuidedFlowActive`）。
+    - 无简历主卡片点击行为调整：
+      - 强引导模式：跳转 `View.CAREER_PROFILE`。
+      - 非强引导模式：保留 `createNewResume()` 旧行为。
+    - 文案同步：强引导模式下显示“先建立职业画像 / 开始强引导”。
+- Commands:
+  - `npx tsc --noEmit -p ai-resume-builder/tsconfig.json`
+  - `pwsh -File scripts/test-local.ps1 -SkipInstall`
+- Verification:
+  - TypeScript 编译：PASS。
+  - 本地基线：PASS（frontend 27 files / 103 tests；backend 72 tests）。
+- Risks/Notes:
+  - 该改动仅影响“无简历”主卡片入口；已有简历用户仍走“继续强引导（Step4）”入口。
+
+## [2026-03-02 18:18] 强引导 Step1 融合改造：上传简历 -> 追问补充 -> 可编辑事实
+- Agent: A + B-FE + C
+- Goal:
+  - 将强引导第一步改为“简历上传与画像融合页”，不再是单一文本输入；支持 AI 追问引导（含 MBTI/性格）并在提交前允许用户编辑解析事实。
+- Changes:
+  - i-resume-builder/components/screens/CareerProfile.tsx
+    - 重构为路由壳组件：强引导走融合页，非强引导走传统输入页。
+  - i-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 新增强引导 Step1 融合页面：上传/跳过、解析事实可编辑、追问建议插入、语音补充、MBTI/性格/目标补充、组合提交入库。
+  - i-resume-builder/components/screens/career-profile/CareerProfileLegacyInputPage.tsx
+    - 新增非强引导兼容输入页（保留原输入+语音能力）。
+  - i-resume-builder/components/screens/career-profile/profile-followup-prompts.ts
+    - 新增追问建议生成器（依据简历缺失项生成定向追问）。
+  - i-resume-builder/components/screens/Dashboard.tsx
+    - 强引导主入口改为 /career-profile/upload。
+  - i-resume-builder/App.tsx
+    - 强引导硬门禁放行 /career-profile/upload；画像未完成时入口统一回到该路由。
+    - 底部导航 AI 诊断入口在画像未完成时跳转 /career-profile/upload。
+  - i-resume-builder/src/guided-flow/route-map.ts
+    - '/career-profile/upload' 映射为 step1_profile_input。
+  - i-resume-builder/src/guided-flow/step-model.ts
+    - Step1 主路由改为 '/career-profile/upload'，文案更新为“上传简历与画像补充”。
+  - Tests:
+    - i-resume-builder/src/__tests__/career-profile-followup-prompts.test.ts（新增）
+    - i-resume-builder/src/__tests__/guided-flow-route-map.test.ts（更新）
+    - i-resume-builder/src/__tests__/guided-flow-step-model.test.ts（更新）
+    - i-resume-builder/src/__tests__/app-routing.test.ts（更新）
+- Commands:
+  - 
+px vitest run src/__tests__/career-profile-followup-prompts.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/guided-flow-step-model.test.ts src/__tests__/app-routing.test.ts src/__tests__/resume-upload-prefill.test.ts
+  - 
+px tsc --noEmit -p ai-resume-builder/tsconfig.json
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（5 files / 16 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 28 files / 106 tests；backend 72 tests）
+- Risks/Notes:
+  - 当前“AI 追问”为前端启发式追问建议，尚未接入后端多轮问答状态机；后续可在 API 层补全“问答回合存储 + 缺失项判定”。
+  - Step1 已融合上传与画像补充；Step2 仍由 CareerProfileResult 承担结构化人工校对。
+
+## [2026-03-02 18:27] 计划书同步 + 旧逻辑清理：Step1 融合页口径收口
+- Agent: A + B-FE + C
+- Goal:
+  - 将当前实现（Step1 上传融合页）同步到重构计划书；清理已不需要的旧路由口径和 fallback 逻辑。
+- Changes:
+  - i-resume-builder/src/app-routing.ts
+    - View.CAREER_PROFILE 主路径由 /career-profile 统一到 /career-profile/upload。
+  - i-resume-builder/components/screens/CareerProfile.tsx
+    - 兼容旧路径 /career-profile 自动 
+eplace 跳转到 /career-profile/upload，避免双口径并行。
+  - i-resume-builder/src/guided-flow/step-model.ts
+    - guidedFlowStepToPath fallback 从 /career-profile 改为 /career-profile/upload。
+  - i-resume-builder/src/__tests__/app-routing.test.ts
+    - 更新 CAREER_PROFILE 路径断言到新主路径。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级 6.1 -> v6.2。
+    - 同步 Step1 融合页现状（上传/跳过 + AI 追问 + 补充 + 可编辑解析事实）。
+    - 六步编号与门禁口径重排（Step3 为诊断输入，Step4 报告，Step5 精修）。
+    - 更新映射表、Smoke、P0、风险与旧逻辑收口状态（新增“已修复/待继续收口”分栏）。
+- Commands:
+  - 
+px vitest run src/__tests__/app-routing.test.ts src/__tests__/guided-flow-step-model.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/career-profile-followup-prompts.test.ts
+  - 
+px tsc --noEmit -p ai-resume-builder/tsconfig.json
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（4 files / 14 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 28 files / 106 tests；backend 72 tests）
+- Risks/Notes:
+  - 上传不入简历库的数据层约束仍未完成（已在计划书 v6.2 明确保留为 P0）。
+  - 面试 jd_input 兼容分支与部分历史 localStorage key 仍保留，已归档为“待继续收口”。
+
+## [2026-03-02 18:29] 旧路由收口补丁：Step3 主路由统一到 /ai-analysis/jd
+- Agent: B-FE + C
+- Goal:
+  - 清除 GuidedFlow Step3 仍指向 /ai-analysis 的旧口径，统一到 /ai-analysis/jd。
+- Changes:
+  - i-resume-builder/src/guided-flow/step-model.ts
+    - step3_mode_and_resume.route 从 /ai-analysis 改为 /ai-analysis/jd。
+  - i-resume-builder/src/__tests__/guided-flow-step-model.test.ts
+    - 新增 Step3 路由断言，防止回归。
+- Commands:
+  - 
+px vitest run src/__tests__/guided-flow-step-model.test.ts src/__tests__/app-routing.test.ts
+  - 
+px tsc --noEmit -p ai-resume-builder/tsconfig.json
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（2 files / 7 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 28 files / 106 tests；backend 72 tests）
+- Risks/Notes:
+  - 该变更仅统一主导航口径，不影响 /ai-analysis 兼容访问与 pathToView 解析。
+
+## [2026-03-02 18:42] 上传不入库策略改造：数据层约束 + 列表过滤
+- Agent: B-FE + B-BE + C
+- Goal:
+  - 落地“上传简历仅用于画像，不直接入简历库；简历库仅保留诊断/优化产物”的数据层策略，并同步计划书。
+- Changes:
+  - i-resume-builder/src/resume-storage-policy.ts（新增）
+    - 新增统一策略：isResumeEligibleForLibrary、shouldPersistResumeRecord、withLocalOnlyDraftMeta。
+  - i-resume-builder/src/database-service.ts
+    - createResume：非诊断产物改为“本地草稿成功返回 + 跳过远端入库”。
+    - getUserResumes：仅返回诊断/优化产物。
+    - getUserResumesExportHistory：仅返回诊断/优化产物。
+  - i-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts
+    - 诊断产物写入补充 source='diagnosis_generated'。
+  - i-resume-builder/components/screens/ai-analysis/hooks/usePostInterviewFinalize.ts
+    - 面试后产物写入补充 source='interview_refined'。
+  - i-resume-builder/src/__tests__/resume-storage-policy.test.ts（新增）
+    - 覆盖策略判定与本地草稿标记行为。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级为 6.3，同步“上传不入库”已完成项与剩余后端 API 一致化风险。
+- Commands:
+  - 
+px vitest run src/__tests__/resume-storage-policy.test.ts src/__tests__/guided-flow-step-model.test.ts src/__tests__/app-routing.test.ts
+  - 
+px tsc --noEmit -p ai-resume-builder/tsconfig.json
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 12 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 29 files / 111 tests；backend 72 tests）
+- Risks/Notes:
+  - 当前“上传不入库”约束位于前端数据服务层；若后续存在绕过前端的写库入口，仍需在后端 API 层加同等校验。
+
+## [2026-03-02 18:52] 旧逻辑收口：诊断旧 key 降级 + 面试步名归一
+- Agent: B-FE + C
+- Goal:
+  - 收敛遗留兼容分支，避免旧 localStorage 与 legacy step 继续驱动主流程行为。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts
+    - 仅在面试模式读取 `ai_interview_force_resume_select`；诊断模式不再读取 `ai_analysis_force_resume_select`。
+    - 面试模式下若当前步骤为 legacy `jd_input`，自动归一到 `interview_scene`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useDiagnosisSessionRecovery.ts
+    - 移除诊断流程对 `ai_analysis_force_resume_select` 的兼容读取，仅依赖运行态参数。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAiDiagnosisExternalEntry.ts
+    - 移除 `ai_result_wait_resume_select` 分支读取，外部诊断入口统一直走 `jd_input/final_report`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts
+    - `shouldSkipInterviewAutoRecovery` 改为仅跳过 `resume_select/interview_scene`；保留旧 `jd_input -> interview_scene` 恢复映射。
+  - ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx
+    - 面试场景渲染仅接受 `interview_scene`（不再直接接受 `jd_input`）。
+  - ai-resume-builder/src/__tests__/analysis-session-recovery-guard.test.ts
+    - 更新断言：面试模式下 legacy `jd_input` 不再作为“跳过恢复”的稳定入口。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.4`，同步 §8.1 收口状态与当前完成度。
+- Commands:
+  - npm run test -- src/__tests__/analysis-session-recovery-guard.test.ts src/__tests__/ai-analysis-route-sync-initial-step.test.ts src/__tests__/resume-selection-jd-restore.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 19 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 29 files / 111 tests；backend 72 tests）
+- Risks/Notes:
+  - 面试恢复层（`useInterviewSessionRecovery`、`useResumeSelection`）仍保留 `jd_input` 历史会话映射，属于最后一段兼容债务，已在计划书 §8.1 标注“待继续收口”。
+
+## [2026-03-02 18:56] 上传不入库策略后端闭环：API 侧入库门禁
+- Agent: B-BE + C
+- Goal:
+  - 将“仅诊断/优化产物可入简历库”从前端数据层扩展到后端 `/api/resumes`，避免绕过前端写库。
+- Changes:
+  - backend/services/resume_storage_policy.py（新增）
+    - 新增后端统一判定：`is_resume_eligible_for_library`（与前端判定口径对齐）。
+  - backend/services/resume_crud_service.py
+    - `list_resumes`：过滤非诊断产物。
+    - `create_resume_record`：非诊断产物返回 `422` + `code=resume_not_persistable`。
+    - `update_resume_record`：当更新 `resumeData` 且不满足诊断产物条件时，返回 `422` + `code=resume_not_persistable`。
+  - backend/tests/test_resume_storage_policy.py（新增）
+    - 覆盖策略判定、create/list/update 门禁行为。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.5`，将“后端 API 一致约束”从待办改为已完成，并更新 §8.1 与 P0 描述。
+- Commands:
+  - python -m pytest backend/tests/test_resume_storage_policy.py -q
+  - python -m pytest backend/tests -q
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted backend tests: PASS（1 file / 6 tests）
+  - backend suite: PASS（78 tests）
+  - local baseline: PASS（frontend 29 files / 111 tests；backend 78 tests）
+- Risks/Notes:
+  - 旧数据中历史“上传稿”若已存在于 `resumes`，会在列表层被过滤；如需可视化迁移/回收策略，建议补一轮数据脚本与运营说明。
+
+## [2026-03-02 19:15] 画像流程重构：上传/补充 -> 编辑 -> 总结（移除独立旧入口）
+- Agent: B-FE + C
+- Goal:
+  - 将职业画像流程改成完整强引导闭环：上传页（可跳过）-> AI追问补充页 -> 画像编辑页 -> 画像总结页，并去掉全部简历“新建简历”入口。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - Step1 拆分为两段子流程：上传选择页 + 画像补充页。
+    - 提交后不再直接去结果预览，而是跳转到 `/career-profile/result/edit`。
+    - 增加画像补充字段：`mbti/personality/workStyle/careerGoal/jobDirection/targetSalary`。
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 拆分为 `edit/summary` 子路由语义（`/career-profile/result/edit` 与 `/career-profile/result/summary`）。
+    - 编辑保存后跳转总结页（不走预览页）。
+    - 总结页新增“上传新简历补充画像”入口（`ResumeImportDialog`）。
+  - ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx
+    - 增加 `mode` 控制（`edit/summary`）。
+    - 总结视图增加 MBTI/性格/薪资/求职方向展示。
+    - 编辑视图增加上述画像字段可编辑能力。
+  - ai-resume-builder/components/screens/CareerProfile.tsx
+    - 下线 legacy 分支，统一使用新强引导融合页。
+  - ai-resume-builder/components/screens/career-profile/CareerProfileLegacyInputPage.tsx
+    - 删除（移除职业画像独立旧输入页）。
+  - ai-resume-builder/components/screens/AllResumes.tsx
+    - 删除顶部“+ 新建简历”按钮。
+    - 空态文案改为引导去职业画像总结页上传新简历。
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 职业画像入口改为：有画像进 `/career-profile/result/summary`，无画像进 `/career-profile/upload`。
+  - ai-resume-builder/components/screens/dashboard/CareerProfileEntryCard.tsx
+    - 卡片文案改为“查看职业画像总结”语义。
+  - ai-resume-builder/src/career-profile-utils.ts
+    - 扩展画像模型与归一化：`mbti/personality/workStyle/careerGoal/jobDirection/targetSalary`。
+  - ai-resume-builder/components/screens/dashboard/useCareerProfileComposer.ts
+    - `saveCareerProfile` 支持 `profileExtras`，将补充字段与 AI 结构化结果合并保存。
+  - ai-resume-builder/src/useUserProfile.ts
+    - 用户画像类型补齐新增字段。
+  - ai-resume-builder/src/guided-flow/step-model.ts
+    - Step2 主路由更新为 `/career-profile/result/edit`。
+  - ai-resume-builder/src/guided-flow/route-map.ts
+    - Step2 识别范围扩展到 `/career-profile/result/*`。
+  - ai-resume-builder/src/__tests__/guided-flow-step-model.test.ts
+    - 更新 Step2 路由断言。
+  - ai-resume-builder/src/__tests__/guided-flow-route-map.test.ts
+    - 增加 `edit/summary` 子路由断言。
+  - ai-resume-builder/components/screens/career-profile/fusion-storage.ts（新增）
+    - 抽取上传/seed 本地存储 key 与读写函数，供上传页和总结页复用。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.6`，同步新流程、路由与入口调整。
+- Commands:
+  - npm run test -- src/__tests__/guided-flow-step-model.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/career-profile-utils.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm run test -- src/__tests__/guided-flow-step-model.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/career-profile-utils.test.ts
+  - npx tsc --noEmit
+- Verification:
+  - targeted tests: PASS（3 files / 11 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 29 files / 111 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前“画像编辑页”已接入编辑器框架与新增字段，但尚未完全复用 `Editor.tsx` 的全部通用区块组件；后续可继续做组件抽取，减少双维护。
+
+## [2026-03-02 19:23] Step3 口径收口：generic/targeted 统一“目标岗位必填”
+- Agent: B-FE + C
+- Goal:
+  - 收敛 Step3 的残留旧口径，确保通用/定向模式都按“目标岗位必填”执行，并补充在线 smoke 断言。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/step3-ui.ts: 新增 isTargetRoleRequired/isTargetRoleMissing；非面试模式统一目标岗位必填；targeted 仍保持 JD 必填。
+  - ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx: 起始按钮门禁改为“目标岗位 +（targeted 时）JD”双条件；文案改为统一目标岗位语义。
+  - ai-resume-builder/src/__tests__/step3-ui.test.ts: 更新 targeted 断言，覆盖“角色缺失/JD缺失/二者齐备”三种阻断组合。
+  - scripts/test-online.ps1: GuidedFlow UI smoke 增加 targeted 分支断言（角色必填 + JD 必填）。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md: 同步 §8.1 与 P0 进度，标注“前端口径已统一、命名迁移待收尾”。
+- Commands:
+  - npm run test -- src/__tests__/step3-ui.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（1 file / 3 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 29 files / 111 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅完成前端语义收口，跨端字段命名仍存在 targetCompany 历史兼容债务；后续需按计划完成 DTO/存储层 targetRole 命名迁移。
+
+## [2026-03-02 19:29] Step3 文案收口：targeted 明确“目标岗位 + JD”
+- Agent: B-FE + C
+- Goal:
+  - 让 targeted 模式在用户可见文案层也明确目标岗位必填，避免误解。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/pages/JdInputPage.tsx: 分析模式提示文案改为“定向优化需要先填写目标岗位和职位描述”。
+- Commands:
+  - npm run test -- src/__tests__/step3-ui.test.ts
+  - npx tsc --noEmit
+- Verification:
+  - targeted tests: PASS（1 file / 3 tests）
+  - type check: PASS
+- Risks/Notes:
+  - 该步仅调整前端文案，不涉及接口协议与数据结构。
+
+## [2026-03-02 19:33] Step3 数据层收口：targeted 目标岗位写入 targetRole
+- Agent: B-FE + C
+- Goal:
+  - 将“targeted 目标岗位必填”扩展到诊断持久化层，避免目标岗位仅停留在 UI 态。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/target-role.ts: 非面试模式下统一优先 	argetRole 解析；shouldPersistTargetRole 改为所有诊断模式生效。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisPersistence.ts: nalysisSnapshot/analysisDossierLatest 增加 	argetRole，并在 generic/targeted 统一回写 
+esumeData.targetRole。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts: 创建/更新诊断产物简历时同步写入 	argetRole，与 	argetCompany 保持兼容。
+  - ai-resume-builder/src/__tests__/target-role.test.ts: 更新 targeted 口径断言（优先 role、缺 role 回退 company）与持久化策略断言。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md: 升级到 6.8，同步 Step3 持久化进度。
+- Commands:
+  - npm run test -- src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（2 files / 10 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 29 files / 112 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前仍保留 	argetCompany 兼容字段；跨端 DTO 全量改名到 	argetRole 仍需单独迁移步骤。
+
+## [2026-03-02 19:39] 诊断会话收口：analysisSession/lastSnapshot 同步 targetRole
+- Agent: B-FE + C
+- Goal:
+  - 将目标岗位语义从“页面/写库”继续扩展到诊断会话与本地恢复链，减少 targetCompany 语义漂移。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionStore.impl.ts: saveLastAnalysis 与 persistAnalysisSessionState 增加 	argetRole 写入（非面试诊断优先）。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts: 诊断过程中持久化 
+eport_ready/analyzing/paused 会话时同步传入 	argetRole；saveLastAnalysis/snapshot 同步带 	argetRole。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useReportSnapshotRestore.ts: 新增 
+esolveRestoredAnalysisTarget，恢复时优先 	argetRole，回退 	argetCompany。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts: 保存最近诊断快照时补写 	argetRole。
+  - ai-resume-builder/src/__tests__/report-snapshot-restore.test.ts（新增）: 覆盖恢复目标优先级逻辑。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md: 升级 6.9，同步会话/快照层进度。
+- Commands:
+  - npm run test -- src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/report-snapshot-restore.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 13 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 30 files / 115 tests；backend 78 tests）
+- Risks/Notes:
+  - 仍保留 	argetCompany 兼容字段；跨端 DTO 主字段改名（	argetRole）与后端统一口径尚未完成。
+
+
+## [2026-03-02 19:47] Step3 诊断 checkpoint 口径收口：session patch 同步 targetRole
+- Agent: B-FE + C
+- Goal:
+  - 收口诊断/报告链中剩余 checkpoint 写入口径，确保 `persistAnalysisSessionState` 在诊断状态下同步写 `targetRole`（兼容保留 `targetCompany`）。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisStepCheckpoint.ts
+    - `persistAnalysisSessionState` patch 类型新增 `targetRole`。
+    - 诊断模式下计算并持久化 `targetRole`（与 `targetCompany` 同步），并将其纳入 checkpoint 去重键与 runtime trace。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisInteractionBundle.ts
+    - 交互层 `persistAnalysisSessionState` 类型签名补齐可选 `targetRole`，保持调用链兼容。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewEntryActions.ts
+    - `persistAnalysisSessionState` 类型签名补齐可选 `targetRole`（兼容扩展，不改面试行为）。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewChat.impl.ts
+    - `persistAnalysisSessionState` 类型签名补齐可选 `targetRole`（兼容扩展，不改面试行为）。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.10`，补充“checkpoint 已同步 targetRole”的收口进度记录。
+- Commands:
+  - npm run test -- src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/report-snapshot-restore.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 13 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 30 files / 115 tests；backend 78 tests）
+- Risks/Notes:
+  - 仍存在历史命名债务：诊断 DTO/状态变量中 `targetCompany` 仍广泛存在，后续需继续做“诊断主口径 `targetRole` + 面试兼容 `targetCompany`”分层迁移。
+
+
+## [2026-03-02 19:50] Step3 口径加固：checkpoint targetRole 解析单测
+- Agent: B-FE + C
+- Goal:
+  - 为诊断 checkpoint 的 `targetRole` 写入口径补充可回归单测，降低后续 DTO 迁移回归风险。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisStepCheckpoint.ts
+    - 抽取并导出 `resolveCheckpointTargetRole` 纯函数。
+    - 主流程改为复用该函数计算 `targetRole`，保持行为一致。
+  - ai-resume-builder/src/__tests__/analysis-step-checkpoint-target-role.test.ts（新增）
+    - 覆盖三类场景：诊断优先 checkpoint 目标、诊断回退 resume targetRole、面试模式保持 resume targetRole。
+- Commands:
+  - npm run test -- src/__tests__/analysis-step-checkpoint-target-role.test.ts src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/report-snapshot-restore.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（4 files / 16 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 31 files / 118 tests；backend 78 tests）
+- Risks/Notes:
+  - 该步仅新增诊断链回归保护，不涉及后端协议改名；`targetCompany` 历史字段仍在跨端契约中存在。
+
+
+## [2026-03-02 19:53] Step3 诊断结果构建收口：analysis snapshot 输出 effectiveTargetRole
+- Agent: B-FE + C
+- Goal:
+  - 在诊断结果构建阶段补齐 `effectiveTargetRole` 主口径，减少后续持久化链路重复拼接字段导致的偏差。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/analysis-execution-result.ts
+    - `buildAnalysisResultSnapshot` 参数新增可选 `targetRole`。
+    - 返回值新增 `effectiveTargetRole`，并统一以解析后的目标岗位驱动诊断目标字段。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts
+    - 诊断结果消费链路改为复用 `effectiveTargetRole`（`snapshot/saveLastAnalysis/report_ready`）。
+  - ai-resume-builder/src/__tests__/analysis-execution-result.test.ts（新增）
+    - 覆盖“显式 targetRole 优先”和“空输入回退 resume targetRole”两类场景。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.11`，同步“结果快照构建已补 effectiveTargetRole”进度。
+- Commands:
+  - npm run test -- src/__tests__/analysis-execution-result.test.ts src/__tests__/analysis-step-checkpoint-target-role.test.ts src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/report-snapshot-restore.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（5 files / 18 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 32 files / 120 tests；backend 78 tests）
+- Risks/Notes:
+  - 本轮仍保持 `targetCompany` 兼容字段写入，真正的 DTO 主字段改名仍需后续分阶段迁移。
+
+
+## [2026-03-02 19:59] 诊断复用链收口：analysis-reuse 补 targetRole 主口径
+- Agent: B-FE + C
+- Goal:
+  - 让“同 JD 复用历史结果”链路显式携带 `targetRole`，并在诊断执行复用分支优先使用 `targetRole`，保留 `targetCompany` 兼容。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/analysis-reuse.ts
+    - `ReusableAnalysisSnapshot` 新增 `targetRole`。
+    - 复用提取逻辑优先读取 `snapshot/finalReport.targetRole`，兼容回退 `targetCompany`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts
+    - 结果构建入参 `targetRole` 改为 `effectiveSessionTargetRole`。
+    - 复用分支写 `report_ready` 时优先使用 `reusable.targetRole`。
+  - ai-resume-builder/src/__tests__/analysis-reuse.test.ts
+    - 补 `targetRole` 断言。
+    - 新增“`targetRole` 与 `targetCompany` 同时存在时优先 role”用例。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本升级到 `v6.12`，同步复用快照收口进度。
+- Commands:
+  - npm run test -- src/__tests__/analysis-reuse.test.ts src/__tests__/analysis-execution-result.test.ts src/__tests__/analysis-step-checkpoint-target-role.test.ts src/__tests__/report-snapshot-restore.test.ts src/__tests__/target-role.test.ts
+  - npx tsc --noEmit
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（5 files / 19 tests）
+  - type check: PASS
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 面试链仍需保留 `targetCompany` 作为会话场景键兼容字段，不能与诊断链同步硬删。
+
+
+## [2026-03-02 20:39] 诊断链硬切收口：停止读取 legacy targetCompany 回退
+- Agent: B-FE + C
+- Goal:
+  - 在不影响面试链的前提下，继续将“诊断/报告链”统一到 `targetRole` 主口径，停止从 `resumeData.targetCompany` 回退。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/analysis-reuse.ts
+    - 复用快照提取仅以 `targetRole` 参与目标解析，不再读取 `resumeData.targetCompany`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/analysis-execution-result.ts
+    - 诊断结果快照构建阶段移除 `resumeData.targetCompany` 回退。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisExecution.impl.ts
+    - 诊断模式解析目标时不再注入 `resumeData.targetCompany`（面试模式保持兼容）。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisPersistence.ts
+    - 诊断快照/会话持久化不再回退 `baseResumeData.targetCompany`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAnalysisStepCheckpoint.ts
+    - 诊断 checkpoint 目标解析不再读取 `resumeData.targetCompany`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useOptimizedResumeStore.ts
+    - 诊断产物创建/绑定链路不再把 `targetCompany` 作为诊断目标回退源。
+  - ai-resume-builder/src/__tests__/career-profile-followup-prompts.test.ts
+    - 同步到当前 `FollowupPrompt[]` 结构（`item.text`）并修复去重断言。
+- Commands:
+  - npm run test -- src/__tests__/target-role.test.ts src/__tests__/analysis-reuse.test.ts src/__tests__/analysis-step-checkpoint-target-role.test.ts src/__tests__/analysis-execution-result.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm run test -- src/__tests__/career-profile-followup-prompts.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（4 files / 16 tests）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+  - failure resolution: 首次 baseline 因 `career-profile-followup-prompts` 用例仍按旧 string[] 断言失败，已改为 `FollowupPrompt[]` 断言后复跑通过。
+- Risks/Notes:
+  - 诊断链逻辑已硬切，但字段命名仍为 `targetCompany`（语义上承载“目标岗位”）；后续仍需完成 DTO/状态变量命名迁移。
+
+
+## [2026-03-02 20:43] 报告链补回退入口：comparison 页新增返回 Step3
+- Agent: B-FE + C
+- Goal:
+  - 在报告链深层页面提供一致的“返回 Step3 重新填岗位/JD”入口，避免用户在 comparison 阶段无法快速回到 JD 输入页。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/pages/PostInterviewReportPage.tsx
+    - 新增可选回调 `onBackToJdInput`。
+    - 页头新增「返回 Step3」按钮（仅在传入回调时显示）。
+  - ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx
+    - `comparison` 分支注入 `onBackToJdInput={() => navigateToStep('jd_input', true)}`。
+- Commands:
+  - npm run test -- src/__tests__/ai-analysis-navigation-back.test.ts src/__tests__/app-routing.test.ts src/__tests__/analysis-session-recovery-guard.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 15 tests）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 入口语义目前仅用于快速返回 Step3，不会自动清理已生成报告；若需“返回即清空当前会话”需后续单独产品决策。
+
+
+## [2026-03-02 20:47] Dashboard 新用户首卡收口为强引导入口
+- Agent: B-FE + C
+- Goal:
+  - 新用户登录后（无简历场景）首页主卡片统一为“强引导卡片”，点击直接进入 Step1（`/career-profile/upload`）。
+- Changes:
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 移除无简历卡片对 `guidedFlowActive`/`createNewResume` 的分支依赖。
+    - `handleStartPrimaryFlow` 统一跳转 `'/career-profile/upload'`。
+    - 无简历卡片文案统一为“先建立你的职业画像 / 开始强引导”。
+- Commands:
+  - npm run test -- src/__tests__/app-routing.test.ts src/__tests__/guided-flow-route-map.test.ts src/__tests__/guided-flow-profile-gate.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 10 tests）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 该改动将首页“首卡”行为统一为强引导入口；若后续需要恢复“老版新建简历”入口，应作为独立次入口而非主卡片回退。
+
+
+## [2026-03-02 20:53] 移除职业画像流程中的“强引导 Step”卡片
+- Agent: B-FE + C
+- Goal:
+  - 删除 Step1-4 页面里显式“强引导 Step”说明卡，保留业务输入与操作按钮，减少页面冗余。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 移除 Step1 与 Step2 的“强引导卡片”展示块。
+    - 保留上传/跳过、状态提示、返回上传页、补充输入与提交按钮。
+    - Step2 顶部改为轻量文本 + 返回按钮，不再出现强引导标签卡。
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 删除 Step3/Step4 顶部“强引导卡片”。
+    - 改为一行轻量说明文字（编辑阶段说明 / 总结阶段统计信息）。
+- Commands:
+  - npm run test -- src/__tests__/career-profile-followup-prompts.test.ts src/__tests__/guided-flow-profile-gate.test.ts src/__tests__/app-routing.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 9 tests）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅删除引导展示卡，不改变步骤流转与保存逻辑；若后续希望保留“步骤位置感”，可考虑在 header 用更轻量的文本 breadcrumb 替代。
+
+
+## [2026-03-02 20:55] Dashboard 去除“强引导”措辞
+- Agent: B-FE + C
+- Goal:
+  - 去掉首页卡片中“强引导”字样，保持入口行为不变（仍进入 Step1）。
+- Changes:
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 文案“继续强引导”改为“继续优化流程”。
+    - CTA“开始强引导”改为“开始使用”。
+- Commands:
+  - rg -n "强引导" ai-resume-builder/components/screens/Dashboard.tsx ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx ai-resume-builder/components/screens/CareerProfileResult.tsx
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - text scan: PASS（相关页面无“强引导”字样）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅文案调整，不影响路由与流程逻辑。
+
+
+## [2026-03-02 20:57] Dashboard 继续卡片去掉步骤编号文案
+- Agent: B-FE + C
+- Goal:
+  - 将“继续优化流程”卡片按钮文案从“进入第4步”改为“继续”，避免界面出现步骤编号。
+- Changes:
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 继续卡片 CTA 文案改为“继续”。
+- Commands:
+  - rg -n "进入第\\s*4\\s*步|第\\s*4\\s*步|进入第" ai-resume-builder/components/screens/Dashboard.tsx ai-resume-builder/components/screens
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - text scan: PASS（Dashboard 与 screens 下无“进入第4步/第4步”）
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅文案更新，不影响任何跳转逻辑。
+
+
+## [2026-03-02 20:58] 新注册用户隐藏职业画像卡片
+- Agent: B-FE + C
+- Goal:
+  - 刚注册用户（无画像、无简历）在 Dashboard 不显示职业画像入口卡片。
+- Changes:
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 新增 `isFreshNewUser = !latestCareerProfile && recentResumes.length === 0`。
+    - `CareerProfileEntryCard` 改为 `!isFreshNewUser` 条件渲染。
+- Commands:
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - local baseline: PASS（frontend 32 files / 121 tests；backend 78 tests）
+- Risks/Notes:
+  - 该规则仅隐藏“纯新用户”场景；已有画像或已有简历用户仍保留职业画像卡片入口。
+
+
+## [2026-03-02 21:03] 计划书同步 + 自动化加固：新用户卡片规则与面试在线 smoke
+- Agent: A + B-FE + C
+- Goal:
+  - 同步计划书到当前实现，并继续推进自动化：补 Dashboard 新用户卡片规则单测与在线 smoke 面试场景断言。
+- Changes:
+  - ai-resume-builder/components/screens/dashboard/dashboard-card-visibility.ts（新增）
+    - 抽离职业画像卡片显示规则 `shouldShowCareerProfileEntryCard`。
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 使用 `shouldShowCareerProfileEntryCard` 控制 `CareerProfileEntryCard` 显示。
+  - ai-resume-builder/src/__tests__/dashboard-card-visibility.test.ts（新增）
+    - 覆盖新用户隐藏卡片、已有画像显示卡片、有简历显示卡片。
+  - scripts/test-online.ps1
+    - `RunGuidedFlowUiSmoke` 增加 `/ai-interview` 场景下 `resume_select -> interview_scene` 断言。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 同步 v6.15 进度：新用户卡片隐藏、文案收口、面试在线 smoke 断言与自动化状态更新。
+- Commands:
+  - npm run test -- src/__tests__/dashboard-card-visibility.test.ts src/__tests__/app-routing.test.ts src/__tests__/guided-flow-profile-gate.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - pwsh -NoProfile -Command -  （Parser.ParseFile 对 scripts/test-online.ps1 做语法解析）
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - targeted tests: PASS（3 files / 9 tests）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+  - online script parse: PASS（PowerShell 解析无语法错误）
+- Risks/Notes:
+  - `scripts/test-online.ps1` 的新增断言依赖“线上账号至少有一份生成简历”；若仅有原始导入简历会按设计报错提示。
+
+
+## [2026-03-02 21:14] Step1 三段流程收口 + 编辑页上传入口下线
+- Agent: A + B-FE + C
+- Goal:
+  - 将 Step1 固定为“融合输入 -> 追问补充 -> 总结页”，并把编辑页中的上传动作完全移除。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 重构内部状态为 `input | followup`，首页改为“上传/跳过 + 用户输入”融合页。
+    - 新增第二页“AI 追问补充”，提交后改为跳转 `/career-profile/result/summary`。
+    - 去除 Step 编号文案，按钮文案统一为动作导向（`继续` / `提交并查看画像总结`）。
+  - ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx
+    - 移除编辑态“上传新简历”按钮、导入弹窗及相关状态/依赖，编辑页只保留画像字段编辑。
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 清理未使用的上传相关依赖与状态。
+    - 总结页文案改为“编辑可选，不再在编辑页上传”。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 升级到 v6.16，明确 Step1 固定三段、编辑页可选进入、编辑页上传入口已下线。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - pwsh -File scripts/archive-worklog.ps1
+- Verification:
+  - module flow check: PASS（前端构建通过，`CareerProfile` / `CareerProfileResult` / 编辑器模块编译通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+  - worklog archive gate: PASS（当日已归档，脚本幂等跳过）
+- Risks/Notes:
+  - 画像总结页“上传新简历补充画像”按钮仍是计划项，当前版本未新增该按钮入口。
+
+
+## [2026-03-02 21:18] 总结页次按钮改为“去补充”并回到融合输入页
+- Agent: B-FE + C
+- Goal:
+  - 将职业画像总结页底部次按钮从“去做 AI 诊断”改为“去补充”，并跳转到 Step1 融合输入页。
+- Changes:
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 次按钮文案改为 `去补充`。
+    - 跳转从 `/ai-analysis/jd` 调整为 `/career-profile/upload`。
+    - 辅助文案同步为“返回融合输入页继续补充”，避免语义不一致。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（CareerProfileResult 所在前端构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前总结页仍保留“去编辑画像”主按钮；本次仅调整次按钮路径，不影响诊断入口的其他入口位置。
+
+
+## [2026-03-02 21:20] Step1 输入页底部操作重排：跳过上传置于继续左侧
+- Agent: B-FE + C
+- Goal:
+  - 在职业画像录入页将“跳过上传”放到“继续”左侧，符合输入页底部动作顺序要求。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 上方上传区域移除“跳过上传”按钮，仅保留“上传简历/重新上传简历”。
+    - 底部 sticky 操作栏改为双按钮布局：左侧“跳过上传”，右侧“继续”。
+    - 继续按钮门禁逻辑保持不变（未选择上传/跳过时继续仍禁用）。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep 所在页面构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 该改动仅调整按钮位置与操作区布局，不改变上传选择状态机与后续跳转逻辑。
+
+
+## [2026-03-02 21:22] Step1 去除跳过上传并改为强制上传后继续
+- Agent: B-FE + C
+- Goal:
+  - 从职业画像录入页完全移除“跳过上传”动作，改为必须上传简历后才能继续。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 移除 `handleSkipUpload` 逻辑与 `clearFusionSeedText` 依赖。
+    - 去除底部“跳过”按钮，底部只保留“继续”。
+    - 输入页文案改为“先上传简历，再输入职业经历”。
+    - 门禁提示改为“请先上传简历后继续”。
+    - 读取本地 `UploadChoice` 时将历史 `skipped` 归一为 `pending`，防止旧缓存绕过上传。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep 构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 本改动将 Step1 从“可跳过上传”切为“强制上传”，会影响无简历用户进入路径；如需恢复可跳过，需要重新开启 skip 交互与门禁分支。
+
+
+## [2026-03-02 21:24] 追问页保留可选补充维度，输入页移除
+- Agent: B-FE + C
+- Goal:
+  - 将“展开更多补充维度（可选）”从职业画像输入页移除，仅在追问页显示。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 输入页（flowStep=`input`）移除 `renderOptionalDimensions()`。
+    - 追问页（flowStep=`followup`）保留 `renderOptionalDimensions()`。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep 构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 可选补充维度入口延后到追问页，用户在输入页无法提前填写 MBTI/目标薪资等字段，属于预期交互变化。
+
+
+## [2026-03-02 21:25] Step1 门禁调整为“上传简历或画像输入二选一”
+- Agent: B-FE + C
+- Goal:
+  - Step1 不再强制上传简历，允许“上传简历”或“职业画像输入”二选一后继续。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 新增 `hasProfileInput` 判定（基于 `supplementText` 非空）。
+    - `blockedByChoice` 改为：仅当“未上传且无画像输入”时阻断继续。
+    - 输入页说明文案改为“上传简历或直接输入，二选一可继续”。
+    - 门禁提示改为“三态”：未满足、已上传、已输入。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep 构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前“职业画像输入”判定为文本非空；若后续需要更严格门禁（例如最少字数），可在 Step1 继续按钮前增加阈值判定。
+
+
+## [2026-03-02 21:27] Dashboard 主卡片文案去简历名，统一为“基于职业画像”
+- Agent: B-FE + C
+- Goal:
+  - 首页“继续优化流程”卡片副文案不显示具体简历名，改为“基于职业画像”。
+- Changes:
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 卡片副文案从 `基于「{latestResume.title}」...` 改为 `基于职业画像继续输入目标岗位/JD，生成新的优化版本。`
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（Dashboard 页面构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅文案变更，不影响继续按钮跳转和主流程状态恢复逻辑。
+
+
+## [2026-03-02 21:30] 返回键导航优化：优先返回上一步操作界面
+- Agent: B-FE + C
+- Goal:
+  - 修正职业画像链路的返回行为，优先回到用户刚刚执行的上一步操作界面。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 新增 `handleBack`：在追问页按返回键先回输入页；仅输入页再走全局 `goBack`。
+    - 提交后跳转总结页时写入导航来源 `state.from = '/career-profile/upload'`，用于总结页回退。
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 新增 `handleBack`：编辑页返回优先回总结页；总结页若有 `location.state.from` 则回来源页；否则走全局 `goBack`。
+    - 头部 BackButton 改为使用 `handleBack`。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep / CareerProfileResult 构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 目前来源回退依赖 `location.state.from`，若从外部深链直接打开总结页且无来源状态，仍回落到全局 `goBack` 逻辑。
+
+
+## [2026-03-02 21:32] 修复“总结页去补充后返回键”导航错误
+- Agent: B-FE + C
+- Goal:
+  - 修复“职业画像总结页 -> 去补充 -> 录入页返回”回到错误页面的问题，保证回到上一个操作界面。
+- Changes:
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - “去补充”跳转改为携带来源状态：`state.from = '/career-profile/result/summary'`。
+    - 去除该跳转的 `replace`，避免覆盖当前操作上下文。
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 引入 `useLocation` 读取 `location.state.from`。
+    - 输入页返回键优先回 `backFrom`；无来源时才走全局 `goBack`。
+    - 追问页返回仍先回输入页。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（CareerProfileResult / GuidedCareerProfileFusionStep 构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 来源回退依赖 `location.state.from`；若用户通过深链直接进入录入页且无来源状态，仍回落到全局 `goBack`。
+
+
+## [2026-03-02 21:38] 追问页移除“展开更多补充维度”按钮
+- Agent: B-FE + C
+- Goal:
+  - 去掉追问页里的“展开更多补充维度（可选）”按钮样式，保留补充字段输入能力。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - `renderOptionalDimensions` 从 `details/summary` 展开按钮结构改为直接展示卡片内容。
+    - 标题文案调整为 `补充维度（可选）`，去除展开交互按钮。
+- Commands:
+  - rg -n "展开更多补充维度（可选）|<details|<summary" ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（追问页已无展开按钮结构）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 可选维度区现在默认展开，页面长度会略增加；不影响提交流程与数据保存。
+
+
+## [2026-03-02 21:44] Step1 单页融合：输入与追问合并同页
+- Agent: B-FE + C
+- Goal:
+  - 将职业画像录入的输入页与追问页融合为同一页面，用户上传或输入后在当前页直接看到 AI 追问并继续补充。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 移除 `flowStep` / `setFlowStep` 两段式页面状态，标题固定为“职业画像录入”。
+    - 新增 `followupReady = !blockedByChoice`，作为同页展示追问建议的触发条件。
+    - 删除“继续”跳转按钮与 followup 页面分支，改为同页连续流程：上传/输入 -> AI追问建议 -> 可选补充维度 -> 提交。
+    - 上传状态文案改为“当前页生成追问建议”，去除“下一页”语义。
+    - 返回键逻辑保留来源优先（`location.state.from`），无来源时回落 `goBack()`。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - PowerShell targeted check:
+    - `flowStep` 残留检查 + 关键文案检查（AI 追问建议 / 提交按钮 / 无“下一页 AI”）
+- Verification:
+  - module flow check: PASS（GuidedCareerProfileFusionStep 单页融合条件检查通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前追问建议为本地规则生成（上传后更定向、仅输入时为通用追问）；若要“强实时个性化追问”，后续可接后端按已输入文本实时生成。
+
+
+## [2026-03-02 21:51] 上传后仅显示简历标题，提交时再与画像融合解析
+- Agent: B-FE + C
+- Goal:
+  - 用户上传简历后先只展示“简历标题”，不在页面内立即解析；点击提交时再把上传简历内容与用户画像输入一起解析。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 移除上传后即时“简历解析事实”展示与编辑逻辑。
+    - 新增 `uploadedResume` 状态，仅保存上传结果用于提交时融合。
+    - 新增标题解析函数 `resolveResumeTitle`，上传后卡片仅展示标题。
+    - `handleSubmit` 内改为按需构建 `mergedInput`：把“上传简历信息（提交时融合解析）”与用户补充事实一起提交。
+    - 字数门禁调整：有上传简历时不再被最小字数阻塞；无上传时仍保留最小字数约束。
+- Commands:
+  - rg -n "简历解析事实|当前仅展示标题|提交时融合解析|已上传简历" ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（确认页面已无“简历解析事实”即时区，仅展示标题）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前“上传后不即时解析”是针对职业画像融合页逻辑；`ResumeImportDialog` 仍使用已有导入接口返回结构化简历数据，后续如需完全延迟到提交才做后端解析，可再拆导入协议（上传原文/文件句柄）。
+
+
+## [2026-03-02 21:53] 取消画像输入最短字数限制（非空即可）
+- Agent: B-FE + C
+- Goal:
+  - 职业画像输入不再要求最短字数，只要不为空即可提交。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 删除最短字数常量与校验变量（`MIN_SUBMIT_LENGTH` / `isInputTooShort` / `remaining`）。
+    - 提交门禁仅保留：`blockedByChoice || isSaving || isTranscribing`。
+    - 提交按钮文案移除“还需补充 X 字”，统一为“提交并查看画像总结”。
+- Commands:
+  - rg -n "MIN_SUBMIT_LENGTH|isInputTooShort|remaining|还需补充" ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（最短字数相关逻辑与文案已移除）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 目前仅保留“上传简历或输入画像二选一”门禁；若后续要避免极短噪声输入，可考虑在后端做轻量质量阈值或追问轮次补偿。
+
+
+## [2026-03-02 21:55] 追问问题上移到输入框上方
+- Agent: B-FE + C
+- Goal:
+  - 调整职业画像融合页布局，让“AI 追问建议”显示在输入框上方。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 重排 JSX 顺序：在 `followupReady` 场景下，先展示“AI 追问建议”，再渲染 `renderSupplementInput(...)`。
+    - 在 `!followupReady` 场景保持可输入：提示卡后渲染输入框。
+    - 保持追问按钮“点击插入补充区”逻辑不变。
+- Commands:
+  - rg -n "AI 追问建议|renderSupplementInput\(" ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（追问建议块行号先于输入框渲染调用）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅布局顺序调整，不影响提交门禁、上传策略、或追问插入行为。
+
+
+## [2026-03-02 21:57] 补充维度并入追问模块，不再独立显示
+- Agent: B-FE + C
+- Goal:
+  - “补充维度（可选）”融合到“AI 追问建议”内部，不再作为单独卡片出现。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - `renderOptionalDimensions` 外层样式改为追问卡片内分区（`mt-4 + border-t`），去掉独立卡片容器。
+    - 将 `renderOptionalDimensions()` 调用移到追问建议卡片内部（提示问题列表后）。
+    - 删除追问区域外部原先的独立调用位置。
+- Commands:
+  - rg -n "renderOptionalDimensions\(|补充维度（可选）" ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（补充维度已成为追问卡片内部段落）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅UI结构融合，字段数据结构与提交拼接逻辑不变。
+
+
+## [2026-03-02 22:01] 动态追问 + AI解析/提交双阶段按钮流转
+- Agent: B-FE + C
+- Goal:
+  - 追问问题根据用户当前输入（上传简历 + 画像输入 + 补充维度）动态调整。
+  - 首次按钮改为“AI解析”；触发追问后按钮变为“提交”。
+  - 用户可不回答追问，直接提交。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/dynamic-followup-prompts.ts (new)
+    - 新增动态追问生成器：基于已填写信息判定缺失项，过滤 `buildCareerProfileFollowupPrompts` 的基础问题集合。
+    - 针对经历、项目、技能、教育、量化、领导力、MBTI、工作方式、职业目标等做缺失检测。
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 引入 `analysisReady` 状态，新增两阶段流程：
+      - 阶段A：点击 `AI解析` 生成追问并展示。
+      - 阶段B：按钮切换为 `提交`，可直接提交。
+    - 新增 `refreshDynamicFollowups` 与 `handleAnalyze`，并在 `analysisReady` 下随输入变化动态刷新追问。
+    - 追问区文案明确“可不回答追问直接提交”。
+    - 上传提示/输入提示文案同步为“先 AI解析，再提交”。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（AI解析 -> 追问显示 -> 提交按钮切换逻辑构建通过）
+  - local baseline: PASS（frontend 33 files / 124 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前动态追问为前端规则引擎；后续可升级为后端/LLM在线生成以获得更高上下文精度。
+
+
+## [2026-03-02 22:04] 首页职业百科卡片首屏提速（本地上下文与缓存优先）
+- Agent: B-FE + C
+- Goal:
+  - 缩短首页“职业百科”卡片读取时间，避免不必要的 auth 请求与空白等待。
+- Changes:
+  - ai-resume-builder/src/useUserProfile.ts
+    - 新增 `resolveProfileUserContext`，统一解析 `userId/seedUser/localStorageUser` 优先级。
+    - Hook 初始化阶段直接读取本地缓存（`cacheWithExpiry.get(userId)`）作为首屏 `userProfile`，先渲染后刷新。
+    - 当 localStorage 已有用户时优先使用其 `id`，避免先走 `supabase.auth.getUser()` 带来的额外延迟。
+  - ai-resume-builder/src/__tests__/use-user-profile-resolution.test.ts (new)
+    - 增加 4 条单测覆盖上下文解析优先级与回退逻辑。
+- Commands:
+  - npm --prefix ai-resume-builder run -s test -- src/__tests__/use-user-profile-resolution.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（新增上下文解析测试 4/4 通过）
+  - local baseline: PASS（frontend 34 files / 128 tests；backend 78 tests）
+- Risks/Notes:
+  - 该优化优先改善“有本地会话/缓存”的返回用户体验；首次冷启动且无 localStorage 时仍需真实鉴权与数据库请求。
+
+
+## [2026-03-02 22:09] 职业画像模块页眉样式与个人中心子页面对齐
+- Agent: B-FE + C
+- Goal:
+  - 将职业画像模块各页面页眉样式统一为个人中心子页面同款（固定毛玻璃栏 + 左侧返回 + 居中标题）。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 页眉容器改为与 Settings/History 一致样式：`fixed top-0 ... bg-white/80 ... border-b ... mx-auto w-full max-w-md`。
+    - 页眉内结构改为：`BackButton(z-10) + absolute centered title(text-lg, tracking-[-0.015em])`。
+    - 主区顶部间距从 `pt-[72px]` 统一为 `pt-14`。
+  - ai-resume-builder/components/screens/CareerProfileResult.tsx
+    - 总结页页眉结构和字体参数同步为同款子页面样式。
+    - 主区顶部间距从 `pt-[72px]` 统一为 `pt-14`。
+  - ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx
+    - 编辑态头部改为同款顶部栏样式（粘性 + 毛玻璃 + 居中标题 + BackButton）。
+    - 原进度条与步骤图标保留，作为顶部栏下方扩展区。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（3 个职业画像页面页眉样式结构已统一）
+  - local baseline: PASS（frontend 34 files / 128 tests；backend 78 tests）
+- Risks/Notes:
+  - 仅样式结构对齐，不变更路由与业务状态；编辑页顶部在小屏下高度略有变化（含进度区），属预期。
+
+## [2026-03-02 22:15] 补充维度内容并入追问且隐藏独立区块（收尾验证）
+- Agent: B-FE + C
+- Goal:
+  - 将“补充维度”需要的信息通过 AI 追问覆盖，不再显示独立补充维度区块。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 页面仅保留“AI 追问建议 + 输入框”，不展示独立“补充维度”模块。
+    - 提交链路仅融合上传简历与画像输入文本，由追问承载额外信息采集。
+  - ai-resume-builder/components/screens/career-profile/profile-followup-prompts.ts
+    - 增加 `job_target` 追问（目标岗位/求职方向/目标薪资）。
+    - 追问上限调整为 `slice(0, 12)`，避免关键追问被截断。
+  - ai-resume-builder/components/screens/career-profile/dynamic-followup-prompts.ts
+    - 动态追问上下文聚焦 `importedResume + supplementText`，按缺失信号过滤并输出追问。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - npm --prefix ai-resume-builder run test -- src/__tests__/career-profile-followup-prompts.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（补充维度由追问覆盖，融合页不再显示独立区块）
+  - local baseline: PASS（frontend 34 files / 128 tests；backend 78 tests）
+- Risks/Notes:
+  - 追问仍为前端规则引擎，后续可改为后端 LLM 追问生成以提升语义覆盖与个性化深度。
+
+## [2026-03-02 22:23] 面试入口无简历时强制回简历选择并提示先诊断
+- Agent: B-FE + C
+- Goal:
+  - 用户在没有可用简历时点击“面试”应停留在简历选择页，并明确提示先完成诊断，不应直接进入面试场景页。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAiAnalysisPageUiEffects.ts
+    - 新增 `resolveInterviewLegacyEntryStep`，面试模式下 `jd_input` 归一逻辑改为：无已选简历 -> `resume_select`；有简历 -> `interview_scene`。
+    - 新增保护：若处于 `interview_scene` 且无已选简历，立即回退到 `resume_select`。
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useAiInterviewExternalEntry.ts
+    - 调整 `scene_select` 外部入口时序：先读取并绑定 resume，再切到 `interview_scene`，避免无简历短暂状态被错误跳转。
+  - ai-resume-builder/components/screens/ai-analysis/pages/ResumeSelectPage.tsx
+    - 面试模式空状态文案改为“请先完成 AI 诊断/先做一次 AI 诊断后再开始面试”。
+  - ai-resume-builder/src/__tests__/ai-analysis-interview-entry-step-guard.test.ts (new)
+    - 新增 2 条单测覆盖“有/无已选简历”时的面试入口步态解析。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/ai-analysis-interview-entry-step-guard.test.ts src/__tests__/ai-analysis-route-sync-initial-step.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（无简历不再直接进面试场景，停留简历选择并提示先诊断）
+  - local baseline: PASS（frontend 35 files / 130 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前“可开始面试”的判断仍基于“生成简历集合”，与“原始上传简历”分离；符合现阶段“先诊断后面试”的产品策略。
+
+## [2026-03-02 22:25] 修复画像录入页清空输入后追问消失
+- Agent: B-FE + C
+- Goal:
+  - 在职业画像录入页中，用户清空输入框内容后，已生成的追问不应消失。
+- Changes:
+  - ai-resume-builder/components/screens/career-profile/GuidedCareerProfileFusionStep.tsx
+    - 追问可见性从 `analysisReady && !blockedByChoice` 调整为 `analysisReady`，确保点击过“AI解析”后追问持续显示。
+    - 顶部提示文案改为两阶段：
+      - `analysisReady && blockedByChoice` 时提示“已生成追问，请先补充任一追问内容或上传简历后再提交”。
+      - 未解析状态仍保持“请先上传或输入后再 AI解析”。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（清空输入后追问仍显示，不再消失）
+  - local baseline: PASS（frontend 35 files / 130 tests；backend 78 tests）
+- Risks/Notes:
+  - 提交按钮仍保留“二选一门禁”（无上传且无输入不可提交），符合当前数据完整性策略。
+
+## [2026-03-02 22:29] 更新计划书并继续开发：补 Step1 追问链路在线 smoke 断言
+- Agent: B-FE + C
+- Goal:
+  - 同步计划书到当前真实实现口径，并继续推进 P0 自动化覆盖，补齐 Step1 追问链路在线 smoke 断言。
+- Changes:
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本更新为 `v6.17`。
+    - Step1 描述改为“同页 AI解析后内嵌追问补充”，不再写成独立追问页。
+    - 新增已落地边界：面试无简历强制停留 `resume_select` + Step1 清空输入后追问不消失。
+    - 6.0 当前完成度增加：面试入口 guard、追问可见性修复、GuidedFlow smoke 新断言。
+    - 10.1 P0 自动化项更新为“第一条上传融合链路断言已完成、上传后追问断言待补”。
+  - scripts/test-online.ps1
+    - GuidedFlow UI smoke 新增 Step1 断言：
+      - 进入 `/career-profile/upload`；
+      - 输入画像后 `AI解析` 可点击；
+      - 出现“AI 追问建议”；
+      - 清空输入后“AI 追问建议”仍可见；
+      - 清空后“提交”按钮保持禁用（门禁生效）。
+    - 面试空状态提示断言兼容新文案（“暂无可用于面试的诊断简历/简历”）。
+- Commands:
+  - pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw 'scripts/test-online.ps1')) | Out-Null; Write-Output 'test-online.ps1 syntax ok'"
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（Step1 追问链路断言已接入在线 smoke 脚本）
+  - local baseline: PASS（frontend 35 files / 130 tests；backend 78 tests）
+- Risks/Notes:
+  - 上传后追问补齐画像（上传简历 -> AI解析 -> 追问补充）的专项 UI smoke 仍待补，已在计划书 10.1 P0 标记为待完成。
+
+## [2026-03-02 22:33] 继续开发：补齐上传后追问补齐画像在线 smoke 断言
+- Agent: B-FE + C
+- Goal:
+  - 补齐 P0 自动化覆盖中剩余项：上传简历后进入 AI解析 并触发追问补齐链路。
+- Changes:
+  - scripts/test-online.ps1
+    - GuidedFlow UI smoke 增加 Scenario B：
+      - 进入 `/career-profile/upload`；
+      - 打开“上传简历”弹窗并切换“粘贴文本”；
+      - 使用 `page.route('**/api/ai/parse-resume')` mock 解析结果，避免线上 AI 依赖抖动；
+      - 断言“已上传简历”标题卡出现；
+      - 点击 `AI解析` 后断言“AI 追问建议”出现。
+  - docs/AI_JOB_SEARCH_AGENT_REFACTOR_PLAN_2026-03-02.md
+    - 版本更新为 `v6.18`。
+    - 6.0 完成度新增“上传后追问补齐画像在线 smoke 已覆盖”。
+    - 10.1 P0 自动化项更新为“上传后追问补齐画像专项断言已完成（mock parse）”。
+- Commands:
+  - pwsh -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw 'scripts/test-online.ps1')) | Out-Null; Write-Output 'test-online.ps1 syntax ok'"
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（GuidedFlow smoke 脚本已覆盖上传->解析->追问链路）
+  - local baseline: PASS（frontend 35 files / 130 tests；backend 78 tests）
+- Risks/Notes:
+  - 上传路径在线 smoke 当前通过 mock parse 保证稳定性；若需验证真实解析服务可用性，应另加 API smoke（非 UI 流程）并按环境启用。
+
+## [2026-03-02 22:54] 继续开发：旧 jd_input 面试会话迁移逻辑抽离与回归测试
+- Agent: B-FE + C
+- Goal:
+  - 收口“旧 `jd_input` 会话迁移到 `interview_scene`”的核心逻辑，避免后续恢复链路回归。
+- Changes:
+  - ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts
+    - 新增 `normalizeInterviewRecoveryStep(sessionStep)`：
+      - `jd_input -> interview_scene`
+      - `report -> final_report`
+      - 其余面试恢复步骤按原值返回，非支持步骤返回 `null`。
+    - 在 `useInterviewSessionRecovery` 中改为统一调用该函数，替换内联分支判断。
+  - ai-resume-builder/src/__tests__/interview-session-step-migration.test.ts (new)
+    - 覆盖 legacy `jd_input`/`report` 映射。
+    - 覆盖 interview-native 步骤透传。
+    - 覆盖无效步骤返回 `null`。
+    - 覆盖 `shouldSkipInterviewAutoRecovery` 保持原行为。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/interview-session-step-migration.test.ts src/__tests__/analysis-session-recovery-guard.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（旧步骤迁移口径有独立单测守护）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 该改动是恢复层逻辑收口与测试加固，不改变用户可见流程；线上行为应与现状一致。
+
+## [2026-03-02 23:00] 继续开发：画像录入上传简历弹窗移动端适配
+- Agent: B-FE + C
+- Goal:
+  - 修复画像录入流程中“上传简历”弹窗在手机端的可用性问题（安全区、滚动区域、顶部关闭按钮可达性）。
+- Changes:
+  - ai-resume-builder/components/ResumeImportDialog.tsx
+    - 弹窗容器改为移动端底部贴合 + 全屏高度（`h-[100dvh]`），桌面端保持居中卡片。
+    - Header 增加 `safe-area-inset-top` 适配，内容区增加 `safe-area-inset-bottom` 适配。
+    - Header/Tabs 固定为 `shrink-0`，内容区保持 `overflow-y-auto`，避免移动端键盘或小屏幕导致按钮/输入区被裁切。
+    - 文本导入 textarea 高度改为响应式（`h-[38dvh] sm:h-64`）。
+    - PDF 上传区内边距改为响应式（`p-5 sm:p-8`）。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/resume-upload-prefill.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（上传入口相关测试通过，弹窗组件构建通过）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前验证为自动化与构建层面，建议后续在真机小屏（如 iPhone SE/安卓窄屏）补一次手动触控回归。
+
+## [2026-03-02 23:10] 继续开发：编辑页并入预览页（默认预览，点击编辑切换编辑态）
+- Agent: B-FE + C
+- Goal:
+  - 移除用户可见的独立简历编辑页模块流程；改为在预览页内直接编辑，默认预览态，点击“编辑”进入编辑态并可保存。
+- Changes:
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 新增 `forceEditMode` 入参，支持从 `/editor` 入口直接以编辑态打开预览页。
+    - 顶部右侧按钮改为“编辑/完成”切换；编辑态点击“完成”触发保存（更新或新建简历）。
+    - 保存逻辑内聚到预览页：统一归一化 summary，写回 `resumeData`，并刷新简历列表。
+    - 编辑态下禁用“导出 PDF”，避免未完成编辑时误导出。
+    - 接入预览页内嵌编辑面板 `PreviewInlineEditorPanel`。
+  - ai-resume-builder/components/screens/preview/PreviewInlineEditorPanel.tsx (new)
+    - 新建预览内嵌编辑面板，复用现有编辑步骤组件（个人信息/工作/教育/项目/技能/总结）。
+    - 通过 `editor-actions` 统一字段更新、增删条目与技能维护，确保数据结构口径一致。
+  - ai-resume-builder/App.tsx
+    - `View.EDITOR` 路由改为渲染 `<Preview forceEditMode />`，不再进入旧 Editor 页面。
+    - `View.TEMPLATES` 入口同样收口到 `<Preview forceEditMode />`。
+    - 清理重复的 `View.EDITOR` switch 分支。
+  - ai-resume-builder/components/screens/preview/hooks/usePreviewRestore.ts
+    - 回退兜底移除 `target=editor` 的旧跳转分支，统一回到 dashboard/all-resumes，避免旧页回退死循环。
+  - ai-resume-builder/components/screens/Dashboard.tsx
+    - 修复现存构建阻断：`DashboardProgressModule` 已删除但仍被引用。
+    - 用内联“最近简历操作卡片”替代旧引用，保留“预览/继续诊断/继续面试”入口。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/app-routing.test.ts src/__tests__/resume-upload-prefill.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（Preview 内可切换编辑态，相关路由与回退逻辑已收口；前端构建通过）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 本次将 `/editor` 语义重定向为“预览页编辑态”；若后续要彻底移除旧路径，建议补一轮路由兼容文案和在线 smoke。
+
+## [2026-03-02 23:15] 继续开发：编辑态改为占用预览主区域，不再在下方追加模块
+- Agent: B-FE + C
+- Goal:
+  - 满足“编辑不要在下方加组件，直接在预览页面上编辑”的交互要求。
+- Changes:
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 编辑态渲染位置调整：从“预览页底部追加编辑面板”改为“直接替换预览主区域内容”。
+    - 预览主卡片在编辑态下不再显示，改为同一主区域展示可编辑内容。
+    - 编辑态下隐藏导出区；预览态继续显示导出按钮与提示文案。
+  - ai-resume-builder/components/screens/preview/PreviewInlineEditorPanel.tsx
+    - 根容器宽度从 `w-[90%]` 改为 `w-full`，适配被放入预览主区域后的一致布局。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - npm --prefix ai-resume-builder run test -- src/__tests__/app-routing.test.ts src/__tests__/resume-upload-prefill.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（编辑态已不再出现在页面底部，改为主区域切换）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前仍是“同页切换到结构化编辑区”，不是模板文本逐字就地编辑；若需要 WYSIWYG 逐段点击编辑，需要单独实现模板层可编辑化。
+
+## [2026-03-02 23:22] 继续开发：预览画布就地编辑（移除模块化编辑面板）
+- Agent: B-FE + C
+- Goal:
+  - 满足“编辑应在预览画布内直接进行，不再按模块组件编辑”的交互要求。
+- Changes:
+  - ai-resume-builder/components/screens/preview/PreviewTemplates.tsx
+    - 新增 `PreviewEditBindings`，支持模板层字段级 onCommit 回写。
+    - 新增 `EditableText` 组件（contentEditable + blur 提交 + 回车提交），用于画布文字就地编辑。
+    - modern/classic/minimal 三套模板接入可编辑字段：
+      - 个人信息：姓名、求职意向
+      - 个人总结
+      - 工作/教育/项目：标题、时间、副标题、描述
+      - 技能：标签逐项编辑或整段文本编辑
+    - `renderPreviewTemplate` 增加 `editBindings` 参数并透传到三模板。
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 删除“编辑态渲染下方模块化编辑面板”的路径。
+    - 编辑态改为继续渲染同一预览画布，但通过 `editBindings` 打开画布文本就地编辑。
+    - 新增画布字段回写处理：个人信息、summary、经历字段、技能文本/单项。
+    - 编辑态禁用缩放位移交互，避免 contentEditable 与手势冲突。
+  - ai-resume-builder/components/screens/preview/PreviewInlineEditorPanel.tsx
+    - 删除（不再使用模块化编辑组件）。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - npm --prefix ai-resume-builder run test -- src/__tests__/app-routing.test.ts src/__tests__/resume-upload-prefill.test.ts
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（编辑态在画布内可直接改字，不再出现模块编辑组件）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前就地编辑采用 `contentEditable + blur commit`；若需“输入即保存”或“撤销栈/多级历史”，需再加编辑事务层。
+
+## [2026-03-02 23:23] 继续开发：画布就地编辑补齐与回归验证
+- Agent: B-FE + C
+- Goal:
+  - 在不使用模块化编辑组件的前提下，完成三套模板画布文本的就地编辑回写并收口验证。
+- Changes:
+  - ai-resume-builder/components/screens/preview/PreviewTemplates.tsx
+    - modern 模板补齐编辑口径：summary 支持空值编辑入口，skills 在空数组下也可直接输入。
+    - renderTemplate 签名统一支持 `editBindings`，三模板均透传。
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 画布编辑绑定（personal/summary/work/education/project/skills）完成收口，编辑态沿用预览画布显示。
+- Commands:
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（编辑入口保留在画布，字段 blur 提交可回写）
+  - local baseline: PASS（frontend 36 files / 135 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前就地编辑为字段级修改，不包含“新增/删除经历条目”能力；如需增删仍需后续设计画布内增删交互。
+
+## [2026-03-02 23:34] 继续开发：预览画布内支持新增/删除条目（含 Minimal 模板补齐）
+- Agent: B-FE + C
+- Goal:
+  - 在“预览画布直接编辑”模式下补齐新增/删除能力，避免仍需回退到模块化编辑。
+- Changes:
+  - ai-resume-builder/components/screens/preview/PreviewTemplates.tsx
+    - `Minimal` 模板补齐与 Modern/Classic 一致的编辑动作：
+      - 工作/教育/项目区块在编辑态下即使为空也显示。
+      - 区块标题右侧接入统一 `HeaderActions`（排序 + 新增按钮）。
+      - 每个工作/教育/项目条目增加删除按钮。
+      - 技能区支持空态新增与逐项删除。
+  - ai-resume-builder/src/__tests__/preview-templates-inline-edit.test.tsx (new)
+    - 新增定向测试：
+      - 断言 `Minimal` 在编辑态空列表时展示 4 个“新增条目”入口。
+      - 断言 `Minimal` 在有数据时展示工作/教育/项目/技能删除按钮。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/preview-templates-inline-edit.test.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（`preview-templates-inline-edit.test.tsx` 2/2 通过，覆盖新增/删除入口）
+  - local baseline: PASS（frontend 37 files / 137 tests；backend 78 tests）
+- Risks/Notes:
+  - 目前新增条目仍使用默认占位文本（例如“新经历”/“新技能”）；后续可再优化为首次新增即自动聚焦并提示填写。
+
+## [2026-03-02 23:42] 继续开发：画布新增后自动聚焦到新条目
+- Agent: B-FE + C
+- Goal:
+  - 在预览画布编辑模式下，点击 `+` 新增条目后自动把光标落到新条目，减少手动再次点击。
+- Changes:
+  - ai-resume-builder/components/screens/preview/inline-focus.ts (new)
+    - 新增聚焦 key 规则工具：
+      - `buildSectionTitleFocusKey(section, id)`
+      - `buildSkillFocusKey(index)`
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 新增 `autoFocusRequest` 状态与 `queueAutoFocus`。
+    - 新增工作/教育/项目时：
+      - 统一生成 `itemId` 并传入 `addResumeSectionItem`。
+      - 立即发送对应标题字段的聚焦 key。
+    - 新增技能时：
+      - 计算新增索引并发送技能项聚焦 key。
+    - `editBindings` 增加 `autoFocusKey/autoFocusToken` 透传到模板层。
+  - ai-resume-builder/components/editor/editor-actions.ts
+    - `addResumeSectionItem` 支持可选 `itemId` 入参，确保新增条目 id 与聚焦 key 一致。
+  - ai-resume-builder/components/screens/preview/PreviewTemplates.tsx
+    - `PreviewEditBindings` 增加聚焦请求字段。
+    - `EditableText` 增加 `focusKey/autoFocusKey/autoFocusToken`，在 key 命中时自动 focus 并将光标置于文本末尾。
+    - 三模板（modern/classic/minimal）的工作/教育/项目标题与技能项接入焦点 key。
+  - ai-resume-builder/src/__tests__/preview-inline-focus.test.ts (new)
+    - 新增 focus key 工具测试，保证 key 规则稳定。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/preview-inline-focus.test.ts src/__tests__/preview-templates-inline-edit.test.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（新增聚焦 key 测试 2/2，模板内联编辑测试 2/2）
+  - local baseline: PASS（frontend 38 files / 139 tests；backend 78 tests）
+- Risks/Notes:
+  - 当前自动聚焦将光标放在文本末尾；若后续要“新增后默认全选占位文本”，可在 focus 时切换为 `range.selectNodeContents` 不 collapse。
+
+## [2026-03-02 23:47] 继续开发：预览页右上角新增撤销/前进（位于“完成”左侧）
+- Agent: B-FE + C
+- Goal:
+  - 在预览画布编辑态中，为“完成”按钮左侧提供可用的撤销/前进能力，并接入真实历史栈。
+- Changes:
+  - ai-resume-builder/components/screens/Preview.tsx
+    - 顶部右侧按钮区改为编辑态按钮组：`撤销`、`前进`、`完成`。
+    - 撤销/前进按钮在无历史或保存中时禁用。
+    - 将个人信息、总结、经历、技能的画布编辑更新统一接入 `applyEditMutation`，保证可撤销/重做。
+  - ai-resume-builder/components/screens/preview/hooks/usePreviewEditHistory.ts (new)
+    - 新增预览编辑历史 hook：
+      - `applyEditMutation`
+      - `undo` / `redo`
+      - `canUndo` / `canRedo`
+    - 非编辑态自动清空历史，避免跨会话污染。
+  - ai-resume-builder/components/screens/preview/history-stack.ts (new)
+    - 新增纯函数历史栈工具（push/undo/redo），便于测试和复用。
+  - ai-resume-builder/src/__tests__/preview-history-stack.test.ts (new)
+    - 新增历史栈单测（5 条）：
+      - push 清空 future
+      - max size 限制
+      - undo/redo 栈行为
+      - 空栈 no-op
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/preview-history-stack.test.ts src/__tests__/preview-inline-focus.test.ts src/__tests__/preview-templates-inline-edit.test.tsx
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（history stack + preview inline 定向测试共 9 条全部通过）
+  - local baseline: PASS（frontend 39 files / 144 tests；backend 78 tests）
+- Risks/Notes:
+  - 撤销/前进目前仅在当前编辑会话内有效；点击“完成”保存并退出编辑后会重置历史。
+
+## [2026-03-02 23:50] 继续开发：预览画布隐藏删除按钮
+- Agent: B-FE + C
+- Goal:
+  - 按需求移除预览编辑画布中的“删除”按钮，仅保留新增与文本编辑。
+- Changes:
+  - ai-resume-builder/components/screens/preview/PreviewTemplates.tsx
+    - `EditIconButton` 对 `icon === 'delete'` 直接不渲染，统一隐藏三模板中的删除入口。
+    - 不影响新增按钮与现有编辑/撤销/前进逻辑。
+  - ai-resume-builder/src/__tests__/preview-templates-inline-edit.test.tsx
+    - 更新断言：编辑态有数据时不再包含删除按钮 aria-label。
+- Commands:
+  - npm --prefix ai-resume-builder run test -- src/__tests__/preview-templates-inline-edit.test.tsx src/__tests__/preview-inline-focus.test.ts src/__tests__/preview-history-stack.test.ts
+  - npm --prefix ai-resume-builder run build
+  - pwsh -File scripts/test-local.ps1 -SkipInstall
+- Verification:
+  - module flow check: PASS（定向 9/9 通过）
+  - local baseline: PASS（frontend 39 files / 144 tests；backend 78 tests）
+- Risks/Notes:
+  - 目前是“隐藏删除按钮”而非移除删除逻辑；若后续要彻底收敛代码，可再清理 `onRemove*` 回调链。
+

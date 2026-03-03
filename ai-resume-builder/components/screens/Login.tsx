@@ -3,6 +3,7 @@ import { View, ScreenProps } from '../../types';
 import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
 import BackButton from '../shared/BackButton';
+import { toast } from '../../src/ui/dialogs';
 
 const Login: React.FC<ScreenProps> = () => {
   const SHOW_SOCIAL_LOGIN = false;
@@ -10,12 +11,10 @@ const Login: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const goBack = useAppContext((s) => s.goBack);
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError('');
 
     const formData = new FormData(e.currentTarget as HTMLFormElement);
     const email = formData.get('email') as string;
@@ -50,7 +49,7 @@ const Login: React.FC<ScreenProps> = () => {
           errorMessage = `登录失败: ${error.message}`;
         }
 
-        setError(errorMessage);
+        toast(errorMessage, 'error');
         return;
       }
 
@@ -66,7 +65,7 @@ const Login: React.FC<ScreenProps> = () => {
       }
     } catch (err) {
       console.error('Unexpected login error:', err);
-      setError('网络错误，请检查连接后重试');
+      toast('网络错误，请检查连接后重试', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -151,14 +150,7 @@ const Login: React.FC<ScreenProps> = () => {
                   </div>
                 </div>
 
-                {error && (
-                  <div className="mb-4 flex items-center gap-3 p-4 bg-red-500/10 backdrop-blur-md border border-red-400/20 rounded-2xl animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="size-6 rounded-full bg-red-500/20 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-red-500 text-[16px]">error</span>
-                    </div>
-                    <p className="text-sm text-red-600 dark:text-red-400 font-bold leading-tight">{error}</p>
-                  </div>
-                )}
+
 
                 <div>
                   <button

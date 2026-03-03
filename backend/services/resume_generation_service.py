@@ -311,6 +311,25 @@ def _build_suggestions_context(suggestions):
     return normalized_suggestions, ('\n'.join(suggestions_text_blocks) if suggestions_text_blocks else '无')
 
 
+def _resolve_career_profile_target_role(career_profile):
+    if not isinstance(career_profile, dict):
+        return ''
+    personal_info = career_profile.get('personalInfo') or {}
+    if not isinstance(personal_info, dict):
+        personal_info = {}
+    for candidate in (
+        career_profile.get('targetRole'),
+        career_profile.get('jobDirection'),
+        career_profile.get('jobTarget'),
+        personal_info.get('title'),
+        career_profile.get('title'),
+    ):
+        text = str(candidate or '').strip()
+        if text:
+            return text
+    return ''
+
+
 def _build_career_profile_context(career_profile):
     if not isinstance(career_profile, dict):
         return '未提供'
@@ -324,8 +343,11 @@ def _build_career_profile_context(career_profile):
     experiences = career_profile.get('experiences') or career_profile.get('careerFacts') or []
     core_skills = career_profile.get('coreSkills') or career_profile.get('skills') or []
     constraints = career_profile.get('constraints') or career_profile.get('hardConstraints') or []
+    target_role = _resolve_career_profile_target_role(career_profile)
 
     lines = []
+    if target_role:
+        lines.append(f"- 目标岗位：{target_role}")
     if summary:
         lines.append(f"- 画像摘要：{summary}")
     if isinstance(core_skills, list) and core_skills:

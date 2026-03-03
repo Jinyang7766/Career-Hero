@@ -70,6 +70,51 @@ export interface UserProfile {
     careerHighlights?: string[];
     coreSkills?: string[];
     constraints?: string[];
+    factItems?: Array<{
+      id: string;
+      kind: 'skill' | 'highlight' | 'constraint';
+      text: string;
+      key: string;
+      aliases?: Array<'skill' | 'highlight' | 'constraint'>;
+    }>;
+    atomicTags?: Array<{
+      id: string;
+      category:
+        | 'identity'
+        | 'intent'
+        | 'preference'
+        | 'summary'
+        | 'fact_skill'
+        | 'fact_highlight'
+        | 'fact_constraint'
+        | 'experience'
+        | 'project'
+        | 'education';
+      text: string;
+      key: string;
+      label?: string;
+      sourcePaths?: string[];
+      aliases?: Array<
+        | 'identity'
+        | 'intent'
+        | 'preference'
+        | 'summary'
+        | 'fact_skill'
+        | 'fact_highlight'
+        | 'fact_constraint'
+        | 'experience'
+        | 'project'
+        | 'education'
+      >;
+    }>;
+    atomicTagsManualOverride?: boolean;
+    mbti?: string;
+    personality?: string;
+    workStyle?: string;
+    careerGoal?: string;
+    targetRole?: string;
+    jobDirection?: string;
+    targetSalary?: string;
     experiences?: Array<{
       title: string;
       period?: string;
@@ -91,6 +136,51 @@ export interface UserProfile {
     careerHighlights?: string[];
     coreSkills?: string[];
     constraints?: string[];
+    factItems?: Array<{
+      id: string;
+      kind: 'skill' | 'highlight' | 'constraint';
+      text: string;
+      key: string;
+      aliases?: Array<'skill' | 'highlight' | 'constraint'>;
+    }>;
+    atomicTags?: Array<{
+      id: string;
+      category:
+        | 'identity'
+        | 'intent'
+        | 'preference'
+        | 'summary'
+        | 'fact_skill'
+        | 'fact_highlight'
+        | 'fact_constraint'
+        | 'experience'
+        | 'project'
+        | 'education';
+      text: string;
+      key: string;
+      label?: string;
+      sourcePaths?: string[];
+      aliases?: Array<
+        | 'identity'
+        | 'intent'
+        | 'preference'
+        | 'summary'
+        | 'fact_skill'
+        | 'fact_highlight'
+        | 'fact_constraint'
+        | 'experience'
+        | 'project'
+        | 'education'
+      >;
+    }>;
+    atomicTagsManualOverride?: boolean;
+    mbti?: string;
+    personality?: string;
+    workStyle?: string;
+    careerGoal?: string;
+    targetRole?: string;
+    jobDirection?: string;
+    targetSalary?: string;
     experiences?: Array<{
       title: string;
       period?: string;
@@ -104,6 +194,14 @@ export interface UserProfile {
     }>;
     rawInput?: string;
   }>;
+  guided_flow_state?: {
+    step?: string;
+    resume_id?: string;
+    jd_key?: string;
+    analysis_mode?: 'generic' | 'targeted';
+    updated_at?: string;
+    source?: string;
+  };
 }
 
 // 缓存项接口
@@ -205,9 +303,49 @@ export const getUserFromLocalStorage = (): any => {
   }
 };
 
+export const resolveProfileUserContext = ({
+  userId,
+  seedUser,
+  localStorageUser,
+}: {
+  userId?: string;
+  seedUser?: any;
+  localStorageUser?: any;
+}): { targetUserId: string; authUser: any } => {
+  const explicitUserId = String(userId || '').trim();
+  if (explicitUserId) {
+    if (seedUser?.id && String(seedUser.id).trim() === explicitUserId) {
+      return { targetUserId: explicitUserId, authUser: seedUser };
+    }
+    if (localStorageUser?.id && String(localStorageUser.id).trim() === explicitUserId) {
+      return { targetUserId: explicitUserId, authUser: localStorageUser };
+    }
+    return { targetUserId: explicitUserId, authUser: seedUser || null };
+  }
+
+  if (seedUser?.id) {
+    return { targetUserId: String(seedUser.id), authUser: seedUser };
+  }
+
+  if (localStorageUser?.id) {
+    return { targetUserId: String(localStorageUser.id), authUser: localStorageUser };
+  }
+
+  return { targetUserId: '', authUser: null };
+};
+
 export const useUserProfile = (userId?: string, seedUser?: any) => {
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
+  const initialContext = resolveProfileUserContext({
+    userId,
+    seedUser,
+    localStorageUser: getUserFromLocalStorage(),
+  });
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => {
+    const cacheKey = String(initialContext.targetUserId || '').trim();
+    if (!cacheKey) return null;
+    return cacheWithExpiry.get(cacheKey);
+  });
+  const [loading, setLoading] = useState(!Boolean(userProfile));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -223,10 +361,13 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
 
         // 1. 优先从localStorage获取用户信息
         const localStorageUser = getUserFromLocalStorage();
-
-        if (!targetUserId && authUser?.id) {
-          targetUserId = authUser.id;
-        }
+        const resolvedContext = resolveProfileUserContext({
+          userId: targetUserId,
+          seedUser: authUser,
+          localStorageUser,
+        });
+        targetUserId = resolvedContext.targetUserId;
+        authUser = resolvedContext.authUser;
 
         if (!targetUserId) {
           // 2. 尝试从supabase获取当前用户
@@ -238,9 +379,6 @@ export const useUserProfile = (userId?: string, seedUser?: any) => {
           }
           targetUserId = user.id;
           authUser = user;
-        } else if (localStorageUser && localStorageUser.id === targetUserId) {
-          // 如果提供了userId且与localStorage中的用户匹配，使用localStorage中的用户信息
-          authUser = localStorageUser;
         }
 
         console.log('Loading user profile for:', targetUserId);

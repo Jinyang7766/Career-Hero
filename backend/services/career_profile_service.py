@@ -91,6 +91,50 @@ def _sanitize_experience_item(item, fallback_index):
     }
 
 
+def _sanitize_education_item(item, fallback_index):
+    if not isinstance(item, dict):
+        return None
+    school = _compact_text(item.get('school') or item.get('university') or f'学校{fallback_index}', 100)
+    degree = _compact_text(item.get('degree'), 100)
+    major = _compact_text(item.get('major'), 100)
+    period = _compact_text(item.get('period') or item.get('date'), 80)
+    description = _compact_text(item.get('description'), 400)
+    
+    if not school:
+        return None
+
+    return {
+        'id': fallback_index,
+        'school': school,
+        'degree': degree,
+        'major': major,
+        'period': period,
+        'description': description
+    }
+
+
+def _sanitize_project_item(item, fallback_index):
+    if not isinstance(item, dict):
+        return None
+    title = _compact_text(item.get('title') or item.get('name') or f'项目{fallback_index}', 100)
+    subtitle = _compact_text(item.get('subtitle') or item.get('role'), 100)
+    period = _compact_text(item.get('period') or item.get('date'), 80)
+    description = _compact_text(item.get('description'), 1000)
+    link = _compact_text(item.get('link'), 200)
+
+    if not title:
+        return None
+
+    return {
+        'id': fallback_index,
+        'title': title,
+        'subtitle': subtitle,
+        'period': period,
+        'description': description,
+        'link': link
+    }
+
+
 def _extract_fallback_sentences(text, limit=6):
     source = str(text or '').strip()
     if not source:
@@ -107,10 +151,142 @@ def _extract_fallback_sentences(text, limit=6):
     return out
 
 
+def _first_non_empty(*values):
+    for value in values:
+        text = _compact_text(value, 120)
+        if text:
+            return text
+    return ''
+
+
+def _extract_personal_info_from_text(raw_text):
+    text = str(raw_text or '')
+    if not text.strip():
+        return {}
+
+    info = {}
+    name_match = re.search(r'(?:姓名|候选人)\s*[：:]\s*([^\n,，。；;|/]{1,40})', text, re.IGNORECASE)
+    title_match = re.search(r'(?:求职意向|目标岗位|应聘职位|职位)\s*[：:]\s*([^\n,，。；;|/]{1,80})', text, re.IGNORECASE)
+    location_match = re.search(r'(?:所在(?:城市|地)|城市|地点)\s*[：:]\s*([^\n,，。；;|/]{1,80})', text, re.IGNORECASE)
+    email_match = re.search(r'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', text)
+    phone_candidates = re.findall(r'(\+?\d[\d\-\s]{8,}\d)', text)
+
+    if name_match:
+        info['name'] = _compact_text(name_match.group(1), 40)
+    if title_match:
+        info['title'] = _compact_text(title_match.group(1), 80)
+    if location_match:
+        info['location'] = _compact_text(location_match.group(1), 80)
+    if email_match:
+        info['email'] = _compact_text(email_match.group(1), 100)
+    for candidate in phone_candidates:
+        digits = re.sub(r'\D', '', candidate)
+        if 10 <= len(digits) <= 16:
+            info['phone'] = _compact_text(candidate, 40)
+            break
+
+    if info.get('name') and info.get('title'):
+        return info
+
+    line_match = re.search(r'(?:候选人)?(?:基础信息|个人信息|候选人信息)\s*[：:]\s*(.+)', text, re.IGNORECASE)
+    if line_match:
+        line = _compact_text(line_match.group(1), 220)
+        parts = [part.strip() for part in re.split(r'[\\/|｜]+', line) if part.strip()]
+        if parts:
+            role_hints = (
+                '工程师', '经理', '总监', '运营', '产品', '开发', '设计', '分析', '顾问',
+                '专员', '主管', '负责人', 'manager', 'engineer', 'developer', 'analyst'
+            )
+            first_lower = parts[0].lower()
+            looks_like_name = (
+                len(parts[0]) <= 20
+                and '@' not in parts[0]
+                and not re.search(r'\d{2,}', parts[0])
+                and not any(hint in first_lower for hint in role_hints)
+            )
+            if looks_like_name and not info.get('name'):
+                info['name'] = _compact_text(parts[0], 40)
+                if len(parts) > 1 and not info.get('title'):
+                    info['title'] = _compact_text(parts[1], 80)
+                if len(parts) > 2 and not info.get('location'):
+                    info['location'] = _compact_text(parts[2], 80)
+            else:
+                if not info.get('title'):
+                    info['title'] = _compact_text(parts[0], 80)
+                if len(parts) > 1 and not info.get('location'):
+                    info['location'] = _compact_text(parts[1], 80)
+
+    return {key: value for key, value in info.items() if value}
+
+
+def _extract_personal_info(raw_profile, existing_profile, raw_text):
+    profile = raw_profile if isinstance(raw_profile, dict) else {}
+    nested = profile.get('personalInfo') if isinstance(profile.get('personalInfo'), dict) else {}
+    existing = existing_profile if isinstance(existing_profile, dict) else {}
+    existing_nested = existing.get('personalInfo') if isinstance(existing.get('personalInfo'), dict) else {}
+    from_text = _extract_personal_info_from_text(raw_text)
+
+    info = {
+        'name': _first_non_empty(
+            nested.get('name'),
+            profile.get('name'),
+            profile.get('userName'),
+            profile.get('user_name'),
+            profile.get('candidateName'),
+            profile.get('candidate_name'),
+            profile.get('fullName'),
+            profile.get('full_name'),
+            from_text.get('name'),
+            existing_nested.get('name'),
+        ),
+        'title': _first_non_empty(
+            nested.get('title'),
+            profile.get('title'),
+            profile.get('targetRole'),
+            profile.get('jobDirection'),
+            profile.get('jobTarget'),
+            profile.get('position'),
+            from_text.get('title'),
+            existing_nested.get('title'),
+        ),
+        'email': _first_non_empty(
+            nested.get('email'),
+            profile.get('email'),
+            profile.get('contactEmail'),
+            profile.get('contact_email'),
+            from_text.get('email'),
+            existing_nested.get('email'),
+        ),
+        'phone': _first_non_empty(
+            nested.get('phone'),
+            profile.get('phone'),
+            profile.get('mobile'),
+            profile.get('tel'),
+            from_text.get('phone'),
+            existing_nested.get('phone'),
+        ),
+        'location': _first_non_empty(
+            nested.get('location'),
+            profile.get('location'),
+            profile.get('city'),
+            from_text.get('location'),
+            existing_nested.get('location'),
+        ),
+    }
+    info = {key: value for key, value in info.items() if value}
+    return info if info else None
+
+
 def _build_fallback_profile(raw_text, existing_profile=None):
     existing = existing_profile if isinstance(existing_profile, dict) else {}
     summary = _compact_text(existing.get('summary') or raw_text, 220)
     highlights = _extract_fallback_sentences(raw_text, limit=4)
+    personal_info = _extract_personal_info(existing, existing, raw_text)
+    target_role = _first_non_empty(
+        existing.get('targetRole'),
+        existing.get('jobDirection'),
+        (personal_info or {}).get('title'),
+    )
     experiences = []
     for idx, sentence in enumerate(_extract_fallback_sentences(raw_text, limit=6), start=1):
         experiences.append({
@@ -132,12 +308,17 @@ def _build_fallback_profile(raw_text, existing_profile=None):
         'summary': summary,
         'careerHighlights': highlights,
         'coreSkills': [],
+        'targetRole': target_role,
+        'jobDirection': target_role,
         'constraints': [
             '仅基于用户明确提供的信息',
             '未明确的时间/结果不得补全',
             '后续诊断与优化禁止虚构经历',
         ],
         'experiences': experiences,
+        'educations': [],
+        'projects': [],
+        'personalInfo': personal_info,
         'rawInput': _compact_text(raw_text, 2000),
     }
 
@@ -201,6 +382,33 @@ def _sanitize_profile(raw_profile, raw_text, existing_profile=None):
                 'confidence': 'low',
                 'evidence': '来自用户自述',
             })
+            
+    educations_raw = raw_profile.get('educations') or []
+    educations = []
+    if isinstance(educations_raw, list):
+        for idx, item in enumerate(educations_raw[:5], start=1):
+            normalized = _sanitize_education_item(item, idx)
+            if normalized:
+                educations.append(normalized)
+
+    projects_raw = raw_profile.get('projects') or []
+    projects = []
+    if isinstance(projects_raw, list):
+        for idx, item in enumerate(projects_raw[:10], start=1):
+            normalized = _sanitize_project_item(item, idx)
+            if normalized:
+                projects.append(normalized)
+
+    personal_info = _extract_personal_info(raw_profile, existing_profile, raw_text)
+    existing = existing_profile if isinstance(existing_profile, dict) else {}
+    target_role = _first_non_empty(
+        raw_profile.get('targetRole'),
+        raw_profile.get('jobDirection'),
+        raw_profile.get('jobTarget'),
+        (personal_info or {}).get('title'),
+        existing.get('targetRole'),
+        existing.get('jobDirection'),
+    )
 
     return {
         'id': f"career_profile_{int(datetime.now(timezone.utc).timestamp() * 1000)}",
@@ -209,8 +417,13 @@ def _sanitize_profile(raw_profile, raw_text, existing_profile=None):
         'summary': summary,
         'careerHighlights': highlights,
         'coreSkills': core_skills,
+        'targetRole': target_role,
+        'jobDirection': target_role,
         'constraints': constraints,
         'experiences': experiences,
+        'educations': educations,
+        'projects': projects,
+        'personalInfo': personal_info,
         'rawInput': _compact_text(raw_text, 2000),
     }
 
@@ -258,6 +471,14 @@ def organize_career_profile_core(current_user_id, data, deps):
 
 输出 JSON 结构：
 {{
+  "personalInfo": {{
+    "name": "姓名，未知留空",
+    "title": "当前/目标职位，未知留空",
+    "email": "邮箱，未知留空",
+    "phone": "电话，未知留空",
+    "location": "城市/地区，未知留空"
+  }},
+  "targetRole": "目标岗位名称，未知留空",
   "summary": "120-220字职业画像总结，客观事实导向",
   "careerHighlights": ["亮点1", "亮点2"],
   "coreSkills": ["技能1", "技能2"],
@@ -273,6 +494,24 @@ def organize_career_profile_core(current_user_id, data, deps):
       "inResume": "yes|no|unknown",
       "confidence": "high|medium|low",
       "evidence": "来自用户自述"
+    }}
+  ],
+  "educations": [
+    {{
+      "school": "学校名称",
+      "degree": "学历",
+      "major": "专业",
+      "period": "就读时间",
+      "description": "其他描述或荣誉奖项"
+    }}
+  ],
+  "projects": [
+    {{
+      "title": "项目名称",
+      "subtitle": "项目角色",
+      "period": "项目时间",
+      "description": "项目描述/行动/结果",
+      "link": "项目链接"
     }}
   ]
 }}

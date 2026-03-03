@@ -5,6 +5,8 @@ import { supabase } from '../../../../src/supabase-client';
 import { buildResumeTitle } from '../../../../src/resume-utils';
 import type { ResumeData } from '../../../../types';
 import { buildAnalysisReportId, makeJdKey } from '../id-utils';
+import { normalizeAnalysisMode, type AnalysisMode } from '../analysis-mode';
+import { resolveAnalysisTargetValue } from '../target-role';
 
 type Params = {
   optimizedResumeId: string | number | null;
@@ -15,6 +17,7 @@ type Params = {
   allResumes: any[] | undefined;
   jdText: string;
   targetCompany: string;
+  analysisMode?: AnalysisMode;
   isSameResumeId: (a: any, b: any) => boolean;
   normalizeResumeId: (id: any) => string;
 };
@@ -28,6 +31,7 @@ export const useOptimizedResumeStore = ({
   allResumes,
   jdText,
   targetCompany,
+  analysisMode,
   isSameResumeId,
   normalizeResumeId,
 }: Params) => {
@@ -38,6 +42,15 @@ export const useOptimizedResumeStore = ({
   useEffect(() => {
     optimizedResumeIdRef.current = optimizedResumeId;
   }, [optimizedResumeId]);
+
+  const resolveEffectiveDiagnosisTarget = (resumeLike: any, stateTarget?: string): string =>
+    resolveAnalysisTargetValue({
+      analysisMode: normalizeAnalysisMode(analysisMode || resumeLike?.analysisMode),
+      stateTargetCompany: stateTarget ?? targetCompany,
+      resumeTargetCompany: '',
+      resumeTargetRole: resumeLike?.targetRole,
+      resumeHasTargetRole: Object.prototype.hasOwnProperty.call(resumeLike || {}, 'targetRole'),
+    });
 
   const resolveOriginalResumeIdForOptimization = () => {
     // Highest priority: if current resume is already optimized, always bind back to its source resume.
@@ -149,14 +162,17 @@ export const useOptimizedResumeStore = ({
     creatingOptimizedForKeyRef.current = dedupeKey;
     creatingOptimizedResumeRef.current = (async () => {
       const baseTitle = allResumes?.find(r => isSameResumeId(r.id, baseResumeData.id))?.title || '简历';
-      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, targetCompany);
+      const effectiveTargetCompany = resolveEffectiveDiagnosisTarget(baseResumeData, targetCompany);
+      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, effectiveTargetCompany);
       const createResult = await DatabaseService.createResume(userId, newTitle, {
         ...baseResumeData,
         optimizationStatus: 'optimized' as const,
         optimizedFromId: normalizedOriginalId,
         optimizationJdKey: jdKey,
         lastJdText: jdText || baseResumeData.lastJdText || '',
-        targetCompany: targetCompany || baseResumeData.targetCompany || ''
+        targetCompany: effectiveTargetCompany || '',
+        targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
+        source: 'diagnosis_generated',
       }, {
         optimizedDuplicateStrategy: 'reuse',
       });
@@ -274,11 +290,17 @@ export const useOptimizedResumeStore = ({
       throw new Error('未找到已诊断简历，无法建立诊断绑定');
     }
     const optimizedData = optimizedRow.data.resume_data || {};
+    const effectiveTargetCompany = resolveEffectiveDiagnosisTarget({
+      ...optimizedData,
+      analysisMode: originalData.analysisMode || optimizedData.analysisMode,
+      targetRole: originalData.targetRole || optimizedData.targetRole,
+    }, targetCompany);
     const needsPatch =
       String(optimizedData.analysisReportId || '') !== String(nextBinding.analysisReportId) ||
       String(optimizedData.optimizationJdKey || '') !== String(jdKey) ||
       String(optimizedData.lastJdText || '') !== String(effectiveJdText || '') ||
-      String(optimizedData.targetCompany || '') !== String(targetCompany || optimizedData.targetCompany || '');
+      String(optimizedData.targetCompany || '') !== String(effectiveTargetCompany || '') ||
+      String(optimizedData.targetRole || '') !== String(effectiveTargetCompany || optimizedData.targetRole || '');
 
     if (needsPatch) {
       await DatabaseService.updateResume(String(optimizedResumeId), {
@@ -290,7 +312,9 @@ export const useOptimizedResumeStore = ({
           analysisReportId: nextBinding.analysisReportId,
           optimizedResumeId,
           lastJdText: effectiveJdText || optimizedData.lastJdText || '',
-          targetCompany: targetCompany || optimizedData.targetCompany || '',
+          targetCompany: effectiveTargetCompany || '',
+          targetRole: effectiveTargetCompany || optimizedData.targetRole || '',
+          source: String(optimizedData.source || 'diagnosis_generated'),
         },
       }, { touchUpdatedAt: false });
     }

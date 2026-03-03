@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ChatMessage } from '../types';
-import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewFocus, getActiveInterviewType } from '../interview-plan-utils';
 import { makeJdKey } from '../id-utils';
 
 type Params = {
@@ -43,6 +43,12 @@ export const useChatIntroMessages = ({
   };
   const normalizeSceneText = (value: any) =>
     String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalizeInterviewType = (value: any) => {
+    const normalized = String(value ?? '').trim().toLowerCase();
+    if (normalized === 'technical') return 'technical';
+    if (normalized === 'pressure' || normalized === 'hr') return 'pressure';
+    return 'general';
+  };
   const hasPersistedHistory = () => {
     const sessions = (resumeData as any)?.interviewSessions || {};
     const list = Object.values(sessions || {}) as any[];
@@ -50,8 +56,7 @@ export const useChatIntroMessages = ({
     const expectedChatMode = isInterviewMode ? 'interview' : 'analysis';
     const effectiveJdText = String(jdText || resumeData?.lastJdText || '').trim();
     const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
-    const expectedType = String(getActiveInterviewType() || '').trim().toLowerCase();
-    const expectedMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
+    const expectedType = normalizeInterviewType(getActiveInterviewType());
     const expectedFocus = normalizeSceneText(getActiveInterviewFocus());
     const expectedCompany = normalizeSceneText((resumeData as any)?.targetCompany || '');
     const expectedResumeId = String((resumeData as any)?.id || '').trim();
@@ -61,13 +66,11 @@ export const useChatIntroMessages = ({
       const chatMode = String(session?.chatMode || '').trim().toLowerCase();
       if (!chatMode || chatMode !== expectedChatMode) return false;
       if (isInterviewMode) {
-        const sessionType = String(session?.interviewType || '').trim().toLowerCase();
-        const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
+        const sessionType = normalizeInterviewType(session?.interviewType || '');
         const sessionFocus = normalizeSceneText(session?.interviewFocus);
         const sessionCompany = normalizeSceneText(session?.targetCompany);
         const sessionResumeId = String(session?.resumeId || '').trim();
         if (sessionType !== expectedType) return false;
-        if (sessionMode !== expectedMode) return false;
         if (sessionFocus !== expectedFocus) return false;
         if (sessionCompany !== expectedCompany) return false;
         if (sessionResumeId !== expectedResumeId) return false;
@@ -90,8 +93,8 @@ export const useChatIntroMessages = ({
       '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
     const technicalWarmup =
       '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
-    const hrWarmup =
-      '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
+    const pressureWarmup =
+      '请讲一次高压场景下你做出关键取舍的经历，并说明你的判断依据与结果。';
 
     if (!isInterviewMode) {
       return {
@@ -107,10 +110,10 @@ export const useChatIntroMessages = ({
       };
     }
 
-    if (interviewType === 'hr') {
+    if (interviewType === 'pressure') {
       return {
-        summary: `${greeting}我是您的 AI HR 面试官。${hasJd ? '我已结合您的简历和目标岗位职位描述，' : '我已阅读您的简历，'}接下来将重点考察你的动机匹配度、沟通协作和职业稳定性。`,
-        ask: hrWarmup
+        summary: `${greeting}我是您的 AI 压力面试官。${hasJd ? '我已结合您的简历和目标岗位职位描述，' : '我已阅读您的简历，'}接下来将重点考察你在高压情境下的取舍能力、冲突处理和应变能力。`,
+        ask: pressureWarmup
       };
     }
 

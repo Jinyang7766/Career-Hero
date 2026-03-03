@@ -41,7 +41,7 @@ export const useAiAnalysisLifecycle = ({
     if (states.includes('interview_done')) return 'final_report';
     if (states.includes('interview_in_progress') || states.includes('paused')) return 'final_report';
     if (score > 0 || suggestionsLength > 0) return 'final_report';
-    return 'resume_select';
+    return 'jd_input';
   };
 
   useEffect(() => {
@@ -77,7 +77,7 @@ export const useAiAnalysisLifecycle = ({
   useEffect(() => {
     if (isInterviewMode) return;
     localStorage.setItem('ai_analysis_step', currentStep);
-    if (currentStep !== 'resume_select') {
+    if (currentStep !== 'jd_input') {
       localStorage.setItem('ai_analysis_has_activity', '1');
     }
   }, [currentStep, selectedResumeId, resumeData, isInterviewMode]);

@@ -1,12 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ResumeData } from '../types';
-import { buildApiUrl } from '../src/api-config';
-import { toSkillListForImport } from '../src/skill-utils';
+import AutoGrowTextarea from './editor/AutoGrowTextarea';
+
+export type ResumeImportInput =
+  | {
+    type: 'text';
+    rawText: string;
+    title: string;
+  }
+  | {
+    type: 'file';
+    file: File;
+    title: string;
+  };
 
 interface ResumeImportDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  onImport: (data: Omit<ResumeData, 'id'>) => void;
+  onImport: (input: ResumeImportInput) => void;
   defaultTab?: 'text' | 'pdf';
   autoPickPdf?: boolean;
 }
@@ -14,98 +24,35 @@ interface ResumeImportDialogProps {
 const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose, onImport, defaultTab = 'text', autoPickPdf = false }) => {
   const [activeTab, setActiveTab] = useState<'text' | 'pdf'>('text');
   const [textResume, setTextResume] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleTextImport = async () => {
+  const handleTextImport = () => {
     if (!textResume.trim()) {
       setError('请输入简历内容');
       return;
     }
-
-    setIsProcessing(true);
     setError('');
-
-    try {
-      console.log('开始智能解析简历...');
-      
-      // 调用 AI 解析接口
-      const response = await fetch(buildApiUrl('/api/ai/parse-resume'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          resumeText: textResume
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '简历解析失败');
-      }
-
-      const result = await response.json();
-      
-      if (result.success && result.data) {
-        console.log('简历解析成功:', result.data);
-        // Normalize skills consistently with AI suggestion logic.
-        onImport({
-          ...result.data,
-          skills: toSkillListForImport(result.data?.skills)
-        });
-        handleClose();
-      } else {
-        throw new Error('解析结果为空');
-      }
-    } catch (err: any) {
-      console.error('简历解析失败:', err);
-      setError(err.message || '简历解析失败，请检查文本格式或稍后重试');
-    } finally {
-      setIsProcessing(false);
-    }
+    onImport({
+      type: 'text',
+      rawText: textResume.trim(),
+      title: '文本简历',
+    });
+    handleClose();
   };
 
-  const handlePDFImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePDFImport = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    setIsProcessing(true);
     setError('');
-
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(buildApiUrl('/api/parse-pdf'), {
-        method: 'POST',
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'PDF/DOCX 导入失败');
-      }
-
-      const result = await response.json();
-      if (result.success && result.data) {
-        onImport({
-          ...result.data,
-          skills: toSkillListForImport(result.data?.skills)
-        });
-        handleClose();
-      } else {
-        throw new Error('解析结果为空');
-      }
-    } catch (err: any) {
-      console.error('PDF导入失败:', err);
-      setError(err.message || 'PDF导入失败');
-    } finally {
-      setIsProcessing(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+    onImport({
+      type: 'file',
+      file,
+      title: String(file.name || '已上传文件'),
+    });
+    handleClose();
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -135,11 +82,11 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
+      <div className="bg-white dark:bg-surface-dark w-full max-w-md sm:max-w-2xl h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-white/5">
-          <h2 className="text-xl font-bold text-slate-900 dark:text-white">简历导入</h2>
+        <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:pt-6 pb-4 border-b border-slate-200 dark:border-white/5 shrink-0">
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">简历导入</h2>
           <button
             onClick={handleClose}
             className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
@@ -149,25 +96,23 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-white/5">
+        <div className="flex border-b border-slate-200 dark:border-white/5 shrink-0">
           <button
             onClick={() => handleTabChange('text')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'text'
-                ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
+            className={`flex-1 px-4 sm:px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'text'
+              ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
           >
             <span className="material-symbols-outlined text-[18px] mr-2">description</span>
             粘贴文本
           </button>
           <button
             onClick={() => handleTabChange('pdf')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'pdf'
-                ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
-            }`}
+            className={`flex-1 px-4 sm:px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'pdf'
+              ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
+              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+              }`}
           >
             <span className="material-symbols-outlined text-[18px] mr-2">picture_as_pdf</span>
             上传PDF
@@ -175,18 +120,19 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6">
           {activeTab === 'text' ? (
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   简历文本内容
                 </label>
-                <textarea
+                <AutoGrowTextarea
                   value={textResume}
                   onChange={(e) => setTextResume(e.target.value)}
                   placeholder="请粘贴您的简历内容..."
-                  className="w-full h-64 px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
+                  className="w-full px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
+                  minRows={12}
                 />
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
                   支持从Word文档、网页、邮件等地方复制粘贴简历内容
@@ -195,20 +141,13 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
 
               <button
                 onClick={handleTextImport}
-                disabled={isProcessing || !textResume.trim()}
+                disabled={!textResume.trim()}
                 className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
-                {isProcessing ? (
-                  <>
-                    <span className="size-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                    处理中...
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined">auto_fix_high</span>
-                    智能识别
-                  </>
-                )}
+                <>
+                  <span className="material-symbols-outlined">upload_file</span>
+                  保存输入
+                </>
               </button>
             </div>
           ) : (
@@ -217,7 +156,7 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
                   上传 PDF / DOCX 文件
                 </label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-[#324d67] rounded-lg p-8 text-center">
+                <div className="border-2 border-dashed border-slate-300 dark:border-[#324d67] rounded-lg p-5 sm:p-8 text-center">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -230,10 +169,9 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
                   <p className="text-sm text-slate-500 dark:text-slate-400">支持 PDF/DOCX，建议文件小于 10MB</p>
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessing}
                     className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   >
-                    {isProcessing ? '解析中...' : '选择文件'}
+                    选择文件
                   </button>
                 </div>
               </div>

@@ -1,4 +1,8 @@
-import { useDiagnosisSessionRecovery, canApplyDiagnosisStepRecovery } from './useDiagnosisSessionRecovery';
+import {
+  useDiagnosisSessionRecovery,
+  canApplyDiagnosisStepRecovery,
+  consumeDiagnosisAutoRecoverySuppression,
+} from './useDiagnosisSessionRecovery';
 import { useInterviewSessionRecovery, shouldSkipInterviewAutoRecovery as shouldSkipInterviewAutoRecoveryForInterview } from './useInterviewSessionRecovery';
 
 type Params = {
@@ -12,7 +16,7 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
   openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
-  navigateToStep: (step: 'jd_input' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep: (step: 'jd_input' | 'interview_scene' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
   isInterviewMode?: boolean;
@@ -60,4 +64,4 @@ export const useAnalysisSessionRecovery = (params: Params) => {
   });
 };
 
-export { canApplyDiagnosisStepRecovery };
+export { canApplyDiagnosisStepRecovery, consumeDiagnosisAutoRecoverySuppression };

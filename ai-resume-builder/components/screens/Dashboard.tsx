@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { ScreenProps, View } from '../../types';
+import { ScreenProps } from '../../types';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfile } from '../../src/useUserProfile';
-import { DatabaseService } from '../../src/database-service';
-import { supabase } from '../../src/supabase-client';
 import { useAppContext } from '../../src/app-context';
 import { useAppStore } from '../../src/app-store';
 import { getLatestCareerProfile } from '../../src/career-profile-utils';
-import DashboardProgressModule from './DashboardProgressModule';
 import CareerProfileEntryCard from './dashboard/CareerProfileEntryCard';
+import { shouldShowCareerProfileEntryCard } from './dashboard/dashboard-card-visibility';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力，量化成果是金标准。",
@@ -45,11 +43,10 @@ const CAREER_TIPS = [
 
 const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ createNewResume }) => {
   const currentUser = useAppContext((s) => s.currentUser);
-  const navigateToView = useAppContext((s) => s.navigateToView);
   const navigate = useNavigate();
   const allResumes = useAppStore((state) => state.allResumes);
-  const setResumeData = useAppStore((state) => state.setResumeData);
   const navOwnerKey = 'ai_nav_owner_user_id';
+  void createNewResume;
   const [greeting, setGreeting] = useState('');
   const [dailyTips, setDailyTips] = useState<string[]>([]);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
@@ -169,129 +166,33 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 3);
   }, [allResumes, currentUser?.id]);
-
-  const [isLoadingResume, setIsLoadingResume] = React.useState<number | null>(null);
-
-  const hasAnyProgressForResume = (resume: any) => {
-    const diagnosisProgress = Math.max(0, Math.min(100, Math.round(Number((resume as any)?.diagnosisProgress || 0))));
-    const hasDiagnosisProgress = diagnosisProgress >= 15;
-    const byMode = (resume as any)?.interviewStageStatusByMode;
-    const hasInterviewProgressByMode = !!(
-      byMode &&
-      (
-        (Array.isArray(byMode.simple) && byMode.simple.some((s: any) => s === 'current' || s === 'done')) ||
-        (Array.isArray(byMode.comprehensive) && byMode.comprehensive.some((s: any) => s === 'current' || s === 'done'))
-      )
-    );
-    const hasInterviewProgressLegacy = Array.isArray((resume as any)?.interviewStageStatus)
-      ? (resume as any).interviewStageStatus.some((s: any) => s === 'current' || s === 'done')
-      : false;
-    const hasInterviewProgress = hasInterviewProgressByMode || hasInterviewProgressLegacy;
-    return hasDiagnosisProgress || hasInterviewProgress;
-  };
-
-  const handleResumeClick = async (resumeId: number) => {
-    if (isLoadingResume) return;
-
-    try {
-      setIsLoadingResume(resumeId);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setIsLoadingResume(null);
-        return;
-      }
-
-      const result = await DatabaseService.getResume(resumeId);
-      if (result.success && result.data) {
-        const fullResume = result.data;
-        if (fullResume && fullResume.resume_data) {
-          if (setResumeData) {
-            // Ensure all required fields exist by merging with defaults
-            const defaultData = {
-              personalInfo: { name: '', title: '', email: '', phone: '', age: '' },
-              workExps: [],
-              educations: [],
-              projects: [],
-              skills: [],
-              gender: '',
-            };
-
-            setResumeData({
-              ...defaultData,
-              ...fullResume.resume_data,
-              id: fullResume.id,
-              resumeTitle: fullResume.title,
-              personalInfo: {
-                ...defaultData.personalInfo,
-                ...(fullResume.resume_data?.personalInfo || {})
-              }
-            });
-          }
-          localStorage.setItem('preview_back_target', 'dashboard');
-          localStorage.setItem('preview_resume_id', String(fullResume.id));
-          navigateToView(View.PREVIEW);
-        } else {
-          console.error('Resume data is empty');
-          alert('简历数据为空');
-        }
-      } else {
-        console.error('Failed to load resume:', result.error);
-        alert('加载简历失败');
-      }
-    } catch (err) {
-      console.error('Failed to load recent resume for preview:', err);
-      alert('加载简历出错，请检查网络');
-    } finally {
-      setIsLoadingResume(null);
-    }
-  };
+  const showCareerProfileEntryCard = shouldShowCareerProfileEntryCard({
+    hasLatestCareerProfile: Boolean(latestCareerProfile),
+    recentResumeCount: recentResumes.length,
+  });
 
   const handleContinueDiagnosis = (resume: any) => {
     const resumeId = String(resume?.id || '').trim();
     const ownerId = String(currentUser?.id || '').trim();
     if (!resumeId) return;
-    // Enter via resume select first, then auto-select this resume.
-    // Keep behavior fully aligned with manually clicking a resume in ResumeSelectPage.
-    localStorage.setItem('ai_analysis_force_resume_select', '1');
+    // Diagnosis entry no longer uses resume selection page.
+    localStorage.removeItem('ai_analysis_force_resume_select');
     localStorage.removeItem('ai_interview_force_resume_select');
     if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
     localStorage.setItem('ai_result_open', '1');
     localStorage.setItem('ai_result_resume_id', resumeId);
     localStorage.setItem('ai_result_prefer_report', (resume as any)?.analyzed ? '1' : '0');
-    localStorage.removeItem('ai_result_step');
-    localStorage.setItem('ai_result_wait_resume_select', '1');
+    localStorage.setItem('ai_result_step', (resume as any)?.analyzed ? 'final_report' : 'jd_input');
+    localStorage.removeItem('ai_result_wait_resume_select');
     localStorage.removeItem('ai_interview_open');
     localStorage.removeItem('ai_interview_resume_id');
     localStorage.removeItem('ai_interview_entry_mode');
-    navigate('/ai-analysis', { replace: true });
+    navigate('/ai-analysis/jd', { replace: true });
   };
-
-  const handleContinueInterview = (resume: any) => {
-    const resumeId = String(resume?.id || '').trim();
-    const ownerId = String(currentUser?.id || '').trim();
-    if (!resumeId) return;
-    if (!hasAnyProgressForResume(resume)) {
-      localStorage.setItem('ai_interview_force_resume_select', '1');
-      localStorage.removeItem('ai_analysis_force_resume_select');
-      if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
-      localStorage.removeItem('ai_result_open');
-      localStorage.removeItem('ai_result_resume_id');
-      localStorage.removeItem('ai_result_step');
-      localStorage.removeItem('ai_interview_open');
-      localStorage.removeItem('ai_interview_resume_id');
-      localStorage.removeItem('ai_interview_entry_mode');
-      navigateToView(View.AI_INTERVIEW, { replace: true });
-      return;
-    }
-    localStorage.removeItem('ai_analysis_force_resume_select');
-    localStorage.removeItem('ai_interview_force_resume_select');
-    if (ownerId) localStorage.setItem(navOwnerKey, ownerId);
-    localStorage.setItem('ai_interview_open', '1');
-    localStorage.setItem('ai_interview_resume_id', resumeId);
-    localStorage.setItem('ai_interview_entry_mode', 'scene_select');
-    navigateToView(View.AI_INTERVIEW, { replace: true });
-  };
+  const latestResume = recentResumes && recentResumes.length > 0 ? recentResumes[0] : null;
+  const handleStartPrimaryFlow = React.useCallback(() => {
+    navigate('/career-profile/upload', { replace: true });
+  }, [navigate]);
 
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
@@ -313,26 +214,49 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
       </div>
 
       <div className="px-4 space-y-6 pt-2">
-        <div>
-          <CareerProfileEntryCard
-            summary={careerProfileSummary}
-            experienceCount={careerProfileExperienceCount}
-            updatedAt={careerProfileUpdatedAt}
-            onOpen={() => navigateToView(View.CAREER_PROFILE)}
-          />
-        </div>
-
-        {/* Progress Module or Create New Resume */}
-        <div>
-          {recentResumes && recentResumes.length > 0 && recentResumes[0] ? (
-            <DashboardProgressModule
-              resume={recentResumes[0]}
-              onContinueDiagnosis={handleContinueDiagnosis}
-              onContinueInterview={handleContinueInterview}
+        {showCareerProfileEntryCard && (
+          <div>
+            <CareerProfileEntryCard
+              summary={careerProfileSummary}
+              experienceCount={careerProfileExperienceCount}
+              updatedAt={careerProfileUpdatedAt}
+              onOpen={() => {
+                if (careerProfileSummary) {
+                  navigate('/career-profile/result/summary', { replace: true });
+                  return;
+                }
+                navigate('/career-profile/upload', { replace: true });
+              }}
             />
+          </div>
+        )}
+
+        {/* Primary Guided Entry (no progress bar module) */}
+        <div>
+          {latestResume ? (
+            <div
+              onClick={() => handleContinueDiagnosis(latestResume)}
+              className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[160px] flex flex-col justify-center"
+            >
+              <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
+              <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"></div>
+              <div className="relative z-10">
+                <div className="size-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 border border-white/30">
+                  <span className="material-symbols-outlined text-white text-2xl">auto_fix_high</span>
+                </div>
+                <h3 className="text-xl font-black mb-1">继续优化流程</h3>
+                <p className="text-white/80 text-sm font-medium">
+                  基于职业画像继续输入目标岗位/JD，生成对应优化简历。
+                </p>
+                <div className="mt-6 flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/20 group-hover:bg-white/30 transition-colors">
+                  <span>继续</span>
+                  <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </div>
+              </div>
+            </div>
           ) : (
             <div
-              onClick={createNewResume}
+              onClick={handleStartPrimaryFlow}
               className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary via-blue-600 to-indigo-700 p-6 shadow-xl shadow-primary/30 text-white cursor-pointer active:scale-[0.98] transition-all min-h-[160px] flex flex-col justify-center"
             >
               <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl animate-pulse"></div>
@@ -341,10 +265,14 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                 <div className="size-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center mb-4 border border-white/30">
                   <span className="material-symbols-outlined text-white text-2xl">add_circle</span>
                 </div>
-                <h3 className="text-xl font-black mb-1">创建您的第一份简历</h3>
-                <p className="text-white/80 text-sm font-medium">使用 AI 智能助攻，让简历脱颖而出</p>
+                <h3 className="text-xl font-black mb-1">
+                  先让我了解你
+                </h3>
+                <p className="text-white/80 text-sm font-medium">
+                  可先上传已有简历（可跳过），再由 AI 引导你补齐画像事实。
+                </p>
                 <div className="mt-6 flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/20 group-hover:bg-white/30 transition-colors">
-                  <span>立即开始</span>
+                  <span>开始使用</span>
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </div>
               </div>

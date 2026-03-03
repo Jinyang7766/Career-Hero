@@ -1,6 +1,9 @@
 import { useEffect } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
 
+export const resolveRestoredAnalysisTarget = (snapshotLike: any): string =>
+  String(snapshotLike?.targetRole || '').trim();
+
 type Params = {
   currentStep: string;
   score: number;
@@ -43,8 +46,9 @@ export const useReportSnapshotRestore = ({
       const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
       if (!snapshotApplied) return;
       setJdText(last.jdText || '');
-      if (last.targetCompany) {
-        setTargetCompany(last.targetCompany);
+      const restoredTarget = resolveRestoredAnalysisTarget(last);
+      if (restoredTarget) {
+        setTargetCompany(restoredTarget);
       }
       setAnalysisResumeId(last.resumeId);
     };

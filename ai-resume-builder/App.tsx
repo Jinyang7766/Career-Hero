@@ -14,6 +14,19 @@ import { useRouteHistoryStack } from './src/hooks/useRouteHistoryStack';
 import { useScrollResetOnRoute } from './src/hooks/useScrollResetOnRoute';
 import { useThemeSync } from './src/hooks/useThemeSync';
 import { mapDbResumeToSummary } from './src/resume-summary-mapper';
+import { useUserProfile } from './src/useUserProfile';
+import {
+  deriveGuidedFlowStepFromLocation,
+  hasGuidedFlowResumeSelection,
+  isCareerProfileComplete,
+  isGuidedFlowActive,
+  isGuidedFlowEnabled,
+  isGuidedStepAtOrAfterStep3,
+  isGuidedStepAtOrAfterStep4,
+  persistGuidedFlowState,
+  resolveAnalysisModeSync,
+  setGuidedFlowActive,
+} from './src/guided-flow';
 
 const Dashboard = React.lazy(() => import('./components/screens/Dashboard'));
 const Profile = React.lazy(() => import('./components/screens/Profile'));
@@ -51,11 +64,13 @@ function App() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
+  const resumeData = useAppStore((state) => state.resumeData);
   const setResumeData = useAppStore((state) => state.setResumeData);
   const allResumes = useAppStore((state) => state.allResumes);
   const setAllResumes = useAppStore((state) => state.setAllResumes);
   const isNavHidden = useAppStore((state) => state.isNavHidden);
   const setIsNavHidden = useAppStore((state) => state.setIsNavHidden);
+  const guidedFlowEnabled = isGuidedFlowEnabled();
   const [theme, setThemeState] = useState<'light' | 'dark' | 'system'>(() => {
     const saved = localStorage.getItem('theme') as 'light' | 'dark' | 'system' | null;
     if (saved === 'light' || saved === 'dark' || saved === 'system') return saved;
@@ -75,8 +90,34 @@ function App() {
   const location = useLocation();
   const navigationType = useNavigationType();
   const appContainerRef = useRef<HTMLDivElement | null>(null);
+  const guidedSchemaWarnedRef = useRef(false);
+  const guidedHardGateToastRef = useRef(false);
+  const guidedResumeGateToastRef = useRef(false);
 
-  const currentView = useMemo(() => pathToView(location.pathname), [location.pathname, isAuthenticated]);
+  const currentUserId = String(currentUser?.id || '').trim();
+  const { userProfile, loading: profileLoading } = useUserProfile(currentUserId || undefined, currentUser);
+  const currentView = useMemo(() => pathToView(location.pathname), [location.pathname]);
+  const isProfileReadyForGuidedFlow = useMemo(
+    () => isCareerProfileComplete(userProfile),
+    [userProfile]
+  );
+  const isGuidedFlowResumeReady = useMemo(
+    () => hasGuidedFlowResumeSelection(resumeData as any),
+    [resumeData]
+  );
+  const analysisModeSync = useMemo(
+    () =>
+      resolveAnalysisModeSync({
+        resumeMode: (resumeData as any)?.analysisMode,
+        guidedStateMode: (userProfile as any)?.guided_flow_state?.analysis_mode,
+      }),
+    [resumeData, userProfile]
+  );
+  const guidedFlowStep = useMemo(
+    () => deriveGuidedFlowStepFromLocation(location.pathname, currentView),
+    [currentView, location.pathname]
+  );
+  const guidedFlowActive = guidedFlowEnabled && isGuidedFlowActive(currentUserId);
   const currentRoute = useMemo(() => `${location.pathname}${location.search || ''}`, [location.pathname, location.search]);
   const {
     routeHistoryRef,
@@ -128,8 +169,171 @@ function App() {
 
     if (!isAuthenticated && !publicPaths.some((x) => p.startsWith(x))) {
       navigate(viewToPath(View.LOGIN), { replace: true });
+      return;
     }
-  }, [authChecked, isAuthenticated, location.pathname, navigate]);
+
+    // "Only after a user has a career profile, they are considered a non-new user"
+    // Force users without a career profile to the upload/creation page
+    if (isAuthenticated) {
+      if (profileLoading) return; // Wait until profile data is loaded
+
+      const hasCareerProfile = Boolean(
+        userProfile?.career_profile_latest ||
+        (userProfile?.career_profile_history && userProfile.career_profile_history.length > 0)
+      );
+
+      const isAllowedWithoutProfile =
+        p.startsWith('/career-profile/upload') ||
+        p.startsWith('/career-profile/result') ||
+        publicPaths.some((x) => p.startsWith(x));
+
+      if (!hasCareerProfile && !isAllowedWithoutProfile) {
+        navigate('/career-profile/upload', { replace: true });
+      }
+    }
+  }, [authChecked, isAuthenticated, profileLoading, userProfile, location.pathname, navigate]);
+
+  // Restore analysis mode from guided_flow_state when resumeData has no explicit mode.
+  useEffect(() => {
+    if (!guidedFlowEnabled) return;
+    if (!authChecked || !isAuthenticated) return;
+    if (!guidedFlowActive) return;
+    if (analysisModeSync.source !== 'guided_state') return;
+    if (!analysisModeSync.effectiveMode) return;
+
+    setResumeData((prev: any) => {
+      if (!prev || typeof prev !== 'object') return prev;
+      const currentMode = String((prev as any)?.analysisMode || '').trim().toLowerCase();
+      if (currentMode === analysisModeSync.effectiveMode) return prev;
+      return {
+        ...prev,
+        analysisMode: analysisModeSync.effectiveMode,
+      };
+    });
+  }, [
+    analysisModeSync,
+    authChecked,
+    guidedFlowActive,
+    guidedFlowEnabled,
+    isAuthenticated,
+    setResumeData,
+  ]);
+
+  // GuidedFlow hard gate (main entry only): profile incomplete cannot enter Step3+.
+  useEffect(() => {
+    if (!guidedFlowEnabled) return;
+    if (!authChecked || !isAuthenticated) return;
+    if (!guidedFlowActive) return;
+    if (!isGuidedStepAtOrAfterStep3(guidedFlowStep)) return;
+    if (isProfileReadyForGuidedFlow) {
+      guidedHardGateToastRef.current = false;
+      return;
+    }
+    const path = String(location.pathname || '').toLowerCase();
+    if (
+      path === '/career-profile' ||
+      path === '/career-profile/upload' ||
+      path.startsWith('/career-profile/result')
+    ) {
+      return;
+    }
+
+    if (!guidedHardGateToastRef.current) {
+      guidedHardGateToastRef.current = true;
+      showToast('建议先补全专属职业画像，再进入 AI 诊断。', 'info', 2800);
+    }
+    navigate('/career-profile/upload', { replace: true });
+  }, [
+    authChecked,
+    guidedFlowActive,
+    guidedFlowEnabled,
+    guidedFlowStep,
+    isAuthenticated,
+    isProfileReadyForGuidedFlow,
+    location.pathname,
+    navigate,
+    showToast,
+  ]);
+
+  // GuidedFlow hard gate (Step4+): Step3 context is required before report/refine/interview.
+  useEffect(() => {
+    if (!guidedFlowEnabled) return;
+    if (!authChecked || !isAuthenticated) return;
+    if (!guidedFlowActive) return;
+    if (!isProfileReadyForGuidedFlow) return;
+    if (!isGuidedStepAtOrAfterStep4(guidedFlowStep)) {
+      guidedResumeGateToastRef.current = false;
+      return;
+    }
+    const hasGuidedFlowAnalysisActivity = localStorage.getItem('ai_analysis_has_activity') === '1';
+    if (isGuidedFlowResumeReady || hasGuidedFlowAnalysisActivity) {
+      guidedResumeGateToastRef.current = false;
+      return;
+    }
+
+    const path = String(location.pathname || '').toLowerCase();
+    if (path === '/ai-analysis' || path === '/ai-analysis/jd') return;
+
+    if (!guidedResumeGateToastRef.current) {
+      guidedResumeGateToastRef.current = true;
+      showToast('请先在 Step 3 填写目标岗位/JD并开始诊断，再进入评分、精修和面试。', 'info', 2800);
+    }
+    navigate('/ai-analysis/jd', { replace: true });
+  }, [
+    authChecked,
+    guidedFlowActive,
+    guidedFlowEnabled,
+    guidedFlowStep,
+    isAuthenticated,
+    isGuidedFlowResumeReady,
+    isProfileReadyForGuidedFlow,
+    location.pathname,
+    navigate,
+    showToast,
+  ]);
+
+  // GuidedFlow state sync to users.guided_flow_state (best-effort, warn-once when schema missing).
+  useEffect(() => {
+    if (!guidedFlowEnabled) return;
+    if (!authChecked || !isAuthenticated) return;
+    if (!guidedFlowActive) return;
+    if (!currentUserId) return;
+    if (!guidedFlowStep) return;
+
+    const resumeId = String((resumeData as any)?.id || '').trim();
+    const analysisModeRaw = String((resumeData as any)?.analysisMode || '').trim().toLowerCase();
+    const analysisMode =
+      analysisModeRaw === 'generic' || analysisModeRaw === 'targeted'
+        ? (analysisModeRaw as 'generic' | 'targeted')
+        : undefined;
+
+    void (async () => {
+      const result = await persistGuidedFlowState({
+        userId: currentUserId,
+        state: {
+          step: guidedFlowStep,
+          resume_id: resumeId || undefined,
+          analysis_mode: analysisMode,
+          source: 'guided_flow',
+        },
+        updateUser: DatabaseService.updateUser,
+      });
+      if (result.success || result.skipped) return;
+      if (result.schemaMissing && !guidedSchemaWarnedRef.current) {
+        guidedSchemaWarnedRef.current = true;
+        showToast('guided_flow_state 字段未就绪，请先执行数据库迁移。', 'error', 3200);
+      }
+    })();
+  }, [
+    authChecked,
+    currentUserId,
+    guidedFlowActive,
+    guidedFlowEnabled,
+    guidedFlowStep,
+    isAuthenticated,
+    resumeData,
+    showToast,
+  ]);
 
   // Load user resumes when authenticated
   useEffect(() => {
@@ -250,12 +454,17 @@ function App() {
     }
   }, [isAuthenticated, isLoggingOut, currentView, navigate]);
 
-  const handleLogin = (userData?: any) => {
+  const handleLogin = (userData?: any, opts?: { isNewUser?: boolean }) => {
     if (userData) {
       setCurrentUser(userData);
     }
     setIsAuthenticated(true);
-    navigate(viewToPath(View.DASHBOARD), { replace: true });
+
+    if (opts?.isNewUser) {
+      navigate('/career-profile/upload', { replace: true });
+    } else {
+      navigate(viewToPath(View.DASHBOARD), { replace: true });
+    }
   };
 
   const handleLogout = async (opts?: { skipConfirm?: boolean }) => {
@@ -280,6 +489,7 @@ function App() {
         localStorage.removeItem('supabase_session');
         localStorage.removeItem('token');
         localStorage.removeItem('user_avatar');
+        setGuidedFlowActive(logoutUserId, false);
         if (logoutUserId) {
           localStorage.removeItem(`user_avatar:${logoutUserId}`);
           localStorage.removeItem(`has_created_resume_${logoutUserId}`);
@@ -333,13 +543,29 @@ function App() {
       setResumeData(createEmptyResumeData());
     }
     if (view === View.AI_ANALYSIS) {
-      localStorage.setItem('ai_analysis_force_resume_select', '1');
+      if (guidedFlowEnabled) {
+        setGuidedFlowActive(currentUserId, true);
+      }
+
+      if (guidedFlowEnabled && !isProfileReadyForGuidedFlow) {
+        localStorage.removeItem('ai_analysis_force_resume_select');
+        localStorage.removeItem('ai_analysis_entry_source');
+        localStorage.removeItem('ai_analysis_step');
+        localStorage.removeItem('ai_analysis_in_progress');
+        localStorage.removeItem('ai_analysis_has_activity');
+        setSingleHistory('/career-profile/upload');
+        navigate('/career-profile/upload', { replace: true });
+        return;
+      }
+
+      localStorage.removeItem('ai_analysis_force_resume_select');
+      localStorage.removeItem('ai_interview_force_resume_select');
       localStorage.setItem('ai_analysis_entry_source', 'bottom_nav');
-      localStorage.removeItem('ai_analysis_step');
+      localStorage.setItem('ai_analysis_step', 'jd_input');
       localStorage.removeItem('ai_analysis_in_progress');
       localStorage.removeItem('ai_analysis_has_activity');
-      setSingleHistory('/ai-analysis');
-      navigate('/ai-analysis', { replace: true });
+      setSingleHistory('/ai-analysis/jd');
+      navigate('/ai-analysis/jd', { replace: true });
       return;
     }
     if (view === View.AI_INTERVIEW) {
@@ -415,8 +641,8 @@ function App() {
   };
 
   const renderView = () => {
-    // Show loading state while auth is being checked to prevent flash of login page
-    if (!authChecked) {
+    // Show loading state while auth is being checked or profile is loading to prevent flash
+    if (!authChecked || (isAuthenticated && profileLoading)) {
       return <ScreenFallback label="加载中..." />;
     }
 

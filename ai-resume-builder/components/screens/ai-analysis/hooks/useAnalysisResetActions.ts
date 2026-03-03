@@ -43,7 +43,8 @@ const inferChatModeFromKey = (key: string) => {
 
 const normalizeInterviewTypeMaybe = (value: any) => {
   const text = String(value || '').trim().toLowerCase();
-  if (text === 'general' || text === 'technical' || text === 'hr') return text;
+  if (text === 'general' || text === 'technical') return text;
+  if (text === 'pressure' || text === 'hr') return 'pressure';
   return '';
 };
 

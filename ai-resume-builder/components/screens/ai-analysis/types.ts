@@ -36,4 +36,5 @@ export interface AnalysisReport {
   weaknesses: string[];
   missingKeywords: string[];
   scoreBreakdown: ScoreBreakdown;
+  generatedResumeData?: any;
 }

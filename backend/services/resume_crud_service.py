@@ -1,12 +1,23 @@
 import uuid
 from datetime import datetime
 
+from .resume_storage_policy import is_resume_eligible_for_library
+
+
+def _resume_not_persistable_error():
+    return {
+        'error': '该简历尚未完成诊断/优化，当前不允许写入简历库',
+        'code': 'resume_not_persistable',
+    }, 422
+
 
 def list_resumes(*, current_user_id, storage_context):
     user_resumes = storage_context.list_resumes(current_user_id, order_by='created_at', desc=True)
 
     resumes = []
     for resume in user_resumes:
+        if not is_resume_eligible_for_library(resume.get('resume_data') or {}):
+            continue
         resumes.append({
             'id': resume['id'],
             'title': resume['title'],
@@ -33,6 +44,8 @@ def create_resume_record(
     cleaned_resume_data, err = clean_resume_payload(resume_data)
     if err:
         return {'error': err}, 400
+    if not is_resume_eligible_for_library(cleaned_resume_data):
+        return _resume_not_persistable_error()
 
     now_iso = datetime.utcnow().isoformat()
     optimization_status = str(cleaned_resume_data.get('optimizationStatus') or '').strip().lower()
@@ -90,6 +103,8 @@ def update_resume_record(
         cleaned_resume_data, err = clean_resume_payload(resume_data)
         if err:
             return {'error': err}, 400
+        if not is_resume_eligible_for_library(cleaned_resume_data):
+            return _resume_not_persistable_error()
         update_data['resume_data'] = cleaned_resume_data
     if score is not None:
         if not isinstance(score, (int, float)) or score < 0 or score > 100:

@@ -22,6 +22,28 @@ export type ResumeSelectPageProps = {
   pointsRemaining?: number | null;
 };
 
+const GENERATED_ANALYSIS_STEPS = new Set([
+  'chat',
+  'comparison',
+  'report',
+  'final_report',
+  'interview_report',
+]);
+
+export const isGeneratedAnalysisResume = (resume: ResumeSummary) => {
+  const optimizationStatus = String(resume.optimizationStatus || '').trim().toLowerCase();
+  if (optimizationStatus === 'optimized') return true;
+
+  const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
+  if (GENERATED_ANALYSIS_STEPS.has(latestStep)) return true;
+
+  const analysisScore = Number(resume.analysisScore ?? 0);
+  if (Number.isFinite(analysisScore) && analysisScore > 0) return true;
+
+  const progress = Number(resume.diagnosisProgress ?? 0);
+  return Number.isFinite(progress) && progress >= 60;
+};
+
 export const hasRecoverableDiagnosisStepForResume = (resume: ResumeSummary) => {
   const latestStep = String(resume.latestAnalysisStep || '').trim().toLowerCase();
   if ([
@@ -88,7 +110,8 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
   isInterviewMode,
   pointsRemaining,
 }) => {
-  const filtered = (allResumes || []).filter((resume) =>
+  const generatedResumes = (allResumes || []).filter(isGeneratedAnalysisResume);
+  const filtered = generatedResumes.filter((resume) =>
     resume.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -145,47 +168,8 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         </div>
       </header>
 
-      {/* Mode Indicator Banner */}
-      <div className="px-4 pt-[72px] pb-2 shrink-0">
-        <div className={`group relative overflow-hidden rounded-2xl py-4 px-5 text-white shadow-xl transition-all ${isInterviewMode
-          ? 'bg-gradient-to-br from-indigo-600 to-indigo-700 shadow-indigo-500/30'
-          : 'bg-gradient-to-br from-primary via-blue-600 to-indigo-700 shadow-xl shadow-primary/30'
-          }`}>
 
-          {/* Decorative shapes - Synced with Membership/Dashboard style for Interview mode */}
-          {isInterviewMode ? (
-            <>
-              <div className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-white/10 blur-3xl animate-pulse pointer-events-none" />
-              <div className="absolute -left-16 -bottom-16 h-48 w-48 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-            </>
-          ) : (
-            <>
-              <div className="absolute -right-8 -top-8 size-24 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-              <div className="absolute -left-8 -bottom-8 size-20 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-            </>
-          )}
-
-          <div className="flex items-center gap-4 relative z-10">
-            <div className="shrink-0 size-10 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-white border border-white/20">
-              <span className="material-symbols-outlined text-[24px]">
-                {isInterviewMode ? 'forum' : 'assessment'}
-              </span>
-            </div>
-            <div className="flex flex-col min-w-0 pr-2">
-              <h2 className="text-base font-black mb-0.5 text-white tracking-wide">
-                {isInterviewMode ? '模拟面试' : '简历优化'}
-              </h2>
-              <p className="text-[11px] text-white/90 leading-tight font-medium whitespace-nowrap overflow-hidden text-ellipsis">
-                {isInterviewMode
-                  ? 'AI 面试官将基于简历提问，模拟真实面试场景。'
-                  : 'AI 将基于 JD 与职业画像生成针对性的优化方案。'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 py-3 bg-background-light dark:bg-background-dark shrink-0">
+      <div className="px-4 pt-[72px] pb-3 bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">
           <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
           <input
@@ -212,8 +196,24 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
           {allResumes && allResumes.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">简历库中还没有简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">请先回首页新建一份简历吧</p>
+              <p className="text-slate-900 dark:text-white font-medium mb-1">
+                {isInterviewMode ? '暂无可用于面试的简历' : '简历库中还没有简历'}
+              </p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                {isInterviewMode ? '请先完成一次 AI 诊断，生成简历后再开始面试。' : '请先回首页新建一份简历吧'}
+              </p>
+            </div>
+          ) : generatedResumes.length === 0 ? (
+            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
+              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">post_add</span>
+              <p className="text-slate-900 dark:text-white font-medium mb-1">
+                {isInterviewMode ? '暂无可用于面试的诊断简历' : '暂无可用于分析的生成简历'}
+              </p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">
+                {isInterviewMode
+                  ? '请先做一次 AI 诊断（通用或定向），生成简历后再进入面试。'
+                  : '请先完成一次通用或定向优化，生成简历后再来这里继续'}
+              </p>
             </div>
           ) : filtered.length === 0 && (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
@@ -229,7 +229,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
         {filtered.length > 0 && (
           <div className="h-12 flex items-center justify-center mt-4">
             <p className="text-xs text-slate-400 dark:text-slate-600">
-              {filtered.length === (allResumes?.length || 0) ? '已加载全部内容' : `显示 ${filtered.length} 条结果`}
+              {filtered.length === generatedResumes.length ? '已加载全部内容' : `显示 ${filtered.length} 条结果`}
             </p>
           </div>
         )}

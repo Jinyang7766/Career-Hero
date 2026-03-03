@@ -5,7 +5,7 @@ import { View } from '../../../../types';
 import { DatabaseService } from '../../../../src/database-service';
 import { deriveDiagnosisProgress, deriveLatestAnalysisStep } from '../../../../src/diagnosis-progress';
 import { deriveInterviewStageStatus } from '../interview-stage-status';
-import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   isInterviewMode?: boolean;
@@ -14,7 +14,7 @@ type Params = {
   clearInterviewSceneState?: () => Promise<void>;
   persistAnalysisSessionState?: (
     state: 'interview_in_progress' | 'paused' | 'interview_done',
-    patch?: Partial<{ jdText: string; targetCompany: string; step: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; step: string; force: boolean }>
   ) => Promise<void>;
   jdText: string;
   targetCompany?: string;
@@ -25,7 +25,7 @@ type Params = {
   setInterviewPlan: (v: string[]) => void;
   setPlanFetchTrigger: Dispatch<SetStateAction<number>>;
   openChat: (source: 'internal' | 'preview') => void;
-  navigateToStep?: (step: 'jd_input' | 'analyzing' | 'chat' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep?: (step: 'jd_input' | 'interview_scene' | 'analyzing' | 'chat' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   navigateToView?: (view: View, options?: any) => void;
   setTargetCompany?: (v: string) => void;
   setJdText?: (v: string) => void;
@@ -58,15 +58,14 @@ export const useInterviewEntryActions = ({
     if (!resumeId) return;
     const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
     const interviewType = String(getActiveInterviewType() || '').trim().toLowerCase();
-    const interviewMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
-    if (!interviewType || !interviewMode) return;
+    if (!interviewType) return;
     const userKey = String(currentUserId || '').trim();
     const userScopedPrefix = userKey
-      ? `ai_interview_plan_${userKey}_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`
+      ? `ai_interview_plan_${userKey}_${resumeId}_${jdKey}_${interviewType}_`
       : '';
-    const legacyPrefix = `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
-    const genericNeedle = `_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
-    const genericJdNeedle = `_${jdKey}_${interviewType}_${interviewMode}_`;
+    const legacyPrefix = `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_`;
+    const genericNeedle = `_${resumeId}_${jdKey}_${interviewType}_`;
+    const genericJdNeedle = `_${jdKey}_${interviewType}_`;
     try {
       const toDelete: string[] = [];
       for (let i = 0; i < localStorage.length; i += 1) {
@@ -92,7 +91,7 @@ export const useInterviewEntryActions = ({
   const handleRestartInterview = useCallback(async () => {
     if (isInterviewMode) {
       // Jump back to scene selection immediately, then clear state in background.
-      navigateToStep?.('jd_input', true);
+      navigateToStep?.('interview_scene', true);
     }
     chatIntroScheduledRef.current = false;
     try {
@@ -190,7 +189,7 @@ export const useInterviewEntryActions = ({
       return;
     }
     // Final report "go interview" should only route to scene selection.
-    navigateToStep?.('jd_input', true);
+    navigateToStep?.('interview_scene', true);
   }, [isInterviewMode, currentUserId, resumeData, navigateToView, navigateToStep]);
 
   return {

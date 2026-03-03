@@ -44,6 +44,7 @@ export const useAiAnalysisPassiveStateFlows = ({
   isAnalysisStillInProgress,
   inprogressAtKey,
   cancelInFlightAnalysis,
+  suppressDiagnosisSessionRecoveryRef,
 }: AiAnalysisPassiveFlowsParams) => {
   useChatIntroMessages({
     isInterviewMode,
@@ -82,6 +83,7 @@ export const useAiAnalysisPassiveStateFlows = ({
     navigateToStep: navigateToStep as any,
     loadLastAnalysis,
     recoveredSessionKeyRef: recoveredSessionKeyRef as any,
+    suppressAutoRecoveryRef: suppressDiagnosisSessionRecoveryRef as any,
   });
 
   useInterviewSessionRecovery({

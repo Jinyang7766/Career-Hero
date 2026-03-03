@@ -2,6 +2,124 @@ import React from 'react';
 import type { ResumeData } from '../../../types';
 import { formatTimeline } from '../../../src/timeline-utils';
 import type { MoveSectionDirection, PreviewSectionKey } from './hooks/usePreviewSectionOrder';
+import { buildSectionTitleFocusKey, buildSkillFocusKey } from './inline-focus';
+
+export type PreviewEditBindings = {
+  enabled: boolean;
+  onPersonalFieldChange: (field: keyof ResumeData['personalInfo'], value: string) => void;
+  onSummaryChange: (value: string) => void;
+  onWorkFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
+  onEducationFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
+  onProjectFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
+  onAddWorkItem: () => void;
+  onRemoveWorkItem: (id: number) => void;
+  onAddEducationItem: () => void;
+  onRemoveEducationItem: (id: number) => void;
+  onAddProjectItem: () => void;
+  onRemoveProjectItem: (id: number) => void;
+  onSkillItemChange: (index: number, value: string) => void;
+  onAddSkillItem: () => void;
+  onRemoveSkillItem: (index: number) => void;
+  onSkillsTextChange: (value: string) => void;
+  autoFocusKey?: string;
+  autoFocusToken?: number;
+};
+
+type EditableTextProps = {
+  as?: React.ElementType;
+  value: string;
+  className?: string;
+  style?: React.CSSProperties;
+  editable?: boolean;
+  multiline?: boolean;
+  onCommit?: (value: string) => void;
+  focusKey?: string;
+  autoFocusKey?: string;
+  autoFocusToken?: number;
+};
+
+const EditableText: React.FC<EditableTextProps> = ({
+  as = 'span',
+  value,
+  className,
+  style,
+  editable = false,
+  multiline = false,
+  onCommit,
+  focusKey,
+  autoFocusKey,
+  autoFocusToken,
+}) => {
+  const Tag = as as any;
+  const elementRef = React.useRef<HTMLElement | null>(null);
+  const editableClass = editable
+    ? 'rounded-sm px-0.5 -mx-0.5 hover:bg-amber-100/70 focus:bg-amber-100/70 focus:outline-none focus:ring-1 focus:ring-amber-300'
+    : '';
+
+  const handleBlur = (event: React.FocusEvent<HTMLElement>) => {
+    if (!editable || !onCommit) return;
+    const raw = String(event.currentTarget.textContent || '').replace(/\u00a0/g, ' ');
+    const next = multiline ? raw.trim() : raw.replace(/\s+/g, ' ').trim();
+    onCommit(next);
+  };
+
+  const handleKeyDown = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (!editable) return;
+    if (!multiline && event.key === 'Enter') {
+      event.preventDefault();
+      (event.currentTarget as HTMLElement).blur();
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      (event.currentTarget as HTMLElement).blur();
+    }
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    if (!editable) return;
+    event.preventDefault();
+    const text = event.clipboardData.getData('text/plain');
+    if (!text) return;
+    document.execCommand('insertText', false, multiline ? text : text.replace(/\s+/g, ' '));
+  };
+
+  React.useEffect(() => {
+    if (!editable) return;
+    if (!focusKey || !autoFocusKey || focusKey !== autoFocusKey) return;
+    const target = elementRef.current;
+    if (!target) return;
+
+    const raf = window.requestAnimationFrame(() => {
+      target.focus({ preventScroll: true });
+      const selection = window.getSelection?.();
+      if (!selection) return;
+      const range = document.createRange();
+      range.selectNodeContents(target);
+      range.collapse(false);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    });
+
+    return () => window.cancelAnimationFrame(raf);
+  }, [autoFocusKey, autoFocusToken, editable, focusKey]);
+
+  return React.createElement(
+    Tag,
+    {
+      className: [className, editableClass].filter(Boolean).join(' '),
+      style,
+      ref: elementRef as any,
+      contentEditable: editable || undefined,
+      suppressContentEditableWarning: editable ? true : undefined,
+      spellCheck: false,
+      onBlur: handleBlur,
+      onKeyDown: handleKeyDown,
+      onPaste: handlePaste,
+      'data-focus-key': focusKey,
+    },
+    value
+  );
+};
 
 const formatDateRange = (item: any): string => {
   return formatTimeline(item);
@@ -139,12 +257,55 @@ const SectionOrderButtons: React.FC<{
   );
 };
 
+const EditIconButton: React.FC<{
+  icon: 'add' | 'remove';
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+}> = ({ icon, label, onClick, danger = false }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`no-print w-6 h-6 rounded-md border transition-colors flex items-center justify-center ${
+      danger
+        ? 'border-red-200 text-red-500 hover:bg-red-50'
+        : 'border-slate-200 text-slate-500 hover:bg-slate-100'
+    }${icon === 'remove' ? ' order-last' : ''}`}
+    aria-label={label}
+    title={label}
+  >
+    <span className="material-symbols-outlined text-[14px] align-middle">{icon}</span>
+  </button>
+);
+
+const HeaderActions: React.FC<{
+  sectionOrderIndex: number;
+  total: number;
+  onMoveSection: (index: number, direction: MoveSectionDirection) => void;
+  hideOrderButtons?: boolean;
+  canAdd?: boolean;
+  onAdd?: () => void;
+}> = ({ sectionOrderIndex, total, onMoveSection, hideOrderButtons, canAdd, onAdd }) => (
+  <div className="flex items-center gap-1">
+    {canAdd && onAdd ? (
+      <EditIconButton icon="add" label="新增条目" onClick={onAdd} />
+    ) : null}
+    <SectionOrderButtons
+      orderIndex={sectionOrderIndex}
+      total={total}
+      onMoveSection={onMoveSection}
+      hidden={hideOrderButtons}
+    />
+  </div>
+);
+
 const ModernTemplate: React.FC<{
   data: ResumeData;
   sectionOrder: PreviewSectionKey[];
   onMoveSection: (index: number, direction: MoveSectionDirection) => void;
   hideOrderButtons?: boolean;
-}> = ({ data, sectionOrder, onMoveSection, hideOrderButtons }) => (
+  editBindings?: PreviewEditBindings;
+}> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
   <div id="resume-content-modern" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="flex gap-4 mb-6 border-b border-gray-200 pb-4 no-break">
       <div className="w-16 h-20 bg-gray-200 rounded-sm shrink-0 overflow-hidden">
@@ -157,8 +318,22 @@ const ModernTemplate: React.FC<{
         )}
       </div>
       <div className="flex-1 flex flex-col justify-center space-y-1.5">
-        <h1 className="text-xl font-bold text-gray-900" style={{ fontSize: '18px', fontWeight: 'bold' }}>{data?.personalInfo?.name || '姓名'}</h1>
-        <p className="text-sm text-gray-600" style={{ fontSize: '14px', color: '#666' }}>{resolveJobTitle(data)}</p>
+        <EditableText
+          as="h1"
+          className="text-xl font-bold text-gray-900"
+          style={{ fontSize: '18px', fontWeight: 'bold' }}
+          value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
+          editable={!!editBindings?.enabled}
+          onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
+        />
+        <EditableText
+          as="p"
+          className="text-sm text-gray-600"
+          style={{ fontSize: '14px', color: '#666' }}
+          value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
+          editable={!!editBindings?.enabled}
+          onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
+        />
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
           {resolvePersonalMetaItems(data).map((item, idx, arr) => (
             <React.Fragment key={`${item}-${idx}`}>
@@ -171,69 +346,220 @@ const ModernTemplate: React.FC<{
     </div>
 
     {sectionOrder.map((section, orderIndex) => {
-      if (section === 'summary' && resolveSummaryText(data)) {
+      if (section === 'summary' && (resolveSummaryText(data) || editBindings?.enabled)) {
         return (
           <div key={section} className="mb-5 no-break">
             <div className="flex items-center justify-between border-b border-blue-100 pb-1 mb-2">
               <h3 className="text-sm font-bold text-blue-600 uppercase" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>个人简介</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+              <HeaderActions
+                sectionOrderIndex={orderIndex}
+                total={sectionOrder.length}
+                onMoveSection={onMoveSection}
+                hideOrderButtons={hideOrderButtons}
+              />
             </div>
-            <p className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{resolveSummaryText(data)}</p>
+            <EditableText
+              as="p"
+              className="text-[10px] text-gray-600 leading-relaxed whitespace-pre-wrap"
+              style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}
+              value={resolveSummaryText(data)}
+              editable={!!editBindings?.enabled}
+              multiline
+              onCommit={(value) => editBindings?.onSummaryChange(value)}
+            />
           </div>
         );
       }
-      if (section === 'workExps' && data?.workExps?.length) {
+      if (section === 'workExps' && (data?.workExps?.length || editBindings?.enabled)) {
         return (
           <div key={section} className="mb-5 space-y-2 no-break">
             <div className="flex items-center justify-between border-b border-blue-100 pb-1 mb-2">
               <h3 className="text-sm font-bold text-blue-600 uppercase" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>工作经历</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+              <HeaderActions
+                sectionOrderIndex={orderIndex}
+                total={sectionOrder.length}
+                onMoveSection={onMoveSection}
+                hideOrderButtons={hideOrderButtons}
+                canAdd={!!editBindings?.enabled}
+                onAdd={editBindings?.onAddWorkItem}
+              />
             </div>
+            {data.workExps.length === 0 && editBindings?.enabled ? (
+              <p className="text-[10px] text-slate-400">暂无工作经历，点击右上角 + 新增</p>
+            ) : null}
             {data.workExps.map((exp: any) => (
               <div key={exp.id} className="mb-2 no-break">
-                <div className="flex items-start gap-3 mb-1">
-                  <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(exp)}</span>
-                  <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(exp) || '工作时间'}</span>
+                <div className="flex items-start gap-2 mb-1">
+                  {editBindings?.enabled ? (
+                    <EditIconButton
+                      icon="remove"
+                      label="删除工作经历"
+                      onClick={() => editBindings.onRemoveWorkItem(Number(exp.id))}
+                    />
+                  ) : null}
+                  <EditableText
+                    className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800"
+                    style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}
+                    value={resolveExperienceTitle(exp)}
+                    editable={!!editBindings?.enabled}
+                    focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
+                    autoFocusKey={editBindings?.autoFocusKey}
+                    autoFocusToken={editBindings?.autoFocusToken}
+                    onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
+                  />
+                  <EditableText
+                    className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500"
+                    style={{ fontSize: '10px', color: '#6b7280' }}
+                    value={formatDateRange(exp) || (editBindings?.enabled ? '' : '工作时间')}
+                    editable={!!editBindings?.enabled}
+                    onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
+                  />
                 </div>
-                <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(exp) || '职位'}</p>
-                <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{exp.description || '工作描述'}</p>
+                <EditableText
+                  as="p"
+                  className="text-[10px] font-medium text-gray-700"
+                  style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}
+                  value={resolveExperienceSubtitle(exp) || (editBindings?.enabled ? '' : '职位')}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
+                />
+                <EditableText
+                  as="p"
+                  className="text-[10px] text-gray-600 leading-relaxed mt-1 whitespace-pre-wrap"
+                  style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}
+                  value={String(exp.description || '')}
+                  editable={!!editBindings?.enabled}
+                  multiline
+                  onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
+                />
               </div>
             ))}
           </div>
         );
       }
-      if (section === 'educations' && data?.educations?.length) {
+      if (section === 'educations' && (data?.educations?.length || editBindings?.enabled)) {
         return (
           <div key={section} className="mb-5 space-y-2 no-break">
             <div className="flex items-center justify-between border-b border-blue-100 pb-1 mb-2">
               <h3 className="text-sm font-bold text-blue-600 uppercase" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>教育背景</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+              <HeaderActions
+                sectionOrderIndex={orderIndex}
+                total={sectionOrder.length}
+                onMoveSection={onMoveSection}
+                hideOrderButtons={hideOrderButtons}
+                canAdd={!!editBindings?.enabled}
+                onAdd={editBindings?.onAddEducationItem}
+              />
             </div>
+            {data.educations.length === 0 && editBindings?.enabled ? (
+              <p className="text-[10px] text-slate-400">暂无教育背景，点击右上角 + 新增</p>
+            ) : null}
             {data.educations.map((edu: any) => (
-              <div key={edu.id} className="flex items-start gap-3 mb-1 no-break">
-                <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(edu)}</span>
-                <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(edu) || '教育时间'}</span>
+              <div key={edu.id} className="flex items-start gap-2 mb-1 no-break">
+                {editBindings?.enabled ? (
+                  <EditIconButton
+                    icon="remove"
+                    label="删除教育背景"
+                    onClick={() => editBindings.onRemoveEducationItem(Number(edu.id))}
+                  />
+                ) : null}
+                <EditableText
+                  className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800"
+                  style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}
+                  value={resolveExperienceTitle(edu)}
+                  editable={!!editBindings?.enabled}
+                  focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
+                  autoFocusKey={editBindings?.autoFocusKey}
+                  autoFocusToken={editBindings?.autoFocusToken}
+                  onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
+                />
+                <EditableText
+                  className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500"
+                  style={{ fontSize: '10px', color: '#6b7280' }}
+                  value={formatDateRange(edu) || (editBindings?.enabled ? '' : '教育时间')}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
+                />
               </div>
             ))}
-            <p className="text-[10px] text-gray-600" style={{ fontSize: '10px', color: '#4b5563' }}>{resolveExperienceSubtitle(data.educations[0])}</p>
+            <div className="space-y-1">
+              {data.educations.map((edu: any) => (
+                <EditableText
+                  key={`edu-subtitle-${edu.id}`}
+                  as="p"
+                  className="text-[10px] text-gray-600"
+                  style={{ fontSize: '10px', color: '#4b5563' }}
+                  value={resolveExperienceSubtitle(edu)}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
+                />
+              ))}
+            </div>
           </div>
         );
       }
-      if (section === 'projects' && data?.projects?.length) {
+      if (section === 'projects' && (data?.projects?.length || editBindings?.enabled)) {
         return (
           <div key={section} className="mb-5 space-y-2 no-break">
             <div className="flex items-center justify-between border-b border-blue-100 pb-1 mb-2">
               <h3 className="text-sm font-bold text-blue-600 uppercase" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>项目经历</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+              <HeaderActions
+                sectionOrderIndex={orderIndex}
+                total={sectionOrder.length}
+                onMoveSection={onMoveSection}
+                hideOrderButtons={hideOrderButtons}
+                canAdd={!!editBindings?.enabled}
+                onAdd={editBindings?.onAddProjectItem}
+              />
             </div>
+            {data.projects.length === 0 && editBindings?.enabled ? (
+              <p className="text-[10px] text-slate-400">暂无项目经历，点击右上角 + 新增</p>
+            ) : null}
             {data.projects.map((proj: any) => (
               <div key={proj.id} className="mb-2 no-break">
-                <div className="flex items-start gap-3 mb-1">
-                  <span className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800" style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}>{resolveExperienceTitle(proj)}</span>
-                  <span className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#6b7280' }}>{formatDateRange(proj) || '项目时间'}</span>
+                <div className="flex items-start gap-2 mb-1">
+                  {editBindings?.enabled ? (
+                    <EditIconButton
+                      icon="remove"
+                      label="删除项目经历"
+                      onClick={() => editBindings.onRemoveProjectItem(Number(proj.id))}
+                    />
+                  ) : null}
+                  <EditableText
+                    className="flex-1 min-w-0 break-words text-xs font-bold text-gray-800"
+                    style={{ fontSize: '12px', fontWeight: 'bold', color: '#1f2937' }}
+                    value={resolveExperienceTitle(proj)}
+                    editable={!!editBindings?.enabled}
+                    focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
+                    autoFocusKey={editBindings?.autoFocusKey}
+                    autoFocusToken={editBindings?.autoFocusToken}
+                    onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
+                  />
+                  <EditableText
+                    className="shrink-0 min-w-[104px] text-right whitespace-nowrap text-[10px] text-gray-500"
+                    style={{ fontSize: '10px', color: '#6b7280' }}
+                    value={formatDateRange(proj) || (editBindings?.enabled ? '' : '项目时间')}
+                    editable={!!editBindings?.enabled}
+                    onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
+                  />
                 </div>
-                <p className="text-[10px] font-medium text-gray-700" style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}>{resolveExperienceSubtitle(proj) || '项目角色'}</p>
-                <p className="text-[10px] text-gray-600 leading-relaxed mt-1" style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}>{proj.description || '项目描述'}</p>
+                <EditableText
+                  as="p"
+                  className="text-[10px] font-medium text-gray-700"
+                  style={{ fontSize: '10px', fontWeight: '500', color: '#374151' }}
+                  value={resolveExperienceSubtitle(proj) || (editBindings?.enabled ? '' : '项目角色')}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
+                />
+                <EditableText
+                  as="p"
+                  className="text-[10px] text-gray-600 leading-relaxed mt-1 whitespace-pre-wrap"
+                  style={{ fontSize: '10px', color: '#4b5563', lineHeight: '1.4' }}
+                  value={String(proj.description || '')}
+                  editable={!!editBindings?.enabled}
+                  multiline
+                  onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
+                />
               </div>
             ))}
           </div>
@@ -241,14 +567,43 @@ const ModernTemplate: React.FC<{
       }
       if (section === 'skills') {
         const skills = resolveSkillsList((data as any)?.skills);
-        if (!skills.length) return null;
+        if (!skills.length && !editBindings?.enabled) return null;
+        const editableSkills = skills.length ? skills : [''];
         return (
           <div key={section} className="mb-5 space-y-2 no-break">
             <div className="flex items-center justify-between border-b border-blue-100 pb-1 mb-2">
               <h3 className="text-sm font-bold text-blue-600 uppercase" style={{ fontSize: '14px', fontWeight: 'bold', color: '#1e40af' }}>技能</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+              <HeaderActions
+                sectionOrderIndex={orderIndex}
+                total={sectionOrder.length}
+                onMoveSection={onMoveSection}
+                hideOrderButtons={hideOrderButtons}
+                canAdd={!!editBindings?.enabled}
+                onAdd={editBindings?.onAddSkillItem}
+              />
             </div>
-            <div className="flex flex-wrap gap-2">{skills.map((skill, index) => <span key={`${skill}-${index}`} className="text-gray-700 text-[10px] mr-2">{skill}</span>)}</div>
+            <div className="flex flex-wrap gap-2">
+              {editableSkills.map((skill, index) => (
+                <span key={`${skill}-${index}`} className="inline-flex items-center gap-1">
+                  <EditableText
+                    className="text-gray-700 text-[10px] mr-2"
+                    value={skill}
+                    editable={!!editBindings?.enabled}
+                    focusKey={buildSkillFocusKey(index)}
+                    autoFocusKey={editBindings?.autoFocusKey}
+                    autoFocusToken={editBindings?.autoFocusToken}
+                    onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
+                  />
+                  {editBindings?.enabled ? (
+                    <EditIconButton
+                      icon="remove"
+                      label="删除技能"
+                      onClick={() => editBindings.onRemoveSkillItem(index)}
+                    />
+                  ) : null}
+                </span>
+              ))}
+            </div>
           </div>
         );
       }
@@ -257,14 +612,26 @@ const ModernTemplate: React.FC<{
   </div>
 );
 
-const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons }) => (
+const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; editBindings?: PreviewEditBindings; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
   <div id="resume-content-classic" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
       <div className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 flex items-center justify-center text-gray-400">
         {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[28px]">person</span>}
       </div>
-      <h1 className="text-2xl font-bold text-black uppercase tracking-wider mb-2">{data?.personalInfo?.name || '姓名'}</h1>
-      <p className="text-base text-gray-800 font-serif italic mb-2">{resolveJobTitle(data)}</p>
+      <EditableText
+        as="h1"
+        className="text-2xl font-bold text-black uppercase tracking-wider mb-2"
+        value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
+        editable={!!editBindings?.enabled}
+        onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
+      />
+      <EditableText
+        as="p"
+        className="text-base text-gray-800 font-serif italic mb-2"
+        value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
+        editable={!!editBindings?.enabled}
+        onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
+      />
       <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs text-gray-600">
         {resolvePersonalMetaItems(data).map((item, idx, arr) => (
           <React.Fragment key={`${item}-${idx}`}>
@@ -275,94 +642,270 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
       </div>
     </div>
     {sectionOrder.map((section, orderIndex) => {
-      if (section === 'summary' && resolveSummaryText(data)) return (
+      if (section === 'summary' && (resolveSummaryText(data) || editBindings?.enabled)) return (
         <div key={section} className="mb-8 px-2 no-break">
           <div className="flex items-center justify-between border-b-2 border-gray-900 mb-2 pb-0.5">
             <h3 className="text-sm font-bold text-gray-900">个人简介</h3>
-            <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+            <HeaderActions
+              sectionOrderIndex={orderIndex}
+              total={sectionOrder.length}
+              onMoveSection={onMoveSection}
+              hideOrderButtons={hideOrderButtons}
+            />
           </div>
-          <p className="text-xs text-gray-700 italic leading-relaxed whitespace-pre-wrap">{resolveSummaryText(data)}</p>
+          <EditableText
+            as="p"
+            className="text-xs text-gray-700 italic leading-relaxed whitespace-pre-wrap"
+            value={resolveSummaryText(data)}
+            editable={!!editBindings?.enabled}
+            multiline
+            onCommit={(value) => editBindings?.onSummaryChange(value)}
+          />
         </div>
       );
-      if (section === 'workExps' && data?.workExps?.length) return (
+      if (section === 'workExps' && (data?.workExps?.length || editBindings?.enabled)) return (
         <div key={section} className="mb-6 space-y-4 no-break">
           <div className="flex items-center justify-between border-b border-black pb-1 mb-3 bg-gray-100 pl-2 pr-1">
             <h3 className="text-sm font-bold text-black uppercase">工作经历</h3>
-            <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+            <HeaderActions
+              sectionOrderIndex={orderIndex}
+              total={sectionOrder.length}
+              onMoveSection={onMoveSection}
+              hideOrderButtons={hideOrderButtons}
+              canAdd={!!editBindings?.enabled}
+              onAdd={editBindings?.onAddWorkItem}
+            />
           </div>
+          {data.workExps.length === 0 && editBindings?.enabled ? (
+            <p className="text-xs text-slate-400 pl-2">暂无工作经历，点击右上角 + 新增</p>
+          ) : null}
           {data.workExps.map((exp: any) => (
             <div key={exp.id} className="mb-4 no-break pl-2">
-              <div className="flex items-start gap-3 mb-1">
-                <span className="flex-1 min-w-0 break-words text-sm font-bold text-black">{resolveExperienceTitle(exp)}</span>
-                <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(exp) || '工作时间'}</span>
+              <div className="flex items-start gap-2 mb-1">
+                {editBindings?.enabled ? (
+                  <EditIconButton
+                    icon="remove"
+                    label="删除工作经历"
+                    onClick={() => editBindings.onRemoveWorkItem(Number(exp.id))}
+                  />
+                ) : null}
+                <EditableText
+                  className="flex-1 min-w-0 break-words text-sm font-bold text-black"
+                  value={resolveExperienceTitle(exp)}
+                  editable={!!editBindings?.enabled}
+                  focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
+                  autoFocusKey={editBindings?.autoFocusKey}
+                  autoFocusToken={editBindings?.autoFocusToken}
+                  onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
+                />
+                <EditableText
+                  className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
+                  value={formatDateRange(exp) || (editBindings?.enabled ? '' : '工作时间')}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
+                />
               </div>
-              <p className="text-xs font-bold text-gray-800 mb-1">{resolveExperienceSubtitle(exp) || '职位'}</p>
-              <p className="text-xs text-gray-700 leading-relaxed text-justify">{exp.description || '工作描述'}</p>
+              <EditableText
+                as="p"
+                className="text-xs font-bold text-gray-800 mb-1"
+                value={resolveExperienceSubtitle(exp) || (editBindings?.enabled ? '' : '职位')}
+                editable={!!editBindings?.enabled}
+                onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
+              />
+              <EditableText
+                as="p"
+                className="text-xs text-gray-700 leading-relaxed text-justify whitespace-pre-wrap"
+                value={String(exp.description || '')}
+                editable={!!editBindings?.enabled}
+                multiline
+                onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
+              />
             </div>
           ))}
         </div>
       );
-      if (section === 'educations' && data?.educations?.length) return (
+      if (section === 'educations' && (data?.educations?.length || editBindings?.enabled)) return (
         <div key={section} className="mb-6 space-y-4 no-break">
           <div className="flex items-center justify-between border-b border-black pb-1 mb-3 bg-gray-100 pl-2 pr-1">
             <h3 className="text-sm font-bold text-black uppercase">教育背景</h3>
-            <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+            <HeaderActions
+              sectionOrderIndex={orderIndex}
+              total={sectionOrder.length}
+              onMoveSection={onMoveSection}
+              hideOrderButtons={hideOrderButtons}
+              canAdd={!!editBindings?.enabled}
+              onAdd={editBindings?.onAddEducationItem}
+            />
           </div>
+          {data.educations.length === 0 && editBindings?.enabled ? (
+            <p className="text-xs text-slate-400 pl-2">暂无教育背景，点击右上角 + 新增</p>
+          ) : null}
           {data.educations.map((edu: any) => (
-            <div key={edu.id} className="flex items-start gap-3 mb-2 no-break pl-2">
+            <div key={edu.id} className="flex items-start gap-2 mb-2 no-break pl-2">
+              {editBindings?.enabled ? (
+                <EditIconButton
+                  icon="remove"
+                  label="删除教育背景"
+                  onClick={() => editBindings.onRemoveEducationItem(Number(edu.id))}
+                />
+              ) : null}
               <div className="flex-1 min-w-0">
-                <span className="text-sm font-bold text-black block break-words">{resolveExperienceTitle(edu)}</span>
-                <span className="text-xs text-gray-800">{resolveExperienceSubtitle(edu)}</span>
+                <EditableText
+                  as="span"
+                  className="text-sm font-bold text-black block break-words"
+                  value={resolveExperienceTitle(edu)}
+                  editable={!!editBindings?.enabled}
+                  focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
+                  autoFocusKey={editBindings?.autoFocusKey}
+                  autoFocusToken={editBindings?.autoFocusToken}
+                  onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
+                />
+                <EditableText
+                  as="span"
+                  className="text-xs text-gray-800"
+                  value={resolveExperienceSubtitle(edu)}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
+                />
               </div>
-              <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(edu) || '教育时间'}</span>
+              <EditableText
+                className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
+                value={formatDateRange(edu) || (editBindings?.enabled ? '' : '教育时间')}
+                editable={!!editBindings?.enabled}
+                onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
+              />
             </div>
           ))}
         </div>
       );
-      if (section === 'projects' && data?.projects?.length) return (
+      if (section === 'projects' && (data?.projects?.length || editBindings?.enabled)) return (
         <div key={section} className="mb-6 space-y-4 no-break">
           <div className="flex items-center justify-between border-b border-black pb-1 mb-3 bg-gray-100 pl-2 pr-1">
             <h3 className="text-sm font-bold text-black uppercase">项目经历</h3>
-            <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+            <HeaderActions
+              sectionOrderIndex={orderIndex}
+              total={sectionOrder.length}
+              onMoveSection={onMoveSection}
+              hideOrderButtons={hideOrderButtons}
+              canAdd={!!editBindings?.enabled}
+              onAdd={editBindings?.onAddProjectItem}
+            />
           </div>
+          {data.projects.length === 0 && editBindings?.enabled ? (
+            <p className="text-xs text-slate-400 pl-2">暂无项目经历，点击右上角 + 新增</p>
+          ) : null}
           {data.projects.map((proj: any) => (
             <div key={proj.id} className="mb-4 no-break pl-2">
-              <div className="flex items-start gap-3 mb-1">
-                <span className="flex-1 min-w-0 break-words text-sm font-bold text-black">{resolveExperienceTitle(proj)}</span>
-                <span className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic">{formatDateRange(proj) || '项目时间'}</span>
+              <div className="flex items-start gap-2 mb-1">
+                {editBindings?.enabled ? (
+                  <EditIconButton
+                    icon="remove"
+                    label="删除项目经历"
+                    onClick={() => editBindings.onRemoveProjectItem(Number(proj.id))}
+                  />
+                ) : null}
+                <EditableText
+                  className="flex-1 min-w-0 break-words text-sm font-bold text-black"
+                  value={resolveExperienceTitle(proj)}
+                  editable={!!editBindings?.enabled}
+                  focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
+                  autoFocusKey={editBindings?.autoFocusKey}
+                  autoFocusToken={editBindings?.autoFocusToken}
+                  onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
+                />
+                <EditableText
+                  className="shrink-0 min-w-[116px] text-right whitespace-nowrap text-xs text-gray-600 italic"
+                  value={formatDateRange(proj) || (editBindings?.enabled ? '' : '项目时间')}
+                  editable={!!editBindings?.enabled}
+                  onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
+                />
               </div>
-              <p className="text-xs font-bold text-gray-800 mb-1">{resolveExperienceSubtitle(proj) || '项目角色'}</p>
-              <p className="text-xs text-gray-700 leading-relaxed text-justify">{proj.description || '项目描述'}</p>
+              <EditableText
+                as="p"
+                className="text-xs font-bold text-gray-800 mb-1"
+                value={resolveExperienceSubtitle(proj) || (editBindings?.enabled ? '' : '项目角色')}
+                editable={!!editBindings?.enabled}
+                onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
+              />
+              <EditableText
+                as="p"
+                className="text-xs text-gray-700 leading-relaxed text-justify whitespace-pre-wrap"
+                value={String(proj.description || '')}
+                editable={!!editBindings?.enabled}
+                multiline
+                onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
+              />
             </div>
           ))}
         </div>
       );
       if (section === 'skills') {
         const skills = resolveSkillsList((data as any)?.skills);
-        if (!skills.length) return null;
+        if (!skills.length && !editBindings?.enabled) return null;
         return (
           <div key={section} className="mb-6 space-y-2 no-break">
             <div className="flex items-center justify-between border-b border-black pb-1 mb-3 bg-gray-100 pl-2 pr-1">
               <h3 className="text-sm font-bold text-black uppercase">专业技能</h3>
-              <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
-            </div>
-            <p className="text-xs text-gray-800 pl-2 leading-relaxed">{skills.join(' • ')}</p>
+            <HeaderActions
+              sectionOrderIndex={orderIndex}
+              total={sectionOrder.length}
+              onMoveSection={onMoveSection}
+              hideOrderButtons={hideOrderButtons}
+              canAdd={!!editBindings?.enabled}
+              onAdd={editBindings?.onAddSkillItem}
+            />
           </div>
-        );
+          <div className="flex flex-wrap gap-2 pl-2">
+            {(skills.length ? skills : ['']).map((skill, index) => (
+              <span key={`${skill}-${index}`} className="inline-flex items-center gap-1">
+                <EditableText
+                  as="span"
+                  className="text-xs text-gray-800 leading-relaxed whitespace-pre-wrap"
+                  value={skill}
+                  editable={!!editBindings?.enabled}
+                  focusKey={buildSkillFocusKey(index)}
+                  autoFocusKey={editBindings?.autoFocusKey}
+                  autoFocusToken={editBindings?.autoFocusToken}
+                  onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
+                />
+                {editBindings?.enabled ? (
+                  <EditIconButton
+                    icon="remove"
+                    label="删除技能"
+                    onClick={() => editBindings.onRemoveSkillItem(index)}
+                  />
+                ) : null}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
       }
       return null;
     })}
   </div>
 );
 
-const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons }) => (
+const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSectionKey[]; onMoveSection: (index: number, direction: MoveSectionDirection) => void; hideOrderButtons?: boolean; editBindings?: PreviewEditBindings; }> = ({ data, sectionOrder, onMoveSection, hideOrderButtons, editBindings }) => (
   <div id="resume-content-minimal" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-10 no-break">
       <div className="mb-4 w-14 h-14 rounded-full border border-slate-300 bg-slate-200 flex items-center justify-center text-slate-400">
         {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[24px]">person</span>}
       </div>
-      <h1 className="text-4xl font-black text-black tracking-tight mb-2">{data?.personalInfo?.name || '姓名'}</h1>
-      <p className="text-lg text-gray-500 font-light mb-4">{resolveJobTitle(data)}</p>
+      <EditableText
+        as="h1"
+        className="text-4xl font-black text-black tracking-tight mb-2"
+        value={String(data?.personalInfo?.name || (editBindings?.enabled ? '' : '姓名'))}
+        editable={!!editBindings?.enabled}
+        onCommit={(value) => editBindings?.onPersonalFieldChange('name', value)}
+      />
+      <EditableText
+        as="p"
+        className="text-lg text-gray-500 font-light mb-4"
+        value={String(resolveJobTitle(data) || (editBindings?.enabled ? '' : '求职意向'))}
+        editable={!!editBindings?.enabled}
+        onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
+      />
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono">
         {resolvePersonalMetaItems(data).map((item, idx) => (
           <span key={`${item}-${idx}`}>{item}</span>
@@ -371,76 +914,208 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
     </div>
     <div className="flex flex-col gap-8">
       {sectionOrder.map((section, orderIndex) => {
-        if (section === 'summary' && resolveSummaryText(data)) {
+        if (section === 'summary' && (resolveSummaryText(data) || editBindings?.enabled)) {
           return (
             <section key={section} className="mb-6 no-break">
               <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
                 <h3 className="text-sm font-bold text-black uppercase tracking-widest">个人总结</h3>
                 <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resolveSummaryText(data)}</p>
+              <EditableText
+                as="p"
+                className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap"
+                value={resolveSummaryText(data)}
+                editable={!!editBindings?.enabled}
+                multiline
+                onCommit={(value) => editBindings?.onSummaryChange(value)}
+              />
             </section>
           );
         }
-        if (section === 'workExps' && data?.workExps?.length) {
+        if (section === 'workExps' && (data?.workExps?.length || editBindings?.enabled)) {
           return (
             <div key={section} className="no-break">
               <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
                 <h3 className="text-sm font-bold text-black uppercase tracking-widest">工作经历</h3>
-                <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+                <HeaderActions
+                  sectionOrderIndex={orderIndex}
+                  total={sectionOrder.length}
+                  onMoveSection={onMoveSection}
+                  hideOrderButtons={hideOrderButtons}
+                  canAdd={!!editBindings?.enabled}
+                  onAdd={editBindings?.onAddWorkItem}
+                />
               </div>
               <div className="space-y-6">
+                {data.workExps.length === 0 && editBindings?.enabled ? (
+                  <p className="text-xs text-slate-400">暂无工作经历，点击右上角 + 新增</p>
+                ) : null}
                 {data.workExps.map((exp: any) => (
                   <div key={exp.id}>
                     <div className="flex items-start gap-3 mb-1">
-                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(exp)}</h4>
-                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(exp)}</span>
+                      {editBindings?.enabled ? (
+                        <EditIconButton
+                          icon="remove"
+                          label="删除工作经历"
+                          onClick={() => editBindings.onRemoveWorkItem(Number(exp.id))}
+                        />
+                      ) : null}
+                      <EditableText
+                        as="h4"
+                        className="flex-1 min-w-0 break-words font-bold text-black"
+                        value={resolveExperienceTitle(exp)}
+                        editable={!!editBindings?.enabled}
+                        focusKey={buildSectionTitleFocusKey('workExps', Number(exp.id))}
+                        autoFocusKey={editBindings?.autoFocusKey}
+                        autoFocusToken={editBindings?.autoFocusToken}
+                        onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'title', value)}
+                      />
+                      <EditableText
+                        className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
+                        value={formatDateRange(exp)}
+                        editable={!!editBindings?.enabled}
+                        onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'date', value)}
+                      />
                     </div>
-                    <p className="text-sm text-gray-700 mb-2 font-medium italic">{resolveExperienceSubtitle(exp)}</p>
-                    <p className="text-sm text-gray-800 leading-relaxed text-justify">{exp.description}</p>
+                    <EditableText
+                      as="p"
+                      className="text-sm text-gray-700 mb-2 font-medium italic"
+                      value={resolveExperienceSubtitle(exp)}
+                      editable={!!editBindings?.enabled}
+                      onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'subtitle', value)}
+                    />
+                    <EditableText
+                      as="p"
+                      className="text-sm text-gray-800 leading-relaxed text-justify whitespace-pre-wrap"
+                      value={String(exp.description || '')}
+                      editable={!!editBindings?.enabled}
+                      multiline
+                      onCommit={(value) => editBindings?.onWorkFieldChange(Number(exp.id), 'description', value)}
+                    />
                   </div>
                 ))}
               </div>
             </div>
           );
         }
-        if (section === 'educations' && data?.educations?.length) {
+        if (section === 'educations' && (data?.educations?.length || editBindings?.enabled)) {
           return (
             <div key={section} className="no-break">
               <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
                 <h3 className="text-sm font-bold text-black uppercase tracking-widest">教育背景</h3>
-                <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+                <HeaderActions
+                  sectionOrderIndex={orderIndex}
+                  total={sectionOrder.length}
+                  onMoveSection={onMoveSection}
+                  hideOrderButtons={hideOrderButtons}
+                  canAdd={!!editBindings?.enabled}
+                  onAdd={editBindings?.onAddEducationItem}
+                />
               </div>
               <div className="space-y-4">
+                {data.educations.length === 0 && editBindings?.enabled ? (
+                  <p className="text-xs text-slate-400">暂无教育背景，点击右上角 + 新增</p>
+                ) : null}
                 {data.educations.map((edu: any) => (
                   <div key={edu.id}>
                     <div className="flex items-start gap-3 mb-1">
-                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(edu)}</h4>
-                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(edu)}</span>
+                      {editBindings?.enabled ? (
+                        <EditIconButton
+                          icon="remove"
+                          label="删除教育背景"
+                          onClick={() => editBindings.onRemoveEducationItem(Number(edu.id))}
+                        />
+                      ) : null}
+                      <EditableText
+                        as="h4"
+                        className="flex-1 min-w-0 break-words font-bold text-black"
+                        value={resolveExperienceTitle(edu)}
+                        editable={!!editBindings?.enabled}
+                        focusKey={buildSectionTitleFocusKey('educations', Number(edu.id))}
+                        autoFocusKey={editBindings?.autoFocusKey}
+                        autoFocusToken={editBindings?.autoFocusToken}
+                        onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'title', value)}
+                      />
+                      <EditableText
+                        className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
+                        value={formatDateRange(edu)}
+                        editable={!!editBindings?.enabled}
+                        onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'date', value)}
+                      />
                     </div>
-                    <p className="text-sm text-gray-700 italic">{resolveExperienceSubtitle(edu)}</p>
+                    <EditableText
+                      as="p"
+                      className="text-sm text-gray-700 italic"
+                      value={resolveExperienceSubtitle(edu)}
+                      editable={!!editBindings?.enabled}
+                      onCommit={(value) => editBindings?.onEducationFieldChange(Number(edu.id), 'subtitle', value)}
+                    />
                   </div>
                 ))}
               </div>
             </div>
           );
         }
-        if (section === 'projects' && data?.projects?.length) {
+        if (section === 'projects' && (data?.projects?.length || editBindings?.enabled)) {
           return (
             <div key={section} className="no-break">
               <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
                 <h3 className="text-sm font-bold text-black uppercase tracking-widest">项目经历</h3>
-                <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+                <HeaderActions
+                  sectionOrderIndex={orderIndex}
+                  total={sectionOrder.length}
+                  onMoveSection={onMoveSection}
+                  hideOrderButtons={hideOrderButtons}
+                  canAdd={!!editBindings?.enabled}
+                  onAdd={editBindings?.onAddProjectItem}
+                />
               </div>
               <div className="space-y-6">
+                {data.projects.length === 0 && editBindings?.enabled ? (
+                  <p className="text-xs text-slate-400">暂无项目经历，点击右上角 + 新增</p>
+                ) : null}
                 {data.projects.map((proj: any) => (
                   <div key={proj.id}>
                     <div className="flex items-start gap-3 mb-1">
-                      <h4 className="flex-1 min-w-0 break-words font-bold text-black">{resolveExperienceTitle(proj)}</h4>
-                      <span className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono">{formatDateRange(proj)}</span>
+                      {editBindings?.enabled ? (
+                        <EditIconButton
+                          icon="remove"
+                          label="删除项目经历"
+                          onClick={() => editBindings.onRemoveProjectItem(Number(proj.id))}
+                        />
+                      ) : null}
+                      <EditableText
+                        as="h4"
+                        className="flex-1 min-w-0 break-words font-bold text-black"
+                        value={resolveExperienceTitle(proj)}
+                        editable={!!editBindings?.enabled}
+                        focusKey={buildSectionTitleFocusKey('projects', Number(proj.id))}
+                        autoFocusKey={editBindings?.autoFocusKey}
+                        autoFocusToken={editBindings?.autoFocusToken}
+                        onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'title', value)}
+                      />
+                      <EditableText
+                        className="shrink-0 min-w-[122px] text-right whitespace-nowrap text-sm text-gray-600 font-mono"
+                        value={formatDateRange(proj)}
+                        editable={!!editBindings?.enabled}
+                        onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'date', value)}
+                      />
                     </div>
-                    <p className="text-sm text-gray-700 mb-2 font-medium italic">{resolveExperienceSubtitle(proj)}</p>
-                    <p className="text-sm text-gray-800 leading-relaxed text-justify">{proj.description}</p>
+                    <EditableText
+                      as="p"
+                      className="text-sm text-gray-700 mb-2 font-medium italic"
+                      value={resolveExperienceSubtitle(proj)}
+                      editable={!!editBindings?.enabled}
+                      onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'subtitle', value)}
+                    />
+                    <EditableText
+                      as="p"
+                      className="text-sm text-gray-800 leading-relaxed text-justify whitespace-pre-wrap"
+                      value={String(proj.description || '')}
+                      editable={!!editBindings?.enabled}
+                      multiline
+                      onCommit={(value) => editBindings?.onProjectFieldChange(Number(proj.id), 'description', value)}
+                    />
                   </div>
                 ))}
               </div>
@@ -449,15 +1124,41 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         }
         if (section === 'skills') {
           const skills = resolveSkillsList((data as any)?.skills);
-          if (!skills.length) return null;
+          if (!skills.length && !editBindings?.enabled) return null;
           return (
             <div key={section} className="no-break">
               <div className="flex items-center justify-between border-b border-black pb-2 mb-4">
                 <h3 className="text-sm font-bold text-black uppercase tracking-widest">专业技能</h3>
-                <SectionOrderButtons orderIndex={orderIndex} total={sectionOrder.length} onMoveSection={onMoveSection} hidden={hideOrderButtons} />
+                <HeaderActions
+                  sectionOrderIndex={orderIndex}
+                  total={sectionOrder.length}
+                  onMoveSection={onMoveSection}
+                  hideOrderButtons={hideOrderButtons}
+                  canAdd={!!editBindings?.enabled}
+                  onAdd={editBindings?.onAddSkillItem}
+                />
               </div>
               <div className="flex flex-wrap gap-x-6 gap-y-3">
-                {skills.map((skill: string) => <span key={skill} className="text-sm text-black font-medium">{skill}</span>)}
+                {(skills.length ? skills : ['']).map((skill: string, index: number) => (
+                  <span key={`${skill}-${index}`} className="inline-flex items-center gap-1">
+                    <EditableText
+                      className="text-sm text-black font-medium"
+                      value={skill}
+                      editable={!!editBindings?.enabled}
+                      focusKey={buildSkillFocusKey(index)}
+                      autoFocusKey={editBindings?.autoFocusKey}
+                      autoFocusToken={editBindings?.autoFocusToken}
+                      onCommit={(value) => editBindings?.onSkillItemChange(index, value)}
+                    />
+                    {editBindings?.enabled ? (
+                      <EditIconButton
+                        icon="remove"
+                        label="删除技能"
+                        onClick={() => editBindings.onRemoveSkillItem(index)}
+                      />
+                    ) : null}
+                  </span>
+                ))}
               </div>
             </div>
           );
@@ -474,20 +1175,23 @@ export const renderPreviewTemplate = ({
   sectionOrder,
   onMoveSection,
   hideOrderButtons,
+  editBindings,
 }: {
   templateId: string;
   data: ResumeData;
   sectionOrder: PreviewSectionKey[];
   onMoveSection: (index: number, direction: MoveSectionDirection) => void;
   hideOrderButtons?: boolean;
+  editBindings?: PreviewEditBindings;
 }) => {
   switch (templateId) {
     case 'classic':
-      return <ClassicTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} />;
+      return <ClassicTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} editBindings={editBindings} />;
     case 'minimal':
-      return <MinimalTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} />;
+      return <MinimalTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} editBindings={editBindings} />;
     case 'modern':
     default:
-      return <ModernTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} />;
+      return <ModernTemplate data={data} sectionOrder={sectionOrder} onMoveSection={onMoveSection} hideOrderButtons={hideOrderButtons} editBindings={editBindings} />;
   }
 };
+

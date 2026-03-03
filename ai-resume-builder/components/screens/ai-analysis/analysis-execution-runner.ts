@@ -6,6 +6,7 @@ type RunAnalysisRequestParams = {
   resumeData: any;
   careerProfile?: any;
   jdText: string;
+  targetRole?: string;
   getBackendAuthToken: () => Promise<string>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error', durationMs?: number) => void;
   buildApiUrl: (path: string) => string;
@@ -22,6 +23,7 @@ export const runRealAnalysisRequest = async ({
   resumeData,
   careerProfile,
   jdText,
+  targetRole,
   getBackendAuthToken,
   showToast,
   buildApiUrl,
@@ -37,6 +39,7 @@ export const runRealAnalysisRequest = async ({
     resumeData,
     careerProfile,
     jdText,
+    targetRole,
     getBackendAuthToken,
     showToast,
     buildApiUrl,

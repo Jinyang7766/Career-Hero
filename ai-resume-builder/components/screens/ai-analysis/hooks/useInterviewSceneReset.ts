@@ -1,5 +1,5 @@
 import React from 'react';
-import { getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewType } from '../interview-plan-utils';
 
 type Params = {
   clearInterviewSession: (overrideJdText?: string, overrideInterviewType?: string, overrideInterviewMode?: string) => Promise<void>;
@@ -31,14 +31,13 @@ export const useInterviewSceneReset = ({
   return React.useCallback(async () => {
     const effectiveJdText = String(jdText || (resumeData as any)?.lastJdText || '').trim();
     const interviewType = String(getActiveInterviewType() || '').trim().toLowerCase();
-    const interviewMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
     try {
-      await clearInterviewSession(effectiveJdText, interviewType, interviewMode);
+      await clearInterviewSession(effectiveJdText, interviewType);
     } catch (err) {
       console.warn('Failed to clear interview chat history before restart:', err);
     }
     try {
-      await clearInterviewSceneState(effectiveJdText, interviewType, interviewMode);
+      await clearInterviewSceneState(effectiveJdText, interviewType);
     } catch (err) {
       console.warn('Failed to clear interview report state before restart:', err);
     }
@@ -50,13 +49,13 @@ export const useInterviewSceneReset = ({
       const resumeId = String((resumeData as any)?.id || '').trim();
       const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
       const userKey = String(currentUserId || '').trim();
-      if (resumeId && jdKey && interviewType && interviewMode) {
+      if (resumeId && jdKey && interviewType) {
         const userScopedPrefix = userKey
-          ? `ai_interview_plan_${userKey}_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`
+          ? `ai_interview_plan_${userKey}_${resumeId}_${jdKey}_${interviewType}_`
           : '';
-        const legacyPrefix = `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
-        const genericNeedle = `_${resumeId}_${jdKey}_${interviewType}_${interviewMode}_`;
-        const genericJdNeedle = `_${jdKey}_${interviewType}_${interviewMode}_`;
+        const legacyPrefix = `ai_interview_plan_${resumeId}_${jdKey}_${interviewType}_`;
+        const genericNeedle = `_${resumeId}_${jdKey}_${interviewType}_`;
+        const genericJdNeedle = `_${jdKey}_${interviewType}_`;
         const toDelete: string[] = [];
         for (let i = 0; i < localStorage.length; i += 1) {
           const key = String(localStorage.key(i) || '');

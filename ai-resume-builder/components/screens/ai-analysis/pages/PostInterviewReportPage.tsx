@@ -19,7 +19,6 @@ import {
 } from './post-interview-annotations';
 
 type Props = {
-  originalResume: ResumeData | null;
   generatedResume: ResumeData | null;
   annotations: Array<{
     id: string;
@@ -34,6 +33,7 @@ type Props = {
   onFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
   onCompleteAndSave?: (editedResume?: ResumeData | null) => Promise<void> | void;
   onBack: () => void;
+  onBackToJdInput?: () => void;
 };
 
 export const resolvePostInterviewSaveResult = (saveSucceeded: boolean) => ({
@@ -80,7 +80,6 @@ const AutoResizeTextarea: React.FC<React.TextareaHTMLAttributes<HTMLTextAreaElem
 };
 
 const PostInterviewReportPage: React.FC<Props> = ({
-  originalResume,
   generatedResume,
   annotations,
   onFeedback,
@@ -119,15 +118,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
     [annotations]
   );
 
-  const renderInlineNote = (key: string, note: { title: string; reason: string }) => (
-    <div key={key} className="mt-2 rounded-xl border border-amber-200/50 dark:border-amber-500/10 bg-amber-50/50 dark:bg-amber-500/5 p-3 animate-in fade-in zoom-in-95 duration-300">
-      <div className="flex items-center gap-1.5 mb-1">
-        <span className="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[14px]">edit_note</span>
-        <p className="text-[10px] font-black text-amber-700 dark:text-amber-300 uppercase tracking-[0.12em]">{note.title}</p>
-      </div>
-      <p className="text-[11px] font-semibold text-amber-600/80 dark:text-amber-200/60 leading-[1.5]">{note.reason}</p>
-    </div>
-  );
+  const renderInlineNote = (_key: string, _note: { title: string; reason: string }) => null;
   const renderModuleFeedback = () => (
     onFeedback ? (
       <div className="mt-3">
@@ -471,27 +462,17 @@ const PostInterviewReportPage: React.FC<Props> = ({
       <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
           <BackButton onClick={onBack} className="-ml-2 size-9" iconClassName="text-[22px]" />
-          <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">简历批改</h1>
+          <h1 className="text-base font-black tracking-tight text-slate-900 dark:text-white">生成简历</h1>
           <div className="w-10"></div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-10">
-        <section className="animate-in slide-in-from-bottom-4 duration-500">
-          <div className="flex items-center justify-center mb-4 px-1">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-500 text-[20px]">mark_chat_read</span>
-              原简历诊断
-            </h3>
-          </div>
-          {renderResume(originalResume, true)}
-        </section>
-
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-6">
         <section className="animate-in slide-in-from-bottom-6 duration-700">
           <div className="flex items-center justify-center mb-4 px-1">
             <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-[20px]">auto_awesome</span>
-              AI 优化方案
+              AI 生成简历
             </h3>
           </div>
 
@@ -516,7 +497,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
                     <span>正在保存至云端...</span>
                   </>
                 ) : (
-                  '保存为新简历（原简历不变）'
+                  '保存为新简历'
                 )}
               </button>
             </div>
@@ -542,7 +523,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
                 </div>
                 <h3 className="text-xl font-black text-slate-900 dark:text-white mb-3 tracking-tight">保存成功</h3>
                 <p className="text-[15px] font-medium text-slate-500 dark:text-slate-400 leading-relaxed px-2">
-                  已保存为新的优化简历，原简历内容保持不变。
+                  已保存为新的生成简历。
                 </p>
               </div>
             </div>

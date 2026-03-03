@@ -1,13 +1,12 @@
 import { useEffect } from 'react';
 import { DatabaseService } from '../../../../src/database-service';
-import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { getActiveInterviewFocus, getActiveInterviewType } from '../interview-plan-utils';
 import type { AiExternalEntriesParams } from './useAiExternalEntries.types';
 
 const normalizeSceneText = (value: any) =>
   String(value ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
-export const shouldRestoreInterviewJdOnExternalEntry = (entryMode: string) =>
-  String(entryMode || 'chat').trim().toLowerCase() !== 'scene_select';
+export const shouldRestoreInterviewJdOnExternalEntry = (_entryMode: string) => true;
 
 const pickLatestSessionByUpdatedAt = (sessions: any[]) =>
   sessions.reduce((acc: any, curr: any) => {
@@ -63,10 +62,6 @@ export const useAiInterviewExternalEntry = ({
     localStorage.removeItem('ai_interview_resume_id');
     localStorage.removeItem('ai_interview_entry_mode');
     localStorage.removeItem(navOwnerKey);
-    if (interviewEntryMode === 'scene_select') {
-      setStepHistory([]);
-      setCurrentStep('jd_input');
-    }
 
     (async () => {
       const result = await DatabaseService.getResume(targetId);
@@ -86,17 +81,14 @@ export const useAiInterviewExternalEntry = ({
         finalResumeData.optimizedResumeId ||
         (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
       );
-      if (finalResumeData.targetCompany) {
-        setTargetCompany(finalResumeData.targetCompany);
-      }
+      const effectiveTarget = String(finalResumeData.targetCompany || finalResumeData.targetRole || '').trim();
+      setTargetCompany(effectiveTarget);
       const savedJdText = (finalResumeData.lastJdText || '').trim();
       const shouldRestoreJdOnEntry = shouldRestoreInterviewJdOnExternalEntry(interviewEntryMode);
-      if (!shouldRestoreJdOnEntry) {
-        // Explicit scene-select entry should always start with empty JD input.
-        setJdText('');
-      }
       if (savedJdText && shouldRestoreJdOnEntry) {
         setJdText(savedJdText);
+      } else {
+        setJdText('');
       }
       if (savedJdText) {
         const sessions = finalResumeData.interviewSessions || {};
@@ -111,15 +103,13 @@ export const useAiInterviewExternalEntry = ({
           const chatMode = String(session?.chatMode || '').trim().toLowerCase();
           if (chatMode !== expectedChatMode) return false;
           const sessionType = String(session?.interviewType || '').trim().toLowerCase();
-          const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
           const sessionFocus = normalizeSceneText(session?.interviewFocus);
           const sessionCompany = normalizeSceneText(session?.targetCompany);
           const sessionResumeId = String(session?.resumeId || '').trim();
           return (
             sessionType === String(getActiveInterviewType() || 'general').trim().toLowerCase() &&
-            sessionMode === String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase() &&
             sessionFocus === normalizeSceneText(getActiveInterviewFocus()) &&
-            sessionCompany === normalizeSceneText(finalResumeData?.targetCompany || '') &&
+            sessionCompany === normalizeSceneText(effectiveTarget) &&
             (!sessionResumeId || sessionResumeId === String(finalResumeData?.id || '').trim())
           );
         });
@@ -135,9 +125,12 @@ export const useAiInterviewExternalEntry = ({
         setChatMessages([]);
         setChatInitialized(false);
       }
-      if (interviewEntryMode !== 'scene_select') {
-        openChat('preview');
+      if (interviewEntryMode === 'scene_select') {
+        setStepHistory([]);
+        setCurrentStep('interview_scene');
+        return;
       }
+      openChat('preview');
     })();
   }, [currentUserId, isInterviewMode]);
 };

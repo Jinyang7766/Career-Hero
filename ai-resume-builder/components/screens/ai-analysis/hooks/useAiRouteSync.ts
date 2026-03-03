@@ -1,10 +1,13 @@
 import { useEffect } from 'react';
 import type { MutableRefObject } from 'react';
 
-type Step = 'resume_select' | 'jd_input' | 'analyzing' | 'chat' | 'interview_report_loading' | 'interview_report' | 'comparison' | 'final_report';
+type Step = 'resume_select' | 'jd_input' | 'interview_scene' | 'analyzing' | 'chat' | 'interview_report_loading' | 'interview_report' | 'comparison' | 'final_report';
 
 export const deriveInitialStepFromPath = (): Step => {
   const path = (window.location.pathname || '').toLowerCase();
+    if (path.startsWith('/ai-interview')) {
+      return 'resume_select';
+    }
     if (path.startsWith('/ai-analysis')) {
       const rest = path.slice('/ai-analysis'.length).replace(/^\/+/, '');
       const sub = (rest.split('/').filter(Boolean)[0] || '');
@@ -16,6 +19,7 @@ export const deriveInitialStepFromPath = (): Step => {
       if (sub === 'interview-report') return 'interview_report';
       if (sub === 'comparison') return 'comparison';
       if (sub === 'final-report') return 'final_report';
+      return 'jd_input';
     }
   return 'resume_select';
 };
@@ -47,27 +51,20 @@ export const useAiRouteSync = ({
   useEffect(() => {
     const currentPath = normalizePath(window.location.pathname || '');
     if (!currentPath.startsWith('/ai-analysis')) return;
-    // When bottom-nav explicitly requests resume_select, do not immediately
-    // re-sync URL back to the previous sub-route in the same render turn.
-    try {
-      const forceResumeSelect = localStorage.getItem('ai_analysis_force_resume_select') === '1';
-      if (forceResumeSelect && currentPath === '/ai-analysis' && currentStep === 'resume_select') return;
-    } catch {
-      // ignore storage failures
-    }
 
     const base = '/ai-analysis';
     const targetPath = (() => {
       switch (currentStep) {
-        case 'resume_select': return base;
+        case 'resume_select': return `${base}/jd`;
         case 'jd_input': return `${base}/jd`;
+        case 'interview_scene': return `${base}/jd`;
         case 'analyzing': return `${base}/analyzing`;
         case 'chat': return `${base}/chat`;
         case 'interview_report_loading': return `${base}/interview-report-loading`;
         case 'interview_report': return selectedResumeId ? `${base}/interview-report/${selectedResumeId}` : `${base}/interview-report`;
         case 'comparison': return selectedResumeId ? `${base}/comparison/${selectedResumeId}` : `${base}/comparison`;
         case 'final_report': return selectedResumeId ? `${base}/final-report/${selectedResumeId}` : `${base}/final-report`;
-        default: return base;
+        default: return `${base}/jd`;
       }
     })();
     const normalizedTargetPath = normalizePath(targetPath);

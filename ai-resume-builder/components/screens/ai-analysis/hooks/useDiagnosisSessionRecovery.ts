@@ -13,6 +13,7 @@ type Params = {
   navigateToStep: (step: 'jd_input' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   loadLastAnalysis: () => any;
   recoveredSessionKeyRef: { current: string };
+  suppressAutoRecoveryRef?: { current: boolean };
 };
 
 export const canApplyDiagnosisStepRecovery = (
@@ -24,17 +25,27 @@ export const canApplyDiagnosisStepRecovery = (
   if (!normalizedTo || normalizedFrom === normalizedTo) return false;
   if (normalizedTo === 'jd_input') return false;
   if (normalizedTo === 'final_report') {
+    // Do not auto-recover from comparison to final_report.
+    // comparison is an explicit user action from report page ("查看优化简历"),
+    // and forcing back to final_report makes the button appear broken.
     return (
       normalizedFrom === 'resume_select' ||
       normalizedFrom === 'jd_input' ||
       normalizedFrom === 'analyzing' ||
-      normalizedFrom === 'comparison' ||
       normalizedFrom === 'chat' ||
       normalizedFrom === 'report' ||
       normalizedFrom === 'interview_report'
     );
   }
   return false;
+};
+
+export const consumeDiagnosisAutoRecoverySuppression = (
+  suppressAutoRecoveryRef?: { current: boolean }
+) => {
+  if (!suppressAutoRecoveryRef?.current) return false;
+  suppressAutoRecoveryRef.current = false;
+  return true;
 };
 
 export const useDiagnosisSessionRecovery = ({
@@ -48,20 +59,15 @@ export const useDiagnosisSessionRecovery = ({
   navigateToStep,
   loadLastAnalysis,
   recoveredSessionKeyRef,
+  suppressAutoRecoveryRef,
 }: Params) => {
   useEffect(() => {
+    if (consumeDiagnosisAutoRecoverySuppression(suppressAutoRecoveryRef)) {
+      return;
+    }
     if (!resumeData) return;
     if (currentStep === 'analyzing') return;
-
-    let forceResumeSelectActive = forcedResumeSelect;
-    try {
-      if (localStorage.getItem('ai_analysis_force_resume_select') === '1') {
-        forceResumeSelectActive = true;
-      }
-    } catch {
-      // ignore storage failures
-    }
-    if (forceResumeSelectActive) return;
+    if (forcedResumeSelect) return;
 
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     if (!effectiveJdText) return;
@@ -148,7 +154,7 @@ export const useDiagnosisSessionRecovery = ({
 
     if (
       status === 'report_ready' &&
-      currentStep === 'resume_select' &&
+      (currentStep === 'jd_input' || currentStep === 'resume_select') &&
       (resumeData.analysisSnapshot || loadLastAnalysis())
     ) {
       pushRuntimeTrace('ai_analysis.recovery', 'goto_final_report_from_ready', {
@@ -167,6 +173,7 @@ export const useDiagnosisSessionRecovery = ({
     loadLastAnalysis,
     makeJdKey,
     navigateToStep,
+    suppressAutoRecoveryRef,
     recoveredSessionKeyRef,
     resumeData,
   ]);

@@ -3,7 +3,6 @@ import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
   composeInterviewPlan,
   getActiveInterviewFocus,
-  getActiveInterviewMode,
   getActiveInterviewType,
   getFallbackPlanByType,
   getInterviewQuestionLimit,
@@ -48,11 +47,10 @@ export const useInterviewPlanLoader = ({
     const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
     const storageJdText = effectiveJdText || '__no_jd__';
     const interviewType = getActiveInterviewType();
-    const interviewMode = getActiveInterviewMode();
     const interviewFocus = getActiveInterviewFocus();
     const questionLimit = getInterviewQuestionLimit();
-    const planGenerationLimit = interviewMode === 'simple' ? 2 : questionLimit;
-    const minExpectedCount = interviewMode === 'simple' ? 3 : 4;
+    const planGenerationLimit = questionLimit;
+    const minExpectedCount = 4;
     const effectiveTargetCompany = String(targetCompany || resumeData?.targetCompany || '').trim();
     const resumeId = String(resumeData?.id || '').trim() || 'unknown';
     const scopedUserId = String(currentUserId || '').trim() || 'anonymous';
@@ -86,12 +84,6 @@ export const useInterviewPlanLoader = ({
       const cached = forceModelPlan ? null : (localStorage.getItem(storageKey) || localStorage.getItem(legacyStorageKey));
       if (cached) {
         const parsed = JSON.parse(cached);
-        const cachedMode = String(parsed?.interviewMode || '').trim().toLowerCase();
-        if (cachedMode && cachedMode !== interviewMode) {
-          try { localStorage.removeItem(storageKey); } catch { }
-          try { localStorage.removeItem(legacyStorageKey); } catch { }
-          throw new Error('cached_plan_mode_mismatch');
-        }
         const cachedSource = String(parsed?.planSource || '').trim().toLowerCase();
         if (cachedSource && cachedSource !== 'model') {
           // Drop stale fallback cache so the next load can attempt real generation.
@@ -108,7 +100,7 @@ export const useInterviewPlanLoader = ({
               Array.isArray(parsed?.questions) ? parsed.questions : [],
               interviewType,
               {
-                minCount: interviewMode === 'simple' ? 2 : 4,
+                minCount: 4,
                 maxCount: planGenerationLimit,
               }
             )
@@ -126,7 +118,7 @@ export const useInterviewPlanLoader = ({
           }
           return;
         }
-        // Cached plan shape is suspicious for current mode; force regeneration.
+        // Cached plan shape is suspicious for current scene; force regeneration.
         try { localStorage.removeItem(storageKey); } catch { }
         try { localStorage.removeItem(legacyStorageKey); } catch { }
       }
@@ -146,7 +138,7 @@ export const useInterviewPlanLoader = ({
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
-              minCount: interviewMode === 'simple' ? 2 : 4,
+              minCount: 4,
               maxCount: planGenerationLimit,
             })
           ).slice(0, questionLimit);
@@ -166,7 +158,6 @@ export const useInterviewPlanLoader = ({
             jobDescription: effectiveJdText,
             chatHistory: [],
             interviewType,
-            interviewMode,
             questionLimit: planGenerationLimit,
             interviewFocus,
           }),
@@ -176,7 +167,7 @@ export const useInterviewPlanLoader = ({
           Array.isArray(data?.questions) ? data.questions : [],
           interviewType,
           {
-            minCount: interviewMode === 'simple' ? 2 : 4,
+            minCount: 4,
             maxCount: planGenerationLimit,
           }
         );
@@ -191,7 +182,7 @@ export const useInterviewPlanLoader = ({
           questions.length > 0
             ? questions
             : sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
-              minCount: interviewMode === 'simple' ? 2 : 4,
+              minCount: 4,
               maxCount: planGenerationLimit,
             })
         ).slice(0, questionLimit);
@@ -205,7 +196,7 @@ export const useInterviewPlanLoader = ({
             try {
               localStorage.setItem(
                 storageKey,
-                JSON.stringify({ questions: finalPlan, interviewType, interviewMode, interviewFocus, jdText: effectiveJdText, planSource: 'model' })
+                JSON.stringify({ questions: finalPlan, interviewType, interviewFocus, jdText: effectiveJdText, planSource: 'model' })
               );
             } catch { }
           }
@@ -219,7 +210,7 @@ export const useInterviewPlanLoader = ({
           const fallback = composeInterviewPlan(
             interviewType,
             sanitizePlanQuestions(getFallbackPlanByType(interviewType), interviewType, {
-              minCount: interviewMode === 'simple' ? 2 : 4,
+              minCount: 4,
               maxCount: planGenerationLimit,
             })
           ).slice(0, questionLimit);

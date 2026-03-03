@@ -8,9 +8,9 @@ interface DiagnosisProgressBarProps {
     onDiagnosisStageClick?: (step: 'comparison' | 'final_report') => void;
 }
 
-const DIAGNOSIS_STAGES = ['岗位分析', '优化对比', '最终报告'] as const;
+const DIAGNOSIS_STAGES = ['岗位分析', '生成简历', '最终报告'] as const;
 const DIAGNOSIS_STAGE_STEPS: Array<'comparison' | 'final_report'> = ['comparison', 'comparison', 'final_report'];
-const INTERVIEW_STAGES = ['初试', '复试', 'HR面'] as const;
+const INTERVIEW_STAGES = ['初试', '复试', '压力面'] as const;
 type StageStatus = 'todo' | 'current' | 'done';
 
 export const deriveDiagnosisStageStatuses = (latestStepRaw: string, progressRaw: number, isFinalReportCompleted: boolean): StageStatus[] => {

@@ -33,6 +33,10 @@ def ai_chat_stream_core(data, deps):
     history_window = max(6, min(30, history_window))
     chat_history_for_prompt = chat_history[-history_window:]
     interview_type = str(data.get('interviewType') or 'general').strip().lower()
+    if interview_type == 'hr':
+        interview_type = 'pressure'
+    if interview_type not in ('general', 'technical', 'pressure'):
+        interview_type = 'general'
     diagnosis_context = _format_diagnosis_dossier(diagnosis_dossier)
 
     has_audio = isinstance(audio, dict) and bool(audio.get('data'))
@@ -183,17 +187,17 @@ def ai_chat_stream_core(data, deps):
     else:
         persona_prompts = {
             'technical': "你是极客型技术面试官（Technical Interviewer）。\n风格：深度挖掘技术细节，喜欢追问底层原理、系统设计与性能优化，对模糊回答零容忍。\n关注点：技术栈掌握度、解决复杂问题能力、代码质量、系统架构思维。",
-            'hr': "你是资深 HR 面试官（HR Interviewer）。\n风格：温和但敏锐，关注候选人的软性素质、动机匹配度与文化契合度，会用 STAR 法则挖掘行为细节。\n关注点：沟通协作、职业稳定性、驱动力、抗压能力、价值观。",
+            'pressure': "你是资深压力面试官（Pressure Interviewer）。\n风格：高标准、快节奏、会在关键点连续追问，重点考察候选人在压力和不确定性下的判断与执行。\n关注点：优先级取舍、冲突处理、反压沟通、风险控制、失败复盘。",
             'general': "你是专业且平衡的综合面试官（General Interviewer）。\n风格：既关注业务能力也关注综合素质，提问覆盖面广，节奏平稳。\n关注点：简历真实性、过往业绩、核心胜任力。"
         }
         persona_instruction = persona_prompts.get(interview_type, persona_prompts['general'])
         style_rules = {
             'technical': "提问要求：优先围绕候选人项目做技术深挖，至少覆盖1个技术决策追问和1个性能/稳定性追问。问题尽量具体到技术栈、架构、trade-off。",
-            'hr': "提问要求：优先行为面与动机面，使用 STAR 导向追问，重点覆盖沟通冲突、压力场景、职业选择与文化匹配，不问底层技术细节。",
+            'pressure': "提问要求：构造真实高压场景，连续追问候选人的取舍逻辑、沟通策略、风险应对和复盘动作。避免泛化人格题，不问侮辱性或歧视性问题。",
             'general': "提问要求：在业务结果、项目实践、协作能力间保持平衡，问题覆盖广但不过度深挖单一方向。"
         }
         interview_style_instruction = style_rules.get(interview_type, style_rules['general'])
-        if interview_type in ('technical', 'hr'):
+        if interview_type in ('technical', 'pressure'):
             self_intro_policy_instruction = "自我介绍规则：当前不是初试场景，严禁要求候选人做自我介绍。"
         elif self_intro_asked_before:
             self_intro_policy_instruction = "自我介绍规则：历史对话中已完成自我介绍，后续严禁再次要求自我介绍。"

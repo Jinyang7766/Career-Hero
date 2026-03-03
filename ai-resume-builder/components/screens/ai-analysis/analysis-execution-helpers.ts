@@ -1,9 +1,10 @@
 import { makeJdKey } from './id-utils';
 
 export const isSessionModeMatchedForQuota = (session: any, normalizedInterviewMode: string) => {
-  const mode = String(session?.interviewMode || '').trim().toLowerCase();
-  if (!mode) return true;
-  return mode === normalizedInterviewMode;
+  // Interview mode selection has been removed. Keep legacy sessions mode-agnostic.
+  void session;
+  void normalizedInterviewMode;
+  return true;
 };
 
 export const isSessionTypeMatchedForQuota = (session: any, normalizedInterviewType: string) => {

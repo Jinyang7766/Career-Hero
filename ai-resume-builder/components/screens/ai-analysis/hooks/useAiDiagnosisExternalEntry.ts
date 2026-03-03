@@ -3,7 +3,6 @@ import type { AiExternalEntriesParams } from './useAiExternalEntries.types';
 
 export const useAiDiagnosisExternalEntry = ({
   currentUserId,
-  currentStep = '',
   isInterviewMode = false,
   setForceReportEntry,
   handleResumeSelect,
@@ -46,8 +45,6 @@ export const useAiDiagnosisExternalEntry = ({
         ? String(targetStepRaw || '').trim().toLowerCase()
         : 'final_report'
     );
-    const waitResumeSelect = localStorage.getItem('ai_result_wait_resume_select') === '1';
-    if (waitResumeSelect && String(currentStep || '').trim().toLowerCase() !== 'resume_select') return;
     if (!shouldOpenReport || !targetId) return;
 
     localStorage.removeItem('ai_result_open');
@@ -62,19 +59,13 @@ export const useAiDiagnosisExternalEntry = ({
     localStorage.removeItem('ai_report_step');
     localStorage.removeItem(navOwnerKey);
     (async () => {
-      if (waitResumeSelect) {
-        setForceReportEntry(false);
-        localStorage.setItem('ai_analysis_step', 'resume_select');
-        await handleResumeSelect(targetId, preferReportFromHome, undefined);
-        return;
-      }
       const effectiveTargetStep =
         targetStep === 'final_report' || targetStep === 'interview_report'
           ? 'final_report'
           : targetStep === 'comparison' || targetStep === 'report' || targetStep === 'chat'
             ? 'final_report'
             : 'jd_input';
-      localStorage.setItem('ai_analysis_step', effectiveTargetStep || 'resume_select');
+      localStorage.setItem('ai_analysis_step', effectiveTargetStep || 'jd_input');
       const preferReport = effectiveTargetStep !== 'jd_input';
       const mappedTargetStep =
         effectiveTargetStep === 'final_report' ? 'final_report'
@@ -84,5 +75,5 @@ export const useAiDiagnosisExternalEntry = ({
       );
       await handleResumeSelect(targetId, preferReport, mappedTargetStep);
     })();
-  }, [currentUserId, currentStep, isInterviewMode]);
+  }, [currentUserId, isInterviewMode, handleResumeSelect, setForceReportEntry]);
 };

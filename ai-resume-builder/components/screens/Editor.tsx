@@ -444,7 +444,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
             pdfError={pdfError}
             onPdfImport={handlePDFImport}
             pdfInputRef={pdfInputRef}
-            onSkip={() => setCurrentStep('personal')}
             onClearAll={handleClearAllData}
           />
         )}

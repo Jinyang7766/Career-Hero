@@ -97,7 +97,7 @@ export const useAnalysisRuntime = ({
           setStepHistory([]);
           setChatEntrySource(null);
           setLastChatStep(null);
-          setCurrentStep('resume_select');
+          setCurrentStep('jd_input');
         }
 
         if (uid) {
@@ -148,10 +148,10 @@ export const useAnalysisRuntime = ({
     if (hasCompletedAnalysis || hasSnapshot) return;
 
     setStepHistory([]);
-    setCurrentStep('resume_select');
+    setCurrentStep('jd_input');
     setChatEntrySource(null);
     setLastChatStep(null);
-    localStorage.setItem('ai_analysis_step', 'resume_select');
+    localStorage.setItem('ai_analysis_step', 'jd_input');
     localStorage.removeItem('ai_analysis_in_progress');
     localStorage.removeItem('ai_chat_prev_step');
     localStorage.removeItem('ai_chat_entry_source');

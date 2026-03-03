@@ -26,6 +26,7 @@ export const createEmptyResumeData = (): ResumeData => ({
   optimizedFromId: undefined,
   lastJdText: '',
   targetCompany: '',
+  targetRole: '',
   analysisSnapshot: undefined,
   interviewSessions: undefined,
   exportHistory: undefined,

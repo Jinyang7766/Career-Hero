@@ -6,6 +6,7 @@ type Params = {
   resumeData: any;
   careerProfile?: any;
   jdText: string;
+  targetRole?: string;
   getBackendAuthToken: () => Promise<string>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
   buildApiUrl: (path: string) => string;
@@ -77,6 +78,7 @@ export const runRealAnalysis = async ({
   resumeData,
   careerProfile,
   jdText,
+  targetRole,
   getBackendAuthToken,
   showToast,
   buildApiUrl,
@@ -151,8 +153,9 @@ export const runRealAnalysis = async ({
       body: JSON.stringify({
         resumeData: maskedResumeData,
         jobDescription: maskedJdText,
+        targetRole: String(targetRole || '').trim(),
         careerProfile: maskedCareerProfile,
-        analysisStage: 'pre_interview',
+        analysisStage: 'final_report',
         ragEnabled,
         interviewType
       })
@@ -181,12 +184,14 @@ export const runRealAnalysis = async ({
 
     const analysisResult = {
       summary: unmaskedResult.summary || 'AI诊断完成',
-      targetCompany: unmaskedResult.targetCompany || '',
-      targetCompanyConfidence: Number(unmaskedResult.targetCompanyConfidence || 0),
+      targetRole: String(unmaskedResult.targetRole || targetRole || '').trim(),
+      targetRoleConfidence: Number(unmaskedResult.targetRoleConfidence || 0),
+      targetCompany: '',
+      targetCompanyConfidence: 0,
       strengths: unmaskedResult.strengths || [],
       weaknesses: unmaskedResult.weaknesses || [],
       missingKeywords: unmaskedResult.missingKeywords,
-      analysisStage: String(unmaskedResult.analysisStage || 'pre_interview'),
+      analysisStage: String(unmaskedResult.analysisStage || 'final_report'),
       score: backendScore,
       scoreBreakdown: buildIndependentBreakdown(
         resumeData,
@@ -196,7 +201,11 @@ export const runRealAnalysis = async ({
         unmaskedResult.suggestions || [],
         unmaskedResult.weaknesses || [],
       ),
-      suggestions: unmaskedResult.suggestions
+      suggestions: unmaskedResult.suggestions,
+      generatedResumeData:
+        unmaskedResult.resumeData && typeof unmaskedResult.resumeData === 'object'
+          ? unmaskedResult.resumeData
+          : null,
     };
 
     await AICacheService.set(resumeData, jdText, analysisResult, careerProfileFingerprint);

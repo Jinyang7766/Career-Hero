@@ -9,6 +9,9 @@ export const isSameResumeId = (a: any, b: any) => {
 export const normalizeJdText = (text: any) =>
   String(text ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
 
+export const NO_JD_SENTINEL = '__no_jd__';
+export const LEGACY_NO_JD_KEY = 'jd_default';
+
 export const makeJdKey = (text: string) => {
   const normalized = normalizeJdText(text);
   if (!normalized) return 'jd_default';
@@ -19,15 +22,29 @@ export const makeJdKey = (text: string) => {
   return `jd_${Math.abs(hash)}`;
 };
 
+export const makeNormalizedJdKey = (text: string) =>
+  makeJdKey(String(text || '').trim() || NO_JD_SENTINEL);
+
+export const normalizeStoredJdKey = (key: any): string => {
+  const raw = String(key || '').trim();
+  if (!raw || raw === LEGACY_NO_JD_KEY) return makeNormalizedJdKey('');
+  return raw;
+};
+
+export const isEquivalentJdKey = (a: any, b: any): boolean =>
+  normalizeStoredJdKey(a) === normalizeStoredJdKey(b);
+
 export const normalizeInterviewType = (value: any) => {
   const t = String(value ?? '').trim().toLowerCase();
-  if (t === 'technical' || t === 'hr' || t === 'general') return t;
+  if (t === 'technical') return 'technical';
+  if (t === 'pressure' || t === 'hr') return 'pressure';
   return 'general';
 };
 
 export const normalizeInterviewMode = (value: any) => {
-  const mode = String(value ?? '').trim().toLowerCase();
-  return mode === 'simple' ? 'simple' : 'comprehensive';
+  // Interview mode selection is removed. Keep one canonical mode in runtime.
+  void value;
+  return 'comprehensive';
 };
 
 export const makeInterviewScopedKey = (

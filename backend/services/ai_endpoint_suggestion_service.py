@@ -79,7 +79,7 @@ def _format_diagnosis_dossier(dossier):
     try:
         summary = str(dossier.get('summary') or '').strip()
         score = dossier.get('score')
-        target_company = str(dossier.get('targetCompany') or '').strip()
+        target_role = str(dossier.get('targetRole') or '').strip()
         jd_text = str(dossier.get('jdText') or '').strip()
         score_breakdown = dossier.get('scoreBreakdown') or {}
         strengths = dossier.get('strengths') or []
@@ -91,8 +91,8 @@ def _format_diagnosis_dossier(dossier):
             lines.append(f"- 诊断总结：{summary}")
         if isinstance(score, (int, float)):
             lines.append(f"- 诊断总分：{int(score)}")
-        if target_company:
-            lines.append(f"- 目标公司：{target_company}")
+        if target_role:
+            lines.append(f"- 目标岗位：{target_role}")
         if jd_text:
             lines.append(f"- 目标岗位职位描述（摘要）：{jd_text[:500]}")
         if isinstance(score_breakdown, dict) and score_breakdown:
@@ -111,6 +111,25 @@ def _format_diagnosis_dossier(dossier):
         return ''
 
 
+def _resolve_career_profile_target_role(profile):
+    if not isinstance(profile, dict):
+        return ''
+    personal_info = profile.get('personalInfo') or {}
+    if not isinstance(personal_info, dict):
+        personal_info = {}
+    for candidate in (
+        profile.get('targetRole'),
+        profile.get('jobDirection'),
+        profile.get('jobTarget'),
+        personal_info.get('title'),
+        profile.get('title'),
+    ):
+        text = str(candidate or '').strip()
+        if text:
+            return text
+    return ''
+
+
 def _format_career_profile_context(profile):
     if not isinstance(profile, dict):
         return ''
@@ -125,8 +144,11 @@ def _format_career_profile_context(profile):
         constraints = profile.get('constraints') or profile.get('hardConstraints') or []
         core_skills = profile.get('coreSkills') or profile.get('skills') or []
         experiences = profile.get('experiences') or profile.get('careerFacts') or []
+        target_role = _resolve_career_profile_target_role(profile)
 
         lines = []
+        if target_role:
+            lines.append(f"- 目标岗位：{target_role}")
         if summary:
             lines.append(f"- 职业画像摘要：{summary}")
         if isinstance(core_skills, list) and core_skills:

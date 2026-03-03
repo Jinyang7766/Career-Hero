@@ -13,14 +13,38 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
   openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
-  navigateToStep: (step: 'jd_input' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep: (step: 'jd_input' | 'interview_scene' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   recoveredSessionKeyRef: { current: string };
   interviewEntryConfirmPendingRef?: { current: boolean };
 };
 
 export const shouldSkipInterviewAutoRecovery = (currentStep: string) => {
   const normalizedStep = String(currentStep || '').trim().toLowerCase();
-  return normalizedStep === 'resume_select' || normalizedStep === 'jd_input';
+  return normalizedStep === 'resume_select' || normalizedStep === 'interview_scene';
+};
+
+export type InterviewRecoveryStep =
+  | 'interview_scene'
+  | 'analyzing'
+  | 'interview_report'
+  | 'comparison'
+  | 'final_report';
+
+export const normalizeInterviewRecoveryStep = (sessionStep: string): InterviewRecoveryStep | null => {
+  const normalized = String(sessionStep || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized === 'report') return 'final_report';
+  if (normalized === 'jd_input') return 'interview_scene';
+  if (
+    normalized === 'interview_scene' ||
+    normalized === 'analyzing' ||
+    normalized === 'interview_report' ||
+    normalized === 'comparison' ||
+    normalized === 'final_report'
+  ) {
+    return normalized as InterviewRecoveryStep;
+  }
+  return null;
 };
 
 export const useInterviewSessionRecovery = ({
@@ -127,18 +151,15 @@ export const useInterviewSessionRecovery = ({
       return;
     }
 
-    if (
-      (sessionStep === 'final_report' || sessionStep === 'interview_report' || sessionStep === 'comparison' || sessionStep === 'report' || sessionStep === 'analyzing' || sessionStep === 'jd_input') &&
-      currentStep !== sessionStep
-    ) {
-      const normalizedStep = sessionStep === 'report' ? 'final_report' : sessionStep;
-      if (!normalizedStep) return;
+    const normalizedStep = normalizeInterviewRecoveryStep(sessionStep);
+    if (normalizedStep) {
+      if (currentStep === normalizedStep) return;
       pushRuntimeTrace('ai_analysis.recovery', 'goto_session_step', {
         from: currentStep,
         to: normalizedStep,
         actionMarker,
       });
-      navigateToStep(normalizedStep as 'jd_input' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', true);
+      navigateToStep(normalizedStep, true);
       recoveredSessionKeyRef.current = actionMarker;
     }
   }, [

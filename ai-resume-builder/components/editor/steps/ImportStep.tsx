@@ -1,4 +1,5 @@
 ﻿import React, { useState } from 'react';
+import AutoGrowTextarea from '../AutoGrowTextarea';
 
 type ImportStepProps = {
   textResume: string;
@@ -10,7 +11,6 @@ type ImportStepProps = {
   pdfError: string;
   onPdfImport: (event: React.ChangeEvent<HTMLInputElement>) => void;
   pdfInputRef: React.RefObject<HTMLInputElement>;
-  onSkip: () => void;
   onClearAll: () => void;
 };
 
@@ -24,7 +24,6 @@ const ImportStep: React.FC<ImportStepProps> = ({
   pdfError,
   onPdfImport,
   pdfInputRef,
-  onSkip,
   onClearAll,
 }) => {
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -77,11 +76,12 @@ const ImportStep: React.FC<ImportStepProps> = ({
             <div className="flex-1 h-px bg-slate-200 dark:bg-white/10"></div>
           </div>
 
-          <textarea
+          <AutoGrowTextarea
             value={textResume}
             onChange={(e) => onTextResumeChange(e.target.value)}
             placeholder="请粘贴您的简历内容..."
-            className="w-full h-40 px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
+            className="w-full px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
+            minRows={6}
           />
           <button
             onClick={onTextImport}
@@ -114,12 +114,6 @@ const ImportStep: React.FC<ImportStepProps> = ({
       </div>
 
       <div className="flex flex-col gap-3 text-center">
-        <button
-          onClick={onSkip}
-          className="text-sm text-slate-500 dark:text-slate-400 hover:text-primary transition-colors"
-        >
-          跳过，从头开始填写 →
-        </button>
 
         <button
           onClick={() => setShowClearConfirm(true)}

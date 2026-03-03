@@ -9,7 +9,7 @@ export const viewToPath = (view: View) => {
     case View.ALL_RESUMES: return '/all-resumes';
     case View.AI_ANALYSIS: return '/ai-analysis';
     case View.PROFILE: return '/profile';
-    case View.CAREER_PROFILE: return '/career-profile';
+    case View.CAREER_PROFILE: return '/career-profile/upload';
     case View.CAREER_PROFILE_RESULT: return '/career-profile/result';
     case View.EDITOR: return '/editor';
     case View.PREVIEW: return '/preview';

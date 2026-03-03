@@ -11,7 +11,7 @@ export const shouldShowMessageFeedback = (msg: ChatMessage) => {
   if (id === 'ai-summary') return false;
   const greetingLike =
     /您好|你好/.test(text) &&
-    /我是您的\s*AI|我是你的\s*AI|模拟面试官|HR面试官|复试深挖面试官/.test(text);
+    /我是您的\s*AI|我是你的\s*AI|模拟面试官|压力面试官|HR面试官|复试深挖面试官/.test(text);
   return !greetingLike;
 };
 

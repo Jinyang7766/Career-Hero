@@ -70,7 +70,6 @@ export const useAiAnalysisPageState = () => {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [postInterviewSummary, setPostInterviewSummary] = useState('');
-  const [showJdEmptyModal, setShowJdEmptyModal] = useState(false);
 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const chatMessagesRef = useRef<ChatMessage[]>([]);
@@ -126,8 +125,6 @@ export const useAiAnalysisPageState = () => {
     setReport,
     postInterviewSummary,
     setPostInterviewSummary,
-    showJdEmptyModal,
-    setShowJdEmptyModal,
     chatMessages,
     setChatMessages,
     chatMessagesRef,

@@ -176,10 +176,6 @@ export const usePreviewRestore = ({
     })();
 
     if (navType === 'reload' || restoreError) {
-      if (target === 'editor') {
-        navigateToView(View.EDITOR, { replace: true });
-        return;
-      }
       if (target === 'dashboard') {
         navigateToView(View.DASHBOARD, { replace: true });
         return;

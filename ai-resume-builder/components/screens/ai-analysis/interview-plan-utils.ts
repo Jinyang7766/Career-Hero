@@ -39,13 +39,13 @@ const readInterviewPreference = (baseKey: string, currentUserId?: string | null)
 
 export const getActiveInterviewType = () => {
   const t = readInterviewPreference('ai_interview_type').toLowerCase();
-  if (t === 'technical' || t === 'hr' || t === 'general') return t;
+  if (t === 'technical') return 'technical';
+  if (t === 'pressure' || t === 'hr') return 'pressure';
   return 'general';
 };
 
 export const getActiveInterviewMode = () => {
-  const mode = readInterviewPreference('ai_interview_mode').toLowerCase();
-  if (mode === 'simple' || mode === 'comprehensive') return mode;
+  // Interview mode selection was removed from UI. Keep a stable single flow.
   return 'comprehensive';
 };
 
@@ -53,8 +53,7 @@ export const getActiveInterviewFocus = () =>
   readInterviewPreference('ai_interview_focus').slice(0, 300);
 
 export const getInterviewQuestionLimit = () => {
-  const mode = getActiveInterviewMode();
-  return mode === 'simple' ? 3 : 12;
+  return 12;
 };
 
 export const getPlanStorageKey = (
@@ -66,11 +65,10 @@ export const getPlanStorageKey = (
   currentUserId?: string | number | null
 ) => {
   const interviewType = getActiveInterviewType();
-  const interviewMode = getActiveInterviewMode();
   const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
   const companyKey = makeJdKey(String(targetCompany || '').trim() || 'none');
   const userKey = String(currentUserId || 'anonymous').trim() || 'anonymous';
-  return `ai_interview_plan_${userKey}_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}_${companyKey}`;
+  return `ai_interview_plan_${userKey}_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${focusKey}_${companyKey}`;
 };
 
 export const getLegacyPlanStorageKey = (
@@ -81,7 +79,8 @@ export const getLegacyPlanStorageKey = (
   targetCompany?: string
 ) => {
   const interviewType = getActiveInterviewType();
-  const interviewMode = getActiveInterviewMode();
+  const mode = readInterviewPreference('ai_interview_mode').toLowerCase();
+  const interviewMode = mode === 'simple' || mode === 'comprehensive' ? mode : 'comprehensive';
   const focusKey = makeJdKey(String(interviewFocus || '').trim() || 'none');
   const companyKey = makeJdKey(String(targetCompany || '').trim() || 'none');
   return `ai_interview_plan_${String(resumeId || 'unknown')}_${makeJdKey(effectiveJdText)}_${interviewType}_${interviewMode}_${focusKey}_${companyKey}`;
@@ -90,20 +89,20 @@ export const getLegacyPlanStorageKey = (
 export const getInterviewerTitle = () => {
   const type = getActiveInterviewType();
   if (type === 'technical') return 'AI 复试深挖面试官';
-  if (type === 'hr') return 'AI HR 面试官';
+  if (type === 'pressure') return 'AI 压力面面试官';
   return 'AI 初试面试官';
 };
 
 export const getInterviewerAvatarUrl = () => {
   const type = getActiveInterviewType();
   if (type === 'technical') return '/ai-avatar-technical-opt.png';
-  if (type === 'hr') return '/ai-avatar-hr-opt.png';
+  if (type === 'pressure') return '/ai-avatar-hr-opt.png';
   return '/ai-avatar.png';
 };
 
 export const getWarmupQuestion = (interviewType: string) => {
   if (interviewType === 'technical') return '你最引以为傲的职业成就是什么？或者一个你最近解决过的棘手问题是什么？';
-  if (interviewType === 'hr') return '请用三个关键词定义你的个人工作风格，并分别说明一个真实体现该关键词的例子。';
+  if (interviewType === 'pressure') return '请讲一次高压场景下你做出关键取舍的经历，并说明你的判断依据与结果。';
   return '请先做一个1分钟的自我介绍，重点突出与你目标岗位最相关的经历与优势。';
 };
 
@@ -119,14 +118,14 @@ export const getFallbackPlanByType = (interviewType: string): string[] => {
       '回到这个项目，你认为最大的技术遗憾和改进方向是什么？',
     ];
   }
-  if (interviewType === 'hr') {
+  if (interviewType === 'pressure') {
     return [
-      '请分享一次你与同事意见冲突并最终达成一致的案例。',
-      '你如何在高压和紧急任务下保持交付质量？',
-      '请讲一个你主动推动改进并产生结果的经历。',
-      '你过去离职/转岗的主要考虑是什么？',
-      '你为什么想加入这个岗位/公司？',
-      '如果入职，你前3个月的工作目标是什么？',
+      '请讲一次你在时间和资源都不足时完成关键目标的案例，重点说明你的取舍逻辑。',
+      '面对上级质疑你的方案时，你如何在压力下沟通并推动执行？',
+      '请复盘一次结果不达预期的经历：你承担了什么责任，后续如何补救？',
+      '如果同一时间有两个高优先级任务冲突，你如何判断先后顺序？',
+      '请举例说明一次跨团队冲突中你如何控制情绪并达成协作。',
+      '请讲一次你在信息不完整时做出决策的经历，以及你如何降低风险。',
     ];
   }
   return [

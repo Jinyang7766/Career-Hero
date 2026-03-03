@@ -31,7 +31,7 @@ type Params = {
   chatIntroScheduledRef: React.MutableRefObject<boolean>;
   persistAnalysisSessionState?: (
     state: 'interview_in_progress' | 'paused' | 'interview_done',
-    patch?: Partial<{ jdText: string; targetCompany: string; step: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; step: string; force: boolean }>
   ) => Promise<void>;
 };
 

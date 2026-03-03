@@ -15,7 +15,6 @@ export const createUserRecord = async (userId: string, email: string, name: stri
         email,
         name,
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
       });
 
     if (error) {
@@ -59,7 +58,6 @@ export const updateUserRecord = async (userId: string, updates: any) => {
       .from('users')
       .update({
         ...updates,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', userId);
 

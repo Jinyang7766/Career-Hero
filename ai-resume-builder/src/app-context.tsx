@@ -22,7 +22,7 @@ export type AppContextValue = {
   navigateToView: (view: View, opts?: { replace?: boolean; root?: boolean }) => void;
   goBack: () => void;
 
-  login: (userData?: any) => void;
+  login: (userData?: any, opts?: { isNewUser?: boolean }) => void;
   logout: (opts?: { skipConfirm?: boolean }) => void;
   theme: 'light' | 'dark' | 'system';
   resolvedTheme: 'light' | 'dark';

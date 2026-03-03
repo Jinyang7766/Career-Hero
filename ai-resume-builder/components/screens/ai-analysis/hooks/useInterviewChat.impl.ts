@@ -38,7 +38,7 @@ type Params = {
   persistInterviewSession: (messages: ChatMessage[], overrideJdText?: string) => Promise<void>;
   persistAnalysisSessionState: (
     state: 'interview_in_progress' | 'paused' | 'interview_done',
-    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; lastMessageAt: string; interviewSummary: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; score: number; step: string; error: string; lastMessageAt: string; interviewSummary: string; force: boolean }>
   ) => Promise<void>;
   jdText: string;
   getBackendAuthToken: () => Promise<string>;

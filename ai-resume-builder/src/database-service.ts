@@ -1,5 +1,10 @@
 import { supabase } from './supabase-client';
 import {
+  isResumeEligibleForLibrary,
+  shouldPersistResumeRecord,
+  withLocalOnlyDraftMeta,
+} from './resume-storage-policy';
+import {
   createUserRecord,
   getUserRecord,
   updateUserRecord,
@@ -212,6 +217,23 @@ export class DatabaseService {
       }
 
       const sanitizedResumeData = DatabaseService.stripLocationFromResumeData(resumeData);
+      if (!shouldPersistResumeRecord(sanitizedResumeData)) {
+        const nowIso = new Date().toISOString();
+        const localOnlyResumeData = withLocalOnlyDraftMeta(sanitizedResumeData);
+        const localOnlyRecord = {
+          id: null,
+          user_id: userId,
+          title,
+          resume_data: localOnlyResumeData,
+          score: 0,
+          has_dot: false,
+          created_at: nowIso,
+          updated_at: nowIso,
+          skipped_persist: true,
+        };
+        console.log('ℹ️ Skip remote persistence for non-analysis resume draft');
+        return { success: true, data: DatabaseService.sanitizeResumeRecord(localOnlyRecord) };
+      }
       const optimizationStatus = String(sanitizedResumeData?.optimizationStatus || '').trim().toLowerCase();
       const optimizedFromId = DatabaseService.normalizeResumeId(sanitizedResumeData?.optimizedFromId);
       const optimizationJdKey = String(sanitizedResumeData?.optimizationJdKey ?? '').trim();
@@ -340,8 +362,9 @@ export class DatabaseService {
           resumeDataSize: r.resume_data ? JSON.stringify(r.resume_data).length : 0
         })) || []
       });
-
-      return { success: true, data: DatabaseService.sanitizeResumeRecords(data) };
+      const sanitizedRows = DatabaseService.sanitizeResumeRecords(data);
+      const visibleRows = sanitizedRows.filter((row: any) => isResumeEligibleForLibrary(row?.resume_data || {}));
+      return { success: true, data: visibleRows };
     } catch (err) {
       console.error('❌ Database operation failed:', err);
       return { success: false, error: err, data: [] };
@@ -377,7 +400,9 @@ export class DatabaseService {
         return { success: false, error, data: [] as any[] };
       }
 
-      const normalized = DatabaseService.sanitizeResumeRecords(data).map((row: any) => {
+      const normalized = DatabaseService.sanitizeResumeRecords(data)
+        .filter((row: any) => isResumeEligibleForLibrary(row?.resume_data || {}))
+        .map((row: any) => {
         if (row && row.exportHistory !== undefined) return row;
         return { ...row, exportHistory: row?.resume_data?.exportHistory || [] };
       });

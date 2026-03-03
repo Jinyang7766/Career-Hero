@@ -2,12 +2,14 @@ import React from 'react';
 import ChatPage from './ChatPage';
 import ResumeSelectPage from './pages/ResumeSelectPage';
 import JdInputPage from './pages/JdInputPage';
+import InterviewScenePage from './pages/InterviewScenePage';
 import PostInterviewReportPage from './pages/PostInterviewReportPage';
 import FinalResumeReportPage from './pages/FinalResumeReportPage';
 import InterviewReportPage from './pages/InterviewReportPage';
 import FinalAnalysisLoadingPage from './pages/FinalAnalysisLoadingPage';
 import InterviewReportLoadingPage from './pages/InterviewReportLoadingPage';
 import type { AiAnalysisStep } from './step-types';
+import type { AnalysisMode } from './analysis-mode';
 
 type Params = {
   currentStep: AiAnalysisStep;
@@ -28,19 +30,28 @@ type Params = {
   resumeReadState: any;
   isInterviewMode?: boolean;
   pointsRemaining?: number | null;
-  isSameResumeId: (a: any, b: any) => boolean;
   resumeData: any;
   targetCompany: string;
   setTargetCompany: (v: string) => void;
   jdText: string;
   setJdText: (v: string) => void;
+  analysisMode: AnalysisMode;
+  setAnalysisMode: (mode: AnalysisMode) => void;
   isUploading: boolean;
   handleScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   handleStepBack: () => void;
+  handleFinalReportBack: () => void;
+  handleBackToJdInputFromFinalReport: () => void;
+  navigateToStep: (step: AiAnalysisStep, replaceTop?: boolean) => void;
   setCurrentStep: (v: AiAnalysisStep) => void;
-  handleStartAnalysisClick: (interviewType?: string) => void;
-  showJdEmptyModal: boolean;
-  setShowJdEmptyModal: (v: boolean) => void;
+  handleStartAnalysisClick: (
+    interviewType?: string,
+    options?: {
+      analysisMode?: AnalysisMode;
+      action?: 'reuse_existing' | 'regenerate';
+      forceRegenerate?: boolean;
+    }
+  ) => void;
   startAnalysis: (interviewType?: string) => void | Promise<void>;
   onRestartCompletedInterviewScene?: () => Promise<void> | void;
   interviewEntryConfirmPendingRef?: React.MutableRefObject<boolean>;
@@ -116,6 +127,23 @@ type Params = {
 
 export const renderAiAnalysisStep = (p: Params) => {
   if (p.currentStep === 'resume_select') {
+    if (!p.isInterviewMode) {
+      return (
+        <JdInputPage
+          resumeData={p.resumeData}
+          targetCompany={p.targetCompany}
+          setTargetCompany={p.setTargetCompany}
+          jdText={p.jdText}
+          setJdText={p.setJdText}
+          analysisMode={p.analysisMode}
+          setAnalysisMode={p.setAnalysisMode}
+          isUploading={p.isUploading}
+          onScreenshotUpload={p.handleScreenshotUpload}
+          onBack={p.handleStepBack}
+          onStart={p.handleStartAnalysisClick}
+        />
+      );
+    }
     return (
       <ResumeSelectPage
         allResumes={p.allResumes}
@@ -135,29 +163,36 @@ export const renderAiAnalysisStep = (p: Params) => {
     );
   }
 
+  if (p.currentStep === 'interview_scene') {
+    return (
+      <InterviewScenePage
+        resumeData={p.resumeData}
+        jdText={p.jdText}
+        targetCompany={p.targetCompany}
+        onBack={p.handleStepBack}
+        onStart={p.handleStartAnalysisClick}
+        onViewReport={() => p.setCurrentStep('interview_report')}
+        startAnalysis={p.startAnalysis}
+        onRestartCompletedInterviewScene={p.onRestartCompletedInterviewScene}
+        interviewEntryConfirmPendingRef={p.interviewEntryConfirmPendingRef}
+      />
+    );
+  }
+
   if (p.currentStep === 'jd_input') {
     return (
       <JdInputPage
-        allResumes={p.allResumes}
-        selectedResumeId={p.selectedResumeId}
-        isSameResumeId={p.isSameResumeId}
         resumeData={p.resumeData}
-        resumeReadState={p.resumeReadState}
         targetCompany={p.targetCompany}
         setTargetCompany={p.setTargetCompany}
         jdText={p.jdText}
         setJdText={p.setJdText}
+        analysisMode={p.analysisMode}
+        setAnalysisMode={p.setAnalysisMode}
         isUploading={p.isUploading}
         onScreenshotUpload={p.handleScreenshotUpload}
         onBack={p.handleStepBack}
         onStart={p.handleStartAnalysisClick}
-        onViewReport={() => p.setCurrentStep('interview_report')}
-        showJdEmptyModal={p.showJdEmptyModal}
-        setShowJdEmptyModal={p.setShowJdEmptyModal}
-        startAnalysis={p.startAnalysis}
-        onRestartCompletedInterviewScene={p.onRestartCompletedInterviewScene}
-        isInterviewMode={p.isInterviewMode}
-        interviewEntryConfirmPendingRef={p.interviewEntryConfirmPendingRef}
       />
     );
   }
@@ -177,7 +212,8 @@ export const renderAiAnalysisStep = (p: Params) => {
           summary={p.finalReportSummary}
           advice={p.finalReportAdvice}
           getScoreColor={p.getScoreColor}
-          onBack={p.handleStepBack}
+          onBack={p.handleFinalReportBack}
+          onBackToJdInput={p.handleBackToJdInputFromFinalReport}
           onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
           onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
           onFeedback={p.onFinalReportFeedback}
@@ -247,12 +283,12 @@ export const renderAiAnalysisStep = (p: Params) => {
     }
     return (
       <PostInterviewReportPage
-        originalResume={p.postInterviewOriginalResume}
         generatedResume={p.postInterviewGeneratedResume}
         annotations={p.postInterviewAnnotations}
         onFeedback={p.handlePostInterviewFeedback}
         onCompleteAndSave={p.handleCompleteAndSavePostInterview}
         onBack={p.handleStepBack}
+        onBackToJdInput={p.handleBackToJdInputFromFinalReport}
       />
     );
   }
@@ -283,7 +319,8 @@ export const renderAiAnalysisStep = (p: Params) => {
         summary={p.finalReportSummary}
         advice={p.finalReportAdvice}
         getScoreColor={p.getScoreColor}
-        onBack={p.handleStepBack}
+        onBack={p.handleFinalReportBack}
+        onBackToJdInput={p.handleBackToJdInputFromFinalReport}
         onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
         onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
         onFeedback={p.onFinalReportFeedback}
@@ -292,7 +329,24 @@ export const renderAiAnalysisStep = (p: Params) => {
   }
 
   // Defensive fallback: never render a blank screen when step state is corrupted.
-  console.warn('[AI_ANALYSIS] unexpected step, fallback to resume_select:', p.currentStep);
+  console.warn('[AI_ANALYSIS] unexpected step, fallback to entry step:', p.currentStep);
+  if (!p.isInterviewMode) {
+    return (
+      <JdInputPage
+        resumeData={p.resumeData}
+        targetCompany={p.targetCompany}
+        setTargetCompany={p.setTargetCompany}
+        jdText={p.jdText}
+        setJdText={p.setJdText}
+        analysisMode={p.analysisMode}
+        setAnalysisMode={p.setAnalysisMode}
+        isUploading={p.isUploading}
+        onScreenshotUpload={p.handleScreenshotUpload}
+        onBack={p.handleStepBack}
+        onStart={p.handleStartAnalysisClick}
+      />
+    );
+  }
   return (
     <ResumeSelectPage
       allResumes={p.allResumes}

@@ -62,8 +62,8 @@ def _build_analysis_prompt(
     "format": 66
   }},
   "summary": "诊断预评估总结",
-  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
-  "targetCompanyConfidence": 0.0,
+  "targetRole": "目标岗位名称，无法确定时返回空字符串",
+  "targetRoleConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
   "weaknesses": ["短板1", "短板2", "短板3"],
   "suggestions": [],
@@ -98,8 +98,8 @@ def _build_analysis_prompt(
     "format": 66
   }},
   "summary": "诊断预评估总结",
-  "targetCompany": "",
-  "targetCompanyConfidence": 0.0,
+  "targetRole": "",
+  "targetRoleConfidence": 0.0,
   "strengths": ["亮点1", "亮点2"],
   "weaknesses": ["短板1", "短板2", "短板3"],
   "suggestions": [],
@@ -136,7 +136,7 @@ def _build_analysis_prompt(
 6. suggestedValue 必须是可直接写入简历的终稿文本；禁止“建议/例如/示例/待补充”。
 7. skills 的 suggestedValue 必须是硬技能名词数组；大模型同类统一为 `LLM`，禁止动作词与泛词。
 8. 严禁基于占位符误判“信息缺失”；严禁性别偏见建议；严禁修改教育事实字段。
-9. 若能识别目标公司，填写 targetCompany 与 0~1 的 targetCompanyConfidence。
+9. 若能识别目标岗位，填写 targetRole 与 0~1 的 targetRoleConfidence。
 10. 批注建议遵循人工逻辑：先模块结论，再逐句问题；每条建议只对应一个问题。
 11. 严禁重复输出同义建议；同一能力缺口只保留一条合并建议。
 12. 当简历存在多个关键短板时，suggestions 需覆盖不同 targetSection（如 summary/workExps/skills），避免集中在单一模块。
@@ -191,8 +191,8 @@ def _build_analysis_prompt(
     "format": 25
   }},
   "summary": "候选人综合匹配度评估简述（控制在100字以内）。",
-  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
-  "targetCompanyConfidence": 0.0,
+  "targetRole": "目标岗位名称，无法确定时返回空字符串",
+  "targetRoleConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [
@@ -242,8 +242,8 @@ def _build_analysis_prompt(
     "format": 25
   }},
   "summary": "候选人综合匹配度评估简述（控制在100字以内）。",
-  "targetCompany": "从职位描述识别出的目标公司名称，无法确定时返回空字符串",
-  "targetCompanyConfidence": 0.0,
+  "targetRole": "目标岗位名称，无法确定时返回空字符串",
+  "targetRoleConfidence": 0.0,
   "strengths": ["优势1", "优势2"],
   "weaknesses": ["不足1", "不足2"],
   "suggestions": [

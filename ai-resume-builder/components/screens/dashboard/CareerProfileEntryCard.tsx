@@ -35,7 +35,7 @@ const CareerProfileEntryCard: React.FC<Props> = ({
         <div className="flex-1 min-w-0 z-10">
           <div className="flex items-center gap-2 mb-2">
             <span className="text-[11px] font-black tracking-[0.2em] uppercase text-primary dark:text-primary-light">
-              我的职业百科
+              我的职业画像
             </span>
             {hasProfile && (
               <span className="inline-flex m-0 p-0 relative flex-shrink-0 size-2">
@@ -45,12 +45,12 @@ const CareerProfileEntryCard: React.FC<Props> = ({
             )}
           </div>
           <h3 className="text-lg font-black text-slate-800 dark:text-white leading-tight group-hover:text-primary dark:group-hover:text-primary-light transition-colors duration-300">
-            {hasProfile ? '来更新一下最近的高光时刻？' : '快来建立属于你的职业百科'}
+            {hasProfile ? '查看我的专属职业画像' : '建立你的专属职业画像'}
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 line-clamp-2 min-h-[40px] leading-relaxed">
             {hasProfile
               ? summary
-              : '把工作细节和高光时刻倒给我，我帮你整理出最强能力图谱，让后续职位匹配和简历优化更精准！'}
+              : '随意告诉我你的经历与高光时刻，AI 为你直接生成核心能力图谱，为简历与面试提供最强弹药！'}
           </p>
         </div>
 
@@ -63,12 +63,12 @@ const CareerProfileEntryCard: React.FC<Props> = ({
         <span className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-[14px]">history_edu</span>
           {hasProfile
-            ? `已帮你记下了 ${Math.max(0, Number(experienceCount || 0))} 个闪光点`
-            : '百科还能帮你查漏补缺'}
+            ? `已收录了 ${Math.max(0, Number(experienceCount || 0))} 段经历素材`
+            : '让 AI 帮你盘点竞争力'}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="material-symbols-outlined text-[14px]">update</span>
-          {hasProfile ? `更新于 ${formatDateText(updatedAt) || '刚刚'}` : '马上去聊聊'}
+          {hasProfile ? `更新于 ${formatDateText(updatedAt) || '刚刚'}` : '立即去完善'}
         </span>
       </div>
     </button>

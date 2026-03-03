@@ -95,13 +95,19 @@ export const useInterviewSessionStore = ({
     resumeId: string | number;
     jdText: string;
     targetCompany?: string;
+    targetRole?: string;
     snapshot: any;
     updatedAt: string;
     analysisReportId?: string;
     optimizedResumeId?: string | number;
   }) => {
     try {
-      localStorage.setItem(getScopedLastAnalysisKey(), JSON.stringify(payload));
+      const normalizedPayload = {
+        ...payload,
+        targetCompany: String(payload?.targetCompany || '').trim(),
+        targetRole: String(payload?.targetRole || payload?.targetCompany || '').trim(),
+      };
+      localStorage.setItem(getScopedLastAnalysisKey(), JSON.stringify(normalizedPayload));
     } catch (error) {
       console.warn('Failed to save last analysis snapshot:', error);
     }
@@ -147,9 +153,8 @@ export const useInterviewSessionStore = ({
     if (!entries.length) return null;
     const filtered = entries.filter((item: any) => {
       const itemType = normalizeInterviewType(item?.interviewType || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewType || '');
-      const itemMode = normalizeInterviewMode(item?.interviewMode || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewMode || '');
       const itemChatMode = String(item?.chatMode || '').trim().toLowerCase();
-      return itemType === interviewType && itemMode === interviewMode && itemChatMode === chatMode;
+      return itemType === interviewType && itemChatMode === chatMode;
     });
     const source = filtered.length ? filtered : entries;
     return pickLatestByUpdatedAt(source as any[]) as any;
@@ -160,6 +165,7 @@ export const useInterviewSessionStore = ({
     patch?: Partial<{
       jdText: string;
       targetCompany: string;
+      targetRole: string;
       score: number;
       step: string;
       error: string;
@@ -187,13 +193,27 @@ export const useInterviewSessionStore = ({
         const entryChatMode = String(entry?.chatMode || '').trim().toLowerCase();
         if (entryChatMode !== chatMode) return false;
         const entryType = normalizeInterviewType(entry?.interviewType || parseInterviewScopedKey(String(entry?.sessionKey || '')).interviewType || '');
-        const entryMode = normalizeInterviewMode(entry?.interviewMode || parseInterviewScopedKey(String(entry?.sessionKey || '')).interviewMode || '');
         const entryJdKey = String(entry?.jdKey || '').trim() || makeJdKey(String(entry?.jdText || '').trim() || '__no_jd__');
-        return entryType === interviewType && entryMode === interviewMode && entryJdKey === jdKey;
+        return entryType === interviewType && entryJdKey === jdKey;
       }) ||
       {};
     const now = new Date().toISOString();
     const force = !!patch?.force;
+    const persistedTargetCompany = String(
+      patch?.targetCompany ?? targetCompany ?? resumeData.targetCompany ?? ''
+    ).trim();
+    const persistedTargetRole = isInterviewMode
+      ? String(currentResumeData.targetRole || '').trim()
+      : String(
+          patch?.targetRole ??
+          patch?.targetCompany ??
+          targetCompany ??
+          currentResumeData.targetRole ??
+          resumeData.targetRole ??
+          currentResumeData.targetCompany ??
+          resumeData.targetCompany ??
+          ''
+        ).trim();
 
     if (!force && prev.state === state) {
       // Avoid noisy writes on every render/send while preserving real transitions.
@@ -212,10 +232,10 @@ export const useInterviewSessionStore = ({
       jdKey,
       sessionKey,
       interviewType,
-      interviewMode,
       interviewFocus: getCurrentInterviewFocus(),
       jdText: sessionJdText,
-      targetCompany: patch?.targetCompany ?? targetCompany ?? resumeData.targetCompany ?? '',
+      targetCompany: persistedTargetCompany,
+      targetRole: persistedTargetRole,
       score: (typeof patch?.score === 'number' ? patch.score : prev.score),
       step: patch?.step ?? prev.step,
       error: patch?.error ?? '',
@@ -231,7 +251,10 @@ export const useInterviewSessionStore = ({
         [sessionKey]: nextSession,
       },
       lastJdText: sessionJdText || currentResumeData.lastJdText || '',
-      targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      targetCompany: persistedTargetCompany || currentResumeData.targetCompany || '',
+      targetRole: isInterviewMode
+        ? (currentResumeData as any).targetRole || ''
+        : (persistedTargetRole || (currentResumeData as any).targetRole || ''),
       interviewFocus: getCurrentInterviewFocus() || (currentResumeData as any).interviewFocus || '',
     };
 
@@ -262,7 +285,6 @@ export const useInterviewSessionStore = ({
     if (!sessionJdText) {
       const expectedChatMode = isInterviewMode ? 'interview' : 'analysis';
       const expectedInterviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-      const expectedInterviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode());
       const expectedTargetCompany = normalizeSceneText(targetCompany || currentResumeData?.targetCompany || '');
       const expectedInterviewFocus = getCurrentInterviewFocus();
       const expectedResumeId = String((currentResumeData as any)?.id || '').trim();
@@ -279,9 +301,7 @@ export const useInterviewSessionStore = ({
         if (sessionJdKey !== expectedJdKey) return false;
         if (!isInterviewMode) return true;
         const sessionType = normalizeInterviewType(session?.interviewType || '');
-        const sessionMode = normalizeInterviewMode(session?.interviewMode || '');
         if (sessionType !== expectedInterviewType) return false;
-        if (sessionMode !== expectedInterviewMode) return false;
         return isSessionSceneMatched({
           session,
           expectedChatMode,
@@ -341,7 +361,6 @@ export const useInterviewSessionStore = ({
         jdKey: makeJdKey(sessionJdText || '__no_jd__'),
         resumeId: currentResumeData?.id,
         interviewType,
-        interviewMode,
         interviewFocus: getCurrentInterviewFocus(),
         targetCompany: targetCompany || currentResumeData.targetCompany || '',
         chatMode: isInterviewMode ? 'interview' : 'analysis',
@@ -440,9 +459,7 @@ export const useInterviewSessionStore = ({
           makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
         if (sessionJdKey !== legacyJdKey) return;
         const sessionType = normalizeInterviewType(session?.interviewType || parseInterviewScopedKey(String(key || '')).interviewType || '');
-        const sessionMode = normalizeInterviewMode(session?.interviewMode || parseInterviewScopedKey(String(key || '')).interviewMode || '');
         if (sessionType !== interviewType) return;
-        if (sessionMode !== interviewMode) return;
         delete updatedSessions[key];
       });
     }
@@ -472,7 +489,7 @@ export const useInterviewSessionStore = ({
     if (!currentResumeData?.id) return;
     const sessionJdText = pickFirstNonEmptyText(overrideJdText, jdText, currentResumeData.lastJdText);
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-    const interviewMode = normalizeInterviewMode(_overrideInterviewMode || getCurrentInterviewMode());
+    void _overrideInterviewMode;
     const jdKey = makeJdKey(sessionJdText || '__no_jd__');
     const byJd = { ...((currentResumeData as any).analysisSessionByJd || {}) };
     const expectedChatMode = getCurrentChatMode();
@@ -488,11 +505,9 @@ export const useInterviewSessionStore = ({
       }
       const parsed = parseInterviewScopedKey(String(key || ''));
       const entryType = normalizeInterviewType(session?.interviewType || parsed.interviewType || '');
-      const entryMode = normalizeInterviewMode(session?.interviewMode || parsed.interviewMode || '');
       const entryJdKey = String(session?.jdKey || parsed.jdKey || '').trim() || makeJdKey(String(session?.jdText || '').trim() || '__no_jd__');
       if (entryJdKey !== jdKey) return;
       if (entryType !== interviewType) return;
-      if (entryMode !== interviewMode) return;
       const entryResumeId = String(session?.resumeId || '').trim();
       const currentResumeId = String((currentResumeData as any)?.id || '').trim();
       if (entryResumeId && currentResumeId && entryResumeId !== currentResumeId) return;

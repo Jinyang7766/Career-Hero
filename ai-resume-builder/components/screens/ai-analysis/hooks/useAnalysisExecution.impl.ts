@@ -7,16 +7,30 @@ import { openChatWithInterviewCheckpoint } from '../interview-entry-checkpoint';
 import type { AnalysisReport, Suggestion } from '../types';
 import { buildAnalysisResultSnapshot } from './analysis-execution-result';
 import { getLatestCareerProfile } from '../../../../src/career-profile-utils';
+import {
+  buildDiagnosisResumeFromProfile,
+  hasCareerProfileForDiagnosis,
+} from '../profile-diagnosis-resume';
+import {
+  shouldPromptForMissingJd,
+  normalizeAnalysisMode,
+  type AnalysisMode,
+} from '../analysis-mode';
+import { resolveAnalysisTargetValue } from '../target-role';
+import {
+  extractReusableAnalysisSnapshotForJd,
+  hasReadyAnalysisSessionForJd,
+  hasReusableSuggestionPayload,
+} from '../analysis-reuse';
 
 type QuotaKind =
   | 'analysis'
   | 'final_report'
-  | 'interview'
-  | 'interview_simple'
-  | 'interview_comprehensive';
+  | 'interview';
 
 type Params = {
   resumeData: any;
+  analysisMode?: AnalysisMode;
   setResumeData?: (value: any) => void;
   jdText: string;
   targetCompany: string;
@@ -48,7 +62,7 @@ type Params = {
   setReport: (value: AnalysisReport | null) => void;
   persistAnalysisSessionState: (
     state: 'jd_ready' | 'analyzing' | 'report_ready' | 'paused' | 'error' | 'interview_in_progress',
-    patch?: Partial<{ jdText: string; targetCompany: string; score: number; step: string; error: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; score: number; step: string; error: string; force: boolean }>
   ) => Promise<void>;
   persistAnalysisSnapshot: (resumeData: any, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => Promise<any>;
   saveLastAnalysis: (payload: any) => void;
@@ -59,7 +73,6 @@ type Params = {
   getBackendAuthToken: () => Promise<string>;
   buildApiUrl: (path: string) => string;
   getRagEnabledFlag: () => boolean;
-  setShowJdEmptyModal: (value: boolean) => void;
   isInterviewMode?: boolean;
   openChat: (source: 'internal' | 'preview') => void;
   consumeUsageQuota?: (kind: QuotaKind, context?: { scenario?: string; mode?: string }) => Promise<boolean>;
@@ -69,6 +82,7 @@ type Params = {
 
 export const useAnalysisExecution = ({
   resumeData,
+  analysisMode,
   setResumeData,
   jdText,
   targetCompany,
@@ -101,7 +115,6 @@ export const useAnalysisExecution = ({
   getBackendAuthToken,
   buildApiUrl,
   getRagEnabledFlag,
-  setShowJdEmptyModal,
   isInterviewMode,
   openChat,
   consumeUsageQuota,
@@ -113,14 +126,28 @@ export const useAnalysisExecution = ({
   const generateRealAnalysisWithOptions = useCallback(async (
     runId: string,
     interviewType?: string,
-    opts?: { bypassCache?: boolean }
+    opts?: {
+      bypassCache?: boolean;
+      targetRole?: string;
+      careerProfile?: any;
+      diagnosisResumeData?: any;
+    }
   ) => {
-    const latestCareerProfile = getLatestCareerProfile(userProfile);
+    const latestCareerProfile = opts?.careerProfile || getLatestCareerProfile(userProfile);
+    const diagnosisResumeData = opts?.diagnosisResumeData || (
+      latestCareerProfile
+        ? buildDiagnosisResumeFromProfile({
+            profile: latestCareerProfile,
+            targetRole: String(opts?.targetRole || '').trim(),
+          })
+        : resumeData
+    );
     return runRealAnalysisRequest({
       interviewType,
-      resumeData,
+      resumeData: diagnosisResumeData,
       careerProfile: latestCareerProfile,
       jdText,
+      targetRole: String(opts?.targetRole || '').trim(),
       getBackendAuthToken,
       showToast,
       buildApiUrl,
@@ -177,6 +204,26 @@ export const useAnalysisExecution = ({
     if (analysisRunIdRef.current) {
       cancelInFlightAnalysis(undefined, { preserveStep: true });
     }
+    const effectiveSessionTarget = resolveAnalysisTargetValue({
+      isInterviewMode,
+      analysisMode: normalizeAnalysisMode(analysisMode || (resumeData as any)?.analysisMode),
+      stateTargetCompany: targetCompany,
+      resumeTargetCompany: isInterviewMode ? resumeData?.targetCompany : '',
+      resumeTargetRole: resumeData?.targetRole,
+      resumeHasTargetRole: Object.prototype.hasOwnProperty.call(resumeData || {}, 'targetRole'),
+    });
+    const effectiveSessionTargetRole = isInterviewMode
+      ? String(resumeData?.targetRole || '').trim()
+      : String(effectiveSessionTarget || resumeData?.targetRole || '').trim();
+    const latestCareerProfile = getLatestCareerProfile(userProfile);
+    if (!hasCareerProfileForDiagnosis(latestCareerProfile)) {
+      showToast('请先完善职业画像，再基于画像与JD生成诊断。', 'info', 2200);
+      return;
+    }
+    const diagnosisResumeData = buildDiagnosisResumeFromProfile({
+      profile: latestCareerProfile,
+      targetRole: effectiveSessionTargetRole,
+    });
     const normalizedInterviewType = String(interviewType || getActiveInterviewType() || 'general').trim().toLowerCase();
     const normalizedInterviewMode = String(getActiveInterviewMode() || 'comprehensive').trim().toLowerCase();
     const analysisSessionByJd = (resumeData as any)?.analysisSessionByJd || {};
@@ -206,13 +253,10 @@ export const useAnalysisExecution = ({
     }
 
     if (consumeUsageQuota && !(isInterviewMode && isContinuingInterview)) {
-      const kind: 'analysis' | 'interview_simple' | 'interview_comprehensive' =
-        isInterviewMode
-          ? (normalizedInterviewMode === 'simple' ? 'interview_simple' : 'interview_comprehensive')
-          : 'analysis';
+      const kind: 'analysis' | 'interview' = isInterviewMode ? 'interview' : 'analysis';
       const allowed = await consumeUsageQuota(kind, isInterviewMode ? {
         scenario: normalizedInterviewType,
-        mode: normalizedInterviewMode
+        mode: undefined
       } : undefined);
       if (!allowed) return;
     }
@@ -231,7 +275,7 @@ export const useAnalysisExecution = ({
         persist: persistAnalysisSessionState,
         patch: {
           jdText: effectiveJd,
-          targetCompany: targetCompany || resumeData?.targetCompany || '',
+          targetCompany: effectiveSessionTarget,
           step: 'chat',
           force: true,
         },
@@ -256,7 +300,7 @@ export const useAnalysisExecution = ({
         persist: persistAnalysisSessionState,
         patch: {
           jdText: effectiveJdText,
-          targetCompany: targetCompany || resumeData.targetCompany || '',
+          targetCompany: effectiveSessionTarget,
           step: 'chat',
           force: true,
         },
@@ -270,12 +314,13 @@ export const useAnalysisExecution = ({
 
     setChatMessages([]);
     setChatInitialized(false);
-    setOriginalResumeData(JSON.parse(JSON.stringify(resumeData)));
+    setOriginalResumeData(JSON.parse(JSON.stringify(diagnosisResumeData)));
     setAnalysisInProgress(true);
     navigateToStep('analyzing');
     persistAnalysisSessionState('analyzing', {
       jdText: jdText || resumeData.lastJdText || '',
-      targetCompany: targetCompany || resumeData.targetCompany || '',
+      targetCompany: effectiveSessionTarget,
+      targetRole: effectiveSessionTargetRole,
       step: 'analyzing',
       force: true,
     }).catch((stateErr) => {
@@ -294,6 +339,9 @@ export const useAnalysisExecution = ({
       }
       const aiAnalysisResult = await generateRealAnalysisWithOptions(runId, interviewType, {
         bypassCache: !!opts?.bypassCache || bypassCacheOnce,
+        targetRole: effectiveSessionTargetRole,
+        careerProfile: latestCareerProfile,
+        diagnosisResumeData,
       });
       if (analysisRunIdRef.current !== runId) return;
       if (!aiAnalysisResult) return;
@@ -303,10 +351,13 @@ export const useAnalysisExecution = ({
         report: newReport,
         totalScore,
         effectiveTargetCompany,
+        effectiveTargetRole,
       } = buildAnalysisResultSnapshot({
         aiAnalysisResult,
-        resumeData,
+        resumeData: diagnosisResumeData,
         targetCompany,
+        targetRole: effectiveSessionTargetRole,
+        analysisMode: normalizeAnalysisMode(analysisMode || (resumeData as any)?.analysisMode),
       });
       setOriginalScore(totalScore);
       setScore(totalScore);
@@ -350,6 +401,7 @@ export const useAnalysisExecution = ({
         updatedAt: new Date().toISOString(),
         jdText: jdText || resumeData.lastJdText || '',
         targetCompany: effectiveTargetCompany,
+        targetRole: effectiveTargetRole,
         targetCompanyConfidence: 0,
         analysisReportId: resolvedAnalysisReportId || undefined,
         optimizedResumeId: resolvedOptimizedResumeId || undefined,
@@ -382,6 +434,7 @@ export const useAnalysisExecution = ({
           resumeId: safePersistTargetId || resumeData.id,
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: effectiveTargetCompany,
+          targetRole: effectiveTargetRole,
           snapshot: snapshotForPersist,
           updatedAt: snapshotForPersist.updatedAt,
           analysisReportId: resolvedAnalysisReportId || undefined,
@@ -393,6 +446,7 @@ export const useAnalysisExecution = ({
         await persistAnalysisSessionState('report_ready', {
           jdText: jdText || resumeData.lastJdText || '',
           targetCompany: effectiveTargetCompany,
+          targetRole: effectiveTargetRole,
           score: totalScore,
           step: 'final_report',
           force: true,
@@ -411,7 +465,8 @@ export const useAnalysisExecution = ({
       try {
         await persistAnalysisSessionState('paused', {
           jdText: jdText || resumeData?.lastJdText || '',
-          targetCompany: targetCompany || resumeData?.targetCompany || '',
+          targetCompany: effectiveSessionTarget,
+          targetRole: effectiveSessionTargetRole,
           step: opts?.preserveReportOnError ? 'final_report' : 'jd_input',
           error: message || 'analysis_interrupted',
           force: true,
@@ -475,20 +530,103 @@ export const useAnalysisExecution = ({
     showToast,
     setTargetCompany,
     targetCompany,
+    analysisMode,
     isInterviewMode,
     consumeUsageQuota,
     refundUsageQuota,
     interviewEntryConfirmPendingRef,
+    userProfile,
   ]);
 
-  const handleStartAnalysisClick = useCallback(async (interviewType?: string) => {
-    const hasJd = !!jdText.trim();
-    if (!hasJd) {
-      setShowJdEmptyModal(true);
+  const handleStartAnalysisClick = useCallback(async (
+    interviewType?: string,
+    options?: {
+      analysisMode?: AnalysisMode;
+      action?: 'reuse_existing' | 'regenerate';
+      forceRegenerate?: boolean;
+    }
+  ) => {
+    const effectiveMode = normalizeAnalysisMode(
+      options?.analysisMode || analysisMode || (resumeData as any)?.analysisMode
+    );
+    if (!isInterviewMode && options?.action === 'reuse_existing') {
+      const reusable = extractReusableAnalysisSnapshotForJd({
+        resumeData,
+        jdText,
+        targetCompany,
+        analysisMode: effectiveMode,
+      });
+      if (reusable) {
+        setOriginalScore(reusable.score);
+        setScore(reusable.score);
+        setSuggestions(
+          hasReusableSuggestionPayload(reusable)
+            ? (reusable.suggestions as Suggestion[])
+            : []
+        );
+        setReport({
+          summary: reusable.summary,
+          strengths: reusable.strengths,
+          weaknesses: reusable.weaknesses,
+          missingKeywords: reusable.missingKeywords,
+          scoreBreakdown: reusable.scoreBreakdown,
+        });
+        setTargetCompany(reusable.targetRole);
+        setIsFromCache(true);
+        try {
+          await persistAnalysisSessionState('report_ready', {
+            jdText: reusable.jdText,
+            targetCompany: String(reusable.targetRole || ''),
+            targetRole: String(reusable.targetRole || ''),
+            score: reusable.score,
+            step: 'final_report',
+            force: true,
+          });
+        } catch (stateErr) {
+          console.warn('Failed to persist report_ready during reuse:', stateErr);
+        }
+        navigateToStep('final_report');
+        showToast('已加载该 JD 的历史结果。', 'success', 1800);
+        return;
+      }
+
+      if (hasReadyAnalysisSessionForJd({ resumeData, jdText })) {
+        navigateToStep('final_report');
+        showToast('已尝试打开该 JD 的历史报告。', 'info', 1800);
+        return;
+      }
+
+      showToast('未找到可复用结果，请选择重新生成。', 'info', 2200);
       return;
     }
-    await startAnalysis(interviewType);
-  }, [jdText, setShowJdEmptyModal, startAnalysis]);
+    if (shouldPromptForMissingJd({
+      isInterviewMode,
+      jdText,
+      analysisMode: effectiveMode,
+    })) {
+      showToast('请先填写职位描述，再开始定向优化。', 'info', 1800);
+      return;
+    }
+    await startAnalysis(interviewType, {
+      bypassCache: Boolean(options?.forceRegenerate || options?.action === 'regenerate'),
+    });
+  }, [
+    analysisMode,
+    isInterviewMode,
+    jdText,
+    navigateToStep,
+    persistAnalysisSessionState,
+    resumeData,
+    setOriginalScore,
+    setReport,
+    setScore,
+    setSuggestions,
+    setTargetCompany,
+    setIsFromCache,
+    showToast,
+    startAnalysis,
+    targetCompany,
+  ]);
 
   return {
     cancelInFlightAnalysis,

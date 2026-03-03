@@ -86,6 +86,7 @@ def clean_resume_payload(payload):
         'optimizationStatus': clean_string(payload.get('optimizationStatus'), 50),
         'optimizedFromId': clean_string(payload.get('optimizedFromId'), 120),
         'lastJdText': clean_string(payload.get('lastJdText'), 8000),
+        'targetRole': clean_string(payload.get('targetRole'), 300),
         'targetCompany': clean_string(payload.get('targetCompany'), 300),
     }
 

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react';
 import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
 import { makeJdKey } from '../id-utils';
+import { normalizeAnalysisMode, type AnalysisMode } from '../analysis-mode';
+import { resolveAnalysisTargetValue } from '../target-role';
 import { pushRuntimeTrace } from '../../../../src/runtime-diagnostics';
 
 type Params = {
@@ -8,6 +10,7 @@ type Params = {
   jdText: string;
   resumeData: any;
   targetCompany: string;
+  analysisMode?: AnalysisMode;
   score: number;
   isInterviewMode?: boolean;
   persistAnalysisSessionState: (
@@ -15,6 +18,7 @@ type Params = {
     patch?: Partial<{
       jdText: string;
       targetCompany: string;
+      targetRole: string;
       score: number;
       step: string;
       force: boolean;
@@ -22,11 +26,25 @@ type Params = {
   ) => Promise<void> | void;
 };
 
+export const resolveCheckpointTargetRole = ({
+  isInterviewMode = false,
+  effectiveTargetCompany,
+  resumeData,
+}: {
+  isInterviewMode?: boolean;
+  effectiveTargetCompany: string;
+  resumeData: any;
+}) =>
+  isInterviewMode
+    ? String((resumeData as any)?.targetRole || '').trim()
+    : String(effectiveTargetCompany || resumeData?.targetRole || '').trim();
+
 export const useAnalysisStepCheckpoint = ({
   currentStep,
   jdText,
   resumeData,
   targetCompany,
+  analysisMode,
   score,
   isInterviewMode = false,
   persistAnalysisSessionState,
@@ -35,6 +53,20 @@ export const useAnalysisStepCheckpoint = ({
 
   useEffect(() => {
     const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
+    const effectiveTargetCompany = isInterviewMode
+      ? String(targetCompany || resumeData?.targetCompany || '').trim()
+      : resolveAnalysisTargetValue({
+          analysisMode: normalizeAnalysisMode(analysisMode || resumeData?.analysisMode),
+          stateTargetCompany: targetCompany,
+          resumeTargetCompany: '',
+          resumeTargetRole: resumeData?.targetRole,
+          resumeHasTargetRole: Object.prototype.hasOwnProperty.call(resumeData || {}, 'targetRole'),
+        });
+    const effectiveTargetRole = resolveCheckpointTargetRole({
+      isInterviewMode,
+      effectiveTargetCompany,
+      resumeData,
+    });
     if (!effectiveJdText && !isInterviewMode) return;
     if (currentStep === 'resume_select') return;
 
@@ -46,6 +78,7 @@ export const useAnalysisStepCheckpoint = ({
       }
     > = {
       jd_input: { state: 'jd_ready', step: 'jd_input' },
+      interview_scene: { state: 'jd_ready', step: 'interview_scene' },
       analyzing: { state: 'analyzing', step: 'analyzing' },
       chat: { state: 'interview_in_progress', step: 'chat' },
       interview_report: { state: 'interview_done', step: 'interview_report' },
@@ -59,13 +92,13 @@ export const useAnalysisStepCheckpoint = ({
     if (!mapped) return;
 
     // Interview flow guard:
-    // Once a scene is started, returning to jd_input must not downgrade state to jd_ready,
+    // Once a scene is started, returning to entry step must not downgrade state to jd_ready,
     // otherwise "继续面试" and scene lock will be lost.
     if (isInterviewMode && mapped.state === 'jd_ready') {
       const normalizedType = String(getActiveInterviewType() || '').trim().toLowerCase();
       const normalizedMode = String(getActiveInterviewMode() || '').trim().toLowerCase();
       const normalizedFocus = String(getActiveInterviewFocus() || '').trim().toLowerCase().replace(/\s+/g, ' ');
-      const normalizedCompany = String(targetCompany || resumeData?.targetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      const normalizedCompany = String(effectiveTargetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
       const normalizedResumeId = String((resumeData as any)?.id || '').trim();
       const jdKey = makeJdKey(effectiveJdText || '__no_jd__');
       const sessions = Object.values((resumeData as any)?.analysisSessionByJd || {}) as any[];
@@ -98,7 +131,8 @@ export const useAnalysisStepCheckpoint = ({
       mapped.state,
       mapped.step,
       effectiveJdText,
-      String(targetCompany || resumeData?.targetCompany || ''),
+      String(effectiveTargetCompany || ''),
+      String(effectiveTargetRole || ''),
       String(typeof score === 'number' ? score : ''),
     ].join('|');
     if (lastCheckpointRef.current === checkpointKey) return;
@@ -107,13 +141,15 @@ export const useAnalysisStepCheckpoint = ({
       step: currentStep,
       state: mapped.state,
       jdLen: effectiveJdText.length,
-      hasCompany: Boolean(String(targetCompany || resumeData?.targetCompany || '').trim()),
+      hasCompany: Boolean(String(effectiveTargetCompany || '').trim()),
+      hasTargetRole: Boolean(String(effectiveTargetRole || '').trim()),
       score: Number(score || 0),
     });
 
     void persistAnalysisSessionState(mapped.state, {
       jdText: effectiveJdText,
-      targetCompany: targetCompany || resumeData?.targetCompany || '',
+      targetCompany: effectiveTargetCompany,
+      targetRole: effectiveTargetRole,
       score,
       step: mapped.step,
       force: true,
@@ -122,8 +158,11 @@ export const useAnalysisStepCheckpoint = ({
     currentStep,
     jdText,
     resumeData?.lastJdText,
+    resumeData?.analysisMode,
     resumeData?.id,
     resumeData?.targetCompany,
+    resumeData?.targetRole,
+    analysisMode,
     score,
     targetCompany,
     isInterviewMode,

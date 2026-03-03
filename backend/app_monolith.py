@@ -819,8 +819,16 @@ try:
         ai_chat_stream_core,
         transcribe_core,
     )
+    from agent.event_repository import create_event_repository
+    from agent.intent_router import RuleIntentRouter
+    from agent.run_service import AgentRunService
+    from agent.run_repository import create_run_repository
+    from agent.tool_run_repository import create_tool_run_repository
+    from agent.tool_runtime import AgentToolRuntimeService
     from routes.ai_routes import register_ai_routes
     from routes.ai_route_deps import build_ai_route_deps
+    from routes.agent_route_deps import build_agent_route_deps
+    from routes.agent_routes import register_agent_routes
 except ImportError:
     from backend.services.export_service import build_pdf_export_payload, PDFExportBusyError
     from backend.services.resume_parse_service import (
@@ -851,8 +859,16 @@ except ImportError:
         ai_chat_stream_core,
         transcribe_core,
     )
+    from backend.agent.event_repository import create_event_repository
+    from backend.agent.intent_router import RuleIntentRouter
+    from backend.agent.run_service import AgentRunService
+    from backend.agent.run_repository import create_run_repository
+    from backend.agent.tool_run_repository import create_tool_run_repository
+    from backend.agent.tool_runtime import AgentToolRuntimeService
     from backend.routes.ai_routes import register_ai_routes
     from backend.routes.ai_route_deps import build_ai_route_deps
+    from backend.routes.agent_route_deps import build_agent_route_deps
+    from backend.routes.agent_routes import register_agent_routes
 
 configure_resume_parse_service(
     logger_obj=logger,
@@ -923,6 +939,46 @@ register_ai_routes(
         generate_optimized_resume=generate_optimized_resume,
     ),
 )
+
+AGENT_API_ENABLED = parse_bool_flag(os.getenv('AGENT_API_ENABLED'), default=False)
+AGENT_MOCK_WORKER_ENABLED = parse_bool_flag(
+    os.getenv('AGENT_MOCK_WORKER_ENABLED'),
+    default=False,
+)
+if AGENT_API_ENABLED:
+    run_repository = create_run_repository(storage_context=storage_context, logger=logger)
+    tool_run_repository = create_tool_run_repository(storage_context=storage_context, logger=logger)
+    event_repository = create_event_repository(storage_context=storage_context)
+    agent_run_service = AgentRunService(
+        repository=run_repository,
+        event_repository=event_repository,
+        logger=logger,
+    )
+    tool_runtime_service = AgentToolRuntimeService(
+        run_service=agent_run_service,
+        repository=tool_run_repository,
+        event_repository=event_repository,
+        logger=logger,
+    )
+    intent_confidence_threshold = float(os.getenv('AGENT_INTENT_CONFIDENCE_THRESHOLD', '0.45') or '0.45')
+    register_agent_routes(
+        app,
+        build_agent_route_deps(
+            token_required=token_required,
+            run_service=agent_run_service,
+            tool_runtime_service=tool_runtime_service,
+            event_repository=event_repository,
+            intent_router=RuleIntentRouter(),
+            intent_confidence_threshold=intent_confidence_threshold,
+            mock_worker_enabled=AGENT_MOCK_WORKER_ENABLED,
+        ),
+    )
+    logger.info(
+        "Agent API routes enabled (mock_worker=%s)",
+        AGENT_MOCK_WORKER_ENABLED,
+    )
+else:
+    logger.info("Agent API routes disabled (set AGENT_API_ENABLED=1 to enable)")
 
 if __name__ == '__main__':
     # 使用配置的端口。关闭 reloader，避免导出 PDF 过程中被文件监控重启打断。

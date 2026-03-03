@@ -344,6 +344,7 @@ export const usePostInterviewFinalize = ({
       optimizationJdKey,
       lastJdText: effectiveJdText,
       targetCompany: effectiveTargetCompany,
+      source: 'interview_refined',
     };
     const snapshotSummary = String(finalReportSnapshot?.summary || '').trim();
     const snapshotScore = Number(finalReportSnapshot?.score);

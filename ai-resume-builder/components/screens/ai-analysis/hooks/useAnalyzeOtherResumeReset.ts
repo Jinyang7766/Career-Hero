@@ -50,7 +50,7 @@ export const useAnalyzeOtherResumeReset = ({
     setIsFromCache(false);
     setOptimizedResumeId(null);
     setAnalysisInProgress(false);
-    setCurrentStep('resume_select');
+    setCurrentStep('jd_input');
   }, [
     clearLastAnalysis,
     resetOptimizedCreationState,

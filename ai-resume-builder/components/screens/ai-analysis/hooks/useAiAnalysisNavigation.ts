@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 type Step =
   | 'resume_select'
   | 'jd_input'
+  | 'interview_scene'
   | 'analyzing'
   | 'chat'
   | 'interview_report_loading'
@@ -12,7 +13,8 @@ type Step =
 
 export const popHistoryBackTarget = (
   stepHistory: Step[],
-  currentStep: Step
+  currentStep: Step,
+  options?: { isInterviewMode?: boolean }
 ): { remainingHistory: Step[]; targetStep: Step | null } => {
   const remainingHistory = [...stepHistory];
   let targetStep: Step | undefined = remainingHistory.pop();
@@ -31,7 +33,7 @@ export const popHistoryBackTarget = (
     targetStep = remainingHistory.pop();
   }
   if (currentStep === 'final_report' && targetStep === 'analyzing') {
-    targetStep = 'jd_input';
+    targetStep = options?.isInterviewMode ? 'interview_scene' : 'jd_input';
   }
   if (!targetStep || targetStep === currentStep) {
     return { remainingHistory, targetStep: null };
@@ -44,6 +46,7 @@ type Params = {
   setCurrentStep: (step: Step) => void;
   restoreInterviewSession: () => void;
   setIsInterviewEntry: (v: boolean) => void;
+  isInterviewMode?: boolean;
   goBack?: () => void;
 };
 
@@ -52,6 +55,7 @@ export const useAiAnalysisNavigation = ({
   setCurrentStep,
   restoreInterviewSession,
   setIsInterviewEntry,
+  isInterviewMode = false,
   goBack,
 }: Params) => {
   const [stepHistory, setStepHistory] = useState<Step[]>([]);
@@ -63,7 +67,7 @@ export const useAiAnalysisNavigation = ({
   });
   const [lastChatStep, setLastChatStep] = useState<Step | null>(() => {
     const stored = localStorage.getItem('ai_chat_prev_step');
-    const validSteps: Step[] = ['resume_select', 'jd_input', 'analyzing', 'interview_report_loading', 'interview_report', 'comparison', 'final_report'];
+    const validSteps: Step[] = ['resume_select', 'jd_input', 'interview_scene', 'analyzing', 'interview_report_loading', 'interview_report', 'comparison', 'final_report'];
     return stored && validSteps.includes(stored as Step) ? (stored as Step) : null;
   });
 
@@ -119,8 +123,9 @@ export const useAiAnalysisNavigation = ({
 
   const handleStepBack = () => {
     if (currentStep === 'interview_report') {
-      setCurrentStep('jd_input');
-      currentStepRef.current = 'jd_input';
+      const interviewEntryStep: Step = isInterviewMode ? 'interview_scene' : 'jd_input';
+      setCurrentStep(interviewEntryStep);
+      currentStepRef.current = interviewEntryStep;
       return;
     }
     if (currentStep === 'chat') {
@@ -136,7 +141,9 @@ export const useAiAnalysisNavigation = ({
       }
     }
     if (stepHistory.length > 0) {
-      const { remainingHistory, targetStep } = popHistoryBackTarget(stepHistory, currentStep);
+      const { remainingHistory, targetStep } = popHistoryBackTarget(stepHistory, currentStep, {
+        isInterviewMode,
+      });
       setStepHistory(remainingHistory);
       if (targetStep) {
         setCurrentStep(targetStep);
@@ -154,8 +161,9 @@ export const useAiAnalysisNavigation = ({
       currentStepRef.current = replacedFrom;
       return;
     } else if (currentStep === 'final_report') {
-      setCurrentStep('jd_input');
-      currentStepRef.current = 'jd_input';
+      const reportFallbackStep: Step = isInterviewMode ? 'interview_scene' : 'jd_input';
+      setCurrentStep(reportFallbackStep);
+      currentStepRef.current = reportFallbackStep;
     } else if (goBack) {
       goBack();
       return;

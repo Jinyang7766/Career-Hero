@@ -1,4 +1,5 @@
 import type React from 'react';
+import type { AnalysisMode } from '../analysis-mode';
 
 export type AiAnalysisPassiveFlowsParams = {
   isInterviewMode?: boolean;
@@ -10,6 +11,7 @@ export type AiAnalysisPassiveFlowsParams = {
   setChatMessages: React.Dispatch<React.SetStateAction<any[]>>;
   resumeData: any;
   jdText: string;
+  analysisMode?: AnalysisMode;
 
   chatEntrySource: 'internal' | 'preview' | null;
   score: number;
@@ -55,6 +57,7 @@ export type AiAnalysisPassiveFlowsParams = {
   isAnalysisStillInProgress: () => boolean;
   inprogressAtKey: string;
   cancelInFlightAnalysis: (...args: any[]) => any;
+  suppressDiagnosisSessionRecoveryRef: React.MutableRefObject<boolean>;
 
   setSelectedResumeId: (v: string | number | null) => void;
   setOptimizedResumeId: (v: string | number | null) => void;

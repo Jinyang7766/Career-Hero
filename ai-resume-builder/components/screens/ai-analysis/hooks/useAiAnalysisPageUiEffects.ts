@@ -1,18 +1,23 @@
 import { useEffect, useRef } from 'react';
 import type { AiAnalysisPageEffectsParams } from './useAiAnalysisPageEffects.types';
 
+export const resolveInterviewLegacyEntryStep = (hasSelectedInterviewResume: boolean) =>
+  hasSelectedInterviewResume ? 'interview_scene' : 'resume_select';
+
 export const useAiAnalysisPageUiEffects = ({
   currentStep,
   setCurrentStep,
   setIsNavHidden,
   prevStepRef,
   setTargetCompany,
+  setJdText,
   planLoaderMountedRef,
   currentUserId,
   userAvatarUrl,
   setUserAvatar,
   pathname,
   isInterviewMode,
+  resumeId,
   forcedResumeSelectRef,
   setStepHistory,
   setSelectedResumeId,
@@ -39,13 +44,24 @@ export const useAiAnalysisPageUiEffects = ({
   }, [setIsNavHidden]);
 
   useEffect(() => {
+    const hasSelectedInterviewResume = String(resumeId || '').trim().length > 0;
     // Keep interview scene fields stable when returning to JD input,
     // otherwise scene matching cannot detect "continue interview".
     if (!isInterviewMode && currentStep === 'jd_input' && prevStepRef.current !== 'jd_input') {
       setTargetCompany('');
+      setJdText('');
+    }
+    if (isInterviewMode && currentStep === 'jd_input') {
+      // Legacy interview sessions might still recover with `jd_input`.
+      // Normalize once so interview flow is represented by `interview_scene` only.
+      // When no resume is selected, force back to resume selection first.
+      setCurrentStep(resolveInterviewLegacyEntryStep(hasSelectedInterviewResume));
+    }
+    if (isInterviewMode && currentStep === 'interview_scene' && !hasSelectedInterviewResume) {
+      setCurrentStep('resume_select');
     }
     prevStepRef.current = currentStep;
-  }, [currentStep, isInterviewMode, prevStepRef, setTargetCompany]);
+  }, [currentStep, isInterviewMode, prevStepRef, resumeId, setCurrentStep, setJdText, setTargetCompany]);
 
   useEffect(() => {
     planLoaderMountedRef.current = true;
@@ -71,13 +87,13 @@ export const useAiAnalysisPageUiEffects = ({
 
   useEffect(() => {
     const path = (pathname || '').toLowerCase();
-    const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
-    const expectedPath = isInterviewMode ? '/ai-interview' : '/ai-analysis';
-    if (path !== expectedPath) return;
+    const forceKey = 'ai_interview_force_resume_select';
+    if (!isInterviewMode) return;
+    if (path !== '/ai-interview') return;
     if (localStorage.getItem(forceKey) !== '1') return;
     if (forceAppliedRef.current) return;
-    // Keep force flag until user leaves resume_select so recovery effects
-    // cannot auto-restore to sub-pages during the same entry cycle.
+    // Keep force flag until user leaves the forced entry step so recovery
+    // effects cannot auto-restore to sub-pages during the same entry cycle.
 
     forceAppliedRef.current = true;
     forcedResumeSelectRef.current = true;
@@ -100,10 +116,12 @@ export const useAiAnalysisPageUiEffects = ({
   ]);
 
   useEffect(() => {
-    if (currentStep !== 'resume_select') {
+    const forcedEntryStep = 'resume_select';
+    if (!isInterviewMode) return;
+    if (currentStep !== forcedEntryStep) {
       forcedResumeSelectRef.current = false;
       forceAppliedRef.current = false;
-      const forceKey = isInterviewMode ? 'ai_interview_force_resume_select' : 'ai_analysis_force_resume_select';
+      const forceKey = 'ai_interview_force_resume_select';
       try {
         localStorage.removeItem(forceKey);
       } catch {

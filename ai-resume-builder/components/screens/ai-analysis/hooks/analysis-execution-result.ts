@@ -1,6 +1,8 @@
 import { toSkillList } from '../../../../src/skill-utils';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
 import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
+import type { AnalysisMode } from '../analysis-mode';
+import { resolveAnalysisTargetValue } from '../target-role';
 import {
   sanitizeReasonText,
   sanitizeSuggestedValue,
@@ -13,17 +15,22 @@ type Params = {
   aiAnalysisResult: any;
   resumeData: any;
   targetCompany: string;
+  targetRole?: string;
+  analysisMode?: AnalysisMode;
 };
 
 export const buildAnalysisResultSnapshot = ({
   aiAnalysisResult,
   resumeData,
   targetCompany,
+  targetRole,
+  analysisMode,
 }: Params): {
   appliedSuggestions: Suggestion[];
   report: AnalysisReport;
   totalScore: number;
   effectiveTargetCompany: string;
+  effectiveTargetRole: string;
 } => {
   const newSuggestions: Suggestion[] = [];
   const analysisStage = String((aiAnalysisResult as any)?.analysisStage || '').toLowerCase();
@@ -123,10 +130,23 @@ export const buildAnalysisResultSnapshot = ({
     weaknesses: aiAnalysisResult.weaknesses || ['需要进一步优化'],
     missingKeywords: aiAnalysisResult.missingKeywords,
     scoreBreakdown: normalizedBreakdown,
+    generatedResumeData:
+      aiAnalysisResult.generatedResumeData && typeof aiAnalysisResult.generatedResumeData === 'object'
+        ? aiAnalysisResult.generatedResumeData
+        : (aiAnalysisResult.resumeData && typeof aiAnalysisResult.resumeData === 'object'
+          ? aiAnalysisResult.resumeData
+          : null),
   };
 
   const totalScore = resolveDisplayScore(aiAnalysisResult.score || 0, report.scoreBreakdown);
-  const effectiveTargetCompany = String(targetCompany || resumeData.targetCompany || '').trim();
+  const effectiveTargetCompany = resolveAnalysisTargetValue({
+    analysisMode: analysisMode || resumeData?.analysisMode,
+    stateTargetCompany: String(targetRole || targetCompany || '').trim(),
+    resumeTargetCompany: '',
+    resumeTargetRole: resumeData?.targetRole,
+    resumeHasTargetRole: Object.prototype.hasOwnProperty.call(resumeData || {}, 'targetRole'),
+  });
+  const effectiveTargetRole = String(effectiveTargetCompany || resumeData?.targetRole || '').trim();
   const appliedSuggestions = consolidateSkillSuggestions(newSuggestions);
 
   return {
@@ -134,5 +154,6 @@ export const buildAnalysisResultSnapshot = ({
     report,
     totalScore,
     effectiveTargetCompany,
+    effectiveTargetRole,
   };
 };
