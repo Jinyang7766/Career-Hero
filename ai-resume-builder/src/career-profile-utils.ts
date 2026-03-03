@@ -46,7 +46,10 @@ export type CareerProfile = {
     location?: string;
     linkedin?: string;
     website?: string;
+    age?: string;
+    gender?: string;
   };
+  gender?: string;
   rawInput?: string;
 };
 
@@ -186,6 +189,18 @@ export const resolveCareerProfileTargetRole = (
   );
 };
 
+const normalizeGenderValue = (value: unknown): '' | 'male' | 'female' => {
+  const raw = compactText(value, 20).toLowerCase();
+  if (!raw) return '';
+  if (raw === 'male' || raw === 'm' || raw === '男' || raw === '男性') return 'male';
+  if (raw === 'female' || raw === 'f' || raw === '女' || raw === '女性') return 'female';
+  if (raw.includes('男') && !raw.includes('女')) return 'male';
+  if (raw.includes('女') && !raw.includes('男')) return 'female';
+  if (/\bmale\b/.test(raw)) return 'male';
+  if (/\bfemale\b/.test(raw)) return 'female';
+  return '';
+};
+
 const normalizeStringList = (value: unknown, maxItems = 20, maxLen = 80): string[] => {
   if (!Array.isArray(value)) return [];
   const seen = new Set<string>();
@@ -250,6 +265,8 @@ const normalizePersonalInfo = (raw: any): CareerProfile['personalInfo'] | undefi
     location: pickPersonalText(100, nested.location, raw.location, raw.city),
     linkedin: pickPersonalText(160, nested.linkedin, raw.linkedin),
     website: pickPersonalText(200, nested.website, raw.website, raw.portfolio, raw.portfolioUrl),
+    age: pickPersonalText(20, nested.age, raw.age),
+    gender: pickPersonalText(20, nested.gender, raw.gender, raw.sex),
   };
 
   if (!Object.values(personalInfo).some(Boolean)) return undefined;
@@ -314,6 +331,7 @@ export const normalizeCareerProfile = (raw: any): CareerProfile | null => {
   const careerGoal = compactText(raw.careerGoal || raw.goal || raw.careerDirection, 220);
   const targetSalary = compactText(raw.targetSalary || raw.salaryExpectation || raw.expectedSalary, 120);
   const personalInfo = normalizePersonalInfo(raw);
+  const normalizedGender = normalizeGenderValue(raw.gender || raw?.personalInfo?.gender || raw.sex || raw?.personalInfo?.sex);
   const normalizedExperiences = experiences.slice(0, 12);
   const generatedAtomicTags = buildCareerProfileAtomicTags({
     summary,
@@ -329,7 +347,7 @@ export const normalizeCareerProfile = (raw: any): CareerProfile | null => {
     jobDirection,
     targetSalary,
     personalInfo,
-    gender: raw.gender || raw?.personalInfo?.gender,
+    gender: normalizedGender,
     experiences: normalizedExperiences,
     educations,
     projects,
@@ -360,6 +378,7 @@ export const normalizeCareerProfile = (raw: any): CareerProfile | null => {
     targetRole,
     jobDirection,
     targetSalary,
+    gender: normalizedGender,
     experiences: normalizedExperiences,
     educations,
     projects,
@@ -389,6 +408,7 @@ export const buildCareerProfileFingerprint = (profile: CareerProfile | null): st
     targetRole,
     jobDirection: profile.jobDirection || '',
     targetSalary: profile.targetSalary || '',
+    gender: profile.gender || profile.personalInfo?.gender || '',
     experiences: profile.experiences.map((x) => ({
       title: x.title,
       period: x.period,

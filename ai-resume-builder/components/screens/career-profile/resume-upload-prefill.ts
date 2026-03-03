@@ -44,6 +44,20 @@ export const buildCareerProfileSeedFromImportedResume = (
     out.push(`候选人基础信息：${baseInfo.join(' / ')}`);
   }
 
+  const contactInfoRows = [
+    cleanText(personalInfo.email, 120) ? `邮箱：${cleanText(personalInfo.email, 120)}` : '',
+    cleanText(personalInfo.phone, 60) ? `电话：${cleanText(personalInfo.phone, 60)}` : '',
+    cleanText(personalInfo.age, 20) ? `年龄：${cleanText(personalInfo.age, 20)}` : '',
+    cleanText((importedResume as any).gender || personalInfo.gender, 20)
+      ? `性别：${cleanText((importedResume as any).gender || personalInfo.gender, 20)}`
+      : '',
+    cleanText(personalInfo.linkedin, 200) ? `LinkedIn：${cleanText(personalInfo.linkedin, 200)}` : '',
+    cleanText(personalInfo.website, 200) ? `个人网址：${cleanText(personalInfo.website, 200)}` : '',
+  ].filter(Boolean);
+  if (contactInfoRows.length) {
+    out.push(`联系方式：${contactInfoRows.join(' / ')}`);
+  }
+
   const summary = cleanText(importedResume.summary || personalInfo.summary, 500);
   if (summary) {
     out.push(`简历自述：${summary}`);

@@ -207,6 +207,10 @@ def _extract_personal_info_from_text(raw_text):
     location_match = re.search(r'(?:所在(?:城市|地)|城市|地点)\s*[：:]\s*([^\n,，。；;|/]{1,80})', text, re.IGNORECASE)
     email_match = re.search(r'([A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,})', text)
     phone_candidates = re.findall(r'(\+?\d[\d\-\s]{8,}\d)', text)
+    age_match = re.search(r'(?:年龄|age)\s*[：:]?\s*(\d{1,3})', text, re.IGNORECASE)
+    gender_match = re.search(r'(?:性别|gender|sex)\s*[：:]?\s*(男|女|男性|女性|male|female)', text, re.IGNORECASE)
+    linkedin_match = re.search(r'((?:https?://)?(?:www\.)?linkedin\.com/[^\s<>()]+)', text, re.IGNORECASE)
+    website_match = re.search(r'((?:https?://|www\.)[^\s<>()]+)', text, re.IGNORECASE)
 
     if name_match:
         info['name'] = _compact_text(name_match.group(1), 40)
@@ -216,6 +220,29 @@ def _extract_personal_info_from_text(raw_text):
         info['location'] = _compact_text(location_match.group(1), 80)
     if email_match:
         info['email'] = _compact_text(email_match.group(1), 100)
+    if age_match:
+        age_num = int(age_match.group(1))
+        if 12 <= age_num <= 80:
+            info['age'] = str(age_num)
+    if gender_match:
+        raw_gender = _compact_text(gender_match.group(1), 20).lower()
+        if raw_gender in ('男', '男性', 'male'):
+            info['gender'] = 'male'
+        elif raw_gender in ('女', '女性', 'female'):
+            info['gender'] = 'female'
+    if linkedin_match:
+        linkedin_url = _compact_text(linkedin_match.group(1), 220)
+        if linkedin_url and not re.match(r'^https?://', linkedin_url, re.IGNORECASE):
+            linkedin_url = f'https://{linkedin_url}'
+        info['linkedin'] = linkedin_url
+    if website_match:
+        website_url = _compact_text(website_match.group(1), 220)
+        if website_url and not re.match(r'^https?://', website_url, re.IGNORECASE):
+            website_url = f'https://{website_url}'
+        if info.get('linkedin') and 'linkedin.com' in website_url.lower():
+            pass
+        else:
+            info['website'] = website_url
     for candidate in phone_candidates:
         digits = re.sub(r'\D', '', candidate)
         if 10 <= len(digits) <= 16:
@@ -309,7 +336,62 @@ def _extract_personal_info(raw_profile, existing_profile, raw_text):
             from_text.get('location'),
             existing_nested.get('location'),
         ),
+        'linkedin': _first_non_empty(
+            nested.get('linkedin'),
+            profile.get('linkedin'),
+            from_text.get('linkedin'),
+            existing_nested.get('linkedin'),
+        ),
+        'website': _first_non_empty(
+            nested.get('website'),
+            profile.get('website'),
+            profile.get('portfolio'),
+            profile.get('portfolioUrl'),
+            from_text.get('website'),
+            existing_nested.get('website'),
+        ),
+        'age': _first_non_empty(
+            nested.get('age'),
+            profile.get('age'),
+            from_text.get('age'),
+            existing_nested.get('age'),
+        ),
+        'gender': _first_non_empty(
+            nested.get('gender'),
+            profile.get('gender'),
+            profile.get('sex'),
+            from_text.get('gender'),
+            existing_nested.get('gender'),
+        ),
     }
+
+    gender_raw = str(info.get('gender') or '').strip().lower()
+    if gender_raw:
+        if gender_raw in ('男', '男性', 'male', 'm'):
+            info['gender'] = 'male'
+        elif gender_raw in ('女', '女性', 'female', 'f'):
+            info['gender'] = 'female'
+        elif ('男' in gender_raw and '女' not in gender_raw):
+            info['gender'] = 'male'
+        elif ('女' in gender_raw and '男' not in gender_raw):
+            info['gender'] = 'female'
+        elif re.search(r'\bmale\b', gender_raw):
+            info['gender'] = 'male'
+        elif re.search(r'\bfemale\b', gender_raw):
+            info['gender'] = 'female'
+
+    age_raw = str(info.get('age') or '').strip()
+    if age_raw:
+        age_match = re.search(r'(\d{1,3})', age_raw)
+        if age_match:
+            age_num = int(age_match.group(1))
+            if 12 <= age_num <= 80:
+                info['age'] = str(age_num)
+            else:
+                info.pop('age', None)
+        else:
+            info.pop('age', None)
+
     info = {key: value for key, value in info.items() if value}
     return info if info else None
 
@@ -536,7 +618,11 @@ def organize_career_profile_core(current_user_id, data, deps):
     "title": "当前/目标职位，未知留空",
     "email": "邮箱，未知留空",
     "phone": "电话，未知留空",
-    "location": "城市/地区，未知留空"
+    "location": "城市/地区，未知留空",
+    "linkedin": "LinkedIn 链接，未知留空",
+    "website": "个人网址/作品集链接，未知留空",
+    "age": "年龄，未知留空",
+    "gender": "male/female 或 男/女，未知留空"
   }},
   "targetRole": "目标岗位名称，未知留空",
   "summary": "120-220字职业画像总结，客观事实导向",
