@@ -8,7 +8,7 @@ describe('app-routing', () => {
     expect(viewToPath(View.AI_ANALYSIS)).toBe('/ai-analysis');
     expect(viewToPath(View.AI_INTERVIEW)).toBe('/ai-interview');
     expect(viewToPath(View.PROFILE)).toBe('/profile');
-    expect(viewToPath(View.CAREER_PROFILE)).toBe('/career-profile');
+    expect(viewToPath(View.CAREER_PROFILE)).toBe('/career-profile/upload');
     expect(viewToPath(View.CAREER_PROFILE_RESULT)).toBe('/career-profile/result');
     expect(viewToPath(View.LOGIN)).toBe('/login');
   });

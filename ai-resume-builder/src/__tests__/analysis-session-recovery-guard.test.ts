@@ -17,16 +17,16 @@ describe('canApplyDiagnosisStepRecovery', () => {
     expect(canApplyDiagnosisStepRecovery('final_report', 'final_report')).toBe(false);
   });
 
-  it('allows recovering final_report from comparison and legacy report steps', () => {
-    expect(canApplyDiagnosisStepRecovery('comparison', 'final_report')).toBe(true);
+  it('allows recovering final_report from legacy report step only', () => {
+    expect(canApplyDiagnosisStepRecovery('comparison', 'final_report')).toBe(false);
     expect(canApplyDiagnosisStepRecovery('report', 'final_report')).toBe(true);
   });
 });
 
 describe('shouldSkipInterviewAutoRecovery', () => {
-  it('blocks auto recovery on interview resume_select and jd_input', () => {
+  it('blocks auto recovery on interview resume_select/interview_scene only', () => {
     expect(shouldSkipInterviewAutoRecovery(true, 'resume_select')).toBe(true);
-    expect(shouldSkipInterviewAutoRecovery(true, 'jd_input')).toBe(true);
+    expect(shouldSkipInterviewAutoRecovery(true, 'jd_input')).toBe(false);
   });
 
   it('allows recovery checks on chat/final_report when in interview mode', () => {
