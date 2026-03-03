@@ -1,7 +1,7 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.18`
-- 更新时间：`2026-03-02`
+- 版本：`v6.19`
+- 更新时间：`2026-03-03`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
 - 制定方式：`基于现有代码真实链路扫描，做最小侵入重编排，不做推翻式重写`
@@ -451,6 +451,17 @@
     - `CareerProfileQuickConfirm` 分支已下线，结果页统一渲染 `CareerProfileStructuredEditor`。
     - 编辑器新增“原子标签”分类编辑区（统一去重口径，避免跨分区重复维护）。
     - 保存时原子标签与事实分区联动回写，保持 `atomicTags/factItems` 一致。
+25. 旧会话步名迁移逻辑已抽离并加固测试：
+    - `useInterviewSessionRecovery` 已抽离 `normalizeInterviewRecoveryStep`，统一 `jd_input -> interview_scene`、`report -> final_report` 映射。
+    - 新增 `interview-session-step-migration.test.ts`，覆盖 legacy 映射与非法步骤保护。
+26. Step1 上传弹窗移动端适配已落地：
+    - `ResumeImportDialog` 已完成安全区适配、可滚动区收口、窄屏高度策略与键盘场景可达性优化。
+27. 编辑入口已收口到预览页：
+    - `/editor` 与 `/templates` 已改为 `Preview(forceEditMode)`，不再走独立模块化编辑页流程。
+    - 预览画布已支持就地文本编辑，保留预览/编辑同页切换。
+28. 预览画布编辑能力已补齐第一阶段：
+    - 已支持新增条目、自动聚焦、撤销/前进历史栈。
+    - 删除按钮已按产品口径隐藏，避免误删；后续按需求再评估可恢复性。
 
 部分完成（可用但仍需收口）：
 1. Step5 精修能力可用，但“选区定点改写 + 事实边界提示 + 手工编辑”的统一产品化还需再收敛一轮。
@@ -659,7 +670,7 @@
 
 待继续收口：
 1. 面试恢复层仍保留 `jd_input` 映射兼容：
-   - 现状：`useInterviewSessionRecovery`、`useResumeSelection` 读取历史会话时仍识别 `jd_input` 并映射。
+   - 现状：已抽离 `normalizeInterviewRecoveryStep` 并补单测，但 `useResumeSelection` 等读取链路仍保留 legacy 映射兼容。
    - 风险：同一语义双状态名并存，排障成本上升。
 2. 状态变量语义债务：
    - 现状：前端显示与门禁已按“目标岗位”统一，但内部状态/DTO 字段名仍包含 `targetCompany` 兼容命名。
@@ -694,7 +705,8 @@
    - 已完成：`scripts/test-online.ps1` 已增加面试 `resume_select -> interview_scene` 分支断言（`/ai-interview` 可达、生成简历可选、场景页与面试类型控件可见）。
    - 已完成：上传融合链路已补第一条关键断言（`AI解析` 后追问出现，清空输入后追问仍保持可见，提交按钮按门禁禁用）。
    - 已完成：上传后追问补齐画像（上传简历 -> AI解析 -> 追问补充）专项断言（采用 parse-resume mock，避免在线环境 AI 依赖抖动）。
-   - 在会话恢复与回退链路补一组 e2e 回归（旧 `jd_input` 会话迁移）。
+   - 已完成：旧 `jd_input` 会话迁移单测（`interview-session-step-migration.test.ts`）与恢复层归一函数抽离。
+   - 待完成：补一组线上 UI e2e 回归，覆盖“历史会话恢复后自动落到 `interview_scene`”的端到端路径。
 6. 面试场景收口验收回归：
    - 前后端统一回归 `pressure` 提示词与题单规则。
    - 兼容：旧 `hr` / `interviewMode` 会话可读、可恢复，但不再产生新写入。
@@ -704,6 +716,9 @@
 8. 画像总结页编辑策略收口（已完成）：
    - “关键确认”模块已删除，统一走结构编辑器。
    - 原子标签可按分类直接编辑，后续重点补“标签级冲突提示 + 一键合并/拆分”体验。
+9. 预览页编辑闭环（二期收口，新增）：
+   - 已完成：预览画布就地编辑、新增条目、自动聚焦、撤销/前进、编辑入口并入 Preview。
+   - 待完成：补“字段级脏标识 + 跨模板一致性回归 + 导出前编辑态守卫”三项验收脚本，避免线上回归。
 
 ### 10.2 P1（随后一周）
 
