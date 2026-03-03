@@ -1,11 +1,31 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { organizeCareerProfileWithAI, persistCareerProfileToUser } from '../../../src/career-profile-service';
-import { getLatestCareerProfile, normalizeCareerProfile, type CareerProfile } from '../../../src/career-profile-utils';
+import {
+  getLatestCareerProfile,
+  normalizeCareerProfile,
+  resolveCareerProfileTargetRole,
+  type CareerProfile,
+} from '../../../src/career-profile-utils';
 import { primeUserProfileCache } from '../../../src/useUserProfile';
+import { toast } from '../../../src/ui/dialogs';
 
 type Params = {
   currentUserId?: string;
   userProfile: any;
+};
+
+type ProfileExtras = Partial<{
+  mbti: string;
+  personality: string;
+  workStyle: string;
+  careerGoal: string;
+  targetRole: string;
+  jobDirection: string;
+  targetSalary: string;
+}>;
+
+type SaveCareerProfileOptions = {
+  profileExtras?: ProfileExtras;
 };
 
 const stripRawInput = (profile: CareerProfile | null): CareerProfile | null => {
@@ -18,25 +38,24 @@ const stripRawInput = (profile: CareerProfile | null): CareerProfile | null => {
 
 export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params) => {
   const [isSaving, setIsSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [hint, setHint] = useState('');
   const [localProfile, setLocalProfile] = useState<any>(null);
 
-  const profile = stripRawInput((localProfile || getLatestCareerProfile(userProfile)) as CareerProfile | null);
+  const profile = useMemo(
+    () => stripRawInput((localProfile || getLatestCareerProfile(userProfile)) as CareerProfile | null),
+    [localProfile, userProfile]
+  );
   const summary = String(profile?.summary || '').trim();
   const experienceCount = Array.isArray(profile?.experiences) ? profile.experiences.length : 0;
   const updatedAt = String(profile?.createdAt || '').trim();
   const initialText = '';
 
-  const saveCareerProfile = async (rawText: string) => {
+  const saveCareerProfile = async (rawText: string, options?: SaveCareerProfileOptions) => {
     const userId = String(currentUserId || '').trim();
     if (!userId) {
-      setError('登录状态异常，请重新登录后再试');
+      toast('登录状态异常，请重新登录后再试', 'error');
       return false;
     }
     setIsSaving(true);
-    setError('');
-    setHint('');
     try {
       const { profile: generated, note } = await organizeCareerProfileWithAI({
         rawExperienceText: rawText,
@@ -44,18 +63,42 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
       });
       const profileToPersist = stripRawInput(generated as CareerProfile | null);
       if (!profileToPersist) {
-        setError('职业画像保存失败，请稍后重试');
+        toast('职业画像保存失败，请稍后重试', 'error');
         return false;
       }
-      const updatedUser = await persistCareerProfileToUser(userId, profileToPersist);
+      const extras = options?.profileExtras || {};
+      const targetRoleCandidate = String(
+        extras.targetRole ||
+        extras.jobDirection ||
+        profileToPersist.personalInfo?.title ||
+        profileToPersist.targetRole ||
+        profileToPersist.jobDirection ||
+        ''
+      ).trim();
+      const canonicalTargetRole = resolveCareerProfileTargetRole({
+        ...profileToPersist,
+        targetRole: targetRoleCandidate,
+        jobDirection: targetRoleCandidate,
+      });
+      const profileWithExtras = {
+        ...profileToPersist,
+        mbti: String(extras.mbti || profileToPersist.mbti || '').trim(),
+        personality: String(extras.personality || profileToPersist.personality || '').trim(),
+        workStyle: String(extras.workStyle || profileToPersist.workStyle || '').trim(),
+        careerGoal: String(extras.careerGoal || profileToPersist.careerGoal || '').trim(),
+        targetRole: canonicalTargetRole,
+        jobDirection: canonicalTargetRole,
+        targetSalary: String(extras.targetSalary || profileToPersist.targetSalary || '').trim(),
+      };
+      const updatedUser = await persistCareerProfileToUser(userId, profileWithExtras as CareerProfile);
       if (updatedUser) {
         primeUserProfileCache(userId, updatedUser as any);
       }
-      setLocalProfile(profileToPersist);
-      setHint(note || '职业画像已更新，后续 JD 诊断与简历优化会优先参照该画像。');
+      setLocalProfile(profileWithExtras);
+      if (note) toast(note, 'success');
       return true;
     } catch (err: any) {
-      setError(String(err?.message || '职业画像保存失败，请稍后重试'));
+      toast(String(err?.message || '职业画像保存失败，请稍后重试'), 'error');
       return false;
     } finally {
       setIsSaving(false);
@@ -65,7 +108,7 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
   const saveStructuredCareerProfile = async (draftProfile: CareerProfile) => {
     const userId = String(currentUserId || '').trim();
     if (!userId) {
-      setError('登录状态异常，请重新登录后再试');
+      toast('登录状态异常，请重新登录后再试', 'error');
       return false;
     }
     const normalized = normalizeCareerProfile({
@@ -76,17 +119,20 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
       rawInput: '',
     });
     if (!normalized) {
-      setError('画像内容为空，请先补充至少一条有效经历或总结');
+      toast('画像内容为空，请先补充至少一条有效经历或总结', 'error');
       return false;
     }
 
     setIsSaving(true);
-    setError('');
-    setHint('');
     try {
-      const profileToPersist = stripRawInput(normalized);
+      const canonicalTargetRole = resolveCareerProfileTargetRole(normalized);
+      const profileToPersist = stripRawInput({
+        ...normalized,
+        targetRole: canonicalTargetRole,
+        jobDirection: canonicalTargetRole || String(normalized.jobDirection || '').trim(),
+      });
       if (!profileToPersist) {
-        setError('职业画像保存失败，请稍后重试');
+        toast('职业画像保存失败，请稍后重试', 'error');
         return false;
       }
       const updatedUser = await persistCareerProfileToUser(userId, profileToPersist);
@@ -94,10 +140,10 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
         primeUserProfileCache(userId, updatedUser as any);
       }
       setLocalProfile(profileToPersist);
-      setHint('职业画像编辑已保存，后续 JD 诊断与简历优化将优先参照该画像。');
+
       return true;
     } catch (err: any) {
-      setError(String(err?.message || '职业画像保存失败，请稍后重试'));
+      toast(String(err?.message || '职业画像保存失败，请稍后重试'), 'error');
       return false;
     } finally {
       setIsSaving(false);
@@ -111,8 +157,6 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
     updatedAt,
     initialText,
     isSaving,
-    error,
-    hint,
     saveCareerProfile,
     saveStructuredCareerProfile,
   };
