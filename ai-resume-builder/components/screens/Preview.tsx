@@ -72,22 +72,14 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     const userId = String(currentUser?.id || '').trim();
     if (!userId) return;
 
-    const personal = (resumeData as any)?.personalInfo || {};
-    const needsHydration = [
-      personal.name,
-      personal.title,
-      personal.email,
-      personal.phone,
-      personal.location,
-      personal.linkedin,
-      personal.website,
-      personal.age,
-      (resumeData as any)?.gender,
-    ].some((value) => String(value || '').trim().length === 0);
-
-    if (!needsHydration) {
-      profileHydratedRef.current = true;
-      return;
+    const resumeId = String((resumeData as any)?.id || '').trim();
+    const profileSyncKey = resumeId ? `preview_profile_sync_v2:${userId}:${resumeId}` : '';
+    if (profileSyncKey) {
+      const synced = String(localStorage.getItem(profileSyncKey) || '') === '1';
+      if (synced) {
+        profileHydratedRef.current = true;
+        return;
+      }
     }
 
     let cancelled = false;
@@ -98,6 +90,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
 
         const rawLatestProfile = (result.data as any)?.career_profile_latest;
         if (!rawLatestProfile || typeof rawLatestProfile !== 'object') {
+          if (profileSyncKey) localStorage.setItem(profileSyncKey, '1');
           profileHydratedRef.current = true;
           return;
         }
@@ -155,18 +148,18 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           const prevPersonal = prev.personalInfo || {};
           const nextPersonal = {
             ...prevPersonal,
-            name: cleanText(prevPersonal.name, 80) || profileMap.name,
-            title: cleanText(prevPersonal.title, 120) || profileMap.title,
-            email: cleanEmail(prevPersonal.email) || profileMap.email,
-            phone: cleanText(prevPersonal.phone, 40) || profileMap.phone,
-            location: cleanText(prevPersonal.location, 80) || profileMap.location,
-            linkedin: cleanText(prevPersonal.linkedin, 200) || profileMap.linkedin,
-            website: cleanText(prevPersonal.website, 200) || profileMap.website,
-            age: cleanAge(prevPersonal.age) || profileMap.age,
-            gender: cleanGender((prevPersonal as any)?.gender) || profileMap.gender,
+            name: profileMap.name,
+            title: profileMap.title,
+            email: profileMap.email,
+            phone: profileMap.phone,
+            location: profileMap.location,
+            linkedin: profileMap.linkedin,
+            website: profileMap.website,
+            age: profileMap.age,
+            gender: profileMap.gender,
           };
 
-          const nextGender = cleanGender(prev.gender) || profileMap.gender;
+          const nextGender = profileMap.gender;
 
           const changed =
             JSON.stringify(nextPersonal) !== JSON.stringify(prevPersonal) ||
@@ -180,6 +173,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           };
         });
 
+        if (profileSyncKey) localStorage.setItem(profileSyncKey, '1');
         profileHydratedRef.current = true;
       } catch {
         profileHydratedRef.current = true;
