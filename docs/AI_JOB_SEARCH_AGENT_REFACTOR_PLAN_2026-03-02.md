@@ -1,6 +1,6 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.20`
+- 版本：`v6.21`
 - 更新时间：`2026-03-08`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
@@ -469,6 +469,12 @@
 30. 结构化保存流程已改为“draftProfile 直持久化优先”：
     - `CareerProfileStructuredEditor.handleSave` 不再依赖 `resumeData/extras` 回写；以 `draftProfile + factDraft + atomicTagDraft` 直接组装持久化对象。
     - `useCareerProfileComposer.saveStructuredCareerProfile` 入库前仅做必要 normalize/校验，并补齐 `personalInfo.title/gender` 与 `targetRole/jobDirection` 一致性。
+31. 职业画像展示字段一致性巡检（第一轮）已完成：
+    - 已修复 MBTI 在“总结/求职约束”中出现但 MBTI 区缺失的问题；新增从 `summary/personality/workStyle/careerGoal/constraints` 推断 MBTI 的回填逻辑。
+    - 已修复“MBTI 文本误落到求职约束”的污染问题，展示层对 MBTI-only 文本做过滤并保留真实约束。
+32. `atomicTags` 反向污染主字段问题已修复：
+    - `createCareerProfileEditorDraft` 改为“仅手动编辑来源（`sourcePaths=atomicTags.<category>`）才允许覆盖主字段”，避免 stale tags 回灌造成字段回弹/删不掉。
+    - `identity` 解析增加姓名过滤，避免 `男/女/MBTI` 等 token 被误识别为姓名。
 
 部分完成（可用但仍需收口）：
 1. Step5 精修能力可用，但“选区定点改写 + 事实边界提示 + 手工编辑”的统一产品化还需再收敛一轮。
