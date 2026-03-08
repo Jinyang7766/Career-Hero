@@ -1,7 +1,7 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.21`
-- 更新时间：`2026-03-08`
+- 版本：`v6.22`
+- 更新时间：`2026-03-09`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
 - 制定方式：`基于现有代码真实链路扫描，做最小侵入重编排，不做推翻式重写`
@@ -64,6 +64,10 @@
    - 面试模式下“未选择诊断产物简历”时，强制停留在 `resume_select`，并提示“请先诊断”；不允许直接进入 `interview_scene`。
 19. Step1 追问可见性补强：
    - 点击 `AI解析` 后，即使用户清空输入框，追问建议仍保持显示；仅“提交”按钮按二选一门禁禁用。
+20. 画像数据策略收口（2026-03-09 决策）：
+   - 主数据源固定为 `draftProfile` 单一映射（编辑/保存/展示都以主字段为准）。
+   - `factItems/atomicTags` 降级为派生数据，不再作为后续产品能力主线，不新增“事实治理 UI（合并/拆分/可视化）”开发。
+   - 派生数据默认不得反向覆盖主字段（仅保留最小兼容与必要防污染兜底）。
 
 ## 1. 现状扫描结果（As-Is）
 
@@ -481,7 +485,7 @@
 2. 多 JD 循环与复用链路已打通，但还缺线上行为埋点与长期回归看板。
 3. 强引导与旧入口兼容并行，仍有少量历史会话兼容逻辑待逐步收口（见 §8.1）。
 4. 上传后 AI 引导补齐画像与“上传不入库”策略已形成前后端一致约束；待线上灰度观察与提示文案优化。
-5. 画像编辑融合进入第二阶段：已完成“单一事实源 + `factId` 级联镜像”，但 UI 仍缺“同源事实可视化 + 手动合并/拆分”能力。
+5. 画像编辑融合进入第二阶段：已完成“编辑态直改 `draftProfile` + 保存直持久化优先”，后续聚焦字段一致性与编辑体验稳定性，不再扩展事实治理 UI。
 
 未完成（后续必须推进）：
 1. “上传简历前置（可跳过）”主流程已完成前端入口改造，待补数据治理与线上迁移说明闭环。
@@ -611,10 +615,10 @@
    缓解：读取层保留 mode 兼容解析；新写入不再依赖 mode，统一归一到单一流程键。
 8. 风险：`hr` 改名 `pressure` 导致旧数据/埋点口径断裂。
    缓解：数据读取时做 `hr -> pressure` 映射，并在埋点层保留一版迁移映射统计。
-9. 风险：`factId` 级联镜像依赖命中（同 key/位置/近似）；当用户进行大段改写或重排时，可能触发新 `factId` 分配，导致跨分区不再自动联动。
-   缓解：在编辑页补“同源事实”可视标识，提供手动合并/拆分事实操作，并在保存前给出联动变更预览提示。
-10. 风险：`factItems` 当前以前端归一与持久化为主，若后端校验缺失，跨端写入可能出现结构漂移。
-    缓解：补充后端 JSON Schema 校验与容错回退，写入失败时不覆盖旧画像并记录可追踪日志。
+9. 风险：历史 `factItems/atomicTags` 派生数据仍可能对展示层造成噪音或字段污染。
+   缓解：保持“主字段优先 + 派生不反写主字段”，并在展示层增加防污染过滤与回归测试。
+10. 风险：主字段入库校验缺失时，跨端写入可能出现结构漂移。
+    缓解：补充主字段 JSON Schema 校验与容错回退，写入失败时不覆盖旧画像并记录可追踪日志。
 
 ### 8.1 旧逻辑收口状态（2026-03-03）
 
@@ -677,9 +681,9 @@
 20. 在线 UI smoke 已补面试场景链路：
    - 现状：`scripts/test-online.ps1 -RunGuidedFlowUiSmoke` 已包含 `/ai-interview` 下 `resume_select -> interview_scene` 断言。
    - 影响：Step6 入口关键链路具备在线自动化验收抓手。
-21. 跨分区重复语义冲突第一阶段已收口：
-   - 现状：画像编辑已接入“单一事实源 + `factId` 级联镜像”，技能/亮点/约束任一处分区改动可自动同步同源条目。
-   - 影响：用户不再需要在多个分区重复改同一语义，数据库写入口径更稳定。
+21. 画像字段单一映射第一阶段已收口：
+   - 现状：画像编辑已完成“编辑态直改 `draftProfile` + 保存直持久化优先”，并修复 MBTI/约束污染、atomic 回灌等一致性问题。
+   - 影响：减少跨结构回写导致的字段错位，用户编辑结果与展示更一致。
 
 待继续收口：
 1. 面试恢复层仍保留 `jd_input` 映射兼容：
@@ -688,9 +692,9 @@
 2. 状态变量语义债务：
    - 现状：前端显示与门禁已按“目标岗位”统一，但内部状态/DTO 字段名仍包含 `targetCompany` 兼容命名。
    - 风险：跨端联调时可能误读字段语义，后续仍需完成 `targetRole` 命名迁移。
-3. 事实联动仍缺显式治理入口：
-   - 现状：`factId` 级联已可用，但“语义近似且不重叠”的条目不会自动归并，用户也缺少显式“合并/拆分事实”操作。
-   - 风险：复杂画像长期编辑后可能出现轻度语义分叉，需要二次手工清理。
+3. 字段一致性回归仍需持续补齐：
+   - 现状：主链路已切到单一映射，但历史脏数据与派生字段仍可能触发个别展示偏差。
+   - 风险：若缺少持续回归用例，后续改动可能复发“字段错位/回弹”。
 
 ## 9. 当前阶段明确不做
 
@@ -706,9 +710,8 @@
    - 已完成：前端数据层 + 后端 API 层一致约束均已落地（非诊断产物阻断入库）。
    - 待验证：线上灰度环境中补齐“上传不入库提示文案”的用户反馈确认。
 2. 画像编辑器与简历编辑器融合改造（第一阶段）：
-   - 已完成：`CareerProfileStructuredEditor` 接入“单一事实源 + `factId` 级联镜像”，三分区编辑口径统一。
    - 已完成：编辑态字段映射改为直改 `draftProfile`（`personalInfo/summary/targetRole/jobDirection/experiences/projects/educations`），保存链路改为 `draftProfile` 直持久化优先，减少 `resumeData/extras` 中转。
-   - 本周待收口：补“同源事实可视化标识”和最小可用的“手动合并/拆分事实”入口。
+   - 本周待收口：继续做字段一致性巡检（编辑态 -> 存储 -> 展示）、派生数据防回灌、历史脏数据兼容清理。
 3. 清理旧步骤语义债务（兼容收口）：
    - 面试内核继续下线恢复层 `jd_input` 兼容分支（渲染层已完成收口），统一 `interview_scene`。
    - 诊断链路移除 `resume_select` 死分支与冗余路由映射。
@@ -724,12 +727,12 @@
 6. 面试场景收口验收回归：
    - 前后端统一回归 `pressure` 提示词与题单规则。
    - 兼容：旧 `hr` / `interviewMode` 会话可读、可恢复，但不再产生新写入。
-7. `factItems` 数据治理补齐（后端/数据层）：
-   - 为画像写入增加 `factItems` 结构校验与容错回退，不合法写入不覆盖旧画像。
-   - 增加最小观测日志（写入失败原因 + 字段路径），便于线上排障与回查。
+7. 派生数据策略收口（后端/数据层）：
+   - `factItems/atomicTags` 仅保留兼容读写与派生用途，不新增治理能力开发。
+   - 写入链路保持“主字段优先、派生不反写主字段”，并保留最小观测日志用于排障。
 8. 画像总结页编辑策略收口（已完成）：
    - “关键确认”模块已删除，统一走结构编辑器。
-   - 原子标签可按分类直接编辑，后续重点补“标签级冲突提示 + 一键合并/拆分”体验。
+   - 编辑行为按单一映射主线执行：用户修改直接落主字段，不依赖事实治理交互。
 9. 预览页编辑闭环（二期收口，新增）：
    - 已完成：预览画布就地编辑、新增条目、自动聚焦、撤销/前进、编辑入口并入 Preview。
    - 待完成：补“字段级脏标识 + 跨模板一致性回归 + 导出前编辑态守卫”三项验收脚本，避免线上回归。
@@ -737,7 +740,7 @@
 ### 10.2 P1（随后一周）
 
 1. Step2 定向追问卡片（非聊天窗）产品化收口。
-2. 画像入库 JSON Schema 校验加固（含 `factItems` 结构校验，失败不覆盖旧画像）。
+2. 画像入库 JSON Schema 校验加固（主字段优先，失败不覆盖旧画像）。
 3. Step5 精修产品化收口：
    - 选区定点改写
    - 事实边界提示
@@ -748,17 +751,16 @@
 5. 低匹配策略完善：
    - 明确展示风险等级
    - 提供“转 generic”快捷路径
-6. 事实链路治理产品化：
-   - 事实冲突提示（同义近似但未自动归并）与一键修复建议。
-   - 联动编辑历史可回溯（与撤销/前进栈打通），降低误改成本。
+6. 字段一致性回归自动化：
+   - 增补“编辑态 -> 存储 -> 总览展示”字段一致性回归用例（覆盖 MBTI/性别/求职意向等高频字段）。
+   - 增补“派生数据不反写主字段”回归断言，避免历史数据回灌。
 
 ### 10.2.1 计划书剩余未完成清单（按模块/文件）
 
 **P0（当前仍未完成）**
-1. 画像事实治理可视化与手动治理入口：
-   - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`
-   - 依赖：`ai-resume-builder/src/career-profile-facts.ts`
-   - 缺口：同源事实可视标识、手动合并/拆分事实、保存前联动预览。
+1. 画像字段单一映射稳定性收口：
+   - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/career-profile/summary-display-logic.ts`、`ai-resume-builder/components/screens/career-profile/career-profile-editor-draft.ts`
+   - 缺口：字段一致性巡检（编辑态 -> 存储 -> 展示）、历史脏数据兼容、派生数据回灌防护。
 2. 诊断/面试旧语义兼容收口：
    - 模块：`ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts`、`ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`、`ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
    - 缺口：进一步下线 legacy `jd_input` 恢复分支与诊断链 `resume_select` 冗余路径。
@@ -768,14 +770,14 @@
 4. 历史会话恢复端到端回归补齐：
    - 脚本：`scripts/test-online.ps1`（GuidedFlow UI smoke 扩展）
    - 缺口：补“历史会话恢复自动落到 `interview_scene`”线上 e2e 断言。
-5. `factItems` 后端校验与观测：
+5. 画像主字段入库校验与观测：
    - 模块：`backend/routes/ai_routes.py`、`backend/services/*career_profile*`（若拆分）
-   - 缺口：画像写入前 JSON Schema 校验 + 失败日志（字段路径/原因）+ 不覆盖旧画像。
+   - 缺口：主字段 JSON Schema 校验 + 失败日志（字段路径/原因）+ 不覆盖旧画像。
 
 **P1（随后一周）**
 1. Step2 定向追问卡片产品化：
    - 模块：`ai-resume-builder/components/screens/career-profile/*`（融合页/结果页交互联动）。
-2. 画像入库 Schema 校验加固（含 `factItems`）：
+2. 画像入库 Schema 校验加固（主字段优先）：
    - 模块：`backend/routes/ai_routes.py` + `backend/tests/*career_profile*`。
 3. Step5 精修产品化收口（选区改写/事实边界/一致性回写）：
    - 模块：`ai-resume-builder/components/screens/ai-analysis/*comparison*`、`ai-resume-builder/components/screens/Editor.tsx`。
@@ -783,8 +785,8 @@
    - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/Editor.tsx`、共享编辑组件目录。
 5. 低匹配策略与 generic 转换捷径：
    - 模块：`ai-resume-builder/components/screens/ai-analysis/JdInputPage.tsx`、报告页组件。
-6. 事实链路治理产品化（冲突提示 + 历史回溯）：
-   - 模块：`ai-resume-builder/src/career-profile-facts.ts`、`ai-resume-builder/components/screens/career-profile/*`。
+6. 字段一致性与派生兼容回归（冲突防回归）：
+   - 模块：`ai-resume-builder/components/screens/career-profile/*`、`ai-resume-builder/src/__tests__/*career-profile*`。
 
 ### 10.3 P2（中期）
 
