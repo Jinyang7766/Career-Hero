@@ -93,7 +93,7 @@ describe('preview-export-guard', () => {
     expect(state.disabled).toBe(true);
     expect(state.buttonText).toContain('完成编辑');
     expect(state.reason).toContain('完成');
-    expect(state.helperText).toContain('完成编辑');
+    expect(state.helperText).toBe('');
   });
 
   it('allows export only when not editing and no pending dirty changes', () => {

@@ -40,7 +40,7 @@ export const getPreviewExportGuardState = ({
     return {
       disabled: true,
       reason: '请先点击右上角「完成」并保存编辑，再导出 PDF。',
-      helperText: '请先完成编辑。',
+      helperText: '',
       buttonText: '请先完成编辑',
     };
   }
