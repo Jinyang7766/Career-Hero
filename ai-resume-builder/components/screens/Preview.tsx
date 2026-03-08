@@ -1,4 +1,4 @@
-import React from 'react';
+﻿import React from 'react';
 import { View, ScreenProps, ResumeData } from '../../types';
 import { DatabaseService } from '../../src/database-service';
 import BottomNav from '../BottomNav';
@@ -174,7 +174,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        alert('请先登录');
+        alert('璇峰厛鐧诲綍');
         return false;
       }
 
@@ -317,7 +317,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
 
   const handleSkillsTextChange = React.useCallback((value: string) => {
     const skills = String(value || '')
-      .split(/[•、,，\n;；|]/)
+      .split(/[鈥€?锛孿n;锛泑]/)
       .map((item) => item.trim())
       .filter(Boolean);
     applyEditMutation((current) => ({
@@ -378,6 +378,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
         ? {
           enabled: true,
           onPersonalFieldChange: handlePersonalFieldChange,
+          onGenderChange: handleGenderChange,
           onSummaryChange: handleSummaryChange,
           onWorkFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) =>
             handleSectionItemChange('workExps', id, field, value),
@@ -405,6 +406,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
       autoFocusRequest.token,
       handleAddSectionItem,
       handleAddSkillItem,
+      handleGenderChange,
       handlePersonalFieldChange,
       handleRemoveSectionItem,
       handleRemoveSkillItem,
@@ -434,7 +436,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           <div className="h-14 px-4 flex items-center justify-between relative">
             <BackButton onClick={handlePreviewBack} className="z-10" />
             <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-              简历预览
+              绠€鍘嗛瑙?
             </h2>
             <div className="z-10 flex items-center gap-1.5">
               <button
@@ -442,7 +444,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
                 onClick={() => void handleToggleEditMode()}
                 disabled={isSavingEdit}
                 className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                title="编辑"
+                title="缂栬緫"
               >
                 <span className="material-symbols-outlined text-[20px]">edit</span>
               </button>
@@ -460,8 +462,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={handleUndo}
               disabled={isSavingEdit || !canUndo}
               className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="撤销"
-              title="撤销"
+              aria-label="鎾ら攢"
+              title="鎾ら攢"
             >
               <span className="material-symbols-outlined text-[18px]">undo</span>
             </button>
@@ -470,8 +472,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={handleRedo}
               disabled={isSavingEdit || !canRedo}
               className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="前进"
-              title="前进"
+              aria-label="鍓嶈繘"
+              title="鍓嶈繘"
             >
               <span className="material-symbols-outlined text-[18px]">redo</span>
             </button>
@@ -480,7 +482,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={() => void handleToggleEditMode()}
               disabled={isSavingEdit}
               className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              title={isSavingEdit ? '保存中...' : '完成'}
+              title={isSavingEdit ? '淇濆瓨涓?..' : '瀹屾垚'}
             >
               {isSavingEdit ? (
                 <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
@@ -513,68 +515,6 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
             ))}
           </div>
         </div>
-
-        {isEditMode ? (
-          <div className="w-[90%] bg-white dark:bg-slate-900/50 backdrop-blur-md rounded-2xl p-3 border border-slate-200 dark:border-white/5 shadow-lg shadow-slate-200/20 dark:shadow-none">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">基础信息（可直接删改）</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input
-                value={String((resumeData as any)?.personalInfo?.name || '')}
-                onChange={(event) => handlePersonalFieldChange('name', event.target.value)}
-                placeholder="姓名"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.title || '')}
-                onChange={(event) => handlePersonalFieldChange('title', event.target.value)}
-                placeholder="求职意向"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.email || '')}
-                onChange={(event) => handlePersonalFieldChange('email', event.target.value)}
-                placeholder="邮箱"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.phone || '')}
-                onChange={(event) => handlePersonalFieldChange('phone', event.target.value)}
-                placeholder="电话"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.location || '')}
-                onChange={(event) => handlePersonalFieldChange('location' as any, event.target.value)}
-                placeholder="所在地"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.gender || (resumeData as any)?.personalInfo?.gender || '')}
-                onChange={(event) => handleGenderChange(event.target.value)}
-                placeholder="性别"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.age || '')}
-                onChange={(event) => handlePersonalFieldChange('age' as any, event.target.value)}
-                placeholder="年龄"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.linkedin || '')}
-                onChange={(event) => handlePersonalFieldChange('linkedin' as any, event.target.value)}
-                placeholder="LinkedIn"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
-              />
-              <input
-                value={String((resumeData as any)?.personalInfo?.website || '')}
-                onChange={(event) => handlePersonalFieldChange('website' as any, event.target.value)}
-                placeholder="个人网站"
-                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm sm:col-span-2"
-              />
-            </div>
-          </div>
-        ) : null}
 
         <div
           className="relative w-[85%] flex flex-col items-center group/doc-wrapper"
@@ -636,7 +576,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
                   onClick={() => navigateToView(View.ALL_RESUMES, { replace: true })}
                   className="h-9 px-4 rounded-full bg-primary text-white text-xs font-bold hover:opacity-90 transition-opacity"
                 >
-                  返回全部简历
+                  杩斿洖鍏ㄩ儴绠€鍘?
                 </button>
               </div>
             ) : resumeData ? renderPreviewTemplate({
@@ -654,7 +594,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           <button
             onClick={handleExportPDF}
             disabled={exportGuard.disabled}
-            title={exportGuard.reason || '导出 PDF'}
+            title={exportGuard.reason || '瀵煎嚭 PDF'}
             className="w-full flex items-center justify-center gap-2 h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white rounded-xl shadow-[0_0_20px_rgba(19,127,236,0.15)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
@@ -689,3 +629,5 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
 };
 
 export default Preview;
+
+

@@ -15,6 +15,7 @@ import {
 export type PreviewEditBindings = {
   enabled: boolean;
   onPersonalFieldChange: (field: keyof ResumeData['personalInfo'], value: string) => void;
+  onGenderChange: (value: string) => void;
   onSummaryChange: (value: string) => void;
   onWorkFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
   onEducationFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
@@ -214,20 +215,83 @@ const resolveExplicitGenderLabel = (value: any): string => {
   return '';
 };
 
-const resolvePersonalMetaItems = (data: ResumeData): string[] => {
-  const personal = data?.personalInfo;
+type PersonalMetaField =
+  | 'gender'
+  | 'age'
+  | 'location'
+  | 'email'
+  | 'phone'
+  | 'linkedin'
+  | 'website';
+
+type PersonalMetaItem = {
+  field: PersonalMetaField;
+  value: string;
+  dirtyKey: string;
+  placeholder: string;
+};
+
+const normalizeAgeValue = (value: string): string => String(value || '').replace(/岁/g, '').trim();
+
+const resolvePersonalMetaItems = (data: ResumeData, editable = false): PersonalMetaItem[] => {
+  const personal = data?.personalInfo || {};
   const rawGender = String((personal as any)?.gender || (data as any)?.gender || '').trim();
   const genderLabel = resolveExplicitGenderLabel(rawGender) || rawGender;
-  const age = String(personal?.age || '').trim();
-  const genderAge = [genderLabel, age ? `${age}岁` : '']
-    .filter(Boolean)
-    .join(' · ');
-  const location = String(personal?.location || '').trim();
-  const email = String(personal?.email || '').trim();
-  const phone = String(personal?.phone || '').trim();
-  const linkedin = String(personal?.linkedin || '').trim();
-  const website = String(personal?.website || '').trim();
-  return [genderAge, location, email, phone, linkedin, website].filter(Boolean);
+  const ageRaw = normalizeAgeValue(String(personal?.age || ''));
+
+  const allItems: PersonalMetaItem[] = [
+    { field: 'gender', value: genderLabel, dirtyKey: 'personal.gender', placeholder: '性别' },
+    { field: 'age', value: ageRaw ? `${ageRaw}岁` : '', dirtyKey: buildPreviewPersonalDirtyKey('age'), placeholder: '年龄' },
+    { field: 'location', value: String(personal?.location || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('location'), placeholder: '所在地' },
+    { field: 'email', value: String(personal?.email || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('email'), placeholder: '邮箱' },
+    { field: 'phone', value: String(personal?.phone || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('phone'), placeholder: '电话' },
+    { field: 'linkedin', value: String(personal?.linkedin || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('linkedin'), placeholder: 'LinkedIn' },
+    { field: 'website', value: String(personal?.website || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('website'), placeholder: '个人网站' },
+  ];
+
+  if (editable) {
+    return allItems;
+  }
+  return allItems.filter((item) => String(item.value || '').trim().length > 0);
+};
+
+const commitPersonalMetaField = (
+  editBindings: PreviewEditBindings | undefined,
+  field: PersonalMetaField,
+  value: string
+) => {
+  if (!editBindings?.enabled) return;
+  if (field === 'gender') {
+    editBindings.onGenderChange(value);
+    return;
+  }
+  if (field === 'age') {
+    editBindings.onPersonalFieldChange('age', normalizeAgeValue(value));
+    return;
+  }
+  editBindings.onPersonalFieldChange(field as keyof ResumeData['personalInfo'], value);
+};
+
+const renderPersonalMeta = (
+  data: ResumeData,
+  editBindings: PreviewEditBindings | undefined,
+  separator: (index: number, total: number) => React.ReactNode,
+  itemClassName: string
+) => {
+  const items = resolvePersonalMetaItems(data, !!editBindings?.enabled);
+  return items.map((item, idx) => (
+    <React.Fragment key={`${item.field}-${idx}`}>
+      <EditableText
+        as="span"
+        className={itemClassName}
+        value={String(item.value || (editBindings?.enabled ? item.placeholder : ''))}
+        editable={!!editBindings?.enabled}
+        dirtyKey={item.dirtyKey}
+        onCommit={(value) => commitPersonalMetaField(editBindings, item.field, value)}
+      />
+      {separator(idx, items.length)}
+    </React.Fragment>
+  ));
 };
 
 const resolveSkillsList = (raw: any): string[] => {
@@ -370,12 +434,12 @@ const ModernTemplate: React.FC<{
           onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
         />
         <div className="flex flex-wrap gap-2 mt-1 text-[10px] text-gray-500" style={{ fontSize: '10px', color: '#999' }}>
-          {resolvePersonalMetaItems(data).map((item, idx, arr) => (
-            <React.Fragment key={`${item}-${idx}`}>
-              <span>{item}</span>
-              {idx < arr.length - 1 ? <span>•</span> : null}
-            </React.Fragment>
-          ))}
+          {renderPersonalMeta(
+            data,
+            editBindings,
+            (idx, total) => (idx < total - 1 ? <span>•</span> : null),
+            'text-[10px] text-gray-500'
+          )}
         </div>
       </div>
     </div>
@@ -689,12 +753,12 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
       />
       <div className="flex flex-wrap justify-center items-center gap-x-2 gap-y-1 text-xs text-gray-600">
-        {resolvePersonalMetaItems(data).map((item, idx, arr) => (
-          <React.Fragment key={`${item}-${idx}`}>
-            <span>{item}</span>
-            {idx < arr.length - 1 ? <span className="text-gray-400">•</span> : null}
-          </React.Fragment>
-        ))}
+        {renderPersonalMeta(
+          data,
+          editBindings,
+          (idx, total) => (idx < total - 1 ? <span className="text-gray-400">•</span> : null),
+          'text-xs text-gray-600'
+        )}
       </div>
     </div>
     {sectionOrder.map((section, orderIndex) => {
@@ -984,9 +1048,12 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
         onCommit={(value) => editBindings?.onPersonalFieldChange('title', value)}
       />
       <div className="flex flex-col gap-1 text-xs text-gray-400 font-mono">
-        {resolvePersonalMetaItems(data).map((item, idx) => (
-          <span key={`${item}-${idx}`}>{item}</span>
-        ))}
+        {renderPersonalMeta(
+          data,
+          editBindings,
+          () => null,
+          'text-xs text-gray-400 font-mono'
+        )}
       </div>
     </div>
     <div className="flex flex-col gap-8">
