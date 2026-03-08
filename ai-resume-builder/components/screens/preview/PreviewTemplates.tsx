@@ -216,12 +216,15 @@ const resolveExplicitGenderLabel = (value: any): string => {
 
 const resolvePersonalMetaItems = (data: ResumeData): string[] => {
   const personal = data?.personalInfo;
-  const genderAge = [resolveExplicitGenderLabel((data as any)?.gender), personal?.age ? `${personal.age}岁` : '']
+  const rawGender = String((personal as any)?.gender || (data as any)?.gender || '').trim();
+  const genderLabel = resolveExplicitGenderLabel(rawGender) || rawGender;
+  const age = String(personal?.age || '').trim();
+  const genderAge = [genderLabel, age ? `${age}岁` : '']
     .filter(Boolean)
     .join(' · ');
   const location = String(personal?.location || '').trim();
-  const email = String(personal?.email || '').trim() || 'email@example.com';
-  const phone = String(personal?.phone || '').trim() || '+86 138 0000 0000';
+  const email = String(personal?.email || '').trim();
+  const phone = String(personal?.phone || '').trim();
   const linkedin = String(personal?.linkedin || '').trim();
   const website = String(personal?.website || '').trim();
   return [genderAge, location, email, phone, linkedin, website].filter(Boolean);

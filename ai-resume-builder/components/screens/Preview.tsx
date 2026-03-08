@@ -7,6 +7,7 @@ import { useAppStore } from '../../src/app-store';
 import { buildResumeTitle } from '../../src/resume-utils';
 import { supabase } from '../../src/supabase-client';
 import { normalizeEditorSummary } from '../../src/editor-summary-sync';
+import { getLatestCareerProfile } from '../../src/career-profile-utils';
 import BackButton from '../shared/BackButton';
 import { usePreviewPdfExport } from './preview/hooks/usePreviewPdfExport';
 import { usePreviewEditHistory } from './preview/hooks/usePreviewEditHistory';
@@ -64,6 +65,90 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
   React.useEffect(() => {
     if (forceEditMode) setIsEditMode(true);
   }, [forceEditMode]);
+
+  const profileHydratedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (profileHydratedRef.current) return;
+    if (!resumeData || typeof resumeData !== 'object') return;
+    const userId = String(currentUser?.id || '').trim();
+    if (!userId) return;
+
+    const personal = (resumeData as any)?.personalInfo || {};
+    const needsHydration = [
+      personal.name,
+      personal.title,
+      personal.email,
+      personal.phone,
+      personal.location,
+      personal.linkedin,
+      personal.website,
+      personal.age,
+      (resumeData as any)?.gender,
+    ].some((value) => String(value || '').trim().length === 0);
+
+    if (!needsHydration) {
+      profileHydratedRef.current = true;
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await DatabaseService.getUser(userId);
+        if (cancelled || !result?.success || !result?.data) return;
+
+        const latestProfile = getLatestCareerProfile(result.data);
+        if (!latestProfile) {
+          profileHydratedRef.current = true;
+          return;
+        }
+
+        const profilePersonal = (latestProfile as any)?.personalInfo || {};
+        const profileTitle = String(
+          profilePersonal.title || (latestProfile as any)?.targetRole || (latestProfile as any)?.jobDirection || ''
+        ).trim();
+        const profileGender = String((latestProfile as any)?.gender || profilePersonal.gender || '').trim();
+
+        setResumeData((prev: any) => {
+          if (!prev || typeof prev !== 'object') return prev;
+          const prevPersonal = prev.personalInfo || {};
+          const nextPersonal = {
+            ...prevPersonal,
+            name: String(prevPersonal.name || '').trim() || String(profilePersonal.name || '').trim(),
+            title: String(prevPersonal.title || '').trim() || profileTitle,
+            email: String(prevPersonal.email || '').trim() || String(profilePersonal.email || '').trim(),
+            phone: String(prevPersonal.phone || '').trim() || String(profilePersonal.phone || '').trim(),
+            location: String(prevPersonal.location || '').trim() || String(profilePersonal.location || '').trim(),
+            linkedin: String(prevPersonal.linkedin || '').trim() || String(profilePersonal.linkedin || '').trim(),
+            website: String(prevPersonal.website || '').trim() || String(profilePersonal.website || '').trim(),
+            age: String(prevPersonal.age || '').trim() || String(profilePersonal.age || '').trim(),
+            gender: String((prevPersonal as any).gender || '').trim() || profileGender,
+          };
+
+          const nextGender = String(prev.gender || '').trim() || profileGender;
+
+          const changed =
+            JSON.stringify(nextPersonal) !== JSON.stringify(prevPersonal) ||
+            String(prev.gender || '').trim() !== String(nextGender || '').trim();
+
+          if (!changed) return prev;
+          return {
+            ...prev,
+            personalInfo: nextPersonal,
+            gender: nextGender,
+          };
+        });
+
+        profileHydratedRef.current = true;
+      } catch {
+        profileHydratedRef.current = true;
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, resumeData, setResumeData]);
 
   const handleSaveInlineEdit = React.useCallback(async () => {
     if (!resumeData) return true;
@@ -170,6 +255,19 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
       (current) => updateResumePersonalField(current, field as any, value),
       { dirtyKeys: [buildPreviewPersonalDirtyKey(field)] }
     );
+  }, [applyEditMutation]);
+
+  const handleGenderChange = React.useCallback((value: string) => {
+    applyEditMutation((current: any) => ({
+      ...current,
+      gender: value,
+      personalInfo: {
+        ...(current.personalInfo || {}),
+        gender: value,
+      },
+    }), {
+      dirtyKeys: ['personal.gender'],
+    });
   }, [applyEditMutation]);
 
   const handleSummaryChange = React.useCallback((value: string) => {
@@ -415,6 +513,68 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
             ))}
           </div>
         </div>
+
+        {isEditMode ? (
+          <div className="w-[90%] bg-white dark:bg-slate-900/50 backdrop-blur-md rounded-2xl p-3 border border-slate-200 dark:border-white/5 shadow-lg shadow-slate-200/20 dark:shadow-none">
+            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 mb-2">基础信息（可直接删改）</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <input
+                value={String((resumeData as any)?.personalInfo?.name || '')}
+                onChange={(event) => handlePersonalFieldChange('name', event.target.value)}
+                placeholder="姓名"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.title || '')}
+                onChange={(event) => handlePersonalFieldChange('title', event.target.value)}
+                placeholder="求职意向"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.email || '')}
+                onChange={(event) => handlePersonalFieldChange('email', event.target.value)}
+                placeholder="邮箱"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.phone || '')}
+                onChange={(event) => handlePersonalFieldChange('phone', event.target.value)}
+                placeholder="电话"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.location || '')}
+                onChange={(event) => handlePersonalFieldChange('location' as any, event.target.value)}
+                placeholder="所在地"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.gender || (resumeData as any)?.personalInfo?.gender || '')}
+                onChange={(event) => handleGenderChange(event.target.value)}
+                placeholder="性别"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.age || '')}
+                onChange={(event) => handlePersonalFieldChange('age' as any, event.target.value)}
+                placeholder="年龄"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.linkedin || '')}
+                onChange={(event) => handlePersonalFieldChange('linkedin' as any, event.target.value)}
+                placeholder="LinkedIn"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm"
+              />
+              <input
+                value={String((resumeData as any)?.personalInfo?.website || '')}
+                onChange={(event) => handlePersonalFieldChange('website' as any, event.target.value)}
+                placeholder="个人网站"
+                className="h-9 rounded-lg border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 px-3 text-sm sm:col-span-2"
+              />
+            </div>
+          </div>
+        ) : null}
 
         <div
           className="relative w-[85%] flex flex-col items-center group/doc-wrapper"

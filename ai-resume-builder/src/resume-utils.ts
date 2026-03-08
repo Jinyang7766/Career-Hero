@@ -69,9 +69,29 @@ export const buildResumeTitle = (
     includeCompany: boolean,
     currentSelectionTargetCompany?: string
 ): string => {
-    const direction = data?.personalInfo?.title?.trim();
-    const personName = data?.personalInfo?.name?.trim();
-    const manualCompany = (data?.targetCompany || currentSelectionTargetCompany || '').trim();
+    const normalizePart = (value: string) =>
+        String(value || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[\s\-_|·•,，。.!！?？:：()（）【】\[\]{}]/g, '');
+
+    const dedupeParts = (items: string[]) => {
+        const out: string[] = [];
+        const seen = new Set<string>();
+        for (const item of items) {
+            const text = String(item || '').trim();
+            if (!text) continue;
+            const key = normalizePart(text);
+            if (!key || seen.has(key)) continue;
+            seen.add(key);
+            out.push(text);
+        }
+        return out;
+    };
+
+    const direction = String(data?.personalInfo?.title || '').trim();
+    const personName = String(data?.personalInfo?.name || '').trim();
+    const manualCompany = String(data?.targetCompany || currentSelectionTargetCompany || '').trim();
     const parts: string[] = [];
 
     if (direction) {
@@ -83,8 +103,8 @@ export const buildResumeTitle = (
     }
 
     if (includeCompany) {
-        const companyName = manualCompany || getCompanyNameFromJd(jd);
-        if (companyName) {
+        const companyName = String(manualCompany || getCompanyNameFromJd(jd) || '').trim();
+        if (companyName && normalizePart(companyName) !== normalizePart(direction)) {
             parts.push(companyName);
         }
     }
@@ -93,5 +113,5 @@ export const buildResumeTitle = (
         parts.push(personName);
     }
 
-    return parts.join(' - ');
+    return dedupeParts(parts).join(' - ');
 };
