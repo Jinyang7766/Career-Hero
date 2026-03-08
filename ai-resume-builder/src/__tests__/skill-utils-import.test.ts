@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { toSkillListForImport } from '../skill-utils';
+import { sanitizeResumeSkills, sanitizeSkillList } from '../resume-skill-sanitizer';
 
 describe('toSkillListForImport', () => {
   it('extracts skills from nested mixed structures', () => {
@@ -38,5 +39,47 @@ describe('toSkillListForImport', () => {
     expect(result).toEqual(expect.arrayContaining(['A/B测试', 'SQL']));
     expect(result).not.toContain('A');
     expect(result).not.toContain('B测试');
+  });
+});
+
+describe('sanitizeSkillList', () => {
+  it('dedupes near-duplicate tokens and filters weak noise', () => {
+    const result = sanitizeSkillList([
+      'SQL',
+      ' sql ',
+      'Power BI',
+      'PowerBI',
+      'A/B Test',
+      'A/B Testing',
+      '管理',
+    ]);
+
+    expect(result.some((x) => x.toLowerCase() === 'sql')).toBe(true);
+    expect(result).toContain('PowerBI');
+    expect(result.some((x) => /^a\/b\s*test/i.test(x))).toBe(true);
+    expect(result).not.toContain('管理');
+    expect(result.filter((x) => x.toLowerCase().includes('sql')).length).toBe(1);
+  });
+
+  it('caps output by default guard limit (10)', () => {
+    const result = sanitizeSkillList([
+      'SQL', 'Python', 'Excel', 'PowerBI', 'Tableau', 'GA4', 'A/B Test', 'LLM', 'RAG', 'Docker', 'Linux', 'Redis',
+    ]);
+
+    expect(result.length).toBe(10);
+  });
+
+  it('sanitizes resume payload skills in place-safe way', () => {
+    const resume = {
+      summary: 'x',
+      skills: ['SQL', 'sql', '策略', 'Python'],
+    } as any;
+
+    const cleaned = sanitizeResumeSkills(resume);
+
+    expect(cleaned.summary).toBe('x');
+    expect(cleaned.skills).toHaveLength(2);
+    expect(cleaned.skills.some((x) => x.toLowerCase() === 'python')).toBe(true);
+    expect(cleaned.skills.some((x) => x.toLowerCase() === 'sql')).toBe(true);
   });
 });

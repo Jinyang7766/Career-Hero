@@ -5,6 +5,7 @@ import { usePostInterviewFeedback } from './usePostInterviewFeedback';
 import { usePostInterviewFinalize } from './usePostInterviewFinalize';
 import { usePostInterviewReportData } from './usePostInterviewReportData';
 import { fillGeneratedResumeTimeline, repairGeneratedContacts } from './postInterviewResumeRepair';
+import { sanitizeResumeSkills } from '../../../../src/resume-skill-sanitizer';
 import { usePostInterviewFinalReportPersistence } from './usePostInterviewFinalReportPersistence';
 
 type Params = {
@@ -159,14 +160,15 @@ export const useAiAnalysisPostInterviewFlow = ({
     const sourceResume = ((postInterviewOriginalResume as any) || (resumeData as any));
     const aiGenerated = resolvedFinalReport?.generatedResume;
     if (!aiGenerated || typeof aiGenerated !== 'object') {
-      return baseComparisonGeneratedResume || baseGeneratedResume;
+      return sanitizeResumeSkills((baseComparisonGeneratedResume || baseGeneratedResume) as any);
     }
-    const normalized: any = fillGeneratedResumeTimeline({ ...aiGenerated }, sourceResume);
+    const normalizedSeed = sanitizeResumeSkills({ ...aiGenerated } as any);
+    const normalized: any = fillGeneratedResumeTimeline(normalizedSeed, sourceResume);
     const contactRepaired: any = repairGeneratedContacts(normalized, sourceResume, resumeData as any);
     contactRepaired.optimizationStatus = 'optimized';
     contactRepaired.optimizedFromId = String((sourceResume as any)?.id || '');
     delete contactRepaired.id;
-    return contactRepaired;
+    return sanitizeResumeSkills(contactRepaired);
   }, [
     baseComparisonGeneratedResume,
     baseGeneratedResume,

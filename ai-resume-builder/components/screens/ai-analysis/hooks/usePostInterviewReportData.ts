@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import type { ResumeData } from '../../../../types';
 import { toSkillList } from '../../../../src/skill-utils';
+import { sanitizeResumeSkills } from '../../../../src/resume-skill-sanitizer';
 import { sanitizeSuggestedValue } from '../chat-formatters';
 import { inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import { applySuggestionToResume } from '../suggestion-applier';
@@ -107,17 +108,17 @@ export const usePostInterviewReportData = ({
 
     // Keep original resume intact: generated resume should be treated as a new optimized copy.
     const sourceId = String((postInterviewOriginalResume as any)?.id || '').trim();
-    const normalized: any = { ...(generated as any) };
+    const normalized: any = sanitizeResumeSkills({ ...(generated as any) });
     if (sourceId) {
       normalized.optimizationStatus = 'optimized';
       normalized.optimizedFromId = sourceId;
     }
     delete normalized.id;
-    return repairGeneratedContacts(
+    return sanitizeResumeSkills(repairGeneratedContacts(
       normalized as ResumeData,
       postInterviewOriginalResume,
       resumeData || null
-    );
+    ));
   }, [postInterviewOriginalResume, suggestions, resumeData]);
 
   const postInterviewAnnotations = useMemo(() => (

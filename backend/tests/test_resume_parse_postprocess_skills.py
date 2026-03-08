@@ -2,6 +2,12 @@ from backend.services.resume_parse_postprocess import (
     extract_skills_from_resume_text,
     fill_skills_if_missing,
 )
+from backend.services.skill_cleanup_service import (
+    DEFAULT_SKILL_LIMIT,
+    clean_skill_list,
+    merge_resume_skills,
+    sanitize_resume_skills,
+)
 
 
 def test_extract_skills_keeps_ab_test_and_splits_regular_slash_tokens():
@@ -87,3 +93,49 @@ def test_fill_skills_extracts_from_work_project_when_no_explicit_skill_section()
     assert "SQL" in filled["skills"]
     assert "A" not in filled["skills"]
     assert "B测试" not in filled["skills"]
+
+
+def test_skill_cleanup_service_dedup_filters_and_caps():
+    cleaned = clean_skill_list([
+        "SQL",
+        " sql ",
+        "Power BI",
+        "PowerBI",
+        "A/B Test",
+        "A/B Testing",
+        "管理",
+        "沟通能力",
+        "Python",
+        "Excel",
+        "Tableau",
+        "GA4",
+        "LLM",
+        "RAG",
+        "Docker",
+        "Linux",
+    ])
+
+    assert "SQL" in cleaned
+    assert "A/B Test" in cleaned
+    assert "管理" not in cleaned
+    assert "沟通能力" not in cleaned
+    assert len(cleaned) <= DEFAULT_SKILL_LIMIT
+
+
+def test_skill_cleanup_service_merge_and_resume_guard():
+    merged = merge_resume_skills(
+        source_skills=["SQL", "Python", "Excel"],
+        generated_skills=["sql", "Power BI", "LLM", "RAG", "Docker"],
+        suggested_skills=["A/B Testing", "GA4", "PowerBI"],
+    )
+
+    assert merged[0] in ("SQL", "Python", "Excel")
+    assert len(merged) <= DEFAULT_SKILL_LIMIT
+
+    payload = {
+        "summary": "x",
+        "skills": ["SQL", " sql ", "策略", "Python"],
+    }
+    sanitized = sanitize_resume_skills(payload)
+    assert sanitized["summary"] == "x"
+    assert sanitized["skills"] == ["SQL", "Python"]

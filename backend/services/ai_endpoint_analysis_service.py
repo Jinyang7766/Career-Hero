@@ -19,6 +19,11 @@ try:
         PIIMasker,
         _normalize_company_confidence,
     )
+    from services.skill_cleanup_service import (
+        DEFAULT_SKILL_LIMIT,
+        clean_skill_list,
+        sanitize_resume_skills,
+    )
 except ImportError:
     from backend.services.ai_endpoint_prompt_service import (
         ANALYSIS_PROMPT_VERSION,
@@ -35,6 +40,11 @@ except ImportError:
     from backend.services.ai_endpoint_shared_service import (
         PIIMasker,
         _normalize_company_confidence,
+    )
+    from backend.services.skill_cleanup_service import (
+        DEFAULT_SKILL_LIMIT,
+        clean_skill_list,
+        sanitize_resume_skills,
     )
 
 def analyze_resume_core(current_user_id, data, deps):
@@ -182,6 +192,26 @@ def analyze_resume_core(current_user_id, data, deps):
             return True
         target_section = str(item.get('targetSection') or '').strip().lower()
         return target_section in ('education', 'educations', 'edu')
+
+    def _sanitize_skill_suggestions(suggestions):
+        if not isinstance(suggestions, list):
+            return []
+        normalized = []
+        for suggestion in suggestions:
+            if not isinstance(suggestion, dict):
+                continue
+            section = str(suggestion.get('targetSection') or '').strip().lower()
+            if section in ('skill', 'skills'):
+                cleaned_values = clean_skill_list(suggestion.get('suggestedValue') or [], limit=DEFAULT_SKILL_LIMIT)
+                if not cleaned_values:
+                    continue
+                patched = dict(suggestion)
+                patched['targetSection'] = 'skills'
+                patched['suggestedValue'] = cleaned_values
+                normalized.append(patched)
+                continue
+            normalized.append(suggestion)
+        return normalized
 
     def _try_generate_final_resume_for_report(_score, _suggestions):
         if not is_final_report_stage:
@@ -397,10 +427,13 @@ def analyze_resume_core(current_user_id, data, deps):
                     ai_result['suggestions'] = _ensure_sentence_level_coverage(ai_result.get('suggestions', []), resume_data)
                     ai_result['suggestions'] = _merge_duplicate_suggestions(ai_result.get('suggestions', []))
                 ai_result['suggestions'] = _append_education_gap_advisory(ai_result.get('suggestions', []))
+            ai_result['suggestions'] = _sanitize_skill_suggestions(ai_result.get('suggestions', []))
             final_resume_data = _try_generate_final_resume_for_report(
                 ai_result.get('score', 70),
                 ai_result.get('suggestions', []),
             )
+            if isinstance(final_resume_data, dict):
+                final_resume_data = sanitize_resume_skills(final_resume_data, limit=DEFAULT_SKILL_LIMIT)
             ensured_summary = deps['ensure_analysis_summary'](
                 ai_result.get('summary', ''),
                 ai_result.get('strengths', []),
@@ -464,7 +497,10 @@ def analyze_resume_core(current_user_id, data, deps):
                     suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
                     suggestions = _merge_duplicate_suggestions(suggestions)
                 suggestions = _append_education_gap_advisory(suggestions)
+            suggestions = _sanitize_skill_suggestions(suggestions)
             final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
+            if isinstance(final_resume_data, dict):
+                final_resume_data = sanitize_resume_skills(final_resume_data, limit=DEFAULT_SKILL_LIMIT)
 
             logger.info(
                 "analyze.fallback user=%s stage=%s score=%s suggestions=%s",
@@ -515,7 +551,10 @@ def analyze_resume_core(current_user_id, data, deps):
             suggestions = _ensure_sentence_level_coverage(suggestions, resume_data)
             suggestions = _merge_duplicate_suggestions(suggestions)
         suggestions = _append_education_gap_advisory(suggestions)
+    suggestions = _sanitize_skill_suggestions(suggestions)
     final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
+    if isinstance(final_resume_data, dict):
+        final_resume_data = sanitize_resume_skills(final_resume_data, limit=DEFAULT_SKILL_LIMIT)
     logger.info(
         "analyze.rule_based user=%s stage=%s score=%s suggestions=%s",
         str(current_user_id),

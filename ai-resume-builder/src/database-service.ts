@@ -1,4 +1,5 @@
 import { supabase } from './supabase-client';
+import { sanitizeResumeSkills } from './resume-skill-sanitizer';
 import {
   isResumeEligibleForLibrary,
   shouldPersistResumeRecord,
@@ -25,7 +26,8 @@ export class DatabaseService {
   }
 
   private static stripLocationFromResumeData(resumeData: any) {
-    return resumeData;
+    if (!resumeData || typeof resumeData !== 'object') return resumeData;
+    return sanitizeResumeSkills({ ...resumeData });
   }
 
   private static sanitizeResumeRecord(record: any) {

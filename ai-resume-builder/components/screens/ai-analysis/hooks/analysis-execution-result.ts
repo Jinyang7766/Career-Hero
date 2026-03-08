@@ -1,4 +1,5 @@
 import { toSkillList } from '../../../../src/skill-utils';
+import { sanitizeResumeSkills } from '../../../../src/resume-skill-sanitizer';
 import { normalizeScoreBreakdown, resolveDisplayScore } from '../analysis-mappers';
 import { consolidateSkillSuggestions, inferTargetSection, normalizeTargetSection } from '../suggestion-helpers';
 import type { AnalysisMode } from '../analysis-mode';
@@ -132,9 +133,9 @@ export const buildAnalysisResultSnapshot = ({
     scoreBreakdown: normalizedBreakdown,
     generatedResumeData:
       aiAnalysisResult.generatedResumeData && typeof aiAnalysisResult.generatedResumeData === 'object'
-        ? aiAnalysisResult.generatedResumeData
+        ? sanitizeResumeSkills(aiAnalysisResult.generatedResumeData)
         : (aiAnalysisResult.resumeData && typeof aiAnalysisResult.resumeData === 'object'
-          ? aiAnalysisResult.resumeData
+          ? sanitizeResumeSkills(aiAnalysisResult.resumeData)
           : null),
   };
 

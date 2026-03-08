@@ -4,9 +4,23 @@ import re
 
 from google.genai import types
 
+try:
+    from services.skill_cleanup_service import (
+        DEFAULT_SKILL_LIMIT,
+        merge_resume_skills,
+        sanitize_resume_skills,
+    )
+except ImportError:
+    from backend.services.skill_cleanup_service import (
+        DEFAULT_SKILL_LIMIT,
+        merge_resume_skills,
+        sanitize_resume_skills,
+    )
+
 
 def _build_resume_fallback(resume_data):
-    return _sync_resume_alias_fields(_normalize_resume_shape(resume_data or {}))
+    fallback = _sync_resume_alias_fields(_normalize_resume_shape(resume_data or {}))
+    return sanitize_resume_skills(fallback, limit=DEFAULT_SKILL_LIMIT)
 
 
 def _normalize_resume_shape(data):
@@ -244,35 +258,12 @@ def _normalize_and_merge_skills(generated_resume, source_resume, suggestions):
     generated_candidates = _split_skill_candidates(generated_skills_raw)
     suggested_candidates = _split_skill_candidates(suggested_skill_keywords)
 
-    merged = []
-    seen = set()
-
-    def _append_skill(raw_skill):
-        text = str(raw_skill or '').strip()
-        if not text:
-            return
-        key = re.sub(r'[\s\W_]+', '', text.lower())
-        if not key or key in seen:
-            return
-        seen.add(key)
-        merged.append(text)
-
-    # Preserve all original user skills first (do not drop user facts).
-    for candidate in source_candidates:
-        _append_skill(_normalize_skill_text(candidate))
-
-    # Then append model-generated/suggested hard skills when valid.
-    for candidate in [*generated_candidates, *suggested_candidates]:
-        skill = _canonicalize_skill(candidate)
-        if not skill:
-            continue
-        if _looks_like_model_family(skill):
-            skill = 'LLM'
-        if not _is_hard_skill(skill):
-            continue
-        _append_skill(skill)
-
-    next_resume['skills'] = merged[:40]
+    next_resume['skills'] = merge_resume_skills(
+        source_skills=source_candidates,
+        generated_skills=generated_candidates,
+        suggested_skills=suggested_candidates,
+        limit=DEFAULT_SKILL_LIMIT,
+    )
     return next_resume
 
 
@@ -729,6 +720,7 @@ def generate_optimized_resume(
             generated = _neutralize_unknown_numbers(generated, resume_data)
             generated = _normalize_and_merge_skills(generated, resume_data, normalized_suggestions)
             generated = _sync_resume_alias_fields(generated)
+            generated = sanitize_resume_skills(generated, limit=DEFAULT_SKILL_LIMIT)
 
             unresolved = _detect_unresolved_suggestions(generated, normalized_suggestions)
             unresolved_context = '\n'.join([
@@ -788,6 +780,7 @@ def generate_optimized_resume(
             final_generated = _neutralize_unknown_numbers(final_generated, resume_data)
             final_generated = _normalize_and_merge_skills(final_generated, resume_data, normalized_suggestions)
             final_generated = _sync_resume_alias_fields(final_generated)
+            final_generated = sanitize_resume_skills(final_generated, limit=DEFAULT_SKILL_LIMIT)
             return final_generated
     except Exception as ai_error:
         logger.error("AI 生成简历失败: %s", ai_error)
