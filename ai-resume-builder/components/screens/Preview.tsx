@@ -331,66 +331,70 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
 
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
-        <div className="h-14 px-4 flex items-center justify-between relative">
-          <BackButton onClick={handlePreviewBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-            简历预览
-          </h2>
-          <div className="z-10 flex items-center gap-1.5">
-            {isEditMode ? (
-              <>
-                <button
-                  type="button"
-                  onClick={handleUndo}
-                  disabled={isSavingEdit || !canUndo}
-                  className="flex items-center justify-center h-9 w-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="撤销"
-                  title="撤销"
-                >
-                  <span className="material-symbols-outlined text-[18px]">undo</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleRedo}
-                  disabled={isSavingEdit || !canRedo}
-                  className="flex items-center justify-center h-9 w-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-                  aria-label="前进"
-                  title="前进"
-                >
-                  <span className="material-symbols-outlined text-[18px]">redo</span>
-                </button>
-                <span
-                  className={`inline-flex h-7 px-2 rounded-full text-[11px] font-semibold items-center border ${
-                    hasDirtyChanges
-                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                  }`}
-                >
-                  {hasDirtyChanges ? '未保存改动' : '已保存'}
-                </span>
-              </>
-            ) : null}
+      {!isEditMode ? (
+        <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
+          <div className="h-14 px-4 flex items-center justify-between relative">
+            <BackButton onClick={handlePreviewBack} className="z-10" />
+            <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
+              简历预览
+            </h2>
+            <div className="z-10 flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void handleToggleEditMode()}
+                disabled={isSavingEdit}
+                className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
+                title="编辑"
+              >
+                <span className="material-symbols-outlined text-[20px]">edit</span>
+              </button>
+            </div>
+          </div>
+        </header>
+      ) : (
+        <div className="fixed top-3 left-0 right-0 z-40 mx-auto w-full max-w-md px-4 flex items-center justify-between pointer-events-none">
+          <div className="pointer-events-auto">
+            <BackButton onClick={handlePreviewBack} className="z-10" />
+          </div>
+          <div className="pointer-events-auto flex items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleUndo}
+              disabled={isSavingEdit || !canUndo}
+              className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="撤销"
+              title="撤销"
+            >
+              <span className="material-symbols-outlined text-[18px]">undo</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleRedo}
+              disabled={isSavingEdit || !canRedo}
+              className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="前进"
+              title="前进"
+            >
+              <span className="material-symbols-outlined text-[18px]">redo</span>
+            </button>
             <button
               type="button"
               onClick={() => void handleToggleEditMode()}
               disabled={isSavingEdit}
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-              title={isEditMode ? (isSavingEdit ? '保存中...' : '完成') : '编辑'}
+              className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              title={isSavingEdit ? '保存中...' : '完成'}
             >
               {isSavingEdit ? (
-                <span className="size-4 border-2 border-slate-400 border-t-slate-700 dark:border-white/20 dark:border-t-white rounded-full animate-spin"></span>
+                <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
               ) : (
-                <span className="material-symbols-outlined text-[20px]">
-                  {isEditMode ? 'check' : 'edit'}
-                </span>
+                <span className="material-symbols-outlined text-[20px]">check</span>
               )}
             </button>
           </div>
         </div>
-      </header>
+      )}
 
-      <main className="flex-1 w-full relative overflow-y-auto no-scrollbar bg-slate-50 dark:bg-background-dark pt-20 pb-32 flex flex-col items-center gap-6" id="preview-area">
+      <main className={`flex-1 w-full relative overflow-y-auto no-scrollbar bg-slate-50 dark:bg-background-dark ${isEditMode ? 'pt-16' : 'pt-20'} pb-32 flex flex-col items-center gap-6`} id="preview-area">
         <div className="w-[90%] bg-white dark:bg-slate-900/50 backdrop-blur-md rounded-2xl p-3 border border-slate-200 dark:border-white/5 shadow-xl shadow-slate-200/20 dark:shadow-none">
           <div className="flex items-center gap-3">
             {TEMPLATE_OPTIONS.map((t) => (
