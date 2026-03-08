@@ -122,6 +122,37 @@ describe('career-profile-editor-draft', () => {
     expect((nextEducations.educations || [])[0]?.major).toBe('计算机科学');
   });
 
+  it('keeps canonical profile fields when atomic tags are generated but not manually edited', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(
+      {
+        ...base,
+        summary: '保留原总结',
+        coreSkills: ['保留原技能'],
+        careerHighlights: ['保留原亮点'],
+        constraints: ['保留原约束'],
+        targetRole: '保留原岗位',
+        jobDirection: '保留原方向',
+        atomicTagsManualOverride: true as any,
+        atomicTags: [
+          { id: 's1', category: 'summary', text: '旧总结标签', key: '旧总结标签', sourcePaths: ['summary'] },
+          { id: 'i1', category: 'intent', text: '旧岗位标签', key: '旧岗位标签', sourcePaths: ['targetRole'] },
+          { id: 'k1', category: 'fact_skill', text: '旧技能标签', key: '旧技能标签', sourcePaths: ['coreSkills[0]'] },
+          { id: 'h1', category: 'fact_highlight', text: '旧亮点标签', key: '旧亮点标签', sourcePaths: ['careerHighlights[0]'] },
+          { id: 'c1', category: 'fact_constraint', text: '旧约束标签', key: '旧约束标签', sourcePaths: ['constraints[0]'] },
+        ] as any,
+      } as any,
+      null
+    );
+
+    expect(draft?.summary).toBe('保留原总结');
+    expect(draft?.personalInfo?.title).toBe('保留原岗位');
+    expect(draft?.targetRole).toBe('保留原岗位');
+    expect(draft?.coreSkills).toEqual(['保留原技能']);
+    expect(draft?.careerHighlights).toEqual(['保留原亮点']);
+    expect(draft?.constraints).toEqual(['保留原约束']);
+  });
+
   it('hydrates summary sections from atomic tags when manual override is enabled', () => {
     const base = createBaseProfile();
     const draft = createCareerProfileEditorDraft(
@@ -135,11 +166,11 @@ describe('career-profile-editor-draft', () => {
         jobDirection: '旧方向',
         atomicTagsManualOverride: true as any,
         atomicTags: [
-          { id: 's1', category: 'summary', text: '新总结', key: '新总结' },
-          { id: 'i1', category: 'intent', text: '新岗位', key: '新岗位' },
-          { id: 'k1', category: 'fact_skill', text: '新技能', key: '新技能' },
-          { id: 'h1', category: 'fact_highlight', text: '新亮点', key: '新亮点' },
-          { id: 'c1', category: 'fact_constraint', text: '新约束', key: '新约束' },
+          { id: 's1', category: 'summary', text: '新总结', key: '新总结', sourcePaths: ['atomicTags.summary'] },
+          { id: 'i1', category: 'intent', text: '新岗位', key: '新岗位', sourcePaths: ['atomicTags.intent'] },
+          { id: 'k1', category: 'fact_skill', text: '新技能', key: '新技能', sourcePaths: ['atomicTags.fact_skill'] },
+          { id: 'h1', category: 'fact_highlight', text: '新亮点', key: '新亮点', sourcePaths: ['atomicTags.fact_highlight'] },
+          { id: 'c1', category: 'fact_constraint', text: '新约束', key: '新约束', sourcePaths: ['atomicTags.fact_constraint'] },
         ] as any,
       } as any,
       null
@@ -151,6 +182,36 @@ describe('career-profile-editor-draft', () => {
     expect(draft?.coreSkills).toEqual(['新技能']);
     expect(draft?.careerHighlights).toEqual(['新亮点']);
     expect(draft?.constraints).toEqual(['新约束']);
+  });
+
+  it('does not pollute personal name with gender-only identity tags', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(
+      {
+        ...base,
+        personalInfo: {
+          ...(base.personalInfo || {}),
+          name: '陈金阳',
+          email: 'cjy@example.com',
+        },
+        atomicTagsManualOverride: true as any,
+        atomicTags: [
+          {
+            id: 'id_gender',
+            category: 'identity',
+            text: '男',
+            key: '男',
+            sourcePaths: ['atomicTags.identity'],
+          },
+        ] as any,
+      } as any,
+      {
+        name: '陈金阳',
+        email: 'cjy@example.com',
+      }
+    );
+
+    expect(draft?.personalInfo?.name).toBe('陈金阳');
   });
 
   it('prefers identity atomic tags for personal name/email over fallback email prefix', () => {

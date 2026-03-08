@@ -101,6 +101,19 @@ const IDENTITY_FIELD_PREFIX_RE =
 const EMAIL_RE = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
 const URL_RE = /(?:https?:\/\/[^\s]+)|(?:www\.[^\s]+)/i;
 const PHONE_RE = /\+?\d[\d\s\-()]{6,}\d/;
+const GENDER_TOKEN_RE = /^(?:男|女|male|female|m|f|性别[:：-]?(?:男|女|male|female))$/i;
+
+const looksLikeIdentityName = (value: string): boolean => {
+  const text = stripUnknown(value);
+  if (!text) return false;
+  if (text.length < 2 || text.length > 40) return false;
+  if (text.includes('@')) return false;
+  if (/[\\/@]/.test(text)) return false;
+  if (/[0-9]{3,}/.test(text)) return false;
+  if (GENDER_TOKEN_RE.test(text)) return false;
+  if (looksLikeMbtiOnlyText(text)) return false;
+  return true;
+};
 
 const normalizeUrl = (value: string): string => {
   const text = stripUnknown(value);
@@ -165,14 +178,7 @@ const resolveIdentityFromAtomicTags = (items: string[]) => {
   }
 
   if (!name) {
-    const hit = candidates.find((entry) => {
-      if (!entry) return false;
-      if (entry.length > 40) return false;
-      if (entry.includes('@')) return false;
-      if (/[\\/@]/.test(entry)) return false;
-      if (/[0-9]{5,}/.test(entry)) return false;
-      return true;
-    });
+    const hit = candidates.find((entry) => looksLikeIdentityName(entry));
     if (hit) name = hit;
   }
 
@@ -300,10 +306,14 @@ export const createCareerProfileEditorDraft = (
   if (!profile) return null;
   const atomicTags = Array.isArray(profile.atomicTags) ? profile.atomicTags : [];
   const useAtomicManualSource = Boolean((profile as any).atomicTagsManualOverride) && atomicTags.length > 0;
-  const atomicSummary = useAtomicManualSource ? firstFromAtomicTags(atomicTags, 'summary') : '';
-  const atomicIntent = useAtomicManualSource ? firstFromAtomicTags(atomicTags, 'intent') : '';
-  const atomicIdentity = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'identity', 20) : [];
-  const atomicIdentityResolved = useAtomicManualSource
+  const shouldUseAtomicSummary = useAtomicManualSource && hasManualAtomicEditsForCategory(atomicTags, 'summary');
+  const shouldUseAtomicIntent = useAtomicManualSource && hasManualAtomicEditsForCategory(atomicTags, 'intent');
+  const shouldUseAtomicIdentity = useAtomicManualSource && hasManualAtomicEditsForCategory(atomicTags, 'identity');
+
+  const atomicSummary = shouldUseAtomicSummary ? firstFromAtomicTags(atomicTags, 'summary') : '';
+  const atomicIntent = shouldUseAtomicIntent ? firstFromAtomicTags(atomicTags, 'intent') : '';
+  const atomicIdentity = shouldUseAtomicIdentity ? listFromAtomicTags(atomicTags, 'identity', 20) : [];
+  const atomicIdentityResolved = shouldUseAtomicIdentity
     ? resolveIdentityFromAtomicTags(atomicIdentity)
     : {
         name: '',
@@ -313,24 +323,26 @@ export const createCareerProfileEditorDraft = (
         linkedin: '',
         website: '',
       };
+
   const atomicCoreSkills = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'fact_skill', 30) : [];
   const atomicHighlights = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'fact_highlight', 20) : [];
   const atomicConstraints = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'fact_constraint', 20) : [];
   const atomicExperienceFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'experience', 30) : [];
-  const fallbackConstraints = Array.isArray(profile.constraints) ? profile.constraints : [];
-  const resolvedMbti =
-    stripUnknown(profile.mbti) ||
-    inferMbti(
-      profile.mbti,
-      profile.summary,
-      profile.personality,
-      profile.workStyle,
-      profile.careerGoal,
-      atomicConstraints,
-      fallbackConstraints
-    );
   const atomicProjectFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'project', 20) : [];
   const atomicEducationFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'education', 20) : [];
+
+  const shouldUseAtomicSkillFacts =
+    useAtomicManualSource &&
+    atomicCoreSkills.length > 0 &&
+    hasManualAtomicEditsForCategory(atomicTags, 'fact_skill');
+  const shouldUseAtomicHighlightFacts =
+    useAtomicManualSource &&
+    atomicHighlights.length > 0 &&
+    hasManualAtomicEditsForCategory(atomicTags, 'fact_highlight');
+  const shouldUseAtomicConstraintFacts =
+    useAtomicManualSource &&
+    atomicConstraints.length > 0 &&
+    hasManualAtomicEditsForCategory(atomicTags, 'fact_constraint');
   const shouldUseAtomicExperienceFacts =
     useAtomicManualSource &&
     atomicExperienceFacts.length > 0 &&
@@ -343,6 +355,20 @@ export const createCareerProfileEditorDraft = (
     useAtomicManualSource &&
     atomicEducationFacts.length > 0 &&
     hasManualAtomicEditsForCategory(atomicTags, 'education');
+
+  const fallbackConstraints = Array.isArray(profile.constraints) ? profile.constraints : [];
+  const mbtiConstraintSource = shouldUseAtomicConstraintFacts ? atomicConstraints : fallbackConstraints;
+  const resolvedMbti =
+    stripUnknown(profile.mbti) ||
+    inferMbti(
+      profile.mbti,
+      profile.summary,
+      profile.personality,
+      profile.workStyle,
+      profile.careerGoal,
+      mbtiConstraintSource,
+      fallbackConstraints
+    );
   const fallbackName = stripUnknown(String(user?.name || user?.email || '').split('@')[0]);
   const existingEmail = stripUnknown(profile.personalInfo?.email) || stripUnknown(user?.email);
   const existingName = stripUnknown(profile.personalInfo?.name);
@@ -385,20 +411,20 @@ export const createCareerProfileEditorDraft = (
       ? mapAtomicProjectFactsToProjects(atomicProjectFacts)
       : (profile.projects || []).map(cloneProject),
     coreSkills:
-      useAtomicManualSource && atomicCoreSkills.length > 0
+      shouldUseAtomicSkillFacts
         ? atomicCoreSkills
         : Array.isArray(profile.coreSkills)
           ? [...profile.coreSkills]
           : [],
     careerHighlights:
-      useAtomicManualSource && atomicHighlights.length > 0
+      shouldUseAtomicHighlightFacts
         ? atomicHighlights
         : Array.isArray(profile.careerHighlights)
           ? [...profile.careerHighlights]
           : [],
     mbti: resolvedMbti,
     constraints:
-      (useAtomicManualSource && atomicConstraints.length > 0
+      (shouldUseAtomicConstraintFacts
         ? atomicConstraints
         : Array.isArray(profile.constraints)
           ? [...profile.constraints]
