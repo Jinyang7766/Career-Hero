@@ -1,6 +1,6 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.22`
+- 版本：`v6.23`
 - 更新时间：`2026-03-09`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
@@ -68,6 +68,12 @@
    - 主数据源固定为 `draftProfile` 单一映射（编辑/保存/展示都以主字段为准）。
    - `factItems/atomicTags` 降级为派生数据，不再作为后续产品能力主线，不新增“事实治理 UI（合并/拆分/可视化）”开发。
    - 派生数据默认不得反向覆盖主字段（仅保留最小兼容与必要防污染兜底）。
+21. 字段唯一归属规则（新增）：
+   - 同一语义值必须有唯一主字段归属，禁止在多个字段重复存储（如 `targetRole/jobDirection`、`mbti/personality`、`gender/personalInfo.gender`）。
+   - 保存阶段执行冲突清洗与去重，展示阶段只读取主字段，兼容字段仅作回迁来源不作展示真值。
+22. 画像总结编辑权限规则（新增）：
+   - 总结区默认只读；当内容包含由其他结构字段拼接/推断出来的信息时，禁止在总结区直接编辑。
+   - 用户需跳转到对应源字段编辑（如 MBTI/目标岗位/约束），保存后自动回流到总结展示。
 
 ## 1. 现状扫描结果（As-Is）
 
@@ -438,23 +444,23 @@
     - 覆盖“输入后可点击 AI解析 -> 追问出现 -> 清空输入后追问仍在 -> 提交按钮禁用”链路。
 19. GuidedFlow 在线 smoke 已新增“上传后追问补齐”断言：
     - 覆盖“上传简历（mock parse）-> 已上传标题展示 -> AI解析 -> 追问出现”的主链路。
-20. 职业画像“单一事实源”第一阶段已落地：
-    - 新增 `career-profile-facts.ts` 统一归并 `coreSkills/careerHighlights/constraints`，并生成 `factItems`。
-    - `normalizeCareerProfile` 与画像签名已接入 `factItems`，DB 读取与 AI 返回统一走归一口径。
-21. `factId` 级联编辑已落地（跨分区自动镜像）：
-    - `CareerProfileStructuredEditor` 以 `factDraft` 作为 skills/highlights/constraints 编辑真值源。
-    - 命中同一 `factId` 时，任一分区改动会自动镜像到其他分区对应条目。
-22. 事实链路测试已补齐并通过：
-    - 新增/更新 `career-profile-facts.test.ts`、`career-profile-utils.test.ts` 等用例，覆盖归并与级联镜像。
-    - 本地基线：frontend `42 files / 158 tests`、backend `80 tests` 通过。
+20. 职业画像“单一映射主线”第一阶段已落地：
+    - 编辑态已改为直改 `draftProfile` 主字段，减少 `resumeData/extras` 中转映射。
+    - 入库链路改为主字段直持久化优先，派生数据仅保留兼容用途。
+21. 字段一致性修复第一轮已完成：
+    - 已修复 MBTI 回填与约束污染问题，避免“展示有值但主字段为空”与“值落错字段”。
+    - 已修复 `atomicTags` stale 回灌污染主字段的问题（仅手动来源可覆盖）。
+22. 字段一致性测试已补齐并通过：
+    - 新增/更新职业画像字段映射与展示回归用例，覆盖主字段优先、派生不反写。
+    - 本地基线通过（frontend/backend 关键链路回归通过）。
 23. Step1 解析触发点已收口为“显式点击 AI 智能解析”：
     - `ResumeImportDialog` 改为仅采集输入（文本/PDF），不做即时解析。
     - `GuidedCareerProfileFusionStep` 在点击 `AI 智能解析` 后才执行上传内容解析与追问生成。
     - 已补 `fusion-upload-parser` 定向单测与本地基线回归。
-24. 画像总结页已收口为“统一结构编辑器 + 原子标签编辑”：
+24. 画像总结页已收口为“统一结构编辑器（主字段优先）”：
     - `CareerProfileQuickConfirm` 分支已下线，结果页统一渲染 `CareerProfileStructuredEditor`。
-    - 编辑器新增“原子标签”分类编辑区（统一去重口径，避免跨分区重复维护）。
-    - 保存时原子标签与事实分区联动回写，保持 `atomicTags/factItems` 一致。
+    - 总结页以主字段展示为准，派生信息仅作兼容显示，不作为独立编辑主线。
+    - 后续按“总结区只读优先”继续收口，避免用户在总结区编辑到非源字段内容。
 25. 旧会话步名迁移逻辑已抽离并加固测试：
     - `useInterviewSessionRecovery` 已抽离 `normalizeInterviewRecoveryStep`，统一 `jd_input -> interview_scene`、`report -> final_report` 映射。
     - 新增 `interview-session-step-migration.test.ts`，覆盖 legacy 映射与非法步骤保护。
@@ -471,7 +477,7 @@
     - `experiences` 从“公司/职位/时间/描述投影回写”改为直接编辑 `organization/title/period/actions/results`，避免二次投影串字段。
     - `projects/educations` 编辑态改为直接写 `period/school/degree/major/link` 等原字段，移除编辑态经 `resumeData` 结构的回写依赖。
 30. 结构化保存流程已改为“draftProfile 直持久化优先”：
-    - `CareerProfileStructuredEditor.handleSave` 不再依赖 `resumeData/extras` 回写；以 `draftProfile + factDraft + atomicTagDraft` 直接组装持久化对象。
+    - `CareerProfileStructuredEditor.handleSave` 不再依赖 `resumeData/extras` 回写；当前以 `draftProfile` 为主组装持久化对象，派生结构仅作兼容输入。
     - `useCareerProfileComposer.saveStructuredCareerProfile` 入库前仅做必要 normalize/校验，并补齐 `personalInfo.title/gender` 与 `targetRole/jobDirection` 一致性。
 31. 职业画像展示字段一致性巡检（第一轮）已完成：
     - 已修复 MBTI 在“总结/求职约束”中出现但 MBTI 区缺失的问题；新增从 `summary/personality/workStyle/careerGoal/constraints` 推断 MBTI 的回填逻辑。
@@ -489,7 +495,7 @@
 
 未完成（后续必须推进）：
 1. “上传简历前置（可跳过）”主流程已完成前端入口改造，待补数据治理与线上迁移说明闭环。
-2. 画像编辑器与简历编辑器融合改造（已完成第一阶段事实收口，继续做编辑体验与组件层复用收口）。
+2. 画像编辑器与简历编辑器融合改造（已完成第一阶段单一映射收口，继续做编辑体验与组件层复用收口）。
 3. Step2 定向追问卡片与画像 JSON Schema 校验加固。
 4. 独立职业规划咨询入口（`/career-planning`）及隔离会话上下文。
 5. 面试场景收口专项：`HR面 -> 压力面`、移除面试模式、后端提示词改造与兼容迁移。
@@ -579,6 +585,8 @@
 11. `analysis_mode 冲突回写验证`：当 `guided_flow_state.analysis_mode` 与 `resume_data.analysisMode` 不一致时，读取以 `resume_data` 为准并完成回写纠正。
 12. `压力面收口验证`：面试场景页仅存在 `初试/复试/压力面` 三类，且不存在“面试模式”选择控件。
 13. `提示词与题单验证`：`pressure` 场景下生成的问题覆盖冲突/压力/取舍/复盘，且不出现旧 `HR面` 或 `simple/comprehensive` 口径。
+14. `字段唯一归属验证`：同一语义值不会同时落到多个字段（例如 `targetRole/jobDirection`、`mbti/personality`、`gender/personalInfo.gender`）。
+15. `总结区只读守卫验证`：当总结内容包含其他字段拼接/推断信息时，总结区不可编辑，用户需改源字段后回流展示。
 
 补充口径（避免验收误判）：
 1. `generic/targeted` 作为业务 smoke 用例，目标是覆盖到 Step5/Step6 闭环。
@@ -593,7 +601,7 @@
 4. `analysis_mode` 冲突回写验证：归属前端集成测试（状态恢复链路）+ 数据层回读断言（`users.guided_flow_state` / `resumes.resume_data`），不依赖 `/api/user/profile`。
 5. 门禁命令链接线：`scripts/test-online.ps1` 增加 `-RunAiMainflowApiSmoke` 与 GuidedFlow UI smoke 执行入口；`scripts/test-step.ps1` 增加 `-RunAiMainflowApiSmoke`、`-RunGuidedFlowUiSmoke` 参数并串联执行。
 6. 验收约束：若 `-RunGuidedFlowUiSmoke` 未接线或未执行，本期 UI 门禁 smoke 不得标记为通过；若 `-RunAiMainflowApiSmoke` 未执行，不得标记主链路 API smoke 全通过。
-7. 自动化覆盖边界：13 条 smoke 属于验收清单，当前自动化覆盖以 runbook 覆盖矩阵为准；低匹配、多 JD 回访、上传不入库、强门禁、analysis_mode 冲突回写保留手工/集成断言。
+7. 自动化覆盖边界：15 条 smoke 属于验收清单，当前自动化覆盖以 runbook 覆盖矩阵为准；低匹配、多 JD 回访、上传不入库、强门禁、analysis_mode 冲突回写保留手工/集成断言。
 8. 后端：`/api/ai/*` 回归测试 + Agent foundation 测试常绿。
 9. 面试场景专项回归：增加 `pressure` 类型映射与兼容（`hr -> pressure`）测试，确保旧会话可恢复。
 
@@ -711,7 +719,10 @@
    - 待验证：线上灰度环境中补齐“上传不入库提示文案”的用户反馈确认。
 2. 画像编辑器与简历编辑器融合改造（第一阶段）：
    - 已完成：编辑态字段映射改为直改 `draftProfile`（`personalInfo/summary/targetRole/jobDirection/experiences/projects/educations`），保存链路改为 `draftProfile` 直持久化优先，减少 `resumeData/extras` 中转。
-   - 本周待收口：继续做字段一致性巡检（编辑态 -> 存储 -> 展示）、派生数据防回灌、历史脏数据兼容清理。
+   - 本周待收口：
+     - 字段唯一归属（同一值不重复落多个字段）；
+     - 字段一致性巡检（编辑态 -> 存储 -> 展示）；
+     - 派生数据防回灌与历史脏数据兼容清理。
 3. 清理旧步骤语义债务（兼容收口）：
    - 面试内核继续下线恢复层 `jd_input` 兼容分支（渲染层已完成收口），统一 `interview_scene`。
    - 诊断链路移除 `resume_select` 死分支与冗余路由映射。
@@ -730,9 +741,10 @@
 7. 派生数据策略收口（后端/数据层）：
    - `factItems/atomicTags` 仅保留兼容读写与派生用途，不新增治理能力开发。
    - 写入链路保持“主字段优先、派生不反写主字段”，并保留最小观测日志用于排障。
-8. 画像总结页编辑策略收口（已完成）：
+8. 画像总结页编辑策略收口（进行中）：
    - “关键确认”模块已删除，统一走结构编辑器。
-   - 编辑行为按单一映射主线执行：用户修改直接落主字段，不依赖事实治理交互。
+   - 新增规则：若总结区内容包含其他字段拼接/推断信息，则总结区改为只读，不允许直接编辑。
+   - 用户需在对应源字段修改，保存后再回流到总结展示。
 9. 预览页编辑闭环（二期收口，新增）：
    - 已完成：预览画布就地编辑、新增条目、自动聚焦、撤销/前进、编辑入口并入 Preview。
    - 待完成：补“字段级脏标识 + 跨模板一致性回归 + 导出前编辑态守卫”三项验收脚本，避免线上回归。
@@ -753,6 +765,7 @@
    - 提供“转 generic”快捷路径
 6. 字段一致性回归自动化：
    - 增补“编辑态 -> 存储 -> 总览展示”字段一致性回归用例（覆盖 MBTI/性别/求职意向等高频字段）。
+   - 增补“同值不重复落多字段”与“总结区派生内容只读守卫”回归断言。
    - 增补“派生数据不反写主字段”回归断言，避免历史数据回灌。
 
 ### 10.2.1 计划书剩余未完成清单（按模块/文件）
@@ -760,7 +773,7 @@
 **P0（当前仍未完成）**
 1. 画像字段单一映射稳定性收口：
    - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/career-profile/summary-display-logic.ts`、`ai-resume-builder/components/screens/career-profile/career-profile-editor-draft.ts`
-   - 缺口：字段一致性巡检（编辑态 -> 存储 -> 展示）、历史脏数据兼容、派生数据回灌防护。
+   - 缺口：字段一致性巡检（编辑态 -> 存储 -> 展示）、字段唯一归属去重（同一值不重复落多字段）、总结区派生内容只读守卫、历史脏数据兼容、派生数据回灌防护。
 2. 诊断/面试旧语义兼容收口：
    - 模块：`ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts`、`ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`、`ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
    - 缺口：进一步下线 legacy `jd_input` 恢复分支与诊断链 `resume_select` 冗余路径。
@@ -787,6 +800,7 @@
    - 模块：`ai-resume-builder/components/screens/ai-analysis/JdInputPage.tsx`、报告页组件。
 6. 字段一致性与派生兼容回归（冲突防回归）：
    - 模块：`ai-resume-builder/components/screens/career-profile/*`、`ai-resume-builder/src/__tests__/*career-profile*`。
+   - 范围：同值去重、总结区只读守卫、派生不反写主字段。
 
 ### 10.3 P2（中期）
 
