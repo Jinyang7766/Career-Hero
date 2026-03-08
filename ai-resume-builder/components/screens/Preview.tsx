@@ -471,7 +471,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           <div className="h-14 px-4 flex items-center justify-between relative">
             <BackButton onClick={handlePreviewBack} className="z-10" />
             <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-              绠€鍘嗛瑙?
+              简历预览
             </h2>
             <div className="z-10 flex items-center gap-1.5">
               <button
@@ -479,7 +479,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
                 onClick={() => void handleToggleEditMode()}
                 disabled={isSavingEdit}
                 className="flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-60 disabled:cursor-not-allowed"
-                title="缂栬緫"
+                title="编辑"
               >
                 <span className="material-symbols-outlined text-[20px]">edit</span>
               </button>
@@ -611,7 +611,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
                   onClick={() => navigateToView(View.ALL_RESUMES, { replace: true })}
                   className="h-9 px-4 rounded-full bg-primary text-white text-xs font-bold hover:opacity-90 transition-opacity"
                 >
-                  杩斿洖鍏ㄩ儴绠€鍘?
+                  返回全部简历
                 </button>
               </div>
             ) : resumeData ? renderPreviewTemplate({
@@ -629,7 +629,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           <button
             onClick={handleExportPDF}
             disabled={exportGuard.disabled}
-            title={exportGuard.reason || '瀵煎嚭 PDF'}
+            title={exportGuard.reason || '导出 PDF'}
             className="w-full flex items-center justify-center gap-2 h-14 bg-primary hover:bg-blue-600 active:bg-blue-700 text-white rounded-xl shadow-[0_0_20px_rgba(19,127,236,0.15)] transition-all transform active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isGenerating ? (
