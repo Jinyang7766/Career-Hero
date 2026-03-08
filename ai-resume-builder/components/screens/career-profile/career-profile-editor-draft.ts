@@ -26,6 +26,38 @@ const stripUnknown = (val: string | undefined | null) => {
   return str.toLowerCase() === 'unknown' ? '' : str;
 };
 
+const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
+
+const normalizeMbtiToken = (value: unknown): string => {
+  const text = stripUnknown(String(value || '')).toUpperCase();
+  if (!text) return '';
+  const match = text.match(MBTI_TOKEN_RE);
+  if (!match) return '';
+  return `${match[1]}${match[2]}${match[3]}${match[4]}`;
+};
+
+const looksLikeMbtiOnlyText = (value: unknown): boolean => {
+  const text = stripUnknown(String(value || ''));
+  if (!text) return false;
+  const compact = text.replace(/\s+/g, '').toUpperCase();
+  if (/^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact)) return true;
+  if (/^[IESNTFJP]{4}$/.test(compact)) return true;
+  return false;
+};
+
+const inferMbti = (...sources: unknown[]): string => {
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      const nested = inferMbti(...source);
+      if (nested) return nested;
+      continue;
+    }
+    const normalized = normalizeMbtiToken(source);
+    if (normalized) return normalized;
+  }
+  return '';
+};
+
 const listFromAtomicTags = (
   tags: unknown,
   category: string,
@@ -285,6 +317,18 @@ export const createCareerProfileEditorDraft = (
   const atomicHighlights = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'fact_highlight', 20) : [];
   const atomicConstraints = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'fact_constraint', 20) : [];
   const atomicExperienceFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'experience', 30) : [];
+  const fallbackConstraints = Array.isArray(profile.constraints) ? profile.constraints : [];
+  const resolvedMbti =
+    stripUnknown(profile.mbti) ||
+    inferMbti(
+      profile.mbti,
+      profile.summary,
+      profile.personality,
+      profile.workStyle,
+      profile.careerGoal,
+      atomicConstraints,
+      fallbackConstraints
+    );
   const atomicProjectFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'project', 20) : [];
   const atomicEducationFacts = useAtomicManualSource ? listFromAtomicTags(atomicTags, 'education', 20) : [];
   const shouldUseAtomicExperienceFacts =
@@ -352,12 +396,16 @@ export const createCareerProfileEditorDraft = (
         : Array.isArray(profile.careerHighlights)
           ? [...profile.careerHighlights]
           : [],
+    mbti: resolvedMbti,
     constraints:
-      useAtomicManualSource && atomicConstraints.length > 0
+      (useAtomicManualSource && atomicConstraints.length > 0
         ? atomicConstraints
         : Array.isArray(profile.constraints)
           ? [...profile.constraints]
-          : [],
+          : [])
+        .map((item) => stripUnknown(item))
+        .filter(Boolean)
+        .filter((item) => !looksLikeMbtiOnlyText(item)),
     targetRole: stripUnknown(atomicIntent) || stripUnknown(profile.targetRole) || stripUnknown(profile.jobDirection),
     jobDirection: stripUnknown(atomicIntent) || stripUnknown(profile.jobDirection) || stripUnknown(profile.targetRole),
     factItems: Array.isArray(profile.factItems) ? profile.factItems.map((item) => ({ ...item })) : [],

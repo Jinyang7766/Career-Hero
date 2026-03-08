@@ -34,6 +34,36 @@ const toText = (value: unknown): string => String(value || '').trim();
 const isUnknownLike = (value: string): boolean =>
   /^(?:unknown|n\/?a|none|null|nil|未(?:知|填写)|无|暂无|不详|-+)$/i.test(String(value || '').trim());
 
+const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
+
+const normalizeMbtiToken = (value: unknown): string => {
+  const text = toText(value).toUpperCase();
+  if (!text) return '';
+  const match = text.match(MBTI_TOKEN_RE);
+  if (!match) return '';
+  return `${match[1]}${match[2]}${match[3]}${match[4]}`;
+};
+
+const isMbtiOnlyText = (value: unknown): boolean => {
+  const text = toText(value);
+  if (!text) return false;
+  const compact = text.replace(/\s+/g, '').toUpperCase();
+  return /^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact) || /^[IESNTFJP]{4}$/.test(compact);
+};
+
+const resolveMbti = (...sources: unknown[]): string => {
+  for (const source of sources) {
+    if (Array.isArray(source)) {
+      const nested = resolveMbti(...source);
+      if (nested) return nested;
+      continue;
+    }
+    const token = normalizeMbtiToken(source);
+    if (token) return token;
+  }
+  return '';
+};
+
 const hasCjk = (value: string): boolean => /[\u3400-\u9fff]/.test(value);
 
 const normalizeTextKey = (value: unknown): string =>
@@ -162,25 +192,27 @@ export const buildCareerProfileSummaryDisplayModel = (
   const careerGoal = toText(extras.careerGoal);
   const personality = toText(extras.personality);
   const workStyle = toText(extras.workStyle);
-  const mbti = toText(extras.mbti);
+  const rawConstraints = dedupeStringList(Array.isArray(extras.constraints) ? extras.constraints : []);
+  const mbti = resolveMbti(extras.mbti, personality, workStyle, careerGoal, summary, rawConstraints);
+
   if (careerGoal && !isCoveredBySummary(careerGoal, summaryKey)) {
     appendRow(preferenceRows, preferenceSeen, '职业目标', careerGoal);
   }
   if (mbti) {
     appendRow(preferenceRows, preferenceSeen, 'MBTI', mbti);
   }
-  if (personality && !isCoveredBySummary(personality, summaryKey)) {
+  if (personality && !isCoveredBySummary(personality, summaryKey) && !isMbtiOnlyText(personality)) {
     appendRow(preferenceRows, preferenceSeen, '性格特征', personality);
   }
-  if (workStyle && !isCoveredBySummary(workStyle, summaryKey)) {
+  if (workStyle && !isCoveredBySummary(workStyle, summaryKey) && !isMbtiOnlyText(workStyle)) {
     appendRow(preferenceRows, preferenceSeen, '工作方式偏好', workStyle);
   }
 
   const highlights = dedupeStringList(Array.isArray(extras.careerHighlights) ? extras.careerHighlights : []).filter(
     (item) => !isCoveredBySummary(item, summaryKey)
   );
-  const constraints = dedupeStringList(Array.isArray(extras.constraints) ? extras.constraints : []).filter(
-    (item) => !isCoveredBySummary(item, summaryKey)
+  const constraints = rawConstraints.filter(
+    (item) => !isCoveredBySummary(item, summaryKey) && !isMbtiOnlyText(item)
   );
   const skills = dedupeStringList(Array.isArray(resumeData.skills) ? resumeData.skills : []).filter((skill) => {
     if (isCoveredBySummary(skill, summaryKey)) return false;
