@@ -11,16 +11,9 @@ import {
   type CareerProfileFactSectionKey,
   type CareerProfileFactDraftSections,
 } from '../../../src/career-profile-facts';
-import type { ResumeData } from '../../../types';
-import {
-  buildCareerProfileSummaryDisplayModel,
-  type ProfileExtrasDraft,
-} from './summary-display-logic';
+import { buildCareerProfileSummaryDisplayModel } from './summary-display-logic';
 import {
   createCareerProfileEditorDraft,
-  patchDraftEducations,
-  patchDraftProjects,
-  patchDraftWorkExps,
   projectCareerProfileEditorData,
 } from './career-profile-editor-draft';
 import {
@@ -126,18 +119,6 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     setDraftProfile((prev) => (prev ? updater(prev) : prev));
   };
 
-  const updateExtraField = (field: keyof ProfileExtrasDraft, value: unknown) => {
-    const text = String(value || '').trim();
-    updateDraftProfile((prev) => {
-      if (field === 'mbti') return { ...prev, mbti: text };
-      if (field === 'personality') return { ...prev, personality: text };
-      if (field === 'workStyle') return { ...prev, workStyle: text };
-      if (field === 'careerGoal') return { ...prev, careerGoal: text };
-      if (field === 'targetSalary') return { ...prev, targetSalary: text };
-      return prev;
-    });
-  };
-
   const { resumeData, extras } = useMemo(
     () => projectCareerProfileEditorData(draftProfile, factDraft),
     [draftProfile, factDraft]
@@ -149,13 +130,30 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
   );
   const isInlineEditing = inlineEditable;
 
-  const setPersonalInfoField = (field: keyof ResumeData['personalInfo'], value: string) => {
+  const draftPersonalInfo = draftProfile?.personalInfo || {};
+  const draftExperiences = Array.isArray(draftProfile?.experiences) ? draftProfile.experiences : [];
+  const draftProjects = Array.isArray(draftProfile?.projects) ? draftProfile.projects : [];
+  const draftEducations = Array.isArray(draftProfile?.educations) ? draftProfile.educations : [];
+  const draftGender = String(draftProfile?.gender || draftPersonalInfo.gender || '');
+
+  const setPersonalInfoField = (field: keyof NonNullable<CareerProfile['personalInfo']>, value: string) => {
     updateDraftProfile((prev) => ({
       ...prev,
       personalInfo: {
         ...(prev.personalInfo || {}),
         [field]: value,
-      } as any,
+      },
+    }));
+  };
+
+  const setDraftProfileTextField = (
+    field: 'mbti' | 'personality' | 'workStyle' | 'careerGoal' | 'targetSalary',
+    value: unknown
+  ) => {
+    const text = String(value || '');
+    updateDraftProfile((prev) => ({
+      ...prev,
+      [field]: text,
     }));
   };
 
@@ -215,28 +213,108 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     }
   };
 
-  const updateWorkItem = (id: number, field: keyof ResumeData['workExps'][number], value: string) => {
-    updateDraftProfile((prev) =>
-      patchDraftWorkExps(prev, (items) =>
-        items.map((item) => (Number(item.id) === id ? { ...item, [field]: value } : item))
-      )
-    );
+  const updateExperienceItem = (
+    index: number,
+    field: keyof CareerProfile['experiences'][number],
+    value: string
+  ) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      experiences: (prev.experiences || []).map((item, idx) =>
+        idx === index ? { ...item, [field]: value } : item
+      ),
+    }));
   };
 
-  const updateProjectItem = (id: number, field: keyof ResumeData['projects'][number], value: string) => {
-    updateDraftProfile((prev) =>
-      patchDraftProjects(prev, (items) =>
-        items.map((item) => (Number(item.id) === id ? { ...item, [field]: value } : item))
-      )
-    );
+  const removeExperienceItem = (index: number) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      experiences: (prev.experiences || []).filter((_, idx) => idx !== index),
+    }));
   };
 
-  const updateEducationItem = (id: number, field: keyof ResumeData['educations'][number], value: string) => {
-    updateDraftProfile((prev) =>
-      patchDraftEducations(prev, (items) =>
-        items.map((item) => (Number(item.id) === id ? { ...item, [field]: value } : item))
-      )
-    );
+  const appendExperienceItem = () => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      experiences: [
+        ...(prev.experiences || []),
+        {
+          title: '',
+          period: '',
+          organization: '',
+          actions: '',
+          results: '',
+          skills: [],
+          inResume: 'unknown',
+          confidence: 'medium',
+          evidence: '来自全量画像编辑',
+        },
+      ],
+    }));
+  };
+
+  const updateProjectItem = (index: number, field: string, value: string) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      projects: (Array.isArray(prev.projects) ? prev.projects : []).map((item: any, idx: number) =>
+        idx === index ? { ...(item || {}), [field]: value } : item
+      ),
+    }));
+  };
+
+  const removeProjectItem = (index: number) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      projects: (Array.isArray(prev.projects) ? prev.projects : []).filter((_: any, idx: number) => idx !== index),
+    }));
+  };
+
+  const appendProjectItem = () => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      projects: [
+        ...(Array.isArray(prev.projects) ? prev.projects : []),
+        { id: Date.now(), title: '', subtitle: '', period: '', description: '', link: '' },
+      ],
+    }));
+  };
+
+  const updateEducationItem = (index: number, field: string, value: string) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      educations: (Array.isArray(prev.educations) ? prev.educations : []).map((item: any, idx: number) => {
+        if (idx !== index) return item;
+        const next = { ...(item || {}), [field]: value };
+        if (field === 'school') {
+          const currentTitle = String(item?.title || '').trim();
+          const currentSchool = String(item?.school || '').trim();
+          if (!currentTitle || currentTitle === currentSchool) {
+            next.title = value;
+          }
+        }
+        if (field === 'period') {
+          next.date = value;
+        }
+        return next;
+      }),
+    }));
+  };
+
+  const removeEducationItem = (index: number) => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      educations: (Array.isArray(prev.educations) ? prev.educations : []).filter((_: any, idx: number) => idx !== index),
+    }));
+  };
+
+  const appendEducationItem = () => {
+    updateDraftProfile((prev) => ({
+      ...prev,
+      educations: [
+        ...(Array.isArray(prev.educations) ? prev.educations : []),
+        { id: Date.now(), title: '', school: '', degree: '', major: '', period: '', description: '' },
+      ],
+    }));
   };
 
   const handleSave = async () => {
@@ -249,13 +327,18 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
       ''
     ).trim();
 
+    const resolvedGender = String(
+      draftProfile.gender || draftProfile.personalInfo?.gender || ''
+    ).trim();
+
     const updatedProfile: CareerProfile = {
       ...draftProfile,
       personalInfo: {
         ...(draftProfile.personalInfo || {}),
         title: resolvedTargetRole,
+        gender: resolvedGender,
       },
-      summary: resumeData.summary,
+      summary: String(draftProfile.summary || '').trim(),
       coreSkills: factSections.coreSkills,
       mbti: String(draftProfile.mbti || '').trim(),
       personality: String(draftProfile.personality || '').trim(),
@@ -264,6 +347,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
       targetRole: resolvedTargetRole,
       jobDirection: resolvedTargetRole,
       targetSalary: String(draftProfile.targetSalary || '').trim(),
+      gender: resolvedGender,
       careerHighlights: factSections.careerHighlights,
       constraints: factSections.constraints,
       factItems: factSections.factItems,
@@ -363,7 +447,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">姓名</span>
                     <input
-                      value={resumeData.personalInfo.name || ''}
+                      value={draftPersonalInfo.name || ''}
                       onChange={(event) => setPersonalInfoField('name', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -371,7 +455,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">求职意向</span>
                     <input
-                      value={resumeData.personalInfo.title || ''}
+                      value={draftPersonalInfo.title || ''}
                       onChange={(event) => setCareerIntent(event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -379,7 +463,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">性别</span>
                     <select
-                      value={resumeData.gender || ''}
+                      value={draftGender}
                       onChange={(event) => setGender(event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     >
@@ -391,7 +475,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">年龄</span>
                     <input
-                      value={resumeData.personalInfo.age || ''}
+                      value={draftPersonalInfo.age || ''}
                       onChange={(event) => setPersonalInfoField('age', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -399,7 +483,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">所在城市</span>
                     <input
-                      value={resumeData.personalInfo.location || ''}
+                      value={draftPersonalInfo.location || ''}
                       onChange={(event) => setPersonalInfoField('location', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -407,7 +491,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">邮箱</span>
                     <input
-                      value={resumeData.personalInfo.email || ''}
+                      value={draftPersonalInfo.email || ''}
                       onChange={(event) => setPersonalInfoField('email', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -415,7 +499,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">电话</span>
                     <input
-                      value={resumeData.personalInfo.phone || ''}
+                      value={draftPersonalInfo.phone || ''}
                       onChange={(event) => setPersonalInfoField('phone', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -423,7 +507,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">LinkedIn</span>
                     <input
-                      value={resumeData.personalInfo.linkedin || ''}
+                      value={draftPersonalInfo.linkedin || ''}
                       onChange={(event) => setPersonalInfoField('linkedin', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -431,7 +515,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                     <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">个人网址</span>
                     <input
-                      value={resumeData.personalInfo.website || ''}
+                      value={draftPersonalInfo.website || ''}
                       onChange={(event) => setPersonalInfoField('website', event.target.value)}
                       className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                     />
@@ -461,7 +545,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <AutoGrowTextarea
-                  value={resumeData.summary || ''}
+                  value={String(draftProfile?.summary || '')}
                   onChange={(event) =>
                     updateDraftProfile((prev) => ({
                       ...prev,
@@ -492,16 +576,16 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">目标薪资</span>
                       <input
-                        value={String(extras.targetSalary || '')}
-                        onChange={(event) => updateExtraField('targetSalary', event.target.value)}
+                        value={String(draftProfile?.targetSalary || '')}
+                        onChange={(event) => setDraftProfileTextField('targetSalary', event.target.value)}
                         className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                       />
                     </label>
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">职业目标</span>
                       <AutoGrowTextarea
-                        value={String(extras.careerGoal || '')}
-                        onChange={(event) => updateExtraField('careerGoal', event.target.value)}
+                        value={String(draftProfile?.careerGoal || '')}
+                        onChange={(event) => setDraftProfileTextField('careerGoal', event.target.value)}
                         className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                         minRows={2}
                       />
@@ -509,16 +593,16 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">MBTI</span>
                       <input
-                        value={String(extras.mbti || '')}
-                        onChange={(event) => updateExtraField('mbti', event.target.value)}
+                        value={String(draftProfile?.mbti || '')}
+                        onChange={(event) => setDraftProfileTextField('mbti', event.target.value)}
                         className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                       />
                     </label>
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">性格特征</span>
                       <AutoGrowTextarea
-                        value={String(extras.personality || '')}
-                        onChange={(event) => updateExtraField('personality', event.target.value)}
+                        value={String(draftProfile?.personality || '')}
+                        onChange={(event) => setDraftProfileTextField('personality', event.target.value)}
                         className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                         minRows={2}
                       />
@@ -526,8 +610,8 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">工作方式偏好</span>
                       <AutoGrowTextarea
-                        value={String(extras.workStyle || '')}
-                        onChange={(event) => updateExtraField('workStyle', event.target.value)}
+                        value={String(draftProfile?.workStyle || '')}
+                        onChange={(event) => setDraftProfileTextField('workStyle', event.target.value)}
                         className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                         minRows={2}
                       />
@@ -535,7 +619,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
                       <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">求职约束</span>
                       <AutoGrowTextarea
-                        value={joinListText(extras.constraints)}
+                        value={joinListText(factDraft.constraints.map((item) => item.text))}
                         onChange={(event) => applyFactSectionTextPatch('constraints', splitListText(event.target.value))}
                         className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                         minRows={2}
@@ -581,7 +665,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <AutoGrowTextarea
-                  value={joinListText(extras.careerHighlights)}
+                  value={joinListText(factDraft.careerHighlights.map((item) => item.text))}
                   onChange={(event) => applyFactSectionTextPatch('careerHighlights', splitListText(event.target.value))}
                   className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#111a22] px-3 py-2 text-xs text-slate-700 dark:text-slate-200 leading-relaxed outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                   placeholder="每行一个亮点事实"
@@ -608,7 +692,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <AutoGrowTextarea
-                  value={resumeData.skills.join('、')}
+                  value={joinListText(factDraft.coreSkills.map((item) => item.text))}
                   onChange={(event) => applyFactSectionTextPatch('coreSkills', splitListText(event.target.value))}
                   className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#111a22] px-3 py-2 text-xs text-slate-700 dark:text-slate-200 leading-relaxed outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                   placeholder="用顿号、逗号或换行分隔技能"
@@ -637,20 +721,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <div className="space-y-3">
-                  {resumeData.workExps.map((item, index) => (
-                    <div key={item.id || index} className="rounded-lg border border-slate-200 dark:border-white/10 p-3 bg-slate-50/60 dark:bg-white/5">
+                  {draftExperiences.map((item, index) => (
+                    <div key={`${item.organization || item.title || 'experience'}-${index}`} className="rounded-lg border border-slate-200 dark:border-white/10 p-3 bg-slate-50/60 dark:bg-white/5">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">经历 {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() =>
-                            updateDraftProfile((prev) =>
-                              patchDraftWorkExps(
-                                prev,
-                                (items) => items.filter((exp) => Number(exp.id) !== Number(item.id))
-                              )
-                            )
-                          }
+                          onClick={() => removeExperienceItem(index)}
                           className="h-6 w-6 rounded-md border border-rose-200 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                           title="删除经历"
                         >
@@ -659,43 +736,43 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <input
-                          value={item.title || ''}
-                          onChange={(event) => updateWorkItem(Number(item.id), 'title', event.target.value)}
+                          value={item.organization || ''}
+                          onChange={(event) => updateExperienceItem(index, 'organization', event.target.value)}
                           placeholder="公司/组织"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
-                          value={item.subtitle || ''}
-                          onChange={(event) => updateWorkItem(Number(item.id), 'subtitle', event.target.value)}
+                          value={item.title || ''}
+                          onChange={(event) => updateExperienceItem(index, 'title', event.target.value)}
                           placeholder="职位"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
-                          value={item.date || ''}
-                          onChange={(event) => updateWorkItem(Number(item.id), 'date', event.target.value)}
+                          value={item.period || ''}
+                          onChange={(event) => updateExperienceItem(index, 'period', event.target.value)}
                           placeholder="时间段"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
                         />
                         <AutoGrowTextarea
-                          value={item.description || ''}
-                          onChange={(event) => updateWorkItem(Number(item.id), 'description', event.target.value)}
-                          placeholder="经历描述"
+                          value={item.actions || ''}
+                          onChange={(event) => updateExperienceItem(index, 'actions', event.target.value)}
+                          placeholder="关键行动"
                           className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
                           minRows={3}
+                        />
+                        <AutoGrowTextarea
+                          value={item.results || ''}
+                          onChange={(event) => updateExperienceItem(index, 'results', event.target.value)}
+                          placeholder="关键成果"
+                          className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
+                          minRows={2}
                         />
                       </div>
                     </div>
                   ))}
                   <button
                     type="button"
-                    onClick={() =>
-                      updateDraftProfile((prev) =>
-                        patchDraftWorkExps(prev, (items) => [
-                          ...items,
-                          { id: Date.now(), title: '', subtitle: '', date: '', description: '', startDate: '', endDate: '' },
-                        ])
-                      )
-                    }
+                    onClick={appendExperienceItem}
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -741,20 +818,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <div className="space-y-3">
-                  {resumeData.projects.map((item, index) => (
+                  {draftProjects.map((item: any, index) => (
                     <div key={item.id || index} className="rounded-lg border border-slate-200 dark:border-white/10 p-3 bg-slate-50/60 dark:bg-white/5">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">项目 {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() =>
-                            updateDraftProfile((prev) =>
-                              patchDraftProjects(
-                                prev,
-                                (items) => items.filter((project) => Number(project.id) !== Number(item.id))
-                              )
-                            )
-                          }
+                          onClick={() => removeProjectItem(index)}
                           className="h-6 w-6 rounded-md border border-rose-200 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                           title="删除项目"
                         >
@@ -764,42 +834,41 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <input
                           value={item.title || ''}
-                          onChange={(event) => updateProjectItem(Number(item.id), 'title', event.target.value)}
+                          onChange={(event) => updateProjectItem(index, 'title', event.target.value)}
                           placeholder="项目名称"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
                           value={item.subtitle || ''}
-                          onChange={(event) => updateProjectItem(Number(item.id), 'subtitle', event.target.value)}
+                          onChange={(event) => updateProjectItem(index, 'subtitle', event.target.value)}
                           placeholder="角色"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
-                          value={item.date || ''}
-                          onChange={(event) => updateProjectItem(Number(item.id), 'date', event.target.value)}
+                          value={item.period || ''}
+                          onChange={(event) => updateProjectItem(index, 'period', event.target.value)}
                           placeholder="时间段"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
                         />
                         <AutoGrowTextarea
                           value={item.description || ''}
-                          onChange={(event) => updateProjectItem(Number(item.id), 'description', event.target.value)}
+                          onChange={(event) => updateProjectItem(index, 'description', event.target.value)}
                           placeholder="项目描述"
                           className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
                           minRows={3}
+                        />
+                        <input
+                          value={item.link || ''}
+                          onChange={(event) => updateProjectItem(index, 'link', event.target.value)}
+                          placeholder="项目链接（可选）"
+                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
                         />
                       </div>
                     </div>
                   ))}
                   <button
                     type="button"
-                    onClick={() =>
-                      updateDraftProfile((prev) =>
-                        patchDraftProjects(prev, (items) => [
-                          ...items,
-                          { id: Date.now(), title: '', subtitle: '', date: '', description: '', link: '' },
-                        ])
-                      )
-                    }
+                    onClick={appendProjectItem}
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -845,20 +914,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <div className="space-y-3">
-                  {resumeData.educations.map((item, index) => (
+                  {draftEducations.map((item: any, index) => (
                     <div key={item.id || index} className="rounded-lg border border-slate-200 dark:border-white/10 p-3 bg-slate-50/60 dark:bg-white/5">
                       <div className="flex items-center justify-between gap-2 mb-2">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">教育 {index + 1}</span>
                         <button
                           type="button"
-                          onClick={() =>
-                            updateDraftProfile((prev) =>
-                              patchDraftEducations(
-                                prev,
-                                (items) => items.filter((education) => Number(education.id) !== Number(item.id))
-                              )
-                            )
-                          }
+                          onClick={() => removeEducationItem(index)}
                           className="h-6 w-6 rounded-md border border-rose-200 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10"
                           title="删除教育背景"
                         >
@@ -867,26 +929,26 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                         <input
-                          value={item.title || item.school || ''}
-                          onChange={(event) => updateEducationItem(Number(item.id), 'title', event.target.value)}
+                          value={item.school || item.title || ''}
+                          onChange={(event) => updateEducationItem(index, 'school', event.target.value)}
                           placeholder="学校/院校"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
                           value={item.degree || ''}
-                          onChange={(event) => updateEducationItem(Number(item.id), 'degree', event.target.value)}
+                          onChange={(event) => updateEducationItem(index, 'degree', event.target.value)}
                           placeholder="学历"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
-                          value={item.major || item.subtitle || ''}
-                          onChange={(event) => updateEducationItem(Number(item.id), 'major', event.target.value)}
+                          value={item.major || ''}
+                          onChange={(event) => updateEducationItem(index, 'major', event.target.value)}
                           placeholder="专业"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
                         <input
-                          value={item.date || ''}
-                          onChange={(event) => updateEducationItem(Number(item.id), 'date', event.target.value)}
+                          value={item.period || item.date || ''}
+                          onChange={(event) => updateEducationItem(index, 'period', event.target.value)}
                           placeholder="时间段"
                           className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
                         />
@@ -895,14 +957,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   ))}
                   <button
                     type="button"
-                    onClick={() =>
-                      updateDraftProfile((prev) =>
-                        patchDraftEducations(prev, (items) => [
-                          ...items,
-                          { id: Date.now(), title: '', subtitle: '', date: '', description: '', school: '', degree: '', major: '' },
-                        ])
-                      )
-                    }
+                    onClick={appendEducationItem}
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>

@@ -111,11 +111,18 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
       toast('登录状态异常，请重新登录后再试', 'error');
       return false;
     }
+    const targetRoleCandidate = resolveCareerProfileTargetRole(draftProfile);
     const normalized = normalizeCareerProfile({
       ...(draftProfile || {}),
       id: String((draftProfile as any)?.id || `career_profile_${Date.now()}`),
       createdAt: String((draftProfile as any)?.createdAt || new Date().toISOString()),
       source: String((draftProfile as any)?.source || 'manual_self_report'),
+      targetRole: targetRoleCandidate,
+      jobDirection: targetRoleCandidate || String((draftProfile as any)?.jobDirection || '').trim(),
+      personalInfo: {
+        ...((draftProfile as any)?.personalInfo || {}),
+        title: targetRoleCandidate || String((draftProfile as any)?.personalInfo?.title || '').trim(),
+      },
       rawInput: '',
     });
     if (!normalized) {
@@ -126,10 +133,17 @@ export const useCareerProfileComposer = ({ currentUserId, userProfile }: Params)
     setIsSaving(true);
     try {
       const canonicalTargetRole = resolveCareerProfileTargetRole(normalized);
+      const resolvedGender = String(normalized.gender || normalized.personalInfo?.gender || '').trim();
       const profileToPersist = stripRawInput({
         ...normalized,
         targetRole: canonicalTargetRole,
         jobDirection: canonicalTargetRole || String(normalized.jobDirection || '').trim(),
+        gender: resolvedGender,
+        personalInfo: {
+          ...(normalized.personalInfo || {}),
+          title: canonicalTargetRole || String(normalized.personalInfo?.title || '').trim(),
+          gender: resolvedGender,
+        },
       });
       if (!profileToPersist) {
         toast('职业画像保存失败，请稍后重试', 'error');

@@ -1,7 +1,7 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.19`
-- 更新时间：`2026-03-03`
+- 版本：`v6.20`
+- 更新时间：`2026-03-08`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
 - 制定方式：`基于现有代码真实链路扫描，做最小侵入重编排，不做推翻式重写`
@@ -462,6 +462,13 @@
 28. 预览画布编辑能力已补齐第一阶段：
     - 已支持新增条目、自动聚焦、撤销/前进历史栈。
     - 删除按钮已按产品口径隐藏，避免误删；后续按需求再评估可恢复性。
+29. 职业画像编辑字段映射已收口为“编辑态直改 draftProfile”：
+    - `CareerProfileStructuredEditor` 编辑态字段改为直接绑定持久化字段（`personalInfo/summary/targetRole/jobDirection/experiences/projects/educations`）。
+    - `experiences` 从“公司/职位/时间/描述投影回写”改为直接编辑 `organization/title/period/actions/results`，避免二次投影串字段。
+    - `projects/educations` 编辑态改为直接写 `period/school/degree/major/link` 等原字段，移除编辑态经 `resumeData` 结构的回写依赖。
+30. 结构化保存流程已改为“draftProfile 直持久化优先”：
+    - `CareerProfileStructuredEditor.handleSave` 不再依赖 `resumeData/extras` 回写；以 `draftProfile + factDraft + atomicTagDraft` 直接组装持久化对象。
+    - `useCareerProfileComposer.saveStructuredCareerProfile` 入库前仅做必要 normalize/校验，并补齐 `personalInfo.title/gender` 与 `targetRole/jobDirection` 一致性。
 
 部分完成（可用但仍需收口）：
 1. Step5 精修能力可用，但“选区定点改写 + 事实边界提示 + 手工编辑”的统一产品化还需再收敛一轮。
@@ -694,6 +701,7 @@
    - 待验证：线上灰度环境中补齐“上传不入库提示文案”的用户反馈确认。
 2. 画像编辑器与简历编辑器融合改造（第一阶段）：
    - 已完成：`CareerProfileStructuredEditor` 接入“单一事实源 + `factId` 级联镜像”，三分区编辑口径统一。
+   - 已完成：编辑态字段映射改为直改 `draftProfile`（`personalInfo/summary/targetRole/jobDirection/experiences/projects/educations`），保存链路改为 `draftProfile` 直持久化优先，减少 `resumeData/extras` 中转。
    - 本周待收口：补“同源事实可视化标识”和最小可用的“手动合并/拆分事实”入口。
 3. 清理旧步骤语义债务（兼容收口）：
    - 面试内核继续下线恢复层 `jd_input` 兼容分支（渲染层已完成收口），统一 `interview_scene`。
@@ -737,6 +745,40 @@
 6. 事实链路治理产品化：
    - 事实冲突提示（同义近似但未自动归并）与一键修复建议。
    - 联动编辑历史可回溯（与撤销/前进栈打通），降低误改成本。
+
+### 10.2.1 计划书剩余未完成清单（按模块/文件）
+
+**P0（当前仍未完成）**
+1. 画像事实治理可视化与手动治理入口：
+   - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`
+   - 依赖：`ai-resume-builder/src/career-profile-facts.ts`
+   - 缺口：同源事实可视标识、手动合并/拆分事实、保存前联动预览。
+2. 诊断/面试旧语义兼容收口：
+   - 模块：`ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts`、`ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`、`ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
+   - 缺口：进一步下线 legacy `jd_input` 恢复分支与诊断链 `resume_select` 冗余路径。
+3. Step3 `targetCompany -> targetRole` 命名债务彻底迁移：
+   - 模块：`ai-resume-builder/components/screens/ai-analysis/**/*`、`ai-resume-builder/src/**/*analysis*`、`backend/routes/ai_routes.py`（及相关 DTO/测试）
+   - 缺口：内部状态/DTO/持久化字段统一改名并补回归测试。
+4. 历史会话恢复端到端回归补齐：
+   - 脚本：`scripts/test-online.ps1`（GuidedFlow UI smoke 扩展）
+   - 缺口：补“历史会话恢复自动落到 `interview_scene`”线上 e2e 断言。
+5. `factItems` 后端校验与观测：
+   - 模块：`backend/routes/ai_routes.py`、`backend/services/*career_profile*`（若拆分）
+   - 缺口：画像写入前 JSON Schema 校验 + 失败日志（字段路径/原因）+ 不覆盖旧画像。
+
+**P1（随后一周）**
+1. Step2 定向追问卡片产品化：
+   - 模块：`ai-resume-builder/components/screens/career-profile/*`（融合页/结果页交互联动）。
+2. 画像入库 Schema 校验加固（含 `factItems`）：
+   - 模块：`backend/routes/ai_routes.py` + `backend/tests/*career_profile*`。
+3. Step5 精修产品化收口（选区改写/事实边界/一致性回写）：
+   - 模块：`ai-resume-builder/components/screens/ai-analysis/*comparison*`、`ai-resume-builder/components/screens/Editor.tsx`。
+4. 画像编辑器与简历编辑器第二阶段融合：
+   - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/Editor.tsx`、共享编辑组件目录。
+5. 低匹配策略与 generic 转换捷径：
+   - 模块：`ai-resume-builder/components/screens/ai-analysis/JdInputPage.tsx`、报告页组件。
+6. 事实链路治理产品化（冲突提示 + 历史回溯）：
+   - 模块：`ai-resume-builder/src/career-profile-facts.ts`、`ai-resume-builder/components/screens/career-profile/*`。
 
 ### 10.3 P2（中期）
 
