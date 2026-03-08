@@ -317,7 +317,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
 
   const handleSkillsTextChange = React.useCallback((value: string) => {
     const skills = String(value || '')
-      .split(/[鈥€?锛孿n;锛泑]/)
+      .split(/[•、,，\n;；|]/)
       .map((item) => item.trim())
       .filter(Boolean);
     applyEditMutation((current) => ({
@@ -462,8 +462,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={handleUndo}
               disabled={isSavingEdit || !canUndo}
               className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="鎾ら攢"
-              title="鎾ら攢"
+              aria-label="撤销"
+              title="撤销"
             >
               <span className="material-symbols-outlined text-[18px]">undo</span>
             </button>
@@ -472,8 +472,8 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={handleRedo}
               disabled={isSavingEdit || !canRedo}
               className="flex items-center justify-center h-9 w-9 rounded-full bg-white/95 dark:bg-slate-900/90 backdrop-blur border border-slate-200 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-              aria-label="鍓嶈繘"
-              title="鍓嶈繘"
+              aria-label="前进"
+              title="前进"
             >
               <span className="material-symbols-outlined text-[18px]">redo</span>
             </button>
@@ -482,7 +482,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
               onClick={() => void handleToggleEditMode()}
               disabled={isSavingEdit}
               className="flex items-center justify-center w-9 h-9 rounded-full bg-primary text-white hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-              title={isSavingEdit ? '淇濆瓨涓?..' : '瀹屾垚'}
+              title={isSavingEdit ? '保存中...' : '完成'}
             >
               {isSavingEdit ? (
                 <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
