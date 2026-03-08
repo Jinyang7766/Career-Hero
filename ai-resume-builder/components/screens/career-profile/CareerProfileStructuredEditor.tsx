@@ -302,7 +302,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* 画像核心事实编辑（仅编辑态显示） */}
-      {isInlineEditing && (
+      {false && (
         <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
           <div className="flex items-center gap-2.5 mb-3">
             <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-violet-500/10 text-violet-500">
@@ -347,7 +347,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
         </div>
       )}
 
-      {!isInlineEditing && (
+      {(
         <>
           {/* 基础信息 */}
           {(isInlineEditing || summaryDisplay.basicInfoRows.length > 0) && (
