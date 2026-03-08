@@ -331,7 +331,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
       draftProfile.gender || draftProfile.personalInfo?.gender || ''
     ).trim();
 
-    const updatedProfile: CareerProfile = {
+    const profileBase: CareerProfile = {
       ...draftProfile,
       personalInfo: {
         ...(draftProfile.personalInfo || {}),
@@ -351,10 +351,18 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
       careerHighlights: factSections.careerHighlights,
       constraints: factSections.constraints,
       factItems: factSections.factItems,
-      // Keep atomic tag edits as the source of truth.
-      atomicTags: atomicTagDraft,
-      atomicTagsManualOverride: true,
       rawInput: '',
+    };
+
+    const syncedAtomicTags = mergeAtomicTagsPreferManual(
+      buildCareerProfileAtomicTags(profileBase),
+      atomicTagDraft
+    );
+
+    const updatedProfile: CareerProfile = {
+      ...profileBase,
+      atomicTags: syncedAtomicTags,
+      atomicTagsManualOverride: true,
     };
 
     const saveResult = await onSave(updatedProfile);
