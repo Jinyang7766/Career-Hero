@@ -228,30 +228,26 @@ type PersonalMetaItem = {
   field: PersonalMetaField;
   value: string;
   dirtyKey: string;
-  placeholder: string;
 };
 
 const normalizeAgeValue = (value: string): string => String(value || '').replace(/岁/g, '').trim();
 
-const resolvePersonalMetaItems = (data: ResumeData, editable = false): PersonalMetaItem[] => {
+const resolvePersonalMetaItems = (data: ResumeData): PersonalMetaItem[] => {
   const personal = data?.personalInfo || {};
   const rawGender = String((personal as any)?.gender || (data as any)?.gender || '').trim();
   const genderLabel = resolveExplicitGenderLabel(rawGender) || rawGender;
   const ageRaw = normalizeAgeValue(String(personal?.age || ''));
 
   const allItems: PersonalMetaItem[] = [
-    { field: 'gender', value: genderLabel, dirtyKey: 'personal.gender', placeholder: '性别' },
-    { field: 'age', value: ageRaw ? `${ageRaw}岁` : '', dirtyKey: buildPreviewPersonalDirtyKey('age'), placeholder: '年龄' },
-    { field: 'location', value: String(personal?.location || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('location'), placeholder: '所在地' },
-    { field: 'email', value: String(personal?.email || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('email'), placeholder: '邮箱' },
-    { field: 'phone', value: String(personal?.phone || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('phone'), placeholder: '电话' },
-    { field: 'linkedin', value: String(personal?.linkedin || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('linkedin'), placeholder: 'LinkedIn' },
-    { field: 'website', value: String(personal?.website || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('website'), placeholder: '个人网站' },
+    { field: 'gender', value: genderLabel, dirtyKey: 'personal.gender' },
+    { field: 'age', value: ageRaw ? `${ageRaw}岁` : '', dirtyKey: buildPreviewPersonalDirtyKey('age') },
+    { field: 'location', value: String(personal?.location || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('location') },
+    { field: 'email', value: String(personal?.email || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('email') },
+    { field: 'phone', value: String(personal?.phone || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('phone') },
+    { field: 'linkedin', value: String(personal?.linkedin || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('linkedin') },
+    { field: 'website', value: String(personal?.website || '').trim(), dirtyKey: buildPreviewPersonalDirtyKey('website') },
   ];
 
-  if (editable) {
-    return allItems;
-  }
   return allItems.filter((item) => String(item.value || '').trim().length > 0);
 };
 
@@ -278,13 +274,13 @@ const renderPersonalMeta = (
   separator: (index: number, total: number) => React.ReactNode,
   itemClassName: string
 ) => {
-  const items = resolvePersonalMetaItems(data, !!editBindings?.enabled);
+  const items = resolvePersonalMetaItems(data);
   return items.map((item, idx) => (
     <React.Fragment key={`${item.field}-${idx}`}>
       <EditableText
         as="span"
         className={itemClassName}
-        value={String(item.value || (editBindings?.enabled ? item.placeholder : ''))}
+        value={String(item.value || '')}
         editable={!!editBindings?.enabled}
         dirtyKey={item.dirtyKey}
         onCommit={(value) => commitPersonalMetaField(editBindings, item.field, value)}

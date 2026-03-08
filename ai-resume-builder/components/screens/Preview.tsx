@@ -7,7 +7,6 @@ import { useAppStore } from '../../src/app-store';
 import { buildResumeTitle } from '../../src/resume-utils';
 import { supabase } from '../../src/supabase-client';
 import { normalizeEditorSummary } from '../../src/editor-summary-sync';
-import { getLatestCareerProfile } from '../../src/career-profile-utils';
 import BackButton from '../shared/BackButton';
 import { usePreviewPdfExport } from './preview/hooks/usePreviewPdfExport';
 import { usePreviewEditHistory } from './preview/hooks/usePreviewEditHistory';
@@ -97,39 +96,81 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
         const result = await DatabaseService.getUser(userId);
         if (cancelled || !result?.success || !result?.data) return;
 
-        const latestProfile = getLatestCareerProfile(result.data);
-        if (!latestProfile) {
+        const rawLatestProfile = (result.data as any)?.career_profile_latest;
+        if (!rawLatestProfile || typeof rawLatestProfile !== 'object') {
           profileHydratedRef.current = true;
           return;
         }
 
-        const profilePersonal = (latestProfile as any)?.personalInfo || {};
-        const profileTitle = String(
-          profilePersonal.title || (latestProfile as any)?.targetRole || (latestProfile as any)?.jobDirection || ''
-        ).trim();
-        const profileGender = String((latestProfile as any)?.gender || profilePersonal.gender || '').trim();
+        const unknownLike = /^(?:unknown|n\/?a|none|null|nil|未(?:知|填写)|无|暂无|不详|-+)$/i;
+        const cleanText = (value: unknown, max = 120): string => {
+          const text = String(value || '').trim();
+          if (!text) return '';
+          if (unknownLike.test(text)) return '';
+          return text.slice(0, max);
+        };
+        const cleanEmail = (value: unknown): string => {
+          const text = cleanText(value, 120);
+          if (!text) return '';
+          return /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(text) ? text : '';
+        };
+        const cleanAge = (value: unknown): string => {
+          const raw = cleanText(value, 20).replace(/岁/g, '').trim();
+          if (!raw) return '';
+          const ageNum = Number(raw);
+          if (!Number.isFinite(ageNum) || ageNum < 10 || ageNum > 80) return '';
+          return String(Math.trunc(ageNum));
+        };
+        const cleanGender = (value: unknown): string => {
+          const text = cleanText(value, 20).toLowerCase();
+          if (!text) return '';
+          if (['male', 'm', '男'].includes(text)) return 'male';
+          if (['female', 'f', '女'].includes(text)) return 'female';
+          return '';
+        };
+
+        const profilePersonal = (rawLatestProfile as any)?.personalInfo || {};
+        const profileTitle =
+          cleanText(profilePersonal.title, 120) ||
+          cleanText((rawLatestProfile as any)?.targetRole, 120) ||
+          cleanText((rawLatestProfile as any)?.jobDirection, 120);
+        const profileGender =
+          cleanGender((rawLatestProfile as any)?.gender) ||
+          cleanGender(profilePersonal.gender);
+
+        const profileMap = {
+          name: cleanText(profilePersonal.name, 80),
+          title: profileTitle,
+          email: cleanEmail(profilePersonal.email),
+          phone: cleanText(profilePersonal.phone, 40),
+          location: cleanText(profilePersonal.location, 80),
+          linkedin: cleanText(profilePersonal.linkedin, 200),
+          website: cleanText(profilePersonal.website, 200),
+          age: cleanAge(profilePersonal.age),
+          gender: profileGender,
+        };
 
         setResumeData((prev: any) => {
           if (!prev || typeof prev !== 'object') return prev;
           const prevPersonal = prev.personalInfo || {};
           const nextPersonal = {
             ...prevPersonal,
-            name: String(prevPersonal.name || '').trim() || String(profilePersonal.name || '').trim(),
-            title: String(prevPersonal.title || '').trim() || profileTitle,
-            email: String(prevPersonal.email || '').trim() || String(profilePersonal.email || '').trim(),
-            phone: String(prevPersonal.phone || '').trim() || String(profilePersonal.phone || '').trim(),
-            location: String(prevPersonal.location || '').trim() || String(profilePersonal.location || '').trim(),
-            linkedin: String(prevPersonal.linkedin || '').trim() || String(profilePersonal.linkedin || '').trim(),
-            website: String(prevPersonal.website || '').trim() || String(profilePersonal.website || '').trim(),
-            age: String(prevPersonal.age || '').trim() || String(profilePersonal.age || '').trim(),
-            gender: String((prevPersonal as any).gender || '').trim() || profileGender,
+            name: cleanText(prevPersonal.name, 80) || profileMap.name,
+            title: cleanText(prevPersonal.title, 120) || profileMap.title,
+            email: cleanEmail(prevPersonal.email) || profileMap.email,
+            phone: cleanText(prevPersonal.phone, 40) || profileMap.phone,
+            location: cleanText(prevPersonal.location, 80) || profileMap.location,
+            linkedin: cleanText(prevPersonal.linkedin, 200) || profileMap.linkedin,
+            website: cleanText(prevPersonal.website, 200) || profileMap.website,
+            age: cleanAge(prevPersonal.age) || profileMap.age,
+            gender: cleanGender((prevPersonal as any)?.gender) || profileMap.gender,
           };
 
-          const nextGender = String(prev.gender || '').trim() || profileGender;
+          const nextGender = cleanGender(prev.gender) || profileMap.gender;
 
           const changed =
             JSON.stringify(nextPersonal) !== JSON.stringify(prevPersonal) ||
-            String(prev.gender || '').trim() !== String(nextGender || '').trim();
+            cleanText(prev.gender || '') !== cleanText(nextGender || '');
 
           if (!changed) return prev;
           return {
@@ -174,7 +215,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     try {
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
-        alert('璇峰厛鐧诲綍');
+        alert('请先登录');
         return false;
       }
 
