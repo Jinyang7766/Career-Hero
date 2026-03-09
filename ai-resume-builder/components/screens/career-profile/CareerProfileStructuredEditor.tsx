@@ -769,6 +769,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                             const mbtiRegex = new RegExp(`(MBTI[:：\\s-]*)?${mbtiToken}`, 'gi');
                             displayItem = displayItem.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[|，,。.!！？?;；:：、\s]+$/g, '').trim();
                           }
+                          if (/^性格特征[:：]/.test(displayItem)) {
+                            displayItem = displayItem
+                              .replace(/^性格特征[:：]\s*[（(]?/, '性格特征：')
+                              .replace(/[）)]/g, '')
+                              .replace(/\s{2,}/g, ' ')
+                              .trim();
+                          }
                           if (!displayItem) return null;
                           return <li key={item} className="leading-relaxed">{displayItem}</li>;
                         }).filter(Boolean)}
