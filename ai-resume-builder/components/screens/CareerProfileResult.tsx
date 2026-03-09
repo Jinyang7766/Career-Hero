@@ -191,8 +191,37 @@ const CareerProfileResult: React.FC = () => {
             </span>
           </button>
         </div>
+        {!isInlineEditing && (
+          <div className="flex items-center gap-4 px-4 h-10 overflow-x-auto no-scrollbar border-t border-slate-50 dark:border-white/5 scroll-smooth">
+            {[
+              { id: 'summary', label: '核心优势' },
+              { id: 'basic', label: '基础信息' },
+              { id: 'preference', label: '目标偏好' },
+              { id: 'skills', label: '专业技能' },
+              { id: 'work', label: '工作履历' },
+              { id: 'projects', label: '重点项目' },
+              { id: 'education', label: '教育背景' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  const el = document.getElementById(`section-${tab.id}`);
+                  if (el) {
+                    const headerOffset = 100;
+                    const elementPosition = el.getBoundingClientRect().top;
+                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+                    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
+                  }
+                }}
+                className="whitespace-nowrap text-[12px] font-bold text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors"
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        )}
         {statusCount.pending > 0 && !isInlineEditing && (
-          <div className="absolute top-14 left-0 right-0 flex justify-center animate-in slide-in-from-top-2 duration-300">
+          <div className="absolute top-[6.25rem] left-0 right-0 flex justify-center animate-in slide-in-from-top-2 duration-300">
             <div className="bg-rose-500/10 dark:bg-rose-500/20 px-3 py-1 rounded-full border border-rose-200/50 dark:border-rose-400/20 flex items-center gap-1.5 backdrop-blur-sm">
               <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
               <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
@@ -203,7 +232,7 @@ const CareerProfileResult: React.FC = () => {
         )}
       </header>
 
-      <main className={`flex-1 overflow-y-auto pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
+      <main className={`flex-1 overflow-y-auto ${isInlineEditing ? 'pt-20' : 'pt-28'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
 
 
         {!loading && (

@@ -547,22 +547,31 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
         <>
           {/* 核心优势总结 */}
           {(isInlineEditing || summaryDisplay.summary) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-[18px]">psychology</span>
+            <div id="section-summary" className="relative rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-5 sm:p-6 shadow-sm overflow-hidden group">
+              <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-primary via-primary/50 to-primary/10" />
+              <div className="absolute -top-4 -right-4 size-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors" />
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="flex items-center justify-center w-8 h-8 rounded-xl bg-primary text-white shadow-sm shadow-primary/20">
+                    <span className="material-symbols-outlined text-[18px]">psychology</span>
+                  </div>
+                  <h3 className="my-0 text-base font-black text-slate-900 dark:text-white tracking-tight">核心优势总结</h3>
                 </div>
-                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">核心优势总结</h3>
+                
+                <div className="relative">
+                  <span className="absolute -left-1 -top-2 text-4xl text-primary/10 font-serif pointer-events-none">“</span>
+                  <p className="my-0 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed relative z-10 pl-3">
+                    {isInlineEditing ? String(draftProfile?.summary || '') : summaryDisplay.summary}
+                  </p>
+                </div>
               </div>
-              <p className="my-0 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
-                {isInlineEditing ? String(draftProfile?.summary || '') : summaryDisplay.summary}
-              </p>
             </div>
           )}
 
           {/* 基础信息 */}
           {(isInlineEditing || summaryDisplay.basicInfoRows.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-basic" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-cyan-500/10 text-cyan-500">
                   <span className="material-symbols-outlined text-[18px]">badge</span>
@@ -663,7 +672,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
           {/* 职业目标与偏好 */}
           {(isInlineEditing || summaryDisplay.preferenceRows.length > 0 || summaryDisplay.constraints.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-preference" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-teal-500/10 text-teal-500">
                   <span className="material-symbols-outlined text-[18px]">tune</span>
@@ -789,7 +798,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
           {/* 专业技能 */}
           {(isInlineEditing || summaryDisplay.skills.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-skills" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-amber-500/10 text-amber-500">
                   <span className="material-symbols-outlined text-[18px]">extension</span>
@@ -818,7 +827,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
           {/* 工作经历 */}
           {(isInlineEditing || summaryDisplay.workExps.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-work" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 text-blue-500">
                   <span className="material-symbols-outlined text-[18px]">work</span>
@@ -886,26 +895,37 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-100 dark:before:bg-white/5">
                   {summaryDisplay.workExps.map((w, i) => (
-                    <div key={w.id || i} className="relative pl-4 border-l-2 border-slate-100 dark:border-white/5 pb-2 last:pb-0">
-                      <div className="absolute -left-[5px] top-1.5 size-2 rounded-full bg-blue-500 ring-4 ring-white dark:ring-surface-dark" />
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h4 className="mt-0 mb-0 text-sm font-bold text-slate-800 dark:text-slate-200">{w.title}</h4>
-                          <p className="my-0 text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">{w.subtitle}</p>
+                    <div key={w.id || i} className="relative pl-7 group">
+                      <div className="absolute left-0 top-1.5 size-[15px] rounded-full bg-white dark:bg-surface-dark border-2 border-blue-500 z-10 group-hover:scale-110 transition-transform" />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{w.title}</h4>
+                          {(w.startDate || w.endDate || w.date) && (
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
+                              {w.date || `${w.startDate || ''} - ${w.endDate || '至今'}`.replace(/^ - $/, '')}
+                            </span>
+                          )}
                         </div>
-                        {(w.startDate || w.endDate || w.date) && (
-                          <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
-                            {w.date || `${w.startDate || ''} - ${w.endDate || '至今'}`.replace(/^ - $/, '')}
-                          </span>
+                        <p className="my-0 text-xs font-semibold text-blue-600 dark:text-blue-400">{w.subtitle}</p>
+                        {w.description && (
+                          <div className="mt-2 text-[13px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed space-y-2">
+                            {w.description.split('\n').map((line, idx) => {
+                              const trimmed = line.trim();
+                              if (!trimmed) return null;
+                              // 优化长列表的可读性：自动识别项目符号
+                              const isBullet = trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*');
+                              return (
+                                <div key={idx} className={`${isBullet ? 'pl-4 relative' : ''}`}>
+                                  {isBullet && <span className="absolute left-0 top-0 text-primary">•</span>}
+                                  {isBullet ? trimmed.substring(1).trim() : trimmed}
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
-                      {w.description && (
-                        <p className="mt-1.5 mb-0 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
-                          {w.description}
-                        </p>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -915,7 +935,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
           {/* 项目经历 */}
           {(isInlineEditing || summaryDisplay.projects.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-projects" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500">
                   <span className="material-symbols-outlined text-[18px]">rocket_launch</span>
@@ -982,26 +1002,36 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   </button>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-6 relative before:absolute before:left-[7px] before:top-2 before:bottom-2 before:w-[1.5px] before:bg-slate-100 dark:before:bg-white/5">
                   {summaryDisplay.projects.map((p, i) => (
-                    <div key={p.id || i} className="relative pl-4 border-l-2 border-slate-100 dark:border-white/5 pb-2 last:pb-0">
-                      <div className="absolute -left-[5px] top-1.5 size-2 rounded-full bg-emerald-500 ring-4 ring-white dark:ring-surface-dark" />
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0">
-                          <h4 className="mt-0 mb-0 text-sm font-bold text-slate-800 dark:text-slate-200">{p.title}</h4>
-                          <p className="my-0 text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">{p.subtitle}</p>
+                    <div key={p.id || i} className="relative pl-7 group">
+                      <div className="absolute left-0 top-1.5 size-[15px] rounded-full bg-white dark:bg-surface-dark border-2 border-emerald-500 z-10 group-hover:scale-110 transition-transform" />
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{p.title}</h4>
+                          {p.date && (
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
+                              {p.date}
+                            </span>
+                          )}
                         </div>
-                        {p.date && (
-                          <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
-                            {p.date}
-                          </span>
+                        <p className="my-0 text-xs font-semibold text-emerald-600 dark:text-emerald-400">{p.subtitle}</p>
+                        {p.description && (
+                          <div className="mt-2 text-[13px] text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed space-y-2">
+                            {p.description.split('\n').map((line: string, idx: number) => {
+                              const trimmed = line.trim();
+                              if (!trimmed) return null;
+                              const isBullet = trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*');
+                              return (
+                                <div key={idx} className={`${isBullet ? 'pl-4 relative' : ''}`}>
+                                  {isBullet && <span className="absolute left-0 top-0 text-primary">•</span>}
+                                  {isBullet ? trimmed.substring(1).trim() : trimmed}
+                                </div>
+                              );
+                            })}
+                          </div>
                         )}
                       </div>
-                      {p.description && (
-                        <p className="mt-1.5 mb-0 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
-                          {p.description}
-                        </p>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -1011,7 +1041,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
           {/* 教育背景 */}
           {(isInlineEditing || summaryDisplay.educations.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+            <div id="section-education" className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
               <div className="flex items-center gap-2.5 mb-3">
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-purple-500/10 text-purple-500">
                   <span className="material-symbols-outlined text-[18px]">school</span>
@@ -1071,20 +1101,25 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                   </button>
                 </div>
               ) : (
-                <div className="space-y-3.5">
+                <div className="space-y-4">
                   {summaryDisplay.educations.map((e, i) => (
-                    <div key={e.id || i} className="flex items-start justify-between gap-2 py-0.5">
-                      <div className="min-w-0">
-                        <h4 className="mt-0 mb-0 text-sm font-bold text-slate-800 dark:text-slate-200">{e.title || e.school}</h4>
-                        <p className="my-0 text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                    <div key={e.id || i} className="flex items-start gap-4 py-1 group">
+                      <div className="flex items-center justify-center size-10 rounded-xl bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">school</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{e.title || e.school}</h4>
+                          {e.date && (
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 tabular-nums">
+                              {e.date}
+                            </span>
+                          )}
+                        </div>
+                        <p className="my-0 mt-1 text-[13px] text-slate-600 dark:text-slate-400">
                           {[e.degree, e.major, e.subtitle].filter(Boolean).join(' · ')}
                         </p>
                       </div>
-                      {e.date && (
-                        <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
-                          {e.date}
-                        </span>
-                      )}
                     </div>
                   ))}
                 </div>
