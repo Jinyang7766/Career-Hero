@@ -74,6 +74,104 @@ const buildFactDraftFromAtomicTags = (
     factItems: seedFactItems || [],
   });
 
+const toTrimmedText = (value: unknown): string => String(value || '').trim();
+
+const normalizeLooseTextKey = (value: unknown): string =>
+  toTrimmedText(value)
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/[，,。.!！？?;；:：、"'`~@#$%^&*+=<>《》()（）[\]{}【】|\/\-_]/g, '')
+    .trim();
+
+const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
+
+const normalizeMbtiToken = (value: unknown): string => {
+  const text = toTrimmedText(value).toUpperCase();
+  if (!text) return '';
+  const match = text.match(MBTI_TOKEN_RE);
+  if (!match) return '';
+  return `${match[1]}${match[2]}${match[3]}${match[4]}`;
+};
+
+const isMbtiOnlyText = (value: unknown): boolean => {
+  const compact = toTrimmedText(value).replace(/\s+/g, '').toUpperCase();
+  if (!compact) return false;
+  return /^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact) || /^[IESNTFJP]{4}$/.test(compact);
+};
+
+export type CareerProfileSingleMappingTouchState = {
+  intent?: boolean;
+  gender?: boolean;
+  mbti?: boolean;
+  personality?: boolean;
+};
+
+export const sanitizeCareerProfileSingleMappingFields = (
+  draftProfile: CareerProfile,
+  baseProfile: CareerProfile | null,
+  touchState: CareerProfileSingleMappingTouchState = {}
+) => {
+  const intentTouched = Boolean(touchState.intent);
+  const genderTouched = Boolean(touchState.gender);
+  const mbtiTouched = Boolean(touchState.mbti);
+  const personalityTouched = Boolean(touchState.personality);
+
+  const draftIntent = toTrimmedText(
+    draftProfile.personalInfo?.title || draftProfile.targetRole || draftProfile.jobDirection
+  );
+  const baseTargetRole = toTrimmedText(baseProfile?.targetRole);
+  const baseJobDirection = toTrimmedText(baseProfile?.jobDirection);
+  const basePersonalTitle = toTrimmedText(baseProfile?.personalInfo?.title);
+
+  const targetRole = intentTouched ? draftIntent : baseTargetRole;
+  const jobDirectionCandidate = intentTouched ? '' : baseJobDirection;
+  const jobDirection =
+    jobDirectionCandidate && jobDirectionCandidate !== targetRole ? jobDirectionCandidate : '';
+  const personalTitle = intentTouched
+    ? draftIntent
+    : toTrimmedText(draftProfile.personalInfo?.title) ||
+      basePersonalTitle ||
+      targetRole ||
+      jobDirection;
+
+  const draftGender = toTrimmedText(draftProfile.gender || draftProfile.personalInfo?.gender);
+  const baseGender = toTrimmedText(baseProfile?.gender);
+  const basePersonalGender = toTrimmedText(baseProfile?.personalInfo?.gender);
+  const gender = genderTouched ? draftGender : baseGender;
+  const personalGenderCandidate = genderTouched ? '' : basePersonalGender;
+  const personalGender =
+    personalGenderCandidate && personalGenderCandidate !== gender ? personalGenderCandidate : '';
+
+  let mbti = toTrimmedText(mbtiTouched ? draftProfile.mbti : baseProfile?.mbti);
+  let personality = toTrimmedText(
+    personalityTouched ? draftProfile.personality : baseProfile?.personality
+  );
+
+  const mbtiToken = normalizeMbtiToken(mbti);
+  const personalityToken = normalizeMbtiToken(personality);
+  const isSamePlainText =
+    Boolean(mbti) &&
+    Boolean(personality) &&
+    normalizeLooseTextKey(mbti) === normalizeLooseTextKey(personality);
+  const isSameMbtiOnly =
+    Boolean(mbtiToken) && personalityToken === mbtiToken && isMbtiOnlyText(personality);
+  if (isSamePlainText || isSameMbtiOnly) {
+    personality = '';
+  }
+
+  return {
+    targetRole,
+    jobDirection,
+    mbti,
+    personality,
+    gender,
+    personalInfo: {
+      title: personalTitle,
+      gender: personalGender,
+    },
+  };
+};
+
 export interface CareerProfileEditorRef {
   handleSave: () => Promise<void>;
 }
@@ -96,6 +194,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     constraints: [],
   });
   const [atomicTagDraft, setAtomicTagDraft] = useState<CareerProfileAtomicTag[]>([]);
+  const [fieldTouchState, setFieldTouchState] = useState<CareerProfileSingleMappingTouchState>({});
 
   useEffect(() => {
     if (!profile) return;
@@ -113,6 +212,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     setDraftProfile(nextDraftProfile);
     setFactDraft(nextFactDraft);
     setAtomicTagDraft(mergedAtomicTags);
+    setFieldTouchState({});
   }, [profile, currentUser]);
 
   const updateDraftProfile = (updater: (prev: CareerProfile) => CareerProfile) => {
@@ -151,6 +251,9 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     value: unknown
   ) => {
     const text = String(value || '');
+    if (field === 'mbti' || field === 'personality') {
+      setFieldTouchState((prev) => ({ ...prev, [field]: true }));
+    }
     updateDraftProfile((prev) => ({
       ...prev,
       [field]: text,
@@ -159,6 +262,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
   const setCareerIntent = (value: string) => {
     const next = String(value || '');
+    setFieldTouchState((prev) => ({ ...prev, intent: true }));
     updateDraftProfile((prev) => ({
       ...prev,
       personalInfo: {
@@ -166,17 +270,21 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
         title: next,
       },
       targetRole: next,
-      jobDirection: next,
+      jobDirection:
+        String(prev.jobDirection || '').trim() && String(prev.jobDirection || '').trim() !== next
+          ? prev.jobDirection
+          : '',
     }));
   };
 
   const setGender = (value: string) => {
+    setFieldTouchState((prev) => ({ ...prev, gender: true }));
     updateDraftProfile((prev) => ({
       ...prev,
       gender: value,
       personalInfo: {
         ...(prev.personalInfo || {}),
-        gender: value,
+        gender: '',
       } as any,
     } as any));
   };
@@ -320,34 +428,29 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
   const handleSave = async () => {
     if (!draftProfile) return;
     const factSections = materializeCareerProfileFactsFromDraft(factDraft);
-    const resolvedTargetRole = String(
-      draftProfile.personalInfo?.title ||
-      draftProfile.targetRole ||
-      draftProfile.jobDirection ||
-      ''
-    ).trim();
-
-    const resolvedGender = String(
-      draftProfile.gender || draftProfile.personalInfo?.gender || ''
-    ).trim();
+    const singleMappedFields = sanitizeCareerProfileSingleMappingFields(
+      draftProfile,
+      profile,
+      fieldTouchState
+    );
 
     const profileBase: CareerProfile = {
       ...draftProfile,
       personalInfo: {
         ...(draftProfile.personalInfo || {}),
-        title: resolvedTargetRole,
-        gender: resolvedGender,
+        title: singleMappedFields.personalInfo.title,
+        gender: singleMappedFields.personalInfo.gender,
       },
       summary: String(draftProfile.summary || '').trim(),
       coreSkills: factSections.coreSkills,
-      mbti: String(draftProfile.mbti || '').trim(),
-      personality: String(draftProfile.personality || '').trim(),
+      mbti: singleMappedFields.mbti,
+      personality: singleMappedFields.personality,
       workStyle: String(draftProfile.workStyle || '').trim(),
       careerGoal: String(draftProfile.careerGoal || '').trim(),
-      targetRole: resolvedTargetRole,
-      jobDirection: resolvedTargetRole,
+      targetRole: singleMappedFields.targetRole,
+      jobDirection: singleMappedFields.jobDirection,
       targetSalary: String(draftProfile.targetSalary || '').trim(),
-      gender: resolvedGender,
+      gender: singleMappedFields.gender,
       careerHighlights: factSections.careerHighlights,
       constraints: factSections.constraints,
       factItems: factSections.factItems,
@@ -384,6 +487,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
     setDraftProfile(hydratedProfile);
     setFactDraft(buildFactDraftFromAtomicTags(mergedAtomicTags, hydratedProfile.factItems || []));
     setAtomicTagDraft(mergedAtomicTags);
+    setFieldTouchState({});
     onInlineEditSaved?.();
   };
 

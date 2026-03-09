@@ -64,6 +64,15 @@ const resolveMbti = (...sources: unknown[]): string => {
   return '';
 };
 
+const isMbtiSemanticDuplicate = (mbti: string, textLike: unknown): boolean => {
+  if (!mbti) return false;
+  const text = toText(textLike);
+  if (!text) return false;
+  const textToken = normalizeMbtiToken(text);
+  if (!textToken || textToken !== mbti) return false;
+  return isMbtiOnlyText(text) || normalizeTextKey(text) === normalizeTextKey(mbti);
+};
+
 const hasCjk = (value: string): boolean => /[\u3400-\u9fff]/.test(value);
 
 const normalizeTextKey = (value: unknown): string =>
@@ -201,10 +210,20 @@ export const buildCareerProfileSummaryDisplayModel = (
   if (mbti) {
     appendRow(preferenceRows, preferenceSeen, 'MBTI', mbti);
   }
-  if (personality && !isCoveredBySummary(personality, summaryKey) && !isMbtiOnlyText(personality)) {
+  if (
+    personality &&
+    !isCoveredBySummary(personality, summaryKey) &&
+    !isMbtiOnlyText(personality) &&
+    !isMbtiSemanticDuplicate(mbti, personality)
+  ) {
     appendRow(preferenceRows, preferenceSeen, '性格特征', personality);
   }
-  if (workStyle && !isCoveredBySummary(workStyle, summaryKey) && !isMbtiOnlyText(workStyle)) {
+  if (
+    workStyle &&
+    !isCoveredBySummary(workStyle, summaryKey) &&
+    !isMbtiOnlyText(workStyle) &&
+    !isMbtiSemanticDuplicate(mbti, workStyle)
+  ) {
     appendRow(preferenceRows, preferenceSeen, '工作方式偏好', workStyle);
   }
 
@@ -212,7 +231,10 @@ export const buildCareerProfileSummaryDisplayModel = (
     (item) => !isCoveredBySummary(item, summaryKey)
   );
   const constraints = rawConstraints.filter(
-    (item) => !isCoveredBySummary(item, summaryKey) && !isMbtiOnlyText(item)
+    (item) =>
+      !isCoveredBySummary(item, summaryKey) &&
+      !isMbtiOnlyText(item) &&
+      !isMbtiSemanticDuplicate(mbti, item)
   );
   const skills = dedupeStringList(Array.isArray(resumeData.skills) ? resumeData.skills : []).filter((skill) => {
     if (isCoveredBySummary(skill, summaryKey)) return false;

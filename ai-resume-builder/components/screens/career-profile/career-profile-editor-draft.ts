@@ -26,16 +26,6 @@ const stripUnknown = (val: string | undefined | null) => {
   return str.toLowerCase() === 'unknown' ? '' : str;
 };
 
-const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
-
-const normalizeMbtiToken = (value: unknown): string => {
-  const text = stripUnknown(String(value || '')).toUpperCase();
-  if (!text) return '';
-  const match = text.match(MBTI_TOKEN_RE);
-  if (!match) return '';
-  return `${match[1]}${match[2]}${match[3]}${match[4]}`;
-};
-
 const looksLikeMbtiOnlyText = (value: unknown): boolean => {
   const text = stripUnknown(String(value || ''));
   if (!text) return false;
@@ -43,19 +33,6 @@ const looksLikeMbtiOnlyText = (value: unknown): boolean => {
   if (/^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact)) return true;
   if (/^[IESNTFJP]{4}$/.test(compact)) return true;
   return false;
-};
-
-const inferMbti = (...sources: unknown[]): string => {
-  for (const source of sources) {
-    if (Array.isArray(source)) {
-      const nested = inferMbti(...source);
-      if (nested) return nested;
-      continue;
-    }
-    const normalized = normalizeMbtiToken(source);
-    if (normalized) return normalized;
-  }
-  return '';
 };
 
 const listFromAtomicTags = (
@@ -356,19 +333,16 @@ export const createCareerProfileEditorDraft = (
     atomicEducationFacts.length > 0 &&
     hasManualAtomicEditsForCategory(atomicTags, 'education');
 
-  const fallbackConstraints = Array.isArray(profile.constraints) ? profile.constraints : [];
-  const mbtiConstraintSource = shouldUseAtomicConstraintFacts ? atomicConstraints : fallbackConstraints;
-  const resolvedMbti =
-    stripUnknown(profile.mbti) ||
-    inferMbti(
-      profile.mbti,
-      profile.summary,
-      profile.personality,
-      profile.workStyle,
-      profile.careerGoal,
-      mbtiConstraintSource,
-      fallbackConstraints
-    );
+  const resolvedMbti = stripUnknown(profile.mbti);
+  const resolvedTargetRole =
+    stripUnknown(atomicIntent) ||
+    stripUnknown(profile.targetRole) ||
+    stripUnknown(profile.jobDirection);
+  const resolvedJobDirectionRaw = stripUnknown(profile.jobDirection);
+  const resolvedJobDirection =
+    resolvedJobDirectionRaw && resolvedJobDirectionRaw !== resolvedTargetRole
+      ? resolvedJobDirectionRaw
+      : '';
   const fallbackName = stripUnknown(String(user?.name || user?.email || '').split('@')[0]);
   const existingEmail = stripUnknown(profile.personalInfo?.email) || stripUnknown(user?.email);
   const existingName = stripUnknown(profile.personalInfo?.name);
@@ -432,8 +406,8 @@ export const createCareerProfileEditorDraft = (
         .map((item) => stripUnknown(item))
         .filter(Boolean)
         .filter((item) => !looksLikeMbtiOnlyText(item)),
-    targetRole: stripUnknown(atomicIntent) || stripUnknown(profile.targetRole) || stripUnknown(profile.jobDirection),
-    jobDirection: stripUnknown(atomicIntent) || stripUnknown(profile.jobDirection) || stripUnknown(profile.targetRole),
+    targetRole: resolvedTargetRole,
+    jobDirection: resolvedJobDirection,
     factItems: Array.isArray(profile.factItems) ? profile.factItems.map((item) => ({ ...item })) : [],
     atomicTags: atomicTags.map((item) => ({ ...item })),
   };
@@ -485,7 +459,7 @@ export const projectCareerProfileEditorData = (
       workStyle: stripUnknown(draft.workStyle),
       careerGoal: stripUnknown(draft.careerGoal),
       targetRole: stripUnknown(draft.targetRole || draft.jobDirection),
-      jobDirection: stripUnknown(draft.targetRole || draft.jobDirection),
+      jobDirection: stripUnknown(draft.jobDirection),
       targetSalary: stripUnknown(draft.targetSalary),
       careerHighlights: factSections.careerHighlights,
       constraints: factSections.constraints,

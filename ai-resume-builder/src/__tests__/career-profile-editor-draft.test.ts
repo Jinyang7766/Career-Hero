@@ -8,6 +8,9 @@ import {
   patchDraftWorkExps,
   projectCareerProfileEditorData,
 } from '../../components/screens/career-profile/career-profile-editor-draft';
+import { buildCareerProfileSummaryDisplayModel } from '../../components/screens/career-profile/summary-display-logic';
+import { sanitizeCareerProfileSingleMappingFields } from '../../components/screens/career-profile/CareerProfileStructuredEditor';
+import type { ResumeData } from '../../types';
 
 const createBaseProfile = (): CareerProfile => ({
   id: 'cp_1',
@@ -289,4 +292,133 @@ describe('career-profile-editor-draft', () => {
     expect((draft?.projects as any)?.[0]?.title).toBe('增长实验平台 2.0');
     expect((draft?.educations as any)?.[0]?.school).toBe('在职研究生（数据科学）');
   });
+  it('keeps mbti field canonical and avoids inferring it from derived text sources', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(
+      {
+        ...base,
+        mbti: '',
+        personality: 'MBTI: INTJ',
+        constraints: ['MBTI: INTJ', '希望远程办公'],
+      } as any,
+      null
+    );
+
+    expect(draft?.mbti).toBe('');
+    expect(draft?.personality).toBe('MBTI: INTJ');
+    expect(draft?.constraints).toEqual(['希望远程办公']);
+  });
+
+  it('projects targetRole/jobDirection as a single canonical mapping', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(
+      {
+        ...base,
+        targetRole: '',
+        jobDirection: '数据分析师',
+        personalInfo: {
+          ...(base.personalInfo || {}),
+          title: '',
+        },
+      } as any,
+      null
+    );
+    const factDraft = createCareerProfileFactDraftSections({
+      coreSkills: [],
+      careerHighlights: [],
+      constraints: [],
+    });
+    const projection = projectCareerProfileEditorData(draft, factDraft);
+
+    expect(draft?.targetRole).toBe('数据分析师');
+    expect(draft?.jobDirection).toBe('');
+    expect(projection.extras.targetRole).toBe('数据分析师');
+    expect(projection.extras.jobDirection).toBe('');
+  });
+
+
+  it('guards single-mapping save payload from derived backfill and duplicated mirrors', () => {
+    const base = {
+      ...createBaseProfile(),
+      targetRole: '',
+      jobDirection: '数据分析师',
+      mbti: '',
+      personality: 'MBTI: INTJ',
+      gender: '',
+      personalInfo: {
+        ...(createBaseProfile().personalInfo || {}),
+        title: '',
+        gender: 'female',
+      },
+    } as CareerProfile;
+
+    const draft = {
+      ...base,
+      targetRole: '数据分析师',
+      jobDirection: '数据分析师',
+      mbti: 'INTJ',
+      personalInfo: {
+        ...(base.personalInfo || {}),
+        title: '数据分析师',
+      },
+    } as CareerProfile;
+
+    const untouched = sanitizeCareerProfileSingleMappingFields(draft, base, {});
+    expect(untouched.targetRole).toBe('');
+    expect(untouched.jobDirection).toBe('数据分析师');
+    expect(untouched.mbti).toBe('');
+    expect(untouched.personality).toBe('MBTI: INTJ');
+    expect(untouched.gender).toBe('');
+    expect(untouched.personalInfo.gender).toBe('female');
+
+    const edited = sanitizeCareerProfileSingleMappingFields(
+      {
+        ...draft,
+        targetRole: '高级数据分析师',
+        personalInfo: {
+          ...(draft.personalInfo || {}),
+          title: '高级数据分析师',
+        },
+        gender: 'male',
+        mbti: 'ENTJ',
+        personality: 'MBTI: ENTJ',
+      },
+      base,
+      { intent: true, gender: true, mbti: true, personality: true }
+    );
+
+    expect(edited.targetRole).toBe('高级数据分析师');
+    expect(edited.jobDirection).toBe('');
+    expect(edited.personalInfo.gender).toBe('');
+    expect(edited.personality).toBe('');
+  });
+
+  it('keeps mbti-derived text read-only in summary display model', () => {
+    const resumeData: ResumeData = {
+      personalInfo: {
+        name: '张三',
+        title: '产品经理',
+        email: 'zhangsan@example.com',
+        phone: '13800000000',
+      },
+      summary: '具备跨团队协作经验',
+      skills: ['增长策略'],
+      workExps: [],
+      projects: [],
+      educations: [],
+    };
+
+    const model = buildCareerProfileSummaryDisplayModel(resumeData, {
+      mbti: 'INTJ',
+      personality: 'MBTI: INTJ',
+      workStyle: 'INTJ',
+      constraints: ['MBTI: INTJ', '希望每周两天远程'],
+    });
+
+    expect(model.preferenceRows.filter((item) => item.label === 'MBTI')).toHaveLength(1);
+    expect(model.preferenceRows.some((item) => item.label === '性格特征')).toBe(false);
+    expect(model.preferenceRows.some((item) => item.label === '工作方式偏好')).toBe(false);
+    expect(model.constraints).toEqual(['希望每周两天远程']);
+  });
+
 });
