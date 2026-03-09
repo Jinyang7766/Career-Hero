@@ -25,6 +25,56 @@ const hasAny = (value: unknown[] | undefined | null): boolean =>
 
 const hasPattern = (text: string, pattern: RegExp): boolean => pattern.test(text);
 
+const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
+
+const normalizeText = (value: unknown): string =>
+  String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const extractMbtiToken = (value: unknown): string => {
+  const text = normalizeText(value).toUpperCase();
+  if (!text) return '';
+  const match = text.match(MBTI_TOKEN_RE);
+  if (!match) return '';
+  return `${match[1]}${match[2]}${match[3]}${match[4]}`;
+};
+
+const hasMbtiInAtomicTags = (profile: CareerProfile): boolean => {
+  const tags = Array.isArray(profile.atomicTags) ? profile.atomicTags : [];
+  return tags.some((tag) => {
+    if (!tag || typeof tag !== 'object') return false;
+
+    if (extractMbtiToken((tag as any).text)) return true;
+    if (extractMbtiToken((tag as any).key)) return true;
+    if (extractMbtiToken((tag as any).label)) return true;
+
+    const sourcePaths = Array.isArray((tag as any).sourcePaths)
+      ? (tag as any).sourcePaths.map((entry: unknown) => normalizeText(entry).toLowerCase())
+      : [];
+    const fromMbtiPath = sourcePaths.some((path: string) => /(^|\.|\[)mbti(\.|\[|$)/i.test(path));
+    if (!fromMbtiPath) return false;
+
+    return Boolean(normalizeText((tag as any).text) || normalizeText((tag as any).key));
+  });
+};
+
+const hasMbtiProfileSignal = (profile: CareerProfile): boolean => {
+  if (normalizeText(profile.mbti)) return true;
+
+  const semanticSources: unknown[] = [
+    profile.personality,
+    profile.summary,
+    ...(Array.isArray(profile.constraints) ? profile.constraints : []),
+  ];
+
+  if (semanticSources.some((source) => Boolean(extractMbtiToken(source)))) {
+    return true;
+  }
+
+  return hasMbtiInAtomicTags(profile);
+};
+
 export const buildDynamicFollowupPrompts = (
   context: DynamicFollowupContext
 ): FollowupPrompt[] => {
@@ -113,7 +163,7 @@ export const buildDynamicFollowupPrompts = (
       case 'leadership':
         return !/(带领|管理|协作|跨部门|推进|owner|负责人|主导|协调)/i.test(fullExperienceText);
       case 'mbti':
-        return !profile.mbti;
+        return !hasMbtiProfileSignal(profile);
       case 'work_style':
         return !profile.workStyle;
       case 'career_goal':
