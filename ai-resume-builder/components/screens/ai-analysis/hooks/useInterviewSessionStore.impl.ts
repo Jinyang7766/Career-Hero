@@ -117,7 +117,7 @@ export const useInterviewSessionStore = ({
       const normalizedPayload = {
         ...payload,
         analysisMode: normalizeAnalysisMode(payload?.analysisMode),
-        targetCompany: String(payload?.targetCompany || '').trim(),
+        targetCompany: '',
         targetRole: String(payload?.targetRole || payload?.targetCompany || '').trim(),
       };
       localStorage.setItem(getScopedLastAnalysisKey(), JSON.stringify(normalizedPayload));
@@ -220,21 +220,17 @@ export const useInterviewSessionStore = ({
       {};
     const now = new Date().toISOString();
     const force = !!patch?.force;
-    const persistedTargetCompany = String(
-      patch?.targetCompany ?? targetCompany ?? resumeData.targetCompany ?? ''
+    const persistedTargetCompany = '';
+    const persistedTargetRole = String(
+      patch?.targetRole ??
+      patch?.targetCompany ??
+      targetCompany ??
+      currentResumeData.targetRole ??
+      resumeData.targetRole ??
+      currentResumeData.targetCompany ??
+      resumeData.targetCompany ??
+      ''
     ).trim();
-    const persistedTargetRole = isInterviewMode
-      ? String(currentResumeData.targetRole || '').trim()
-      : String(
-          patch?.targetRole ??
-          patch?.targetCompany ??
-          targetCompany ??
-          currentResumeData.targetRole ??
-          resumeData.targetRole ??
-          currentResumeData.targetCompany ??
-          resumeData.targetCompany ??
-          ''
-        ).trim();
     const persistedAnalysisMode = normalizeAnalysisMode(
       patch?.analysisMode || (currentResumeData as any)?.analysisMode
     );
@@ -278,10 +274,8 @@ export const useInterviewSessionStore = ({
       lastJdText: chatMode === 'analysis'
         ? sessionJdText
         : (sessionJdText || currentResumeData.lastJdText || ''),
-      targetCompany: persistedTargetCompany || currentResumeData.targetCompany || '',
-      targetRole: isInterviewMode
-        ? (currentResumeData as any).targetRole || ''
-        : (persistedTargetRole || (currentResumeData as any).targetRole || ''),
+      targetCompany: '',
+      targetRole: persistedTargetRole || (currentResumeData as any).targetRole || (currentResumeData as any).targetCompany || '',
       interviewFocus: getCurrentInterviewFocus() || (currentResumeData as any).interviewFocus || '',
     };
 
@@ -304,15 +298,17 @@ export const useInterviewSessionStore = ({
     if (!jdText && sessionJdText) {
       setJdText(sessionJdText);
     }
-    if (!targetCompany && currentResumeData.targetCompany) {
-      setTargetCompany(currentResumeData.targetCompany);
+    if (!targetCompany && (currentResumeData.targetRole || currentResumeData.targetCompany)) {
+      setTargetCompany(String(currentResumeData.targetRole || currentResumeData.targetCompany || '').trim());
     }
 
     const sessions = currentResumeData.interviewSessions || {};
     if (!sessionJdText) {
       const expectedChatMode = isInterviewMode ? 'interview' : 'analysis';
       const expectedInterviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
-      const expectedTargetCompany = normalizeSceneText(targetCompany || currentResumeData?.targetCompany || '');
+      const expectedTargetCompany = normalizeSceneText(
+        targetCompany || currentResumeData?.targetRole || currentResumeData?.targetCompany || ''
+      );
       const expectedInterviewFocus = getCurrentInterviewFocus();
       const expectedResumeId = String((currentResumeData as any)?.id || '').trim();
       const expectedJdKey = makeJdKey('__no_jd__');
@@ -371,11 +367,15 @@ export const useInterviewSessionStore = ({
     const sessionJdText = pickFirstNonEmptyText(overrideJdText, jdText, currentResumeData.lastJdText);
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
     const interviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive');
+    const effectiveTargetRole = String(
+      targetCompany || currentResumeData.targetRole || currentResumeData.targetCompany || ''
+    ).trim();
     const sessionKey = buildInterviewSessionStorageKey({
       jdText: sessionJdText,
       interviewType,
       interviewMode,
-      targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      targetCompany: effectiveTargetRole,
+      targetRole: effectiveTargetRole,
       interviewFocus: getCurrentInterviewFocus(),
       resumeId: currentResumeData?.id,
       chatMode: isInterviewMode ? 'interview' : 'analysis',
@@ -389,7 +389,8 @@ export const useInterviewSessionStore = ({
         resumeId: currentResumeData?.id,
         interviewType,
         interviewFocus: getCurrentInterviewFocus(),
-        targetCompany: targetCompany || currentResumeData.targetCompany || '',
+        targetCompany: '',
+        targetRole: effectiveTargetRole,
         chatMode: isInterviewMode ? 'interview' : 'analysis',
         messages: messages.map((m) => ({ id: m.id, role: m.role, text: m.text })),
         updatedAt: new Date().toISOString(),
@@ -400,7 +401,8 @@ export const useInterviewSessionStore = ({
       ...currentResumeData,
       interviewSessions: updatedSessions,
       lastJdText: sessionJdText,
-      targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      targetCompany: '',
+      targetRole: effectiveTargetRole || currentResumeData.targetRole || currentResumeData.targetCompany || '',
       interviewFocus: getCurrentInterviewFocus() || (currentResumeData as any).interviewFocus || '',
     };
 
@@ -432,11 +434,15 @@ export const useInterviewSessionStore = ({
     const sessionJdText = pickFirstNonEmptyText(overrideJdText, jdText, currentResumeData.lastJdText);
     const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
     const interviewMode = normalizeInterviewMode(_overrideInterviewMode || getCurrentInterviewMode());
+    const effectiveTargetRole = String(
+      targetCompany || currentResumeData.targetRole || currentResumeData.targetCompany || ''
+    ).trim();
     const sessionKey = buildInterviewSessionStorageKey({
       jdText: sessionJdText,
       interviewType,
       interviewMode,
-      targetCompany: targetCompany || currentResumeData.targetCompany || '',
+      targetCompany: effectiveTargetRole,
+      targetRole: effectiveTargetRole,
       interviewFocus: getCurrentInterviewFocus(),
       resumeId: currentResumeData?.id,
       chatMode: isInterviewMode ? 'interview' : 'analysis',

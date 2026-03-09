@@ -81,7 +81,7 @@ export const useAiInterviewExternalEntry = ({
         finalResumeData.optimizedResumeId ||
         (finalResumeData.optimizationStatus === 'optimized' ? result.data.id : null)
       );
-      const effectiveTarget = String(finalResumeData.targetCompany || finalResumeData.targetRole || '').trim();
+      const effectiveTarget = String(finalResumeData.targetRole || finalResumeData.targetCompany || '').trim();
       setTargetCompany(effectiveTarget);
       const savedJdText = (finalResumeData.lastJdText || '').trim();
       const shouldRestoreJdOnEntry = shouldRestoreInterviewJdOnExternalEntry(interviewEntryMode);
@@ -104,7 +104,7 @@ export const useAiInterviewExternalEntry = ({
           if (chatMode !== expectedChatMode) return false;
           const sessionType = String(session?.interviewType || '').trim().toLowerCase();
           const sessionFocus = normalizeSceneText(session?.interviewFocus);
-          const sessionCompany = normalizeSceneText(session?.targetCompany);
+          const sessionCompany = normalizeSceneText(session?.targetRole || session?.targetCompany);
           const sessionResumeId = String(session?.resumeId || '').trim();
           return (
             sessionType === String(getActiveInterviewType() || 'general').trim().toLowerCase() &&

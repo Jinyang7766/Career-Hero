@@ -58,7 +58,7 @@ export const useChatIntroMessages = ({
     const effectiveJdKey = makeJdKey(effectiveJdText || '__no_jd__');
     const expectedType = normalizeInterviewType(getActiveInterviewType());
     const expectedFocus = normalizeSceneText(getActiveInterviewFocus());
-    const expectedCompany = normalizeSceneText((resumeData as any)?.targetCompany || '');
+    const expectedCompany = normalizeSceneText((resumeData as any)?.targetRole || (resumeData as any)?.targetCompany || '');
     const expectedResumeId = String((resumeData as any)?.id || '').trim();
     return list.some((session: any) => {
       const messages = Array.isArray(session?.messages) ? session.messages : [];
@@ -68,7 +68,7 @@ export const useChatIntroMessages = ({
       if (isInterviewMode) {
         const sessionType = normalizeInterviewType(session?.interviewType || '');
         const sessionFocus = normalizeSceneText(session?.interviewFocus);
-        const sessionCompany = normalizeSceneText(session?.targetCompany);
+        const sessionCompany = normalizeSceneText(session?.targetRole || session?.targetCompany);
         const sessionResumeId = String(session?.resumeId || '').trim();
         if (sessionType !== expectedType) return false;
         if (sessionFocus !== expectedFocus) return false;

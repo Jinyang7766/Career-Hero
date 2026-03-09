@@ -309,7 +309,7 @@ export const useResumeSelection = ({
             saveLastAnalysis({
               resumeId: resume.id,
               jdText: restoredJdText,
-              targetCompany: String((finalResumeData as any).targetRole || ''),
+              targetCompany: '',
               targetRole: String((finalResumeData as any).targetRole || ''),
               snapshot: (finalResumeData as any).analysisSnapshot,
               updatedAt: (finalResumeData as any).analysisSnapshot.updatedAt || new Date().toISOString(),

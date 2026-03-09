@@ -64,7 +64,9 @@ export const usePostInterviewFinalReportPersistence = ({
         const baseResumeData = (latest.data.resume_data || {}) as any;
         const now = new Date().toISOString();
         const effectiveJdText = String(jdText || baseResumeData.lastJdText || '').trim();
-        const effectiveTargetCompany = String(targetCompany || baseResumeData.targetCompany || '').trim();
+        const effectiveTargetRole = String(
+          targetCompany || baseResumeData.targetRole || baseResumeData.targetCompany || ''
+        ).trim();
         const weaknesses = Array.isArray(resolvedFinalReport.weaknesses)
           ? resolvedFinalReport.weaknesses.map((x: any) => String(x || '').trim()).filter(Boolean).slice(0, 10)
           : [];
@@ -78,7 +80,8 @@ export const usePostInterviewFinalReportPersistence = ({
             ? Math.max(0, Math.min(100, Math.round(Number(resolvedFinalReport.score))))
             : 0,
           summary: normalizedSummary,
-          targetCompany: effectiveTargetCompany,
+          targetCompany: '',
+          targetRole: effectiveTargetRole,
           jdText: effectiveJdText,
           scoreBreakdown: baseResumeData?.analysisDossierLatest?.scoreBreakdown || {
             experience: 0,
@@ -113,10 +116,12 @@ export const usePostInterviewFinalReportPersistence = ({
             generatedResume: resolvedFinalReport.generatedResume || null,
             updatedAt: now,
             jdText: effectiveJdText,
-            targetCompany: effectiveTargetCompany,
+            targetCompany: '',
+            targetRole: effectiveTargetRole,
           },
           lastJdText: effectiveJdText || baseResumeData.lastJdText || '',
-          targetCompany: effectiveTargetCompany || baseResumeData.targetCompany || '',
+          targetCompany: '',
+          targetRole: effectiveTargetRole || baseResumeData.targetRole || '',
         };
         const write = await DatabaseService.updateResume(
           resumeId,

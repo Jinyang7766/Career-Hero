@@ -6,6 +6,7 @@ export const resolveAnalysisTargetValue = ({
   isInterviewMode,
   analysisMode,
   stateTargetCompany,
+  stateTargetRole,
   resumeTargetCompany,
   resumeTargetRole,
   resumeHasTargetRole,
@@ -13,36 +14,39 @@ export const resolveAnalysisTargetValue = ({
   isInterviewMode?: boolean;
   analysisMode?: AnalysisMode;
   stateTargetCompany?: string;
+  stateTargetRole?: string;
   resumeTargetCompany?: string;
   resumeTargetRole?: string;
   resumeHasTargetRole?: boolean;
 }): string => {
+  const normalizedState = normalizeText(stateTargetRole || stateTargetCompany);
   if (isInterviewMode) {
-    return normalizeText(stateTargetCompany || resumeTargetCompany || '');
+    return normalizeText(normalizedState || resumeTargetCompany || resumeTargetRole || '');
   }
   const mode = normalizeAnalysisMode(analysisMode);
   if (mode === 'generic' || mode === 'targeted') {
-    const normalizedState = normalizeText(stateTargetCompany);
     if (normalizedState) return normalizedState;
     if (resumeHasTargetRole) {
       return normalizeText(resumeTargetRole || '');
     }
-    return normalizeText(resumeTargetRole || '');
+    return normalizeText(resumeTargetRole || resumeTargetCompany || '');
   }
-  return normalizeText(stateTargetCompany || resumeTargetRole || '');
+  return normalizeText(normalizedState || resumeTargetRole || resumeTargetCompany || '');
 };
 
 export const resolveStep3TargetInputValue = ({
   isInterviewMode,
   analysisMode,
   stateTargetCompany,
+  stateTargetRole,
   resumeTargetCompany,
   resumeTargetRole,
   resumeHasTargetRole,
 }: {
   isInterviewMode?: boolean;
   analysisMode: AnalysisMode;
-  stateTargetCompany: string;
+  stateTargetCompany?: string;
+  stateTargetRole?: string;
   resumeTargetCompany?: string;
   resumeTargetRole?: string;
   resumeHasTargetRole?: boolean;
@@ -51,6 +55,7 @@ export const resolveStep3TargetInputValue = ({
     isInterviewMode,
     analysisMode,
     stateTargetCompany,
+    stateTargetRole,
     resumeTargetCompany,
     resumeTargetRole,
     resumeHasTargetRole,

@@ -117,7 +117,7 @@ const hasMatchingInterviewChatSession = (
   const stateMode = resolveInterviewMode(session, sessionKey);
   const stateJdKey = resolveJdKey(session, sessionKey);
   const stateResumeId = String(session?.resumeId || '').trim();
-  const stateCompany = normalizeSceneText(session?.targetCompany);
+  const stateCompany = normalizeSceneText(session?.targetRole || session?.targetCompany);
   const stateFocus = normalizeSceneText(session?.interviewFocus);
 
   return Object.entries(interviewSessions || {}).some(([interviewKey, iv]: [string, any]) => {
@@ -127,7 +127,7 @@ const hasMatchingInterviewChatSession = (
     const ivMode = resolveInterviewMode(iv, interviewKey);
     const ivJdKey = resolveJdKey(iv, interviewKey);
     const ivResumeId = String(iv?.resumeId || '').trim();
-    const ivCompany = normalizeSceneText(iv?.targetCompany);
+    const ivCompany = normalizeSceneText(iv?.targetRole || iv?.targetCompany);
     const ivFocus = normalizeSceneText(iv?.interviewFocus);
 
     if (stateType && ivType && stateType !== ivType) return false;
@@ -187,7 +187,7 @@ export const deriveInterviewStageStatus = (rowData: any) => {
   const interviewSessions = rowData?.interviewSessions || {};
   const fallbackResumeId = String(rowData?.id || '').trim();
   const activeJdKey = makeJdKey(String(rowData?.lastJdText || '').trim() || '__no_jd__');
-  const activeTargetCompany = normalizeSceneText(rowData?.targetCompany || '');
+  const activeTargetCompany = normalizeSceneText(rowData?.targetRole || rowData?.targetCompany || '');
   const activeInterviewFocus = normalizeSceneText(rowData?.interviewFocus || '');
   const byModeCandidates: { simple: Array<StageCandidate | null>; comprehensive: Array<StageCandidate | null> } = {
     simple: [null, null, null],
@@ -197,7 +197,7 @@ export const deriveInterviewStageStatus = (rowData: any) => {
   const isSceneBaselineMatched = (sessionKey: string, session: any) => {
     const sessionJdKey = resolveSessionJdKey(session, sessionKey);
     if (sessionJdKey !== activeJdKey) return false;
-    const sessionCompany = normalizeSceneText(session?.targetCompany || '');
+    const sessionCompany = normalizeSceneText(session?.targetRole || session?.targetCompany || '');
     if (sessionCompany !== activeTargetCompany) return false;
     const sessionFocus = normalizeSceneText(session?.interviewFocus || '');
     if (activeInterviewFocus && sessionFocus !== activeInterviewFocus) return false;
@@ -223,7 +223,7 @@ export const deriveInterviewStageStatus = (rowData: any) => {
       interviewType,
       interviewMode,
       resumeId: session?.resumeId || fallbackResumeId,
-      targetCompany: session?.targetCompany,
+      targetCompany: session?.targetRole || session?.targetCompany,
       interviewFocus: session?.interviewFocus,
     });
 
@@ -254,7 +254,7 @@ export const deriveInterviewStageStatus = (rowData: any) => {
       interviewType,
       interviewMode,
       resumeId: session?.resumeId || fallbackResumeId,
-      targetCompany: session?.targetCompany,
+      targetCompany: session?.targetRole || session?.targetCompany,
       interviewFocus: session?.interviewFocus,
     });
     if (completedSceneKeys.has(sceneKey)) return;

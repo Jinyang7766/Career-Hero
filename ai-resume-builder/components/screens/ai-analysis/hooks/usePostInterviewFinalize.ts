@@ -294,7 +294,8 @@ export const usePostInterviewFinalize = ({
       allResumes?.find((r: any) => isSameResumeId(r.id, (resumeData as any)?.id))?.title ||
       (resumeData as any)?.resumeTitle ||
       '简历';
-    const newTitle = buildResumeTitle(baseTitle, resumeData as any, effectiveJdText, true, targetCompany);
+    const effectiveTitleTarget = String(targetCompany || (resumeData as any)?.targetRole || (resumeData as any)?.targetCompany || '').trim();
+    const newTitle = buildResumeTitle(baseTitle, resumeData as any, effectiveJdText, true, effectiveTitleTarget);
     const originalSourceId = String((resumeData as any)?.optimizedFromId || '').trim();
     const preferredSourceId = originalSourceId || sourceId;
     const sourceRow = preferredSourceId
@@ -335,7 +336,9 @@ export const usePostInterviewFinalize = ({
       (resumeData as any) || {}
     );
     const nowIso = new Date().toISOString();
-    const effectiveTargetCompany = targetCompany || (resumeData as any)?.targetCompany || '';
+    const effectiveTargetRole = String(
+      targetCompany || (resumeData as any)?.targetRole || (resumeData as any)?.targetCompany || ''
+    ).trim();
     const payload: any = {
       ...normalizedResume,
       contentUpdatedAt: nowIso,
@@ -343,7 +346,8 @@ export const usePostInterviewFinalize = ({
       optimizedFromId: sourceId || undefined,
       optimizationJdKey,
       lastJdText: effectiveJdText,
-      targetCompany: effectiveTargetCompany,
+      targetCompany: '',
+      targetRole: effectiveTargetRole,
       source: 'interview_refined',
     };
     const snapshotSummary = String(finalReportSnapshot?.summary || '').trim();
@@ -364,14 +368,16 @@ export const usePostInterviewFinalize = ({
           : null,
         updatedAt: nowIso,
         jdText: effectiveJdText,
-        targetCompany: effectiveTargetCompany,
+        targetCompany: '',
+        targetRole: effectiveTargetRole,
       };
     } else if (currentFinalReport) {
       payload.postInterviewFinalReport = {
         ...currentFinalReport,
         updatedAt: String(currentFinalReport.updatedAt || nowIso),
         jdText: String(currentFinalReport.jdText || effectiveJdText),
-        targetCompany: String(currentFinalReport.targetCompany || effectiveTargetCompany),
+        targetCompany: '',
+        targetRole: String(currentFinalReport.targetRole || currentFinalReport.targetCompany || effectiveTargetRole),
       };
     }
     payload.personalInfo = {

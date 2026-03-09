@@ -81,7 +81,7 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
     [jdText, resumeData]
   );
   const effectiveTarget = React.useMemo(
-    () => String(targetCompany || (resumeData as any)?.targetCompany || (resumeData as any)?.targetRole || '').trim(),
+    () => String(targetCompany || (resumeData as any)?.targetRole || (resumeData as any)?.targetCompany || '').trim(),
     [resumeData, targetCompany]
   );
 
@@ -118,7 +118,7 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
 
     const sessionType = normalizeInterviewType(session?.interviewType || '');
     const sessionFocus = normalizeSceneText(session?.interviewFocus);
-    const sessionTarget = normalizeSceneText(session?.targetCompany);
+    const sessionTarget = normalizeSceneText(session?.targetRole || session?.targetCompany);
     const sessionResumeId = String(session?.resumeId || '').trim();
     return (
       sessionType === normalizedType &&

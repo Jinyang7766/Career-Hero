@@ -218,7 +218,7 @@ export const useAnalysisExecution = ({
       isInterviewMode,
       analysisMode: normalizeAnalysisMode(analysisMode || (resumeData as any)?.analysisMode),
       stateTargetCompany: targetCompany,
-      resumeTargetCompany: isInterviewMode ? resumeData?.targetCompany : '',
+      resumeTargetCompany: isInterviewMode ? (resumeData?.targetRole || resumeData?.targetCompany) : '',
       resumeTargetRole: resumeData?.targetRole,
       resumeHasTargetRole: Object.prototype.hasOwnProperty.call(resumeData || {}, 'targetRole'),
     });
@@ -417,7 +417,7 @@ export const useAnalysisExecution = ({
         updatedAt: new Date().toISOString(),
         analysisMode: effectiveAnalysisMode,
         jdText: effectiveAnalysisJdText,
-        targetCompany: effectiveTargetCompany,
+        targetCompany: '',
         targetRole: effectiveTargetRole,
         targetCompanyConfidence: 0,
         analysisReportId: resolvedAnalysisReportId || undefined,
@@ -450,7 +450,7 @@ export const useAnalysisExecution = ({
         saveLastAnalysis({
           resumeId: safePersistTargetId || resumeData.id,
           jdText: effectiveAnalysisJdText,
-          targetCompany: effectiveTargetCompany,
+          targetCompany: '',
           targetRole: effectiveTargetRole,
           analysisMode: effectiveAnalysisMode,
           snapshot: snapshotForPersist,
@@ -596,7 +596,7 @@ export const useAnalysisExecution = ({
         try {
           await persistAnalysisSessionState('report_ready', {
             jdText: reusable.jdText,
-            targetCompany: String(reusable.targetRole || ''),
+            targetCompany: '',
             targetRole: String(reusable.targetRole || ''),
             analysisMode: effectiveMode,
             score: reusable.score,

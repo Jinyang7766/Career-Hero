@@ -44,7 +44,9 @@ export const resolveInterviewSessionWithContext = ({
   const interviewType = normalizeInterviewType(overrideInterviewType || getCurrentInterviewType());
   const interviewMode = normalizeInterviewMode(overrideInterviewMode || getCurrentInterviewMode() || 'comprehensive');
   const chatMode = isInterviewMode ? 'interview' : 'analysis';
-  const expectedTargetCompany = normalizeSceneText(targetCompany || resumeData?.targetCompany || '');
+  const expectedTargetCompany = normalizeSceneText(
+    targetCompany || resumeData?.targetRole || resumeData?.targetCompany || ''
+  );
   const expectedInterviewFocus = getCurrentInterviewFocus();
   const expectedResumeId = String((getLatestResumeData() as any)?.id || '').trim();
   const typedModeKey = buildInterviewSessionStorageKey({
@@ -52,6 +54,7 @@ export const resolveInterviewSessionWithContext = ({
     interviewType,
     interviewMode,
     targetCompany: expectedTargetCompany,
+    targetRole: expectedTargetCompany,
     interviewFocus: expectedInterviewFocus,
     resumeId: expectedResumeId,
     chatMode,

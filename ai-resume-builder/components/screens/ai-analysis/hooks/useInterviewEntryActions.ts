@@ -166,7 +166,8 @@ export const useInterviewEntryActions = ({
       try {
         await persistAnalysisSessionState?.('interview_in_progress', {
           jdText: effectiveJdText,
-          targetCompany: String(resumeData?.targetCompany || '').trim(),
+          targetCompany: '',
+          targetRole: String(resumeData?.targetRole || resumeData?.targetCompany || '').trim(),
           step: 'chat',
           force: true,
         });
@@ -174,7 +175,7 @@ export const useInterviewEntryActions = ({
         console.warn('Failed to persist non-interview chat restart checkpoint:', stateErr);
       }
     }
-  }, [isInterviewMode, chatIntroScheduledRef, clearInterviewSession, clearInterviewSceneState, persistAnalysisSessionState, jdText, targetCompany, resumeData?.lastJdText, resumeData?.targetCompany, resumeData?.id, makeJdKey, currentUserId, setAllResumes, setInterviewPlan, setPlanFetchTrigger, navigateToStep, setTargetCompany, setJdText, clearCurrentScenePlanCache]);
+  }, [isInterviewMode, chatIntroScheduledRef, clearInterviewSession, clearInterviewSceneState, persistAnalysisSessionState, jdText, targetCompany, resumeData?.lastJdText, resumeData?.targetCompany, resumeData?.targetRole, resumeData?.id, makeJdKey, currentUserId, setAllResumes, setInterviewPlan, setPlanFetchTrigger, navigateToStep, setTargetCompany, setJdText, clearCurrentScenePlanCache]);
 
   const handleStartInterviewFromFinalReport = useCallback(async () => {
     if (!isInterviewMode) {

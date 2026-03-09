@@ -25,6 +25,7 @@ export const buildInterviewSessionStorageKey = ({
   interviewType,
   interviewMode,
   targetCompany,
+  targetRole,
   interviewFocus,
   resumeId,
   chatMode,
@@ -33,6 +34,7 @@ export const buildInterviewSessionStorageKey = ({
   interviewType: string;
   interviewMode: string;
   targetCompany?: string;
+  targetRole?: string;
   interviewFocus?: string;
   resumeId?: string | number | null;
   chatMode: 'interview' | 'analysis';
@@ -40,9 +42,10 @@ export const buildInterviewSessionStorageKey = ({
   // New keys are mode-agnostic. Keep interviewMode param only for legacy call-site compatibility.
   const baseKey = makeInterviewSessionKey(jdText, interviewType);
   if (chatMode !== 'interview') return baseKey;
+  const sceneTarget = normalizeSceneText(targetRole || targetCompany) || 'none';
   const signature = [
     `rid=${String(resumeId ?? '').trim() || 'unknown'}`,
-    `tc=${normalizeSceneText(targetCompany) || 'none'}`,
+    `tr=${sceneTarget}`,
     `focus=${normalizeSceneText(interviewFocus) || 'none'}`,
     `mode=${String(chatMode).trim().toLowerCase()}`,
   ].join('|');
@@ -96,7 +99,7 @@ export const isSessionSceneMatched = ({
 }) => {
   const chatMode = String(session?.chatMode || '').trim().toLowerCase();
   if (!chatMode || chatMode !== expectedChatMode) return false;
-  const sessionTargetCompany = normalizeSceneText(session?.targetCompany);
+  const sessionTargetCompany = normalizeSceneText(session?.targetRole || session?.targetCompany);
   const sessionInterviewFocus = normalizeSceneText(session?.interviewFocus);
   const sessionResumeId = String(session?.resumeId || '').trim();
   return (

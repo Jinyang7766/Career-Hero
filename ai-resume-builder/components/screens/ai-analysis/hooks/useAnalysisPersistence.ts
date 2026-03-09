@@ -76,7 +76,7 @@ export const useAnalysisPersistence = ({
     const effectiveMode = normalizeAnalysisMode(
       baseResumeData.analysisMode || data.analysisMode
     );
-    const effectiveTargetCompany = resolveAnalysisTargetValue({
+    const effectiveTargetRole = resolveAnalysisTargetValue({
       analysisMode: effectiveMode,
       stateTargetCompany: targetCompany,
       resumeTargetCompany: '',
@@ -95,14 +95,14 @@ export const useAnalysisPersistence = ({
       updatedAt: new Date().toISOString(),
       analysisMode: effectiveMode,
       jdText: String(jdText || '').trim(),
-      targetCompany: effectiveTargetCompany || '',
-      targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
+      targetCompany: '',
+      targetRole: effectiveTargetRole || baseResumeData.targetRole || '',
     };
     const nextTargetRole = shouldPersistTargetRole({
       isInterviewMode: false,
       analysisMode: effectiveMode,
     })
-      ? (effectiveTargetCompany || baseResumeData.targetRole || '')
+      ? (effectiveTargetRole || baseResumeData.targetRole || '')
       : (baseResumeData.targetRole || '');
     const nextSuggestions = Array.isArray(suggestionItems) ? suggestionItems : [];
     const dossier = {
@@ -110,7 +110,7 @@ export const useAnalysisPersistence = ({
       createdAt: snapshot.updatedAt,
       score: scoreValue,
       summary: reportData.summary || '',
-      targetCompany: snapshot.targetCompany || '',
+      targetCompany: '',
       targetRole: snapshot.targetRole || '',
       analysisMode: effectiveMode,
       jdText: snapshot.jdText || '',
@@ -132,7 +132,7 @@ export const useAnalysisPersistence = ({
       analysisDossierLatest: dossier,
       analysisDossierHistory: [dossier, ...previousHistory].slice(0, 20),
       lastJdText: snapshot.jdText || '',
-      targetCompany: snapshot.targetCompany || '',
+      targetCompany: '',
       targetRole: nextTargetRole,
     };
     if (setResumeData) {

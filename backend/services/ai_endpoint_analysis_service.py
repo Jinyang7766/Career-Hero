@@ -91,6 +91,13 @@ def analyze_resume_core(current_user_id, data, deps):
     def _normalize_text(value):
         return str(value or '').strip().lower()
 
+    def _resolve_requested_target_role(payload):
+        candidate = str((payload or {}).get('targetRole') or '').strip()
+        if candidate:
+            return candidate
+        # Backward-compatible read for legacy clients.
+        return str((payload or {}).get('targetCompany') or '').strip()
+
     def _degree_rank_from_text(text):
         value = _normalize_text(text)
         if not value:
@@ -237,7 +244,7 @@ def analyze_resume_core(current_user_id, data, deps):
                 suggestions=safe_suggestions,
                 career_profile=career_profile,
                 job_description=job_description,
-                target_role=str((data or {}).get('targetRole') or '').strip(),
+                target_role=_resolve_requested_target_role(data),
             )
             return generated if isinstance(generated, dict) else None
         except Exception as gen_err:
@@ -386,7 +393,7 @@ def analyze_resume_core(current_user_id, data, deps):
             ai_result = deps['parse_ai_response'](response.text)
             if pii_masker:
                 ai_result = pii_masker.unmask_object(ai_result)
-            requested_target_role = str((data or {}).get('targetRole') or '').strip()
+            requested_target_role = _resolve_requested_target_role(data)
             model_target_role = str(ai_result.get('targetRole') or '').strip()
             model_role_confidence = _normalize_company_confidence(ai_result.get('targetRoleConfidence'), default=0.0)
             extracted_target_role = model_target_role or requested_target_role
@@ -480,7 +487,7 @@ def analyze_resume_core(current_user_id, data, deps):
             logger.error("Full traceback: %s", traceback.format_exc())
             score = deps['calculate_resume_score'](resume_data)
             suggestions = deps['generate_enhanced_suggestions'](resume_data, score, job_description)
-            requested_target_role = str((data or {}).get('targetRole') or '').strip()
+            requested_target_role = _resolve_requested_target_role(data)
             if analysis_stage == 'pre_interview':
                 suggestions = []
             else:
@@ -536,7 +543,7 @@ def analyze_resume_core(current_user_id, data, deps):
 
     score = deps['calculate_resume_score'](resume_data)
     suggestions = [] if analysis_stage == 'pre_interview' else deps['generate_suggestions'](resume_data, score)
-    requested_target_role = str((data or {}).get('targetRole') or '').strip()
+    requested_target_role = _resolve_requested_target_role(data)
     if analysis_stage != 'pre_interview':
         suggestions = [
             suggestion for suggestion in (suggestions or [])

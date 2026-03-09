@@ -162,16 +162,16 @@ export const useOptimizedResumeStore = ({
     creatingOptimizedForKeyRef.current = dedupeKey;
     creatingOptimizedResumeRef.current = (async () => {
       const baseTitle = allResumes?.find(r => isSameResumeId(r.id, baseResumeData.id))?.title || '简历';
-      const effectiveTargetCompany = resolveEffectiveDiagnosisTarget(baseResumeData, targetCompany);
-      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, effectiveTargetCompany);
+      const effectiveTargetRole = resolveEffectiveDiagnosisTarget(baseResumeData, targetCompany);
+      const newTitle = buildResumeTitle(baseTitle, baseResumeData, jdText, true, effectiveTargetRole);
       const createResult = await DatabaseService.createResume(userId, newTitle, {
         ...baseResumeData,
         optimizationStatus: 'optimized' as const,
         optimizedFromId: normalizedOriginalId,
         optimizationJdKey: jdKey,
         lastJdText: String(jdText || '').trim(),
-        targetCompany: effectiveTargetCompany || '',
-        targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
+        targetCompany: '',
+        targetRole: effectiveTargetRole || baseResumeData.targetRole || '',
         source: 'diagnosis_generated',
       }, {
         optimizedDuplicateStrategy: 'reuse',
@@ -290,7 +290,7 @@ export const useOptimizedResumeStore = ({
       throw new Error('未找到已诊断简历，无法建立诊断绑定');
     }
     const optimizedData = optimizedRow.data.resume_data || {};
-    const effectiveTargetCompany = resolveEffectiveDiagnosisTarget({
+    const effectiveTargetRole = resolveEffectiveDiagnosisTarget({
       ...optimizedData,
       analysisMode: originalData.analysisMode || optimizedData.analysisMode,
       targetRole: originalData.targetRole || optimizedData.targetRole,
@@ -299,8 +299,8 @@ export const useOptimizedResumeStore = ({
       String(optimizedData.analysisReportId || '') !== String(nextBinding.analysisReportId) ||
       String(optimizedData.optimizationJdKey || '') !== String(jdKey) ||
       String(optimizedData.lastJdText || '') !== String(effectiveJdText || '') ||
-      String(optimizedData.targetCompany || '') !== String(effectiveTargetCompany || '') ||
-      String(optimizedData.targetRole || '') !== String(effectiveTargetCompany || optimizedData.targetRole || '');
+      String(optimizedData.targetCompany || '') !== '' ||
+      String(optimizedData.targetRole || '') !== String(effectiveTargetRole || optimizedData.targetRole || '');
 
     if (needsPatch) {
       await DatabaseService.updateResume(String(optimizedResumeId), {
@@ -312,8 +312,8 @@ export const useOptimizedResumeStore = ({
           analysisReportId: nextBinding.analysisReportId,
           optimizedResumeId,
           lastJdText: effectiveJdText,
-          targetCompany: effectiveTargetCompany || '',
-          targetRole: effectiveTargetCompany || optimizedData.targetRole || '',
+          targetCompany: '',
+          targetRole: effectiveTargetRole || optimizedData.targetRole || '',
           source: String(optimizedData.source || 'diagnosis_generated'),
         },
       }, { touchUpdatedAt: false });

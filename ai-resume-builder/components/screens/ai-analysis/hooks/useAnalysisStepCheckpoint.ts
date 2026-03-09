@@ -58,7 +58,7 @@ export const useAnalysisStepCheckpoint = ({
       ? ''
       : String(jdText || '').trim();
     const effectiveTargetCompany = isInterviewMode
-      ? String(targetCompany || resumeData?.targetCompany || '').trim()
+      ? String(targetCompany || resumeData?.targetRole || resumeData?.targetCompany || '').trim()
       : resolveAnalysisTargetValue({
           analysisMode: effectiveAnalysisMode,
           stateTargetCompany: targetCompany,
@@ -117,7 +117,7 @@ export const useAnalysisStepCheckpoint = ({
         const sessionType = String(session?.interviewType || '').trim().toLowerCase();
         const sessionMode = String(session?.interviewMode || '').trim().toLowerCase();
         const sessionFocus = String(session?.interviewFocus || '').trim().toLowerCase().replace(/\s+/g, ' ');
-        const sessionCompany = String(session?.targetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const sessionCompany = String(session?.targetRole || session?.targetCompany || '').trim().toLowerCase().replace(/\s+/g, ' ');
         const sessionResumeId = String(session?.resumeId || '').trim();
         return (
           sessionType === normalizedType &&

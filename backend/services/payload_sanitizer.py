@@ -252,6 +252,11 @@ def clean_resume_payload(payload, *, existing_resume_data=None, logger=None):
     if not isinstance(personal_info, dict):
         personal_info = {}
 
+    normalized_target_role = clean_string(payload.get('targetRole'), 300)
+    if not normalized_target_role:
+        # Backward-compatible read for legacy payloads.
+        normalized_target_role = clean_string(payload.get('targetCompany'), 300)
+
     cleaned = {
         'personalInfo': {
             'name': clean_string(personal_info.get('name'), 200),
@@ -287,8 +292,8 @@ def clean_resume_payload(payload, *, existing_resume_data=None, logger=None):
         'optimizationStatus': clean_string(payload.get('optimizationStatus'), 50),
         'optimizedFromId': clean_string(payload.get('optimizedFromId'), 120),
         'lastJdText': clean_string(payload.get('lastJdText'), 8000),
-        'targetRole': clean_string(payload.get('targetRole'), 300),
-        'targetCompany': clean_string(payload.get('targetCompany'), 300),
+        'targetRole': normalized_target_role,
+        'targetCompany': '',
     }
 
     existing_resume = existing_resume_data if isinstance(existing_resume_data, dict) else {}

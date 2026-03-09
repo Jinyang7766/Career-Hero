@@ -259,3 +259,30 @@ def test_clean_resume_payload_fallbacks_fact_items_to_existing_profile_when_inva
         and err_item.get('error_type') == 'invalid_enum'
         for err_item in errors
     )
+
+
+def test_clean_resume_payload_reads_legacy_target_company_into_target_role():
+    payload = {
+        'personalInfo': {'name': 'A'},
+        'targetCompany': '资深数据分析师',
+    }
+
+    cleaned, err = clean_resume_payload(payload)
+
+    assert err is None
+    assert cleaned.get('targetRole') == '资深数据分析师'
+    assert cleaned.get('targetCompany') == ''
+
+
+def test_clean_resume_payload_prefers_target_role_and_clears_target_company():
+    payload = {
+        'personalInfo': {'name': 'A'},
+        'targetRole': '算法工程师',
+        'targetCompany': '旧字段残留',
+    }
+
+    cleaned, err = clean_resume_payload(payload)
+
+    assert err is None
+    assert cleaned.get('targetRole') == '算法工程师'
+    assert cleaned.get('targetCompany') == ''
