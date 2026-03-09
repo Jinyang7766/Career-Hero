@@ -92,16 +92,6 @@ const ProfileExtrasStep: React.FC<ProfileExtrasStepProps> = ({ extras, onChange 
                 </div>
 
                 <div>
-                    <label className="text-xs font-bold text-slate-700 dark:text-slate-300">亮点事实（每行一条）</label>
-                    <textarea
-                        value={(extras.careerHighlights || []).join('\n')}
-                        onChange={(e) => onChange('careerHighlights', e.target.value.split('\n').map(l => l.trim()).filter(Boolean))}
-                        className="mt-1 w-full min-h-[84px] resize-none rounded-lg border bg-slate-50 dark:bg-[#111a22] border-slate-300 dark:border-[#334155] text-slate-900 dark:text-white px-3 py-2 text-sm leading-relaxed outline-none transition-all focus:ring-2 focus:ring-primary focus:border-transparent"
-                        placeholder="例如：主导某业务增长项目，转化率提升 15%"
-                    />
-                </div>
-
-                <div>
                     <label className="text-xs font-bold text-slate-700 dark:text-slate-300">约束条件（每行一条）</label>
                     <textarea
                         value={(extras.constraints || []).join('\n')}

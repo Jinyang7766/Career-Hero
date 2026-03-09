@@ -787,33 +787,6 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
             </div>
           )}
 
-          {/* 亮点事实 */}
-          {(isInlineEditing || summaryDisplay.highlights.length > 0) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-rose-500/10 text-rose-500">
-                  <span className="material-symbols-outlined text-[18px]">military_tech</span>
-                </div>
-                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">亮点事实</h3>
-              </div>
-              {isInlineEditing ? (
-                <AutoGrowTextarea
-                  value={joinListText(factDraft.careerHighlights.map((item) => item.text))}
-                  onChange={(event) => applyFactSectionTextPatch('careerHighlights', splitListText(event.target.value))}
-                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#111a22] px-3 py-2 text-xs text-slate-700 dark:text-slate-200 leading-relaxed outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  placeholder="每行一个亮点事实"
-                  minRows={3}
-                />
-              ) : (
-                <ul className="my-0 pl-4 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                  {summaryDisplay.highlights.map((item) => (
-                    <li key={item} className="leading-relaxed">{item}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
           {/* 专业技能 */}
           {(isInlineEditing || summaryDisplay.skills.length > 0) && (
             <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
