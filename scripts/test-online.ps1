@@ -127,6 +127,29 @@ async (page) => {
     return patched;
   };
 
+  const assertRecoveredToInterviewScene = async () => {
+    const interviewSceneTitle = page.getByRole('heading', { name: '设置面试场景' });
+    await interviewSceneTitle.waitFor({ timeout: 30000 });
+
+    const jdInputTitleVisible = await page
+      .getByRole('heading', { name: '添加职位描述' })
+      .isVisible()
+      .catch(() => false);
+
+    if (jdInputTitleVisible) {
+      throw new Error('[legacy-ui] legacy jd_input recovery stayed on jd_input; expected interview_scene');
+    }
+
+    try {
+      await page.waitForFunction(() => {
+        const step = String(localStorage.getItem('ai_analysis_step') || '').trim().toLowerCase();
+        return step === 'interview_scene';
+      }, { timeout: 30000 });
+    } catch {
+      throw new Error('[legacy-ui] recovery did not persist ai_analysis_step=interview_scene');
+    }
+  };
+
   await page.goto(cfg.loginUrl, { waitUntil: 'domcontentloaded' });
   await page.getByRole('textbox', { name: '电子邮箱' }).fill(cfg.email);
   await page.getByRole('textbox', { name: '密码' }).fill(cfg.password);
@@ -247,17 +270,7 @@ async (page) => {
 
     await page.goto(cfg.interviewUrl, { waitUntil: 'domcontentloaded' });
 
-    const interviewSceneTitle = page.getByRole('heading', { name: '设置面试场景' });
-    await interviewSceneTitle.waitFor({ timeout: 30000 });
-
-    const jdInputTitleVisible = await page
-      .getByRole('heading', { name: '添加职位描述' })
-      .isVisible()
-      .catch(() => false);
-
-    if (jdInputTitleVisible) {
-      throw new Error('[legacy-ui] legacy jd_input recovery stayed on jd_input; expected interview_scene');
-    }
+    await assertRecoveredToInterviewScene();
 
     if (!responsePatched) {
       throw new Error('[legacy-ui] failed to inject legacy jd_input analysis session into resume payload');
