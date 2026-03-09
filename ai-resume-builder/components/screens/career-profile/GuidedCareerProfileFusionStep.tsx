@@ -366,7 +366,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
         {renderUploadedResumeTitleCard()}
 
         {renderSupplementInput(
-          analysisReady ? '补充更多工作细节（可选）' : '简单聊聊你的经历',
+          analysisReady ? '补充更多工作细节' : '简单聊聊你的经历',
           '在这里随便写写你的经历，比如主导了什么项目、解决了什么难题、取得了什么成果...不用在意排版和用词，我会帮你全部搞定！'
         )}
 

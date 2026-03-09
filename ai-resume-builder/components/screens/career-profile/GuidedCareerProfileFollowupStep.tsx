@@ -182,97 +182,83 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
     [activePrompt]
   );
 
-  const handleSubmitCurrent = React.useCallback(() => {
-    if (!activePrompt) return;
-    const promptId = activePrompt.id;
-    const nextAnswer = String(draftByPromptId[promptId] ?? '').trim();
-    if (!nextAnswer) {
-      setError('当前问题回答为空，请填写后提交，或点击“跳过当前题”。');
-      return;
-    }
+  const handleGenerateWithAnswers = React.useCallback(
+    async (currentAnswers: Record<string, string>) => {
+      if (!hydrated || isSaving) return;
 
-    setError('');
-    setAnswersByPromptId((prev) => ({
-      ...prev,
-      [promptId]: nextAnswer,
-    }));
-    setDraftByPromptId((prev) => ({
-      ...prev,
-      [promptId]: nextAnswer,
-    }));
-    setSkippedPromptIds((prev) => prev.filter((id) => id !== promptId));
-    setCurrentIndex((prev) => getAutoAdvanceIndex(prev, Math.max(total, 1)));
-  }, [activePrompt, draftByPromptId, total]);
+      const deferredResumeSeed = uploadedResume
+        ? buildCareerProfileSeedFromImportedResume(uploadedResume)
+        : '';
+      const profileOnlyInput = mergeBlocks([
+        supplementText ? `【用户补充事实】\n${supplementText}` : '',
+        '请先基于事实提炼职业画像，并继续定向追问缺失信息，不要编造内容。',
+      ]);
+      const answerBlocks = buildFollowupAnswerBlocks(prompts, currentAnswers);
 
-  const handleSkipCurrent = React.useCallback(() => {
-    if (!activePrompt) return;
-    const promptId = activePrompt.id;
+      const mergedInput = mergeBlocks([
+        deferredResumeSeed
+          ? `【上传简历信息（提交时融合解析）】\n${deferredResumeSeed}`
+          : uploadedResumeTitle
+            ? `【上传简历标题】\n${uploadedResumeTitle}`
+            : '',
+        profileOnlyInput,
+        answerBlocks ? `【定向追问回答】\n${answerBlocks}` : '',
+      ]);
 
-    setError('');
-    setAnswersByPromptId((prev) => {
-      const next = { ...prev };
-      delete next[promptId];
-      return next;
-    });
-    setDraftByPromptId((prev) => {
-      const next = { ...prev };
-      delete next[promptId];
-      return next;
-    });
-    setSkippedPromptIds((prev) => (prev.includes(promptId) ? prev : [...prev, promptId]));
-    setCurrentIndex((prev) => getAutoAdvanceIndex(prev, Math.max(total, 1)));
-  }, [activePrompt, total]);
+      const saved = await saveCareerProfile(mergedInput);
+      if (!saved) return;
 
-  const handleSwipePrev = React.useCallback(() => {
-    setCurrentIndex((prev) => moveFollowupIndex(prev, Math.max(total, 1), 'prev'));
-  }, [total]);
-
-  const handleSwipeNext = React.useCallback(() => {
-    setCurrentIndex((prev) => moveFollowupIndex(prev, Math.max(total, 1), 'next'));
-  }, [total]);
+      navigate('/career-profile/result/summary', {
+        replace: true,
+        state: {
+          from: '/career-profile/followup',
+        },
+      });
+    },
+    [
+      hydrated,
+      isSaving,
+      navigate,
+      prompts,
+      saveCareerProfile,
+      supplementText,
+      uploadedResume,
+      uploadedResumeTitle,
+    ]
+  );
 
   const handleGenerate = React.useCallback(async () => {
-    if (!hydrated || isSaving) return;
+    await handleGenerateWithAnswers(answersByPromptId);
+  }, [answersByPromptId, handleGenerateWithAnswers]);
 
-    const deferredResumeSeed = uploadedResume
-      ? buildCareerProfileSeedFromImportedResume(uploadedResume)
-      : '';
-    const profileOnlyInput = mergeBlocks([
-      supplementText ? `【用户补充事实】\n${supplementText}` : '',
-      '请先基于事实提炼职业画像，并继续定向追问缺失信息，不要编造内容。',
-    ]);
-    const answerBlocks = buildFollowupAnswerBlocks(prompts, answersByPromptId);
+  const handleSubmission = React.useCallback(async (trigger: 'enter' | 'blur') => {
+    if (!activePrompt) return;
+    const promptId = activePrompt.id;
+    const nextAnswer = (draftByPromptId[promptId] ?? '').trim();
 
-    const mergedInput = mergeBlocks([
-      deferredResumeSeed
-        ? `【上传简历信息（提交时融合解析）】\n${deferredResumeSeed}`
-        : uploadedResumeTitle
-          ? `【上传简历标题】\n${uploadedResumeTitle}`
-          : '',
-      profileOnlyInput,
-      answerBlocks ? `【定向追问回答】\n${answerBlocks}` : '',
-    ]);
+    // Always save current draft to answers
+    setAnswersByPromptId((prev) => {
+      const next = {
+        ...prev,
+        [promptId]: nextAnswer,
+      };
 
-    const saved = await saveCareerProfile(mergedInput);
-    if (!saved) return;
-
-    navigate('/career-profile/result/summary', {
-      replace: true,
-      state: {
-        from: '/career-profile/followup',
-      },
+      // If it's the last question, we need the latest answers for handleGenerate
+      if (activeIndex === total - 1) {
+        // Use a timeout or a separate effect to ensure state is flushed?
+        // Actually, let's just pass the next state directly to a modified handleGenerate
+        void handleGenerateWithAnswers(next);
+      }
+      return next;
     });
-  }, [
-    answersByPromptId,
-    hydrated,
-    isSaving,
-    navigate,
-    prompts,
-    saveCareerProfile,
-    supplementText,
-    uploadedResume,
-    uploadedResumeTitle,
-  ]);
+    setError('');
+
+    if (activeIndex < total - 1 && trigger === 'enter') {
+      setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
+    } else if (activeIndex < total - 1 && trigger === 'blur') {
+      setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
+    }
+  }, [activePrompt, activeIndex, draftByPromptId, handleGenerateWithAnswers, total]);
 
   if (!hydrated) {
     return (
@@ -294,17 +280,6 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       </header>
 
       <main className="pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-4 max-w-md mx-auto w-full">
-        <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">一次一题 · 滑动切换</p>
-            <span className="text-xs text-slate-500 dark:text-slate-400">
-              已完成 {completedCount}/{total}
-            </span>
-          </div>
-          <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-            可左右滑动卡片切换问题；回答提交后自动进入下一题。每条回答都会按问题 ID 独立保存，避免串题。
-          </p>
-        </div>
 
         {total > 0 ? (
           <>
@@ -363,36 +338,6 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                   })}
                 </div>
               </div>
-
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={handleSwipePrev}
-                  disabled={activeIndex <= 0}
-                  className="h-9 px-3 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 disabled:opacity-50"
-                >
-                  上一题
-                </button>
-                <div className="flex items-center gap-1.5">
-                  {prompts.map((prompt, idx) => (
-                    <button
-                      key={prompt.id}
-                      type="button"
-                      onClick={() => setCurrentIndex(idx)}
-                      className={`h-2 rounded-full transition-all ${idx === activeIndex ? 'w-5 bg-primary' : 'w-2 bg-slate-300 dark:bg-slate-600'}`}
-                      aria-label={`跳到问题${idx + 1}`}
-                    />
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleSwipeNext}
-                  disabled={activeIndex >= total - 1}
-                  className="h-9 px-3 rounded-lg text-xs font-semibold bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 disabled:opacity-50"
-                >
-                  下一题
-                </button>
-              </div>
             </div>
 
             <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
@@ -403,25 +348,18 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                   setError('');
                   handleTypeCurrent(event.target.value);
                 }}
+                onBlur={() => {
+                  void handleSubmission('blur');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    void handleSubmission('enter');
+                  }
+                }}
                 placeholder="请输入你的真实经历与细节（默认空白，不会预填模板）"
                 className="mt-2 w-full min-h-[112px] resize-none rounded-lg border bg-slate-50 dark:bg-[#111a22] border-slate-300 dark:border-[#334155] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:ring-2 focus:ring-primary focus:border-transparent"
               />
-              <div className="mt-3 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleSubmitCurrent}
-                  className="flex-1 h-10 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all"
-                >
-                  提交并下一题
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSkipCurrent}
-                  className="h-10 px-3 rounded-xl bg-slate-100 dark:bg-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold"
-                >
-                  跳过当前题
-                </button>
-              </div>
               {!!error && (
                 <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">
                   {error}
@@ -433,21 +371,18 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
           <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接生成职业画像。</p>
+            <button
+              type="button"
+              onClick={() => {
+                void handleGenerate();
+              }}
+              disabled={isSaving}
+              className="mt-4 w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isSaving ? 'AI 正在马不停蹄整理画像...' : '一键生成画像'}
+            </button>
           </div>
         )}
-
-        <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-1">
-          <button
-            type="button"
-            onClick={() => {
-              void handleGenerate();
-            }}
-            disabled={isSaving}
-            className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isSaving ? 'AI 正在马不停蹄整理画像...' : '一键生成画像'}
-          </button>
-        </div>
       </main>
     </div>
   );

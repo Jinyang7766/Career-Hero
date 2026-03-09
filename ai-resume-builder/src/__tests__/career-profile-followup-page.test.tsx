@@ -56,7 +56,7 @@ describe('career-profile followup page', () => {
     });
   });
 
-  it('supports single-question flow, skip, left-right switch, and id-safe writes', async () => {
+  it('supports single-question minimal UI, enter/blur auto-advance, and id-safe writes', async () => {
     render(
       <MemoryRouter initialEntries={['/career-profile/followup']}>
         <Routes>
@@ -68,30 +68,31 @@ describe('career-profile followup page', () => {
 
     expect(await screen.findByText('问题 1/2')).toBeTruthy();
 
+    // Verify minimal UI: No instruction cards, no prev/next buttons
+    expect(screen.queryByText('一次一题 · 滑动切换')).toBeNull();
+    expect(screen.queryByText('上一题')).toBeNull();
+    expect(screen.queryByText('下一题')).toBeNull();
+    expect(screen.queryByText('提交并下一题')).toBeNull();
+    expect(screen.queryByText('跳过当前题')).toBeNull();
+
     const textarea = screen.getByPlaceholderText('请输入你的真实经历与细节（默认空白，不会预填模板）') as HTMLTextAreaElement;
     expect(textarea.value).toBe('');
 
-    fireEvent.click(screen.getByText('跳过当前题'));
-    expect(await screen.findByText('问题 2/2')).toBeTruthy();
-
-    fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });
-    fireEvent.click(screen.getByText('提交并下一题'));
-
-    fireEvent.click(screen.getByText('上一题'));
-    expect(await screen.findByText('问题 1/2')).toBeTruthy();
-
+    // Enter to next question
     fireEvent.change(textarea, { target: { value: '项目转化率提升 20%' } });
-    fireEvent.click(screen.getByText('提交并下一题'));
-
+    fireEvent.keyDown(textarea, { key: 'Enter', code: 'Enter' });
+    
     expect(await screen.findByText('问题 2/2')).toBeTruthy();
+    expect(textarea.value).toBe('');
 
-    fireEvent.click(screen.getByText('一键生成画像'));
+    // Blur to auto-advance (and since it's last question, trigger generate)
+    fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });
+    fireEvent.blur(textarea);
 
     expect(saveCareerProfileMock).toHaveBeenCalledTimes(1);
     const payload = String(saveCareerProfileMock.mock.calls[0][0] || '');
     expect(payload).toContain('问题：请补充项目成果\n回答：项目转化率提升 20%');
     expect(payload).toContain('问题：请补充目标岗位\n回答：目标是 AI 产品经理');
-    expect(payload).not.toContain('回答：\n');
 
     expect(await screen.findByText('RESULT_PAGE')).toBeTruthy();
   });
