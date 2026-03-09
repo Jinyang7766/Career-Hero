@@ -839,7 +839,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                 <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-blue-500/10 text-blue-500">
                   <span className="material-symbols-outlined text-[18px]">work</span>
                 </div>
-                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">关键经历素材</h3>
+                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">工作履历</h3>
               </div>
               {isInlineEditing ? (
                 <div className="space-y-3">
