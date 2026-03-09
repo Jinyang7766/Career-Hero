@@ -5,11 +5,34 @@ import { useAppContext } from '../../src/app-context';
 import { useUserProfile } from '../../src/useUserProfile';
 import { useCareerProfileComposer } from './dashboard/useCareerProfileComposer';
 import CareerProfileStructuredEditor, { CareerProfileEditorRef } from './career-profile/CareerProfileStructuredEditor';
+import {
+  type FollowupCardStatus,
+  FOLLOWUP_PROGRESS_KEY,
+  getScopedFusionStorageKey,
+  readFusionFollowupProgress,
+} from './career-profile/fusion-storage';
 
 const normalizePath = (pathname: string): string => {
   const raw = String(pathname || '').split('?')[0].split('#')[0].trim().toLowerCase();
   const stripped = raw.replace(/\/+$/, '');
   return stripped || '/';
+};
+
+const STATUS_ORDER: FollowupCardStatus[] = ['missing', 'pending', 'completed'];
+
+const STATUS_LABEL: Record<FollowupCardStatus, string> = {
+  missing: '缺失',
+  pending: '待补充',
+  completed: '已补充',
+};
+
+const STATUS_PILL_CLASS: Record<FollowupCardStatus, string> = {
+  missing:
+    'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-400/25',
+  pending:
+    'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-400/25',
+  completed:
+    'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-400/25',
 };
 
 const CareerProfileResult: React.FC = () => {
@@ -38,6 +61,32 @@ const CareerProfileResult: React.FC = () => {
     currentUserId: currentUser?.id,
     userProfile,
   });
+
+  const followupProgressKey = React.useMemo(() => {
+    const userId = String(currentUser?.id || '').trim();
+    if (!userId) return '';
+    return getScopedFusionStorageKey(FOLLOWUP_PROGRESS_KEY, userId);
+  }, [currentUser?.id]);
+
+  const followupSnapshot = React.useMemo(() => {
+    if (!followupProgressKey) return null;
+    return readFusionFollowupProgress(followupProgressKey);
+  }, [followupProgressKey, location.key]);
+
+  const statusCount = React.useMemo(() => {
+    const counters: Record<FollowupCardStatus, number> = {
+      missing: 0,
+      pending: 0,
+      completed: 0,
+    };
+    followupSnapshot?.cards.forEach((card) => {
+      counters[card.status] += 1;
+    });
+    return counters;
+  }, [followupSnapshot]);
+
+  const hasFollowupProgress = Boolean(followupSnapshot?.cards?.length);
+  const hasMissingFollowup = statusCount.missing > 0;
 
   const handleBack = React.useCallback(() => {
     if (isInlineEditing) {
@@ -117,11 +166,36 @@ const CareerProfileResult: React.FC = () => {
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
                   <span className="material-symbols-outlined text-[20px]">add_circle</span>
                 </div>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">还有经历尚未收录？</h3>
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">定向追问卡片进度</h3>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                如果有新的经历或想要补充细节，可以交给 AI 引导你继续完善画像。
-              </p>
+
+              {hasFollowupProgress ? (
+                <>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    融合页与结果页已联动同一批追问卡片。你可以回到融合页继续补充，不会打开聊天窗口。
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {STATUS_ORDER.map((status) => {
+                      const count = statusCount[status];
+                      if (count <= 0) return null;
+                      return (
+                        <span
+                          key={status}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[11px] font-bold ${STATUS_PILL_CLASS[status]}`}
+                        >
+                          <span>{STATUS_LABEL[status]}</span>
+                          <span>{count}</span>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  如果有新的经历或想要补充细节，可回到融合页继续补全定向追问卡片。
+                </p>
+              )}
+
               <button
                 type="button"
                 onClick={() =>
@@ -133,7 +207,7 @@ const CareerProfileResult: React.FC = () => {
                 }
                 className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center"
               >
-                AI 引导深度完善
+                {hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}
               </button>
             </div>
           </div>

@@ -19,9 +19,55 @@ import {
   appendCareerProfileSupplement,
   clampCareerProfileSupplement,
 } from './fusion-input-limit';
+import {
+  type FollowupCardStatus,
+  FOLLOWUP_PROGRESS_KEY,
+  clearFusionFollowupProgress,
+  getScopedFusionStorageKey,
+  writeFusionFollowupProgress,
+} from './fusion-storage';
+import {
+  computeFollowupCardStatuses,
+  getFollowupPromptTemplateAnswerState,
+} from './followup-card-status';
 import AutoGrowTextarea from '../../editor/AutoGrowTextarea';
 
 type ImportedResume = Omit<ResumeData, 'id'>;
+
+const STATUS_META: Record<
+  FollowupCardStatus,
+  {
+    label: string;
+    pillClass: string;
+    cardClass: string;
+    hint: string;
+  }
+> = {
+  pending: {
+    label: '待补充',
+    pillClass:
+      'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-400/25',
+    cardClass:
+      'border-amber-200/80 dark:border-amber-400/20 bg-amber-50/40 dark:bg-amber-500/5 text-amber-900 dark:text-amber-100 hover:bg-amber-50/70 dark:hover:bg-amber-500/10',
+    hint: '点我插入回答模板',
+  },
+  completed: {
+    label: '已补充',
+    pillClass:
+      'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-400/25',
+    cardClass:
+      'border-emerald-200/80 dark:border-emerald-400/20 bg-emerald-50/40 dark:bg-emerald-500/5 text-emerald-900 dark:text-emerald-100 hover:bg-emerald-50/60 dark:hover:bg-emerald-500/10',
+    hint: '已记录，可继续补充',
+  },
+  missing: {
+    label: '缺失',
+    pillClass:
+      'bg-rose-50 text-rose-700 border border-rose-200 dark:bg-rose-500/10 dark:text-rose-300 dark:border-rose-400/25',
+    cardClass:
+      'border-rose-300/80 dark:border-rose-400/35 bg-rose-50/60 dark:bg-rose-500/10 text-rose-900 dark:text-rose-100 hover:bg-rose-50/80 dark:hover:bg-rose-500/15',
+    hint: '已插入模板但回答为空，请先补全',
+  },
+};
 
 const mergeBlocks = (blocks: Array<string | null | undefined>): string =>
   blocks
@@ -33,6 +79,28 @@ const normalizeToken = (value: string): string =>
   String(value || '')
     .replace(/\s+/g, ' ')
     .trim();
+
+const mergeFollowupPrompts = (prev: FollowupPrompt[], next: FollowupPrompt[]): FollowupPrompt[] => {
+  const merged: FollowupPrompt[] = [];
+  const seen = new Set<string>();
+  [...prev, ...next].forEach((item) => {
+    const id = String(item?.id || '').trim();
+    const text = String(item?.text || '').trim();
+    if (!id || !text || seen.has(id)) return;
+    seen.add(id);
+    merged.push(item);
+  });
+  return merged;
+};
+
+const resolveCategoryStatus = (
+  prompts: Array<{ status: FollowupCardStatus }>
+): FollowupCardStatus => {
+  if (!prompts.length) return 'completed';
+  if (prompts.some((item) => item.status === 'missing')) return 'missing';
+  if (prompts.every((item) => item.status === 'completed')) return 'completed';
+  return 'pending';
+};
 
 const resolveResumeTitle = (resume: Partial<ImportedResume> | null | undefined): string => {
   if (!resume) return '未命名简历';
@@ -68,7 +136,6 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
   const [analysisReady, setAnalysisReady] = React.useState(false);
   const [followupPrompts, setFollowupPrompts] = React.useState<FollowupPrompt[]>([]);
   const [activeCategoryIndex, setActiveCategoryIndex] = React.useState(0);
-  const [answeredPromptIds, setAnsweredPromptIds] = React.useState<Set<string>>(new Set());
 
   const categories: { key: PromptCategory; label: string }[] = React.useMemo(
     () => [
@@ -79,6 +146,12 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
     ],
     []
   );
+
+  const followupProgressKey = React.useMemo(() => {
+    const userId = String(currentUser?.id || '').trim();
+    if (!userId) return '';
+    return getScopedFusionStorageKey(FOLLOWUP_PROGRESS_KEY, userId);
+  }, [currentUser?.id]);
 
   const appendSupplement = React.useCallback((text: string) => {
     setSupplementText((prev) => appendCareerProfileSupplement(prev, text));
@@ -110,7 +183,6 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       setAnalyzeError('');
       setAnalysisReady(false);
       setFollowupPrompts([]);
-      setAnsweredPromptIds(new Set());
     },
     []
   );
@@ -127,34 +199,49 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
   const supplementCharCount = supplementText.length;
   const supplementAtLimit = supplementCharCount >= CAREER_PROFILE_SUPPLEMENT_MAX_CHARS;
   const blockedByChoice = !hasUploadedResume && !hasProfileInput;
+
+  const currentMissingPromptIds = React.useMemo(
+    () =>
+      new Set(
+        buildDynamicFollowupPrompts({
+          importedResume: uploadedResume || null,
+          supplementText,
+        }).map((item) => item.id)
+      ),
+    [supplementText, uploadedResume]
+  );
+
+  const followupCards = React.useMemo(
+    () =>
+      computeFollowupCardStatuses({
+        prompts: followupPrompts,
+        currentlyMissingPromptIds: currentMissingPromptIds,
+        supplementText,
+      }),
+    [currentMissingPromptIds, followupPrompts, supplementText]
+  );
+
+  const hasFollowupMissing = followupCards.some((item) => item.status === 'missing');
   const followupVisible = analysisReady;
 
   const refreshDynamicFollowups = React.useCallback(
-    (parsedResume: ImportedResume | null, opts?: { preserveAnswered?: boolean }) => {
+    (parsedResume: ImportedResume | null, opts?: { preserveExisting?: boolean }) => {
       const prompts = buildDynamicFollowupPrompts({
         importedResume: parsedResume,
         supplementText,
       });
-      setFollowupPrompts(prompts);
-      if (opts?.preserveAnswered) {
-        setAnsweredPromptIds((prev) => {
-          const promptIds = new Set(prompts.map((item) => item.id));
-          const next = new Set<string>();
-          prev.forEach((id) => {
-            if (promptIds.has(id)) next.add(id);
-          });
-          return next;
+
+      setFollowupPrompts((prev) => {
+        const next = opts?.preserveExisting ? mergeFollowupPrompts(prev, prompts) : prompts;
+        const firstAvailableCategory = categories.findIndex((cat) =>
+          next.some((item) => item.category === cat.key)
+        );
+        setActiveCategoryIndex((prevIdx) => {
+          const currentKey = categories[prevIdx]?.key;
+          if (currentKey && next.some((item) => item.category === currentKey)) return prevIdx;
+          return firstAvailableCategory >= 0 ? firstAvailableCategory : 0;
         });
-      } else {
-        setAnsweredPromptIds(new Set());
-      }
-      const firstAvailableCategory = categories.findIndex((cat) =>
-        prompts.some((item) => item.category === cat.key)
-      );
-      setActiveCategoryIndex((prev) => {
-        const currentKey = categories[prev]?.key;
-        if (currentKey && prompts.some((item) => item.category === currentKey)) return prev;
-        return firstAvailableCategory >= 0 ? firstAvailableCategory : 0;
+        return next;
       });
     },
     [categories, supplementText]
@@ -162,8 +249,26 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
 
   React.useEffect(() => {
     if (!analysisReady) return;
-    refreshDynamicFollowups(uploadedResume || null, { preserveAnswered: true });
-  }, [analysisReady, uploadedResume, refreshDynamicFollowups]);
+    refreshDynamicFollowups(uploadedResume || null, { preserveExisting: true });
+  }, [analysisReady, refreshDynamicFollowups, uploadedResume]);
+
+  React.useEffect(() => {
+    if (!followupProgressKey) return;
+    if (!analysisReady || !followupCards.length) {
+      clearFusionFollowupProgress(followupProgressKey);
+      return;
+    }
+
+    writeFusionFollowupProgress(
+      followupProgressKey,
+      followupCards.map((item) => ({
+        id: item.id,
+        category: item.category,
+        text: item.text,
+        status: item.status,
+      }))
+    );
+  }, [analysisReady, followupCards, followupProgressKey]);
 
   const handleAnalyze = React.useCallback(async () => {
     if (blockedByChoice || isSaving || isTranscribing || isAnalyzing) return;
@@ -189,16 +294,23 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
     }
   }, [
     blockedByChoice,
+    isAnalyzing,
     isSaving,
     isTranscribing,
-    isAnalyzing,
+    refreshDynamicFollowups,
     uploadedInput,
     uploadedResume,
-    refreshDynamicFollowups,
   ]);
 
   const handleSubmit = async () => {
-    if (blockedByChoice || isSaving || isTranscribing || isAnalyzing) return;
+    if (blockedByChoice || isSaving || isTranscribing || isAnalyzing || hasFollowupMissing) {
+      if (hasFollowupMissing) {
+        setAnalyzeError('存在“缺失”状态的追问卡片，请先补全对应回答后再生成画像。');
+      }
+      return;
+    }
+
+    setAnalyzeError('');
     const deferredResumeSeed = hasUploadedResume && uploadedResume
       ? buildCareerProfileSeedFromImportedResume(uploadedResume)
       : '';
@@ -212,6 +324,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
     ]);
     const saved = await saveCareerProfile(mergedInput);
     if (!saved) return;
+
     navigate('/career-profile/result/summary', {
       replace: true,
       state: {
@@ -247,7 +360,10 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       <label className="text-sm font-bold text-slate-800 dark:text-slate-200">{title}</label>
       <AutoGrowTextarea
         value={supplementText}
-        onChange={(event) => setSupplementText(clampCareerProfileSupplement(event.target.value))}
+        onChange={(event) => {
+          setAnalyzeError('');
+          setSupplementText(clampCareerProfileSupplement(event.target.value));
+        }}
         maxLength={CAREER_PROFILE_SUPPLEMENT_MAX_CHARS}
         placeholder={placeholder}
         className="mt-2 w-full min-h-[120px] resize-none rounded-lg border bg-slate-50 dark:bg-[#111a22] border-slate-300 dark:border-[#334155] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -321,8 +437,6 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       </header>
 
       <main className="pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6 max-w-md mx-auto w-full">
-        {/* Standalone upload button removed to avoid double-button awkwardness */}
-
         {renderUploadedResumeTitleCard()}
 
         {followupVisible ? (
@@ -331,15 +445,19 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               <div className="flex items-center justify-between gap-2 mb-3">
                 <div className="flex items-center gap-2">
                   <span className="material-symbols-outlined text-primary text-[18px]">lightbulb</span>
-                  <label className="text-sm font-bold text-slate-800 dark:text-slate-200">AI 智能追问建议</label>
+                  <label className="text-sm font-bold text-slate-800 dark:text-slate-200">AI 定向追问卡片</label>
                 </div>
-                <span className="text-[11px] text-slate-400 dark:text-slate-500">点一下可插入补充区</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">卡片状态与提交门禁同步</span>
               </div>
 
               <div className="flex gap-2 mb-3 overflow-x-auto no-scrollbar pb-1">
                 {categories.map((cat, idx) => {
-                  const hasPrompts = followupPrompts.some((item) => item.category === cat.key);
+                  const catPrompts = followupCards.filter((item) => item.category === cat.key);
+                  const hasPrompts = catPrompts.length > 0;
                   if (!hasPrompts && activeCategoryIndex !== idx) return null;
+
+                  const status = resolveCategoryStatus(catPrompts);
+                  const statusMeta = STATUS_META[status];
 
                   return (
                     <button
@@ -347,12 +465,19 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
                       type="button"
                       onClick={() => setActiveCategoryIndex(idx)}
                       disabled={!hasPrompts && activeCategoryIndex === idx}
-                      className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${activeCategoryIndex === idx
+                      className={`whitespace-nowrap px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex items-center gap-1.5 ${activeCategoryIndex === idx
                         ? 'bg-primary text-white shadow-sm'
                         : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10'
                         } ${!hasPrompts ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                      {cat.label}
+                      <span>{cat.label}</span>
+                      <span className={`rounded-full px-1.5 py-0.5 text-[10px] leading-none ${
+                        activeCategoryIndex === idx
+                          ? 'bg-white/20 text-white border border-white/40'
+                          : statusMeta.pillClass
+                      }`}>
+                        {statusMeta.label}
+                      </span>
                     </button>
                   );
                 })}
@@ -360,43 +485,59 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
 
               <div className="flex flex-col gap-2 relative">
                 {(() => {
-                  const currentCatPrompts = followupPrompts.filter(
+                  const currentCatPrompts = followupCards.filter(
                     (item) => item.category === categories[activeCategoryIndex].key
                   );
-                  const remainingPrompts = currentCatPrompts.filter((p) => !answeredPromptIds.has(p.id));
 
-                  if (remainingPrompts.length === 0) {
+                  if (currentCatPrompts.length === 0) {
                     return (
                       <div className="py-4 text-center animate-in zoom-in-95 duration-300">
                         <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/20 mb-2">
                           <span className="material-symbols-outlined text-emerald-600 dark:text-emerald-400">check_circle</span>
                         </div>
                         <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          此分类的追问已回答完毕，看看其他分类或直接提交吧
+                          当前分类暂无待追问项，可切换分类或直接提交
                         </p>
                       </div>
                     );
                   }
 
-                  const prompt = remainingPrompts[0];
-                  return (
-                    <button
-                      key={prompt.id}
-                      type="button"
-                      onClick={() => {
-                        appendSupplement(`问题：${prompt.text}\n回答：`);
-                        setAnsweredPromptIds((prev) => new Set(prev).add(prompt.id));
-                      }}
-                      className="text-left px-4 py-3.5 rounded-xl border border-primary/20 dark:border-primary/30 bg-blue-50/50 dark:bg-blue-500/5 text-sm font-medium text-blue-900 dark:text-blue-100 hover:border-primary/50 hover:bg-blue-100/50 transition-all shadow-sm flex flex-col gap-2 group animate-in slide-in-from-right-2 duration-300"
-                    >
-                      <span>{prompt.text}</span>
-                      <span className="text-[11px] text-primary/70 font-bold group-hover:text-primary mt-1 flex items-center gap-1">
-                        帮我补充 <span className="material-symbols-outlined text-[14px]">edit</span>
-                      </span>
-                    </button>
-                  );
+                  return currentCatPrompts.map((prompt) => {
+                    const statusMeta = STATUS_META[prompt.status];
+                    return (
+                      <button
+                        key={prompt.id}
+                        type="button"
+                        onClick={() => {
+                          setAnalyzeError('');
+                          const answerState = getFollowupPromptTemplateAnswerState(supplementText, prompt.text);
+                          if (answerState === 'none') {
+                            appendSupplement(`问题：${prompt.text}\n回答：`);
+                          }
+                        }}
+                        className={`text-left px-4 py-3.5 rounded-xl border text-sm font-medium transition-all shadow-sm flex flex-col gap-2 group animate-in slide-in-from-right-2 duration-300 ${statusMeta.cardClass}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold leading-none tracking-wide uppercase bg-white/70 dark:bg-black/20">
+                            {statusMeta.label}
+                          </span>
+                          <span className="text-[11px] font-semibold opacity-80">{statusMeta.hint}</span>
+                        </div>
+                        <span>{prompt.text}</span>
+                        <span className="text-[11px] font-bold opacity-85 mt-1 flex items-center gap-1">
+                          帮我补充 <span className="material-symbols-outlined text-[14px]">edit</span>
+                        </span>
+                      </button>
+                    );
+                  });
                 })()}
               </div>
+
+              {hasFollowupMissing && (
+                <p className="mt-3 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">
+                  存在“缺失”卡片（已插入问题但回答为空），请先补全后再提交。
+                </p>
+              )}
             </div>
             {renderSupplementInput(
               '补充更多工作细节',
@@ -420,7 +561,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               }
               void handleSubmit();
             }}
-            disabled={blockedByChoice || isSaving || isTranscribing || isAnalyzing}
+            disabled={blockedByChoice || isSaving || isTranscribing || isAnalyzing || hasFollowupMissing}
             className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isAnalyzing
@@ -428,7 +569,9 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               : isSaving
                 ? 'AI 正在马不停蹄整理画像...'
                 : analysisReady
-                  ? '一键生成画像'
+                  ? hasFollowupMissing
+                    ? '请先补全缺失卡片'
+                    : '一键生成画像'
                   : 'AI 智能解析'}
           </button>
           {!!analyzeError && (
@@ -437,8 +580,6 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
             </p>
           )}
         </div>
-
-
       </main>
 
       <ResumeImportDialog

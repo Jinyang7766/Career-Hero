@@ -1,7 +1,23 @@
+import type { FollowupPrompt, PromptCategory } from './profile-followup-prompts';
+
 export type UploadChoice = 'pending' | 'uploaded' | 'skipped';
+export type FollowupCardStatus = 'pending' | 'completed' | 'missing';
+
+export type FollowupProgressItem = {
+  id: string;
+  category: PromptCategory;
+  text: string;
+  status: FollowupCardStatus;
+};
+
+export type FollowupProgressSnapshot = {
+  updatedAt: string;
+  cards: FollowupProgressItem[];
+};
 
 export const UPLOAD_CHOICE_KEY = 'guided_flow_step1_upload_choice';
 export const UPLOAD_SEED_KEY = 'guided_flow_step1_seed_text';
+export const FOLLOWUP_PROGRESS_KEY = 'guided_flow_step2_followup_progress';
 
 export const getScopedFusionStorageKey = (key: string, userId?: string | null): string => {
   const uid = String(userId || '').trim();
@@ -62,3 +78,72 @@ export const clearFusionSeedText = (seedKey: string) => {
   safeRemove(seedKey);
 };
 
+const sanitizeFollowupCard = (item: any): FollowupProgressItem | null => {
+  if (!item || typeof item !== 'object') return null;
+  const id = String(item.id || '').trim();
+  const text = String(item.text || '').trim();
+  const categoryRaw = String(item.category || '').trim();
+  const statusRaw = String(item.status || '').trim();
+  if (!id || !text) return null;
+  if (
+    categoryRaw !== 'experience' &&
+    categoryRaw !== 'skills_education' &&
+    categoryRaw !== 'personality' &&
+    categoryRaw !== 'others'
+  ) {
+    return null;
+  }
+  if (statusRaw !== 'pending' && statusRaw !== 'completed' && statusRaw !== 'missing') {
+    return null;
+  }
+  return {
+    id,
+    text,
+    category: categoryRaw,
+    status: statusRaw,
+  } as FollowupProgressItem;
+};
+
+export const readFusionFollowupProgress = (
+  progressKey: string
+): FollowupProgressSnapshot | null => {
+  const raw = safeRead(progressKey);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as FollowupProgressSnapshot;
+    const cards = Array.isArray(parsed?.cards)
+      ? parsed.cards.map(sanitizeFollowupCard).filter(Boolean) as FollowupProgressItem[]
+      : [];
+    if (!cards.length) return null;
+    return {
+      updatedAt: String(parsed?.updatedAt || '').trim() || new Date().toISOString(),
+      cards,
+    };
+  } catch {
+    return null;
+  }
+};
+
+export const writeFusionFollowupProgress = (
+  progressKey: string,
+  cards: Array<Pick<FollowupPrompt, 'id' | 'category' | 'text'> & { status: FollowupCardStatus }>
+) => {
+  const normalizedCards = cards
+    .map((item) => sanitizeFollowupCard(item))
+    .filter(Boolean) as FollowupProgressItem[];
+  if (!normalizedCards.length) {
+    safeRemove(progressKey);
+    return;
+  }
+  safeWrite(
+    progressKey,
+    JSON.stringify({
+      updatedAt: new Date().toISOString(),
+      cards: normalizedCards,
+    })
+  );
+};
+
+export const clearFusionFollowupProgress = (progressKey: string) => {
+  safeRemove(progressKey);
+};
