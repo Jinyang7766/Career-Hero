@@ -1,6 +1,6 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.24`
+- 版本：`v6.25`
 - 更新时间：`2026-03-09`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
@@ -496,6 +496,17 @@
     - 后端新增 `skill_cleanup_service.py`，对技能做标准化去重、噪音过滤与数量上限控制（默认 10，范围钳制 8~12）。
     - 前端展示前与落库前双守卫接入 `sanitizeResumeSkills`，防止旧脏数据继续放大。
     - 覆盖 analyze / generate / post-interview 链路，并补齐前后端相关测试。
+36. JD 上下文隔离与复用键收口已完成：
+    - 诊断缓存/复用键补齐 `analysisMode + jdKey + targetRole` 维度，避免 `generic/targeted` 或不同目标岗位误命中同一份报告。
+    - `generic` 模式不再回退复用 `lastJdText`；空 JD 与有 JD 结果隔离，避免“填/不填 JD 结果相同”。
+    - 会话恢复与报告快照恢复增加模式与 JD 键一致性校验，阻断 stale snapshot 复用。
+37. 诊断性能与定向口径收口已完成：
+    - 后端 `analyze` 增加阶段计时（timings）观测，定位 LLM 与后处理耗时占比。
+    - `final_report` 默认关闭非必要 verify 二次生成（`enable_verify_pass=False`），缩短生成链路耗时。
+    - JD 定向模式提示词强化为“JD 匹配差距 + 定向改写策略”主叙事，降低“简历整体评价”口径暴露。
+38. 针对 JD 定向链路的回归测试已补齐：
+    - 新增/更新 `analysis_mode`、`jd-key-compat`、`analysis-execution-result` 前端用例。
+    - 后端补充 JD 定向提示词与关键词对齐覆盖（`test_parse_endpoint_service.py`）。
 
 部分完成（可用但仍需收口）：
 1. Step5 精修能力可用，但“选区定点改写 + 事实边界提示 + 手工编辑”的统一产品化还需再收敛一轮。
@@ -762,6 +773,10 @@
 10. AI 诊断技能质量收口（已完成）：
    - 已完成：后端 `skill_cleanup_service` 统一技能去重/过滤/上限（默认 10）。
    - 已完成：前端展示前与落库前接入 `sanitizeResumeSkills` 双守卫，防止技能过多与重复回归。
+11. AI 诊断 JD 定向一致性与性能收口（已完成）：
+   - 已完成：前端按 `analysisMode + jdKey + targetRole` 隔离复用上下文，避免空 JD 与有 JD 误复用同结果。
+   - 已完成：后端增加 `analyze timings` 观测并下调 `final_report` 非必要二次生成开销，报告生成耗时显著下降。
+   - 已完成：定向提示词主叙事收口为“JD 匹配差距 + 定向改写策略”。
 
 ### 10.2 P1（随后一周）
 
@@ -800,6 +815,17 @@
 5. 画像主字段入库校验与观测：
    - 模块：`backend/routes/ai_routes.py`、`backend/services/*career_profile*`（若拆分）
    - 缺口：主字段 JSON Schema 校验 + 失败日志（字段路径/原因）+ 不覆盖旧画像。
+
+**近期已收口（从 P0 移出，2026-03-09）**
+1. JD 上下文复用误命中：
+   - 已完成：复用键补齐 `analysisMode + jdKey + targetRole`，并强化会话/快照恢复校验，阻断空 JD 与有 JD 结果串用。
+   - 相关提交：`8559930`。
+2. 定向报告口径与性能：
+   - 已完成：定向提示词收口为“JD 匹配差距 + 定向改写策略”；`analyze` 增加阶段计时并下调 `final_report` 非必要二次生成开销。
+   - 相关提交：`46cb556`。
+3. JD 定向链路自动化回归：
+   - 已完成：补齐后端 JD 定向提示词/关键词对齐相关测试。
+   - 相关提交：`bb91310`。
 
 **P1（随后一周）**
 1. Step2 定向追问卡片产品化：
