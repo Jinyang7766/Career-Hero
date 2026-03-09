@@ -55,6 +55,8 @@ describe('career-profile fusion followup jump', () => {
     fireEvent.click(screen.getByText('AI 智能解析'));
 
     expect(await screen.findByText('下一步')).toBeTruthy();
+    expect(screen.getByText('补充更多工作细节')).toBeTruthy();
+    expect(screen.queryByText('补充更多工作细节（可选）')).toBeNull();
     expect(screen.queryByText('AI 定向追问卡片')).toBeNull();
 
     fireEvent.click(screen.getByText('下一步'));

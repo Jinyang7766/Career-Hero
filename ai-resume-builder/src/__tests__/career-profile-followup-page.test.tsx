@@ -56,7 +56,7 @@ describe('career-profile followup page', () => {
     });
   });
 
-  it('supports single-question minimal UI, enter/blur auto-advance, and id-safe writes', async () => {
+  it('supports minimal followup UI, keeps generate button, enter/blur auto-advance, and id-safe writes', async () => {
     render(
       <MemoryRouter initialEntries={['/career-profile/followup']}>
         <Routes>
@@ -67,8 +67,11 @@ describe('career-profile followup page', () => {
     );
 
     expect(await screen.findByText('问题 1/2')).toBeTruthy();
+    expect(screen.getByText('定向追问补充')).toBeTruthy();
+    expect(screen.getByText('回答当前问题')).toBeTruthy();
+    expect(screen.getByText('已完成 0/2')).toBeTruthy();
 
-    // Verify minimal UI: No instruction cards, no prev/next buttons
+    // Verify minimal UI: no extra navigation/submit action buttons
     expect(screen.queryByText('一次一题 · 滑动切换')).toBeNull();
     expect(screen.queryByText('上一题')).toBeNull();
     expect(screen.queryByText('下一题')).toBeNull();
@@ -88,7 +91,8 @@ describe('career-profile followup page', () => {
     // Final answer
     fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });
     
-    // Explicitly click "一键生成画像" as per latest requirement
+    // Keep bottom CTA as required
+    expect(screen.getByRole('button', { name: '一键生成画像' })).toBeTruthy();
     fireEvent.click(screen.getByText('一键生成画像'));
 
     expect(saveCareerProfileMock).toHaveBeenCalledTimes(1);
