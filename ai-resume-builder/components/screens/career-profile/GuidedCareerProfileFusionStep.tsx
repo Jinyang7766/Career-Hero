@@ -4,10 +4,13 @@ import BackButton from '../../shared/BackButton';
 import ResumeImportDialog, { type ResumeImportInput } from '../../ResumeImportDialog';
 import type { ResumeData } from '../../../types';
 import { useAppContext } from '../../../src/app-context';
+import { useUserProfile } from '../../../src/useUserProfile';
+import { useCareerProfileComposer } from '../dashboard/useCareerProfileComposer';
 import { useCareerProfileVoiceInput } from './useCareerProfileVoiceInput';
 import { buildDynamicFollowupPrompts } from './dynamic-followup-prompts';
 import type { FollowupPrompt } from './profile-followup-prompts';
 import { parseFusionUploadedResumeSafe } from './fusion-upload-parser';
+import { buildCareerProfileSeedFromImportedResume } from './resume-upload-prefill';
 import {
   CAREER_PROFILE_SUPPLEMENT_MAX_CHARS,
   appendCareerProfileSupplement,
@@ -58,6 +61,14 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
   const currentUser = useAppContext((state) => state.currentUser);
   const goBack = useAppContext((state) => state.goBack);
   const backFrom = String((location.state as any)?.from || '').trim();
+
+  const { userProfile } = useUserProfile(currentUser?.id, currentUser);
+  const { isSaving: isGenerating, saveCareerProfile } = useCareerProfileComposer({
+    currentUserId: currentUser?.id,
+    userProfile,
+  });
+
+  const isFirstBuild = !userProfile?.career_profile_latest;
 
   const [importDialogOpen, setImportDialogOpen] = React.useState(false);
   const [uploadedInput, setUploadedInput] = React.useState<ResumeImportInput | null>(null);
@@ -122,11 +133,13 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       const prompts = buildDynamicFollowupPrompts({
         importedResume: parsedResume,
         supplementText,
+        existingProfile: userProfile?.career_profile_latest as any,
+        isFirstBuild,
       });
       setFollowupPrompts(prompts);
       return prompts;
     },
-    [supplementText]
+    [isFirstBuild, supplementText, userProfile?.career_profile_latest]
   );
 
   React.useEffect(() => {
@@ -235,6 +248,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       state: {
         from: '/career-profile/upload',
         followupSession: session,
+        isFirstBuild,
       },
     });
   }, [
@@ -244,8 +258,50 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
     followupSessionKey,
     hasUploadedResume,
     isAnalyzing,
+    isFirstBuild,
     isTranscribing,
     navigate,
+    supplementText,
+    uploadedResume,
+    uploadedResumeTitle,
+  ]);
+
+  const handleDirectGenerate = React.useCallback(async () => {
+    if (!analysisReady || isTranscribing || isAnalyzing || isGenerating) return;
+
+    const deferredResumeSeed = uploadedResume
+      ? buildCareerProfileSeedFromImportedResume(uploadedResume)
+      : '';
+    const profileOnlyInput = mergeBlocks([
+      supplementText ? `【用户补充事实】\n${supplementText}` : '',
+      '请先基于事实提炼职业画像，不要编造内容。',
+    ]);
+
+    const mergedInput = mergeBlocks([
+      deferredResumeSeed
+        ? `【上传简历信息（提交时融合解析）】\n${deferredResumeSeed}`
+        : uploadedResumeTitle
+          ? `【上传简历标题】\n${uploadedResumeTitle}`
+          : '',
+      profileOnlyInput,
+    ]);
+
+    const saved = await saveCareerProfile(mergedInput);
+    if (!saved) return;
+
+    navigate('/career-profile/result/summary', {
+      replace: true,
+      state: {
+        from: '/career-profile/upload',
+      },
+    });
+  }, [
+    analysisReady,
+    isAnalyzing,
+    isGenerating,
+    isTranscribing,
+    navigate,
+    saveCareerProfile,
     supplementText,
     uploadedResume,
     uploadedResumeTitle,
@@ -379,12 +435,24 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
                 void handleAnalyze();
                 return;
               }
-              handleGoFollowup();
+              if (isFirstBuild) {
+                handleGoFollowup();
+              } else {
+                void handleDirectGenerate();
+              }
             }}
-            disabled={blockedByChoice || isTranscribing || isAnalyzing}
+            disabled={blockedByChoice || isTranscribing || isAnalyzing || isGenerating}
             className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isAnalyzing ? 'AI 正在解析上传内容...' : canStartFollowup ? '下一步' : 'AI 智能解析'}
+            {isAnalyzing
+              ? 'AI 正在解析上传内容...'
+              : isGenerating
+              ? 'AI 正在重新生成画像...'
+              : canStartFollowup
+              ? isFirstBuild
+                ? '下一步'
+                : '一键生成画像'
+              : 'AI 智能解析'}
           </button>
           {!!analyzeError && (
             <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">

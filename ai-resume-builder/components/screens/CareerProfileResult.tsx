@@ -5,11 +5,16 @@ import { useAppContext } from '../../src/app-context';
 import { useUserProfile } from '../../src/useUserProfile';
 import { useCareerProfileComposer } from './dashboard/useCareerProfileComposer';
 import CareerProfileStructuredEditor, { CareerProfileEditorRef } from './career-profile/CareerProfileStructuredEditor';
+import { buildDynamicFollowupPrompts } from './career-profile/dynamic-followup-prompts';
+import { computeFollowupCardStatuses } from './career-profile/followup-card-status';
 import {
   type FollowupCardStatus,
   FOLLOWUP_PROGRESS_KEY,
+  FOLLOWUP_SESSION_KEY,
   getScopedFusionStorageKey,
   readFusionFollowupProgress,
+  writeFusionFollowupProgress,
+  writeFusionFollowupSession,
 } from './career-profile/fusion-storage';
 
 const normalizePath = (pathname: string): string => {
@@ -68,6 +73,12 @@ const CareerProfileResult: React.FC = () => {
     return getScopedFusionStorageKey(FOLLOWUP_PROGRESS_KEY, userId);
   }, [currentUser?.id]);
 
+  const followupSessionKey = React.useMemo(() => {
+    const userId = String(currentUser?.id || '').trim();
+    if (!userId) return '';
+    return getScopedFusionStorageKey(FOLLOWUP_SESSION_KEY, userId);
+  }, [currentUser?.id]);
+
   const followupSnapshot = React.useMemo(() => {
     if (!followupProgressKey) return null;
     return readFusionFollowupProgress(followupProgressKey);
@@ -102,6 +113,56 @@ const CareerProfileResult: React.FC = () => {
 
     goBack();
   }, [backFrom, goBack, isInlineEditing, navigate]);
+
+  const handleGoFollowup = React.useCallback(() => {
+    if (!followupSessionKey || !followupProgressKey || !profile) return;
+
+    const prompts = buildDynamicFollowupPrompts({
+      importedResume: null,
+      supplementText: '',
+      existingProfile: profile,
+      isFirstBuild: false,
+    });
+
+    const session = {
+      sourcePath: '/career-profile/result/summary',
+      supplementText: '',
+      uploadedResumeTitle: '',
+      uploadedResume: null,
+      prompts,
+      answersByPromptId: {},
+      draftByPromptId: {},
+      skippedPromptIds: [],
+      currentIndex: 0,
+    };
+
+    writeFusionFollowupSession(followupSessionKey, session);
+
+    const currentlyMissingPromptIds = new Set(prompts.map((item) => item.id));
+    const statuses = computeFollowupCardStatuses({
+      prompts,
+      currentlyMissingPromptIds,
+      answersByPromptId: {},
+      skippedPromptIds: [],
+    });
+    writeFusionFollowupProgress(
+      followupProgressKey,
+      statuses.map((item) => ({
+        id: item.id,
+        category: item.category,
+        text: item.text,
+        status: item.status,
+      }))
+    );
+
+    navigate('/career-profile/followup', {
+      state: {
+        from: '/career-profile/result/summary',
+        followupSession: session,
+        isFirstBuild: false,
+      },
+    });
+  }, [followupProgressKey, followupSessionKey, navigate, profile]);
 
 
   return (
@@ -196,19 +257,24 @@ const CareerProfileResult: React.FC = () => {
                 </p>
               )}
 
-              <button
-                type="button"
-                onClick={() =>
-                  navigate('/career-profile/followup', {
-                    state: {
-                      from: '/career-profile/result/summary',
-                    },
-                  })
-                }
-                className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center"
-              >
-                {hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}
-              </button>
+              <div className="flex flex-col gap-2.5 mt-1">
+                <button
+                  type="button"
+                  onClick={handleGoFollowup}
+                  className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">quiz</span>
+                  <span>{hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/career-profile/upload')}
+                  className="w-full h-11 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
+                  <span>返回重新录入</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
