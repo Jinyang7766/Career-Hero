@@ -14,7 +14,9 @@ export const deriveGuidedFlowStepFromLocation = (
 ): GuidedFlowStep | null => {
   const path = normalizePath(pathname);
 
-  if (path === '/career-profile' || path === '/career-profile/upload') return 'step1_profile_input';
+  if (path === '/career-profile' || path === '/career-profile/upload' || path === '/career-profile/followup') {
+    return 'step1_profile_input';
+  }
   if (path.startsWith('/career-profile/result')) return 'step2_profile_confirm';
 
   if (path === '/ai-interview' || path.startsWith('/ai-interview/')) {

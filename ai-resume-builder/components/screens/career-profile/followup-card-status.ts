@@ -1,42 +1,26 @@
 import type { FollowupPrompt } from './profile-followup-prompts';
 import type { FollowupCardStatus } from './fusion-storage';
 
-type TemplateAnswerState = 'none' | 'blank' | 'filled';
-
-const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+type FollowupAnswerState = 'none' | 'blank' | 'filled';
 
 const normalizeAnswer = (value: string): string =>
   String(value || '')
     .replace(/[\s\u3000]+/g, ' ')
     .trim();
 
-const isBlankLikeAnswer = (value: string): boolean => {
-  const normalized = normalizeAnswer(value).toLowerCase();
-  if (!normalized) return true;
-  if (/^(待补充|待完善|暂无|无|n\/?a|null|none|todo|tbd|---|……|\.\.\.)$/i.test(normalized)) {
-    return true;
+export const getFollowupPromptAnswerStateById = (
+  answersByPromptId: Record<string, string>,
+  promptId: string
+): FollowupAnswerState => {
+  const id = String(promptId || '').trim();
+  if (!id) return 'none';
+
+  if (!Object.prototype.hasOwnProperty.call(answersByPromptId || {}, id)) {
+    return 'none';
   }
-  const compact = normalized.replace(/[，,。.!！？?;；:：、'"“”‘’()（）\[\]{}【】<>《》·`~@#$%^&*_+=|\\/\-]/g, '');
-  return compact.length < 2;
-};
 
-export const getFollowupPromptTemplateAnswerState = (
-  supplementText: string,
-  promptText: string
-): TemplateAnswerState => {
-  const text = String(supplementText || '');
-  const prompt = String(promptText || '').trim();
-  if (!text || !prompt) return 'none';
-
-  const pattern = new RegExp(
-    `问题：\\s*${escapeRegExp(prompt)}\\s*(?:\\r?\\n)+回答：([\\s\\S]*?)(?=(?:\\r?\\n)\\s*问题：|$)`,
-    'i'
-  );
-  const match = text.match(pattern);
-  if (!match) return 'none';
-
-  const answer = normalizeAnswer(match[1] || '');
-  return isBlankLikeAnswer(answer) ? 'blank' : 'filled';
+  const answer = normalizeAnswer(String((answersByPromptId || {})[id] || ''));
+  return answer ? 'filled' : 'blank';
 };
 
 const ensurePromptOrder = (prompts: FollowupPrompt[]): FollowupPrompt[] => {
@@ -54,18 +38,21 @@ const ensurePromptOrder = (prompts: FollowupPrompt[]): FollowupPrompt[] => {
 export const computeFollowupCardStatuses = (params: {
   prompts: FollowupPrompt[];
   currentlyMissingPromptIds: Set<string>;
-  supplementText: string;
+  answersByPromptId?: Record<string, string>;
+  skippedPromptIds?: string[];
 }): Array<FollowupPrompt & { status: FollowupCardStatus }> => {
   const orderedPrompts = ensurePromptOrder(params.prompts || []);
+  const answersByPromptId = params.answersByPromptId || {};
+  const skipped = new Set((params.skippedPromptIds || []).map((id) => String(id || '').trim()));
 
   return orderedPrompts.map((prompt) => {
-    const answerState = getFollowupPromptTemplateAnswerState(params.supplementText, prompt.text);
+    const answerState = getFollowupPromptAnswerStateById(answersByPromptId, prompt.id);
     const unresolved = params.currentlyMissingPromptIds.has(prompt.id);
 
     let status: FollowupCardStatus = 'pending';
     if (!unresolved || answerState === 'filled') {
       status = 'completed';
-    } else if (answerState === 'blank') {
+    } else if (answerState === 'blank' && !skipped.has(prompt.id)) {
       status = 'missing';
     }
 

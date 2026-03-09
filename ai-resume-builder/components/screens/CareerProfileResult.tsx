@@ -172,7 +172,7 @@ const CareerProfileResult: React.FC = () => {
               {hasFollowupProgress ? (
                 <>
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    融合页与结果页已联动同一批追问卡片。你可以回到融合页继续补充，不会打开聊天窗口。
+                    追问页与结果页已联动同一批追问卡片。你可以回到追问页继续补充，不会打开聊天窗口。
                   </p>
                   <div className="flex flex-wrap gap-2">
                     {STATUS_ORDER.map((status) => {
@@ -192,14 +192,14 @@ const CareerProfileResult: React.FC = () => {
                 </>
               ) : (
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  如果有新的经历或想要补充细节，可回到融合页继续补全定向追问卡片。
+                  如果有新的经历或想要补充细节，可回到追问页继续补全定向追问卡片。
                 </p>
               )}
 
               <button
                 type="button"
                 onClick={() =>
-                  navigate('/career-profile/upload', {
+                  navigate('/career-profile/followup', {
                     state: {
                       from: '/career-profile/result/summary',
                     },

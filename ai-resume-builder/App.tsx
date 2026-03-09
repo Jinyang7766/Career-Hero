@@ -184,6 +184,7 @@ function App() {
 
       const isAllowedWithoutProfile =
         p.startsWith('/career-profile/upload') ||
+        p.startsWith('/career-profile/followup') ||
         p.startsWith('/career-profile/result') ||
         publicPaths.some((x) => p.startsWith(x));
 
@@ -233,6 +234,7 @@ function App() {
     if (
       path === '/career-profile' ||
       path === '/career-profile/upload' ||
+      path === '/career-profile/followup' ||
       path.startsWith('/career-profile/result')
     ) {
       return;
