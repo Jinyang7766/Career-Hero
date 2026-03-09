@@ -4,6 +4,183 @@ from typing import Any, Dict, List, Optional, Tuple
 
 FACT_ITEM_KINDS = {'skill', 'highlight', 'constraint'}
 
+CAREER_PROFILE_MAIN_FIELD_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'summary': {'type': 'string'},
+        'targetRole': {'type': 'string'},
+        'jobDirection': {'type': 'string'},
+        'mbti': {'type': 'string'},
+        'personality': {'type': 'string'},
+        'workStyle': {'type': 'string'},
+        'careerGoal': {'type': 'string'},
+        'targetSalary': {'type': 'string'},
+        'gender': {'type': 'string'},
+        'careerHighlights': {'type': 'array', 'items': {'type': 'string'}},
+        'coreSkills': {'type': 'array', 'items': {'type': 'string'}},
+        'constraints': {'type': 'array', 'items': {'type': 'string'}},
+        'experiences': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'title': {'type': 'string'},
+                    'period': {'type': 'string'},
+                    'organization': {'type': 'string'},
+                    'actions': {'type': 'string'},
+                    'results': {'type': 'string'},
+                    'skills': {'type': 'array', 'items': {'type': 'string'}},
+                    'inResume': {'type': 'string', 'enum': ['yes', 'no', 'unknown']},
+                    'confidence': {'type': 'string', 'enum': ['high', 'medium', 'low']},
+                    'evidence': {'type': 'string'},
+                },
+                'additionalProperties': True,
+            },
+        },
+        'educations': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'id': {'type': ['string', 'number', 'integer']},
+                    'school': {'type': 'string'},
+                    'degree': {'type': 'string'},
+                    'major': {'type': 'string'},
+                    'period': {'type': 'string'},
+                    'description': {'type': 'string'},
+                },
+                'additionalProperties': True,
+            },
+        },
+        'projects': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'id': {'type': ['string', 'number', 'integer']},
+                    'title': {'type': 'string'},
+                    'subtitle': {'type': 'string'},
+                    'period': {'type': 'string'},
+                    'description': {'type': 'string'},
+                    'link': {'type': 'string'},
+                },
+                'additionalProperties': True,
+            },
+        },
+        'personalInfo': {
+            'type': 'object',
+            'properties': {
+                'name': {'type': 'string'},
+                'title': {'type': 'string'},
+                'email': {'type': 'string'},
+                'phone': {'type': 'string'},
+                'location': {'type': 'string'},
+                'linkedin': {'type': 'string'},
+                'website': {'type': 'string'},
+                'age': {'type': 'string'},
+                'gender': {'type': 'string'},
+            },
+            'additionalProperties': True,
+        },
+    },
+    'additionalProperties': True,
+}
+
+
+def _matches_schema_type(value: Any, expected_type: str) -> bool:
+    if expected_type == 'string':
+        return isinstance(value, str)
+    if expected_type == 'object':
+        return isinstance(value, dict)
+    if expected_type == 'array':
+        return isinstance(value, list)
+    if expected_type == 'number':
+        return isinstance(value, (int, float)) and not isinstance(value, bool)
+    if expected_type == 'integer':
+        return isinstance(value, int) and not isinstance(value, bool)
+    if expected_type == 'boolean':
+        return isinstance(value, bool)
+    if expected_type == 'null':
+        return value is None
+    return False
+
+
+def _schema_type_label(expected_type: Any) -> str:
+    if isinstance(expected_type, list):
+        return '|'.join(str(item) for item in expected_type)
+    return str(expected_type)
+
+
+def _validate_json_schema(value: Any, schema: Dict[str, Any], path: str) -> List[Dict[str, str]]:
+    errors: List[Dict[str, str]] = []
+
+    expected_type = schema.get('type')
+    if expected_type:
+        expected_types = expected_type if isinstance(expected_type, list) else [expected_type]
+        if not any(_matches_schema_type(value, str(item)) for item in expected_types):
+            errors.append(
+                _error(
+                    path,
+                    'invalid_type',
+                    f'expected {_schema_type_label(expected_type)}',
+                )
+            )
+            return errors
+
+    enum_values = schema.get('enum')
+    if enum_values is not None and value not in enum_values:
+        errors.append(
+            _error(
+                path,
+                'invalid_enum',
+                f"value must be one of {', '.join(str(item) for item in enum_values)}",
+            )
+        )
+
+    if isinstance(value, dict):
+        properties = schema.get('properties') if isinstance(schema.get('properties'), dict) else {}
+        required_fields = schema.get('required') if isinstance(schema.get('required'), list) else []
+
+        for required_key in required_fields:
+            if required_key not in value:
+                errors.append(_error(f'{path}.{required_key}', 'required', f'{required_key} is required'))
+
+        for key, item in value.items():
+            next_path = f'{path}.{key}'
+            if key in properties:
+                errors.extend(_validate_json_schema(item, properties[key], next_path))
+                continue
+            if schema.get('additionalProperties', True) is False:
+                errors.append(_error(next_path, 'additional_property', 'unexpected field'))
+
+    if isinstance(value, list):
+        item_schema = schema.get('items')
+        if isinstance(item_schema, dict):
+            for idx, item in enumerate(value):
+                errors.extend(_validate_json_schema(item, item_schema, f'{path}[{idx}]'))
+
+    return errors
+
+
+def validate_career_profile_main_fields(
+    profile: Any,
+    *,
+    field_path: str = 'careerProfile',
+) -> List[Dict[str, str]]:
+    if not isinstance(profile, dict):
+        return [_error(field_path, 'invalid_type', 'careerProfile must be object')]
+
+    profile_main_fields = {
+        key: profile.get(key)
+        for key in CAREER_PROFILE_MAIN_FIELD_SCHEMA['properties'].keys()
+        if key in profile
+    }
+
+    if not profile_main_fields:
+        return []
+
+    return _validate_json_schema(profile_main_fields, CAREER_PROFILE_MAIN_FIELD_SCHEMA, field_path)
+
 
 def validate_email(email):
     pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
@@ -208,8 +385,11 @@ def clean_career_profile_payload(
 ):
     existing = existing_profile if isinstance(existing_profile, dict) else {}
 
+    if profile is None:
+        return dict(existing) if existing else None
+
     if not isinstance(profile, dict):
-        if profile is not None and logger and hasattr(logger, 'warning'):
+        if logger and hasattr(logger, 'warning'):
             logger.warning(
                 'career_profile.invalid_type_fallback',
                 extra={
@@ -217,6 +397,21 @@ def clean_career_profile_payload(
                     'field_path': field_path,
                     'error_type': 'invalid_type',
                     'detail': 'careerProfile must be object',
+                },
+            )
+        return dict(existing) if existing else None
+
+    main_field_errors = validate_career_profile_main_fields(profile, field_path=field_path)
+    if main_field_errors:
+        fallback_source = 'existing_profile' if existing else 'empty_value'
+        if logger and hasattr(logger, 'warning'):
+            logger.warning(
+                'career_profile.main_fields.validation_failed',
+                extra={
+                    'event': 'career_profile.main_fields.validation_failed',
+                    'field_path': field_path,
+                    'fallback_source': fallback_source,
+                    'validation_errors': main_field_errors,
                 },
             )
         return dict(existing) if existing else None

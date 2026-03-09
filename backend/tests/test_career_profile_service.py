@@ -39,6 +39,35 @@ def _deps_ai_enabled(parsed_profile, logger=None):
     }
 
 
+def _build_valid_career_profile_payload(summary='画像'):
+    return {
+        'summary': summary,
+        'targetRole': '资深数据分析师',
+        'coreSkills': ['SQL', 'Python'],
+        'careerHighlights': ['主导增长分析项目'],
+        'constraints': ['仅基于事实'],
+        'experiences': [
+            {
+                'title': '增长运营',
+                'period': '2022-2024',
+                'organization': '某消费品公司',
+                'actions': '主导实验与复盘',
+                'results': '复购率提升',
+                'skills': ['SQL'],
+                'inResume': 'yes',
+                'confidence': 'high',
+                'evidence': '来自用户自述',
+            }
+        ],
+        'personalInfo': {
+            'name': 'A',
+            'title': '数据分析师',
+            'email': 'a@example.com',
+            'phone': '13800000000',
+        },
+    }
+
+
 def test_organize_career_profile_requires_input():
     body, status = organize_career_profile_core(
         current_user_id='u1',
@@ -257,6 +286,87 @@ def test_clean_resume_payload_fallbacks_fact_items_to_existing_profile_when_inva
     assert any(
         err_item.get('path') == 'resumeData.careerProfile.factItems[0].kind'
         and err_item.get('error_type') == 'invalid_enum'
+        for err_item in errors
+    )
+
+
+def test_clean_resume_payload_accepts_valid_career_profile_main_fields_for_write():
+    payload = {
+        'personalInfo': {'name': 'A'},
+        'careerProfile': _build_valid_career_profile_payload(summary='新画像'),
+    }
+
+    cleaned, err = clean_resume_payload(
+        payload,
+        existing_resume_data={
+            'careerProfile': _build_valid_career_profile_payload(summary='旧画像'),
+        },
+    )
+
+    assert err is None
+    assert cleaned.get('careerProfile', {}).get('summary') == '新画像'
+    assert cleaned.get('careerProfile', {}).get('experiences', [{}])[0].get('title') == '增长运营'
+
+
+def test_clean_resume_payload_main_field_validation_failure_keeps_existing_profile():
+    logger = _DummyLogger()
+    existing_profile = _build_valid_career_profile_payload(summary='历史画像')
+    payload = {
+        'personalInfo': {'name': 'A'},
+        'careerProfile': {
+            **_build_valid_career_profile_payload(summary='损坏画像'),
+            'coreSkills': 'SQL',
+        },
+    }
+
+    cleaned, err = clean_resume_payload(
+        payload,
+        existing_resume_data={'careerProfile': existing_profile},
+        logger=logger,
+    )
+
+    assert err is None
+    assert cleaned.get('careerProfile') == existing_profile
+
+
+def test_clean_resume_payload_main_field_validation_logs_path_and_reason():
+    logger = _DummyLogger()
+    payload = {
+        'personalInfo': {'name': 'A'},
+        'careerProfile': {
+            **_build_valid_career_profile_payload(summary='损坏画像'),
+            'experiences': [
+                {
+                    **_build_valid_career_profile_payload()['experiences'][0],
+                    'title': 123,
+                }
+            ],
+        },
+    }
+
+    cleaned, err = clean_resume_payload(
+        payload,
+        existing_resume_data={
+            'careerProfile': _build_valid_career_profile_payload(summary='历史画像'),
+        },
+        logger=logger,
+    )
+
+    assert err is None
+    assert cleaned.get('careerProfile', {}).get('summary') == '历史画像'
+
+    validation_warnings = [
+        call for call in logger.warning_calls
+        if call[0] and call[0][0] == 'career_profile.main_fields.validation_failed'
+    ]
+    assert validation_warnings
+
+    extra = validation_warnings[0][1].get('extra') or {}
+    errors = extra.get('validation_errors') or []
+    assert any(
+        err_item.get('path') == 'resumeData.careerProfile.experiences[0].title'
+        and err_item.get('error_type') == 'invalid_type'
+        and err_item.get('detail') == 'expected string'
         for err_item in errors
     )
 
