@@ -119,13 +119,13 @@ def _build_analysis_prompt(
     }
 
     final_stage_requirements = """
-15. 最终阶段必须明确“岗位关键任务的支撑缺口”，写入 weaknesses 与 suggestions。
-16. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
-17. 无法确认数字时用中性结果口径，不得编造与占位符。
+17. 最终阶段必须明确“岗位关键任务的支撑缺口”，写入 weaknesses 与 suggestions。
+18. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
+19. 无法确认数字时用中性结果口径，不得编造与占位符。
 """ if is_final_stage else ""
     targeted_summary_requirements = """
-18. 当提供 JD 时，summary 必须采用“JD匹配差距 + 定向改写策略”结构，禁止“简历整体好坏评价/打分点评”作为主叙事。
-19. 当提供 JD 时，weaknesses 与 suggestions 必须优先描述“岗位职责锚点、关键词覆盖、证据缺口”，而非泛化的简历评价。
+20. 当提供 JD 时，summary 必须采用“JD匹配差距 + 定向改写策略”结构，禁止“简历整体好坏评价/打分点评”作为主叙事。
+21. 当提供 JD 时，weaknesses 与 suggestions 必须优先描述“岗位职责锚点、关键词覆盖、证据缺口”，而非泛化的简历评价。
 """ if bool(str(job_description or '').strip()) else ""
     format_requirements = f"""
 输出规范（精简版）：
@@ -146,6 +146,8 @@ def _build_analysis_prompt(
 12. 当简历存在多个关键短板时，suggestions 需覆盖不同 targetSection（如 summary/workExps/skills），避免集中在单一模块。
 13. 事实来源仅允许：用户简历、用户职业画像、补充对话内容（若有）。禁止凭空新增公司/项目/时间线/结果数据。
 14. 若用户画像与简历信息冲突，优先保持“已明确可验证事实”，并在 reason 中提示信息冲突风险，不得自行拍板编造。
+15. 严禁在简历可见内容（summary/workExps/projects/skills/extra）中输出 MBTI / 人格类型（如 INTJ、ENFP、16型人格）。
+16. 工作风格、职业目标、约束、薪资诉求等仅可用于内部判断，不得将其原文放入 suggestedValue。
 {final_stage_requirements}
 {targeted_summary_requirements}
 {rag_context}

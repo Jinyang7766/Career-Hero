@@ -47,6 +47,93 @@ except ImportError:
         sanitize_resume_skills,
     )
 
+
+_MBTI_TOKEN_RE = re.compile(r'(?<![A-Za-z])[IE][NS][FT][JP](?:-[AT])?(?![A-Za-z])', flags=re.IGNORECASE)
+_PREFERENCE_KEYS = (
+    'workStyle', 'work_style',
+    'careerGoal', 'career_goal',
+    'constraints', 'hardConstraints',
+    'targetSalary', 'target_salary', 'salaryExpectation',
+)
+
+
+def _compact_text(value):
+    return re.sub(r'[\s\W_]+', '', str(value or '').lower())
+
+
+def _collect_preference_terms(profile):
+    if not isinstance(profile, dict):
+        return []
+
+    terms = []
+
+    def _append(raw):
+        if isinstance(raw, list):
+            for item in raw:
+                _append(item)
+            return
+        text = str(raw or '').strip()
+        if text:
+            terms.append(text)
+
+    for key in _PREFERENCE_KEYS:
+        _append(profile.get(key))
+
+    for key in ('preferences', 'careerPreferences', 'jobPreferences'):
+        block = profile.get(key)
+        if not isinstance(block, dict):
+            continue
+        for nested_key in _PREFERENCE_KEYS:
+            _append(block.get(nested_key))
+
+    deduped = []
+    seen = set()
+    for term in terms:
+        compact = _compact_text(term)
+        if len(compact) < 4 or compact in seen:
+            continue
+        seen.add(compact)
+        deduped.append(term)
+    return deduped
+
+
+def _has_forbidden_resume_text(value, blocked_terms):
+    text = str(value or '')
+    if not text:
+        return False
+    if _MBTI_TOKEN_RE.search(text):
+        return True
+    compact = _compact_text(text)
+    if not compact:
+        return False
+    for term in blocked_terms:
+        compact_term = _compact_text(term)
+        if compact_term and compact_term in compact:
+            return True
+    return False
+
+
+def _sanitize_visibility_leaking_suggestions(suggestions, career_profile):
+    source = suggestions if isinstance(suggestions, list) else []
+    blocked_terms = _collect_preference_terms(career_profile)
+    cleaned = []
+    for item in source:
+        if not isinstance(item, dict):
+            continue
+        suggestion = dict(item)
+        suggested_value = suggestion.get('suggestedValue')
+        if isinstance(suggested_value, str):
+            if _has_forbidden_resume_text(suggested_value, blocked_terms):
+                continue
+        elif isinstance(suggested_value, list):
+            filtered_values = [v for v in suggested_value if not _has_forbidden_resume_text(v, blocked_terms)]
+            if suggested_value and not filtered_values:
+                continue
+            suggestion['suggestedValue'] = filtered_values
+        cleaned.append(suggestion)
+    return cleaned
+
+
 def analyze_resume_core(current_user_id, data, deps):
     logger = deps['logger']
     resume_data = data.get('resumeData')
@@ -437,6 +524,7 @@ def analyze_resume_core(current_user_id, data, deps):
                     ai_result['suggestions'] = _merge_duplicate_suggestions(ai_result.get('suggestions', []))
                 ai_result['suggestions'] = _append_education_gap_advisory(ai_result.get('suggestions', []))
             ai_result['suggestions'] = _sanitize_skill_suggestions(ai_result.get('suggestions', []))
+            ai_result['suggestions'] = _sanitize_visibility_leaking_suggestions(ai_result.get('suggestions', []), career_profile)
             final_resume_data = _try_generate_final_resume_for_report(
                 ai_result.get('score', 70),
                 ai_result.get('suggestions', []),
@@ -507,6 +595,7 @@ def analyze_resume_core(current_user_id, data, deps):
                     suggestions = _merge_duplicate_suggestions(suggestions)
                 suggestions = _append_education_gap_advisory(suggestions)
             suggestions = _sanitize_skill_suggestions(suggestions)
+            suggestions = _sanitize_visibility_leaking_suggestions(suggestions, career_profile)
             final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
             if isinstance(final_resume_data, dict):
                 final_resume_data = sanitize_resume_skills(final_resume_data, limit=DEFAULT_SKILL_LIMIT)
@@ -561,6 +650,7 @@ def analyze_resume_core(current_user_id, data, deps):
             suggestions = _merge_duplicate_suggestions(suggestions)
         suggestions = _append_education_gap_advisory(suggestions)
     suggestions = _sanitize_skill_suggestions(suggestions)
+    suggestions = _sanitize_visibility_leaking_suggestions(suggestions, career_profile)
     final_resume_data = _try_generate_final_resume_for_report(score, suggestions)
     if isinstance(final_resume_data, dict):
         final_resume_data = sanitize_resume_skills(final_resume_data, limit=DEFAULT_SKILL_LIMIT)

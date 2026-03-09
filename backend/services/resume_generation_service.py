@@ -19,8 +19,123 @@ except ImportError:
     )
 
 
-def _build_resume_fallback(resume_data):
+_MBTI_TOKEN_RE = re.compile(r'(?<![A-Za-z])[IE][NS][FT][JP](?:-[AT])?(?![A-Za-z])', flags=re.IGNORECASE)
+_MBTI_LABEL_RE = re.compile(r'(?:MBTI|16型人格|人格类型)\s*[:：]?\s*[A-Za-z\-/]{0,8}', flags=re.IGNORECASE)
+_PREFERENCE_SOURCE_KEYS = (
+    'workStyle', 'work_style',
+    'careerGoal', 'career_goal',
+    'constraints', 'hardConstraints',
+    'targetSalary', 'target_salary', 'salaryExpectation',
+)
+
+
+def _normalize_compact_text(value: str) -> str:
+    return re.sub(r'[\s\W_]+', '', str(value or '').lower())
+
+
+def _should_block_preference_phrase(text: str) -> bool:
+    value = str(text or '').strip()
+    compact = _normalize_compact_text(value)
+    if not compact:
+        return False
+    if len(compact) >= 10:
+        return True
+    return bool(re.search(r'(目标|偏好|希望|薪资|salary|远程|居家|坐班|地点|城市|通勤|约束|限制|workstyle|careergoal)', value, flags=re.IGNORECASE))
+
+
+def _extract_preference_phrases(career_profile):
+    if not isinstance(career_profile, dict):
+        return []
+
+    phrases = []
+
+    def _append_value(raw, *, force=False):
+        if isinstance(raw, list):
+            for item in raw:
+                _append_value(item, force=force)
+            return
+        text = str(raw or '').strip()
+        if text and (force or _should_block_preference_phrase(text)):
+            phrases.append(text)
+
+    force_block_keys = {'workStyle', 'work_style', 'careerGoal', 'career_goal', 'targetSalary', 'target_salary', 'salaryExpectation'}
+    for key in _PREFERENCE_SOURCE_KEYS:
+        _append_value(career_profile.get(key), force=key in force_block_keys)
+
+    for key in ('preferences', 'careerPreferences', 'jobPreferences'):
+        block = career_profile.get(key)
+        if isinstance(block, dict):
+            for nested_key in _PREFERENCE_SOURCE_KEYS:
+                _append_value(block.get(nested_key), force=nested_key in force_block_keys)
+
+    deduped = []
+    seen = set()
+    for phrase in phrases:
+        compact = _normalize_compact_text(phrase)
+        if not compact or compact in seen:
+            continue
+        seen.add(compact)
+        deduped.append(phrase)
+    return deduped
+
+
+def _scrub_profile_leakage_text(value, blocked_phrases):
+    text = str(value or '')
+    if not text:
+        return ''
+
+    text = _MBTI_LABEL_RE.sub('', text)
+    text = _MBTI_TOKEN_RE.sub('', text)
+    text = re.sub(r'(?:偏好|希望|期望)[^，。；;\n]{0,30}(?:远程办公|居家办公|管理岗|薪资|年薪|月薪)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(?:目标薪资|期望薪资|薪资诉求|薪资期望|target\s*salary)[^，。；;\n]{0,20}', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'(远程办公|居家办公|hybrid|remote)', '', text, flags=re.IGNORECASE)
+
+    for phrase in blocked_phrases:
+        if not phrase:
+            continue
+        text = re.sub(re.escape(phrase), '', text, flags=re.IGNORECASE)
+
+    text = re.sub(r'[\s]{2,}', ' ', text)
+    text = re.sub(r'[，；;,、]{2,}', '，', text)
+    text = re.sub(r'\s*([，。；;、,])\s*', r'\1', text)
+    text = re.sub(r'^[，。；;、,\s]+|[，。；;、,\s]+$', '', text)
+    return text
+
+
+def _sanitize_resume_visibility_fields(generated_resume, career_profile=None):
+    next_resume = _normalize_resume_shape(generated_resume or {})
+    blocked_phrases = _extract_preference_phrases(career_profile)
+
+    next_resume['summary'] = _scrub_profile_leakage_text(next_resume.get('summary'), blocked_phrases)
+
+    for section in ('workExps', 'projects'):
+        items = next_resume.get(section) or []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            for field in ('description', 'subtitle', 'position', 'role'):
+                if field in item:
+                    item[field] = _scrub_profile_leakage_text(item.get(field), blocked_phrases)
+
+    cleaned_skills = []
+    for skill in (next_resume.get('skills') or []):
+        text = _scrub_profile_leakage_text(skill, blocked_phrases)
+        compact = _normalize_compact_text(text)
+        if not compact:
+            continue
+        if _MBTI_TOKEN_RE.search(str(skill or '')):
+            continue
+        if any(_normalize_compact_text(phrase) == compact for phrase in blocked_phrases):
+            continue
+        cleaned_skills.append(text)
+    next_resume['skills'] = cleaned_skills
+
+    return next_resume
+
+
+def _build_resume_fallback(resume_data, career_profile=None):
     fallback = _sync_resume_alias_fields(_normalize_resume_shape(resume_data or {}))
+    fallback = _sanitize_resume_visibility_fields(fallback, career_profile=career_profile)
     return sanitize_resume_skills(fallback, limit=DEFAULT_SKILL_LIMIT)
 
 
@@ -386,6 +501,9 @@ def _build_career_profile_context(career_profile):
     experiences = career_profile.get('experiences') or career_profile.get('careerFacts') or []
     core_skills = career_profile.get('coreSkills') or career_profile.get('skills') or []
     constraints = career_profile.get('constraints') or career_profile.get('hardConstraints') or []
+    work_style = career_profile.get('workStyle') or career_profile.get('work_style') or ''
+    career_goal = career_profile.get('careerGoal') or career_profile.get('career_goal') or ''
+    target_salary = career_profile.get('targetSalary') or career_profile.get('target_salary') or career_profile.get('salaryExpectation') or ''
     target_role = _resolve_career_profile_target_role(career_profile)
 
     lines = []
@@ -417,10 +535,22 @@ def _build_career_profile_context(career_profile):
             if results:
                 segments.append(f"结果：{results[:120]}")
             lines.append("；".join(segments))
+
+    internal_preferences = []
     if isinstance(constraints, list) and constraints:
         constraints_text = [str(x).strip() for x in constraints[:8] if str(x).strip()]
         if constraints_text:
-            lines.append(f"- 使用约束：{'；'.join(constraints_text)}")
+            internal_preferences.append(f"约束：{'；'.join(constraints_text)}")
+    if str(work_style or '').strip():
+        internal_preferences.append(f"工作风格偏好：{str(work_style).strip()}")
+    if str(career_goal or '').strip():
+        internal_preferences.append(f"职业目标：{str(career_goal).strip()}")
+    if str(target_salary or '').strip():
+        internal_preferences.append(f"薪资诉求：{str(target_salary).strip()}")
+    if internal_preferences:
+        lines.append("- 内部偏好参考（仅用于改写策略，禁止原文写入简历）：")
+        for pref in internal_preferences:
+            lines.append(f"  - {pref}")
 
     if not lines:
         return '未提供'
@@ -642,13 +772,14 @@ def _neutralize_unknown_numbers(generated_resume, source_resume):
     return next_resume
 
 
-def _postprocess_generated_resume(generated_resume, source_resume, normalized_suggestions):
+def _postprocess_generated_resume(generated_resume, source_resume, normalized_suggestions, career_profile=None):
     generated = _normalize_resume_shape(generated_resume or {})
     generated = _restore_original_contacts(generated, source_resume)
     generated = _restore_source_fact_boundaries(generated, source_resume)
     generated = _soften_unverified_claims(generated)
     generated = _neutralize_unknown_numbers(generated, source_resume)
     generated = _normalize_and_merge_skills(generated, source_resume, normalized_suggestions)
+    generated = _sanitize_resume_visibility_fields(generated, career_profile=career_profile)
     generated = _sync_resume_alias_fields(generated)
     return sanitize_resume_skills(generated, limit=DEFAULT_SKILL_LIMIT)
 
@@ -675,7 +806,7 @@ def generate_optimized_resume(
 
     job_description_text = str(job_description or '').strip()
     target_role_text = str(target_role or '').strip()
-    fallback_resume = _build_resume_fallback(resume_data)
+    fallback_resume = _build_resume_fallback(resume_data, career_profile=career_profile)
     if job_description_text:
         fallback_resume = _merge_jd_keywords_into_skills(
             fallback_resume,
@@ -756,6 +887,8 @@ def generate_optimized_resume(
    - skills 至少覆盖 3 个 JD 硬技能关键词（优先使用“JD硬技能关键词参考”）；
    - workExps/projects 至少各有 1 条描述显式对齐目标岗位职责锚点。
 10. 若 JD 与现有事实存在冲突，只能调整表达，不得编造新经历。
+11. 严禁在简历可见字段中输出 MBTI / 人格类型（如 INTJ、ENFP、16型人格等）。
+12. 职业目标与偏好（工作风格、职业目标、约束、薪资诉求等）仅用于内部改写策略，不得原文写入 summary/skills/workExps/projects/extra。
 
 **输出格式**
 {{
@@ -825,6 +958,7 @@ def generate_optimized_resume(
                 ai_result.get('resumeData') or {},
                 resume_data,
                 normalized_suggestions,
+                career_profile=career_profile,
             )
             if job_description_text:
                 generated = _merge_jd_keywords_into_skills(
@@ -847,7 +981,8 @@ def generate_optimized_resume(
                     timing_marks,
                     round((time.perf_counter() - total_started) * 1000, 2),
                 )
-                return generated
+                generated = _sanitize_resume_visibility_fields(generated, career_profile=career_profile)
+                return sanitize_resume_skills(generated, limit=DEFAULT_SKILL_LIMIT)
 
             unresolved_context = '\n'.join([
                 f"- [{s.get('id')}] {s.get('title')} | section={s.get('targetSection')} | reason={s.get('reason')} | original={s.get('originalValue')} | suggested={s.get('suggestedValue')}"
@@ -863,6 +998,8 @@ def generate_optimized_resume(
 4) personalInfo.name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
 5) 若提供 JD，skills 至少覆盖 3 个 JD 硬技能关键词，并确保经历描述出现岗位职责锚点。
 6) 仅返回 JSON。
+7) 严禁在简历可见字段中输出 MBTI / 人格类型（如 INTJ、ENFP、16型人格等）。
+8) 工作风格、职业目标、约束、薪资诉求等仅可作为内部改写依据，不得将其原文写入简历。
 
 原始简历：
 {resume_info}
@@ -917,6 +1054,7 @@ JD硬技能关键词参考：
                 verified.get('resumeData') or generated,
                 resume_data,
                 normalized_suggestions,
+                career_profile=career_profile,
             )
             if job_description_text:
                 final_generated = _merge_jd_keywords_into_skills(
@@ -935,7 +1073,8 @@ JD硬技能关键词参考：
                 timing_marks,
                 round((time.perf_counter() - total_started) * 1000, 2),
             )
-            return final_generated
+            final_generated = _sanitize_resume_visibility_fields(final_generated, career_profile=career_profile)
+            return sanitize_resume_skills(final_generated, limit=DEFAULT_SKILL_LIMIT)
     except Exception as ai_error:
         logger.error("AI 生成简历失败: %s", ai_error)
         if "429" in str(ai_error) or "quota" in str(ai_error).lower() or "exceeded" in str(ai_error).lower():

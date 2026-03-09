@@ -1,7 +1,10 @@
+import json
+
 from flask import Flask, request
 
 from backend.routes.ai_routes import get_json_payload
 from backend.services.parse_endpoint_service import parse_resume_core
+from backend.services.ai_endpoint_analysis_service import _sanitize_visibility_leaking_suggestions
 from backend.services.ai_endpoint_prompt_service import _build_analysis_prompt
 from backend.services.resume_generation_service import generate_optimized_resume
 
@@ -152,3 +155,157 @@ def test_generate_optimized_resume_fallback_still_aligns_jd_keywords_into_skills
     joined = ' '.join(skills).lower()
     assert 'python' in joined
     assert 'sql' in joined
+
+
+class _FakeGeminiClient:
+    def __init__(self, payload):
+        self._payload = payload
+        self.models = self
+
+    def generate_content(self, **_kwargs):
+        return type('Response', (), {'text': json.dumps(self._payload, ensure_ascii=False)})()
+
+
+class _SilentLogger:
+    def info(self, *_args, **_kwargs):
+        return None
+
+    def warning(self, *_args, **_kwargs):
+        return None
+
+    def error(self, *_args, **_kwargs):
+        return None
+
+
+def test_generate_optimized_resume_strips_mbti_and_preference_leakage():
+    resume_data = {
+        'personalInfo': {
+            'name': '候选人',
+            'title': '数据分析师',
+            'email': 'candidate@example.com',
+            'phone': '13800138000',
+            'location': '上海',
+        },
+        'workExps': [
+            {
+                'id': 1,
+                'company': '示例科技',
+                'position': '数据分析师',
+                'startDate': '2022-01',
+                'endDate': '2024-01',
+                'description': '负责数据分析与可视化看板建设。',
+            }
+        ],
+        'educations': [],
+        'projects': [
+            {
+                'id': 1,
+                'title': '增长分析项目',
+                'subtitle': '项目负责人',
+                'startDate': '2023-01',
+                'endDate': '2023-08',
+                'description': '搭建指标体系并优化投放策略。',
+            }
+        ],
+        'skills': ['Python', 'SQL'],
+        'summary': '3年数据分析经验，擅长业务诊断与增长分析。',
+    }
+    career_profile = {
+        'mbti': 'INTJ',
+        'workStyle': '偏好远程办公',
+        'careerGoal': '希望两年内转管理岗',
+        'targetSalary': '30K-40K',
+        'constraints': ['仅接受远程办公'],
+    }
+
+    ai_payload = {
+        'resumeData': {
+            'personalInfo': {
+                'name': '候选人',
+                'title': '数据分析师',
+                'email': 'candidate@example.com',
+                'phone': '13800138000',
+                'location': '上海',
+            },
+            'workExps': [
+                {
+                    'id': 1,
+                    'company': '示例科技',
+                    'position': '数据分析师',
+                    'startDate': '2022-01',
+                    'endDate': '2024-01',
+                    'description': '我是INTJ，偏好远程办公，仅接受远程办公，并希望两年内转管理岗。',
+                }
+            ],
+            'educations': [],
+            'projects': [
+                {
+                    'id': 1,
+                    'title': '增长分析项目',
+                    'subtitle': '项目负责人',
+                    'startDate': '2023-01',
+                    'endDate': '2023-08',
+                    'description': '期望薪资30K-40K，偏好远程办公。',
+                }
+            ],
+            'skills': ['Python', 'INTJ', '仅接受远程办公'],
+            'summary': '我是INTJ，偏好远程办公，期望薪资30K-40K。',
+        }
+    }
+
+    generated = generate_optimized_resume(
+        gemini_client=_FakeGeminiClient(ai_payload),
+        check_gemini_quota=lambda: True,
+        gemini_analysis_model='gemini-2.5-flash',
+        parse_ai_response=lambda text: json.loads(text),
+        format_resume_for_ai=lambda _: 'resume',
+        logger=_SilentLogger(),
+        resume_data=resume_data,
+        chat_history=[],
+        score=72,
+        suggestions=[],
+        career_profile=career_profile,
+        job_description='',
+        target_role='数据分析师',
+        enable_verify_pass=False,
+    )
+
+    serialized = json.dumps(generated, ensure_ascii=False)
+    assert 'INTJ' not in serialized
+    assert '远程办公' not in serialized
+    assert '30K-40K' not in serialized
+    assert '希望两年内转管理岗' not in serialized
+
+
+def test_analysis_suggestions_filter_mbti_and_preference_raw_text():
+    suggestions = [
+        {
+            'id': 's1',
+            'targetSection': 'summary',
+            'suggestedValue': '我是INTJ，偏好远程办公。',
+        },
+        {
+            'id': 's2',
+            'targetSection': 'skills',
+            'suggestedValue': ['Python', 'INTJ', '仅接受远程办公'],
+        },
+        {
+            'id': 's3',
+            'targetSection': 'workExps',
+            'suggestedValue': '主导数据看板搭建并推动转化效率提升。',
+        },
+    ]
+
+    profile = {
+        'workStyle': '偏好远程办公',
+        'constraints': ['仅接受远程办公'],
+    }
+
+    cleaned = _sanitize_visibility_leaking_suggestions(suggestions, profile)
+
+    assert len(cleaned) == 2
+    kept_ids = {item.get('id') for item in cleaned}
+    assert 's1' not in kept_ids
+    assert 's3' in kept_ids
+    skills_item = next(item for item in cleaned if item.get('id') == 's2')
+    assert skills_item.get('suggestedValue') == ['Python']

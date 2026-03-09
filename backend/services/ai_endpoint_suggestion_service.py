@@ -142,6 +142,9 @@ def _format_career_profile_context(profile):
         ).strip()
         highlights = profile.get('careerHighlights') or profile.get('highlights') or []
         constraints = profile.get('constraints') or profile.get('hardConstraints') or []
+        work_style = profile.get('workStyle') or profile.get('work_style') or ''
+        career_goal = profile.get('careerGoal') or profile.get('career_goal') or ''
+        target_salary = profile.get('targetSalary') or profile.get('target_salary') or profile.get('salaryExpectation') or ''
         core_skills = profile.get('coreSkills') or profile.get('skills') or []
         experiences = profile.get('experiences') or profile.get('careerFacts') or []
         target_role = _resolve_career_profile_target_role(profile)
@@ -180,8 +183,21 @@ def _format_career_profile_context(profile):
                     parts.append(f"是否在简历：{in_resume}")
                 lines.append("；".join(parts))
 
+        internal_preferences = []
         if isinstance(constraints, list) and constraints:
-            lines.append(f"- 使用约束：{'；'.join([str(x).strip() for x in constraints[:8] if str(x).strip()])}")
+            constraint_text = [str(x).strip() for x in constraints[:8] if str(x).strip()]
+            if constraint_text:
+                internal_preferences.append(f"约束：{'；'.join(constraint_text)}")
+        if str(work_style or '').strip():
+            internal_preferences.append(f"工作风格偏好：{str(work_style).strip()}")
+        if str(career_goal or '').strip():
+            internal_preferences.append(f"职业目标：{str(career_goal).strip()}")
+        if str(target_salary or '').strip():
+            internal_preferences.append(f"薪资诉求：{str(target_salary).strip()}")
+        if internal_preferences:
+            lines.append("- 内部偏好参考（仅用于改写策略，禁止原文写入简历）：")
+            for item in internal_preferences:
+                lines.append(f"  - {item}")
 
         return '\n'.join([line for line in lines if str(line).strip()])
     except Exception:
