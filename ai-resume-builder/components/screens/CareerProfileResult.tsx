@@ -263,7 +263,7 @@ const CareerProfileResult: React.FC = () => {
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
                   <span>{hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}</span>
                   {statusCount.pending > 0 && (
-                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900 animate-in zoom-in duration-300">
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-in zoom-in duration-300">
                       {statusCount.pending}
                     </span>
                   )}
