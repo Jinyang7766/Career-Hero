@@ -14,11 +14,30 @@ export interface DynamicFollowupContext {
   isFirstBuild?: boolean;
 }
 
+type FollowupPresenceSignals = {
+  workExp: boolean;
+  projects: boolean;
+  skills: boolean;
+  education: boolean;
+  quantified: boolean;
+  leadership: boolean;
+  mbti: boolean;
+  workStyle: boolean;
+  careerGoal: boolean;
+  jobTarget: boolean;
+  enoughNarrative: boolean;
+};
+
 const normalize = (value: unknown): string =>
   String(value || '')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
+
+const normalizeText = (value: unknown): string =>
+  String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const hasAny = (value: unknown[] | undefined | null): boolean =>
   Array.isArray(value) && value.length > 0;
@@ -26,11 +45,6 @@ const hasAny = (value: unknown[] | undefined | null): boolean =>
 const hasPattern = (text: string, pattern: RegExp): boolean => pattern.test(text);
 
 const MBTI_TOKEN_RE = /(?:^|[^A-Z])(I|E)(N|S)(T|F)(J|P)(?:$|[^A-Z])/i;
-
-const normalizeText = (value: unknown): string =>
-  String(value || '')
-    .replace(/\s+/g, ' ')
-    .trim();
 
 const extractMbtiToken = (value: unknown): string => {
   const text = normalizeText(value).toUpperCase();
@@ -40,22 +54,70 @@ const extractMbtiToken = (value: unknown): string => {
   return `${match[1]}${match[2]}${match[3]}${match[4]}`;
 };
 
-const hasMbtiInAtomicTags = (profile: CareerProfile): boolean => {
-  const tags = Array.isArray(profile.atomicTags) ? profile.atomicTags : [];
+const getAtomicTags = (profile: CareerProfile): Array<Record<string, any>> =>
+  Array.isArray(profile.atomicTags) ? (profile.atomicTags as Array<Record<string, any>>) : [];
+
+const collectAtomicTagTexts = (profile: CareerProfile): string[] => {
+  const tags = getAtomicTags(profile);
+  const out: string[] = [];
+
+  tags.forEach((tag) => {
+    const text = normalizeText(tag?.text);
+    const key = normalizeText(tag?.key);
+    const label = normalizeText(tag?.label);
+    if (text) out.push(text);
+    if (key && key !== text) out.push(key);
+    if (label && label !== text && label !== key) out.push(label);
+  });
+
+  return out;
+};
+
+const hasAtomicTagByCategory = (profile: CareerProfile, category: string): boolean => {
+  const tags = getAtomicTags(profile);
+  return tags.some((tag) => normalizeText(tag?.category).toLowerCase() === category.toLowerCase());
+};
+
+const hasAtomicTagBySourcePath = (profile: CareerProfile, pathPattern: RegExp): boolean => {
+  const tags = getAtomicTags(profile);
   return tags.some((tag) => {
-    if (!tag || typeof tag !== 'object') return false;
+    const sourcePaths = Array.isArray(tag?.sourcePaths) ? tag.sourcePaths : [];
+    return sourcePaths.some((entry: unknown) => pathPattern.test(normalizeText(entry)));
+  });
+};
 
-    if (extractMbtiToken((tag as any).text)) return true;
-    if (extractMbtiToken((tag as any).key)) return true;
-    if (extractMbtiToken((tag as any).label)) return true;
+const buildProfileSemanticBlob = (profile: CareerProfile): string => {
+  const constraints = Array.isArray(profile.constraints) ? profile.constraints : [];
+  const coreSkills = Array.isArray(profile.coreSkills) ? profile.coreSkills : [];
 
-    const sourcePaths = Array.isArray((tag as any).sourcePaths)
-      ? (tag as any).sourcePaths.map((entry: unknown) => normalizeText(entry).toLowerCase())
+  return normalize([
+    profile.summary,
+    profile.personality,
+    profile.workStyle,
+    profile.careerGoal,
+    profile.targetRole,
+    (profile as any).jobDirection,
+    profile.personalInfo?.title,
+    ...constraints,
+    ...coreSkills,
+    ...collectAtomicTagTexts(profile),
+  ].join(' '));
+};
+
+const hasMbtiInAtomicTags = (profile: CareerProfile): boolean => {
+  const tags = getAtomicTags(profile);
+  return tags.some((tag) => {
+    if (extractMbtiToken(tag?.text)) return true;
+    if (extractMbtiToken(tag?.key)) return true;
+    if (extractMbtiToken(tag?.label)) return true;
+
+    const sourcePaths = Array.isArray(tag?.sourcePaths)
+      ? tag.sourcePaths.map((entry: unknown) => normalizeText(entry).toLowerCase())
       : [];
     const fromMbtiPath = sourcePaths.some((path: string) => /(^|\.|\[)mbti(\.|\[|$)/i.test(path));
     if (!fromMbtiPath) return false;
 
-    return Boolean(normalizeText((tag as any).text) || normalizeText((tag as any).key));
+    return Boolean(normalizeText(tag?.text) || normalizeText(tag?.key));
   });
 };
 
@@ -75,6 +137,130 @@ const hasMbtiProfileSignal = (profile: CareerProfile): boolean => {
   return hasMbtiInAtomicTags(profile);
 };
 
+const hasCoreSkillsProfileSignal = (profile: CareerProfile): boolean => {
+  if (hasAny(profile.coreSkills)) return true;
+  if (hasAtomicTagByCategory(profile, 'fact_skill')) return true;
+  if (hasAtomicTagBySourcePath(profile, /(^|\.|\[)coreSkills(\.|\[|$)/i)) return true;
+
+  const blob = buildProfileSemanticBlob(profile);
+  return /(技能|技术栈|skill|擅长|熟练|精通|掌握|sql|python|java(script)?|typescript|react|vue|node)/i.test(blob);
+};
+
+const hasWorkStyleProfileSignal = (profile: CareerProfile): boolean => {
+  if (Boolean(normalizeText(profile.workStyle))) return true;
+  if (hasAtomicTagBySourcePath(profile, /(^|\.|\[)workStyle(\.|\[|$)/i)) return true;
+
+  const blob = buildProfileSemanticBlob(profile);
+  return /(工作方式|团队文化|协作方式|沟通(?:风格|方式)?|工作节奏|远程|弹性办公|独立负责|高协作|work\s*style|协作偏好)/i.test(blob);
+};
+
+const hasCareerGoalProfileSignal = (profile: CareerProfile): boolean => {
+  if (Boolean(normalizeText(profile.careerGoal))) return true;
+  if (hasAtomicTagBySourcePath(profile, /(^|\.|\[)careerGoal(\.|\[|$)/i)) return true;
+
+  const blob = buildProfileSemanticBlob(profile);
+  return /(职业目标|发展方向|求职方向|长期目标|短期目标|职业规划|赛道|career\s*goal)/i.test(blob);
+};
+
+const hasJobTargetProfileSignal = (profile: CareerProfile): boolean => {
+  if (Boolean(normalizeText(profile.targetRole))) return true;
+  if (Boolean(normalizeText((profile as any).jobDirection))) return true;
+  if (Boolean(normalizeText(profile.personalInfo?.title))) return true;
+  if (hasAtomicTagByCategory(profile, 'intent')) return true;
+  if (hasAtomicTagBySourcePath(profile, /(^|\.|\[)(targetRole|jobDirection|personalInfo\.title)(\.|\[|$)/i)) return true;
+
+  const blob = buildProfileSemanticBlob(profile);
+  return /(目标岗位|求职方向|应聘岗位|岗位方向|target\s*role|job\s*target)/i.test(blob);
+};
+
+const buildFirstBuildSignals = (
+  resume: ImportedResume | null,
+  supplementText: string,
+  blob: string
+): FollowupPresenceSignals => {
+  const hasCareerGoalSignals = hasPattern(
+    blob,
+    /(职业目标|发展方向|求职方向|目标岗位|目标薪资|薪资)/i
+  );
+
+  return {
+    workExp:
+      hasAny((resume as any)?.workExps) ||
+      hasPattern(blob, /(工作|任职|公司|职责|经验|岗位|实习)/i),
+    projects:
+      hasAny((resume as any)?.projects) ||
+      hasPattern(blob, /(项目|落地|上线|需求|迭代)/i),
+    skills:
+      hasAny((resume as any)?.skills) ||
+      hasPattern(blob, /(技能|技术栈|语言|框架|工具)/i),
+    education:
+      hasAny((resume as any)?.educations) ||
+      hasPattern(blob, /(学历|学校|专业|教育|证书)/i),
+    quantified: hasPattern(
+      blob,
+      /(\d+[%万千百]?|提升|增长|下降|节省|转化率|roi|gmv|留存|营收|效率)/i
+    ),
+    leadership: hasPattern(
+      blob,
+      /(带领|管理|协作|跨部门|推进|owner|负责人|主导|协调)/i
+    ),
+    mbti: hasPattern(blob, /\b[ei][ns][ft][jp]\b/i),
+    workStyle: hasPattern(blob, /(工作方式|团队|协作|沟通|节奏|管理风格|独立负责)/i),
+    careerGoal: hasCareerGoalSignals,
+    jobTarget: hasCareerGoalSignals,
+    enoughNarrative: normalize(supplementText).length >= 180,
+  };
+};
+
+const buildSubsequentSignals = (profile: CareerProfile): FollowupPresenceSignals => {
+  const fullExperienceText = (profile.experiences || [])
+    .map((e) => `${e.actions} ${e.results}`)
+    .join(' ');
+
+  return {
+    workExp: hasAny(profile.experiences),
+    projects: hasAny(profile.projects),
+    skills: hasCoreSkillsProfileSignal(profile),
+    education: hasAny(profile.educations),
+    quantified: /(\d+[%万千百]?|提升|增长|下降|节省|转化率|roi|gmv|留存|营收|效率)/i.test(fullExperienceText),
+    leadership: /(带领|管理|协作|跨部门|推进|owner|负责人|主导|协调)/i.test(fullExperienceText),
+    mbti: hasMbtiProfileSignal(profile),
+    workStyle: hasWorkStyleProfileSignal(profile),
+    careerGoal: hasCareerGoalProfileSignal(profile),
+    jobTarget: hasJobTargetProfileSignal(profile),
+    enoughNarrative: (profile.summary || '').length >= 180,
+  };
+};
+
+const isPromptMissingBySignals = (promptId: string, signals: FollowupPresenceSignals): boolean => {
+  switch (promptId) {
+    case 'work_exp':
+      return !signals.workExp;
+    case 'projects':
+      return !signals.projects;
+    case 'skills':
+      return !signals.skills;
+    case 'education':
+      return !signals.education;
+    case 'quantify':
+      return !signals.quantified;
+    case 'leadership':
+      return !signals.leadership;
+    case 'mbti':
+      return !signals.mbti;
+    case 'work_style':
+      return !signals.workStyle;
+    case 'career_goal':
+      return !signals.careerGoal;
+    case 'job_target':
+      return !signals.jobTarget;
+    case 'missing_facts':
+      return !signals.enoughNarrative;
+    default:
+      return true;
+  }
+};
+
 export const buildDynamicFollowupPrompts = (
   context: DynamicFollowupContext
 ): FollowupPrompt[] => {
@@ -85,95 +271,13 @@ export const buildDynamicFollowupPrompts = (
 
   const blob = normalize(context.supplementText);
 
-  // For first build, we only use resume and supplement text (current logic)
   if (isFirstBuild) {
-    const hasWorkSignals =
-      hasAny((resume as any)?.workExps) ||
-      hasPattern(blob, /(工作|任职|公司|职责|经验|岗位|实习)/i);
-    const hasProjectSignals =
-      hasAny((resume as any)?.projects) || hasPattern(blob, /(项目|落地|上线|需求|迭代)/i);
-    const hasSkillSignals =
-      hasAny((resume as any)?.skills) || hasPattern(blob, /(技能|技术栈|语言|框架|工具)/i);
-    const hasEducationSignals =
-      hasAny((resume as any)?.educations) || hasPattern(blob, /(学历|学校|专业|教育|证书)/i);
-    const hasQuantifiedSignals = hasPattern(
-      blob,
-      /(\d+[%万千百]?|提升|增长|下降|节省|转化率|roi|gmv|留存|营收|效率)/i
-    );
-    const hasLeadershipSignals = hasPattern(
-      blob,
-      /(带领|管理|协作|跨部门|推进|owner|负责人|主导|协调)/i
-    );
-    const hasMbtiSignals = hasPattern(blob, /\b[ei][ns][ft][jp]\b/i);
-    const hasWorkStyleSignals =
-      hasPattern(blob, /(工作方式|团队|协作|沟通|节奏|管理风格|独立负责)/i);
-    const hasCareerGoalSignals =
-      hasPattern(blob, /(职业目标|发展方向|求职方向|目标岗位|目标薪资|薪资)/i);
-    const hasEnoughNarrative = normalize(context.supplementText).length >= 180;
-
-    return basePrompts.filter((prompt) => {
-      switch (prompt.id) {
-        case 'work_exp':
-          return !hasWorkSignals;
-        case 'projects':
-          return !hasProjectSignals;
-        case 'skills':
-          return !hasSkillSignals;
-        case 'education':
-          return !hasEducationSignals;
-        case 'quantify':
-          return !hasQuantifiedSignals;
-        case 'leadership':
-          return !hasLeadershipSignals;
-        case 'mbti':
-          return !hasMbtiSignals;
-        case 'work_style':
-          return !hasWorkStyleSignals;
-        case 'career_goal':
-          return !hasCareerGoalSignals;
-        case 'job_target':
-          return !hasCareerGoalSignals;
-        case 'missing_facts':
-          return !hasEnoughNarrative;
-        default:
-          return true;
-      }
-    });
+    const signals = buildFirstBuildSignals(resume, context.supplementText, blob);
+    return basePrompts.filter((prompt) => isPromptMissingBySignals(prompt.id, signals));
   }
 
-  // For subsequent followups, we check the existing profile fields
   if (!profile) return basePrompts;
 
-  const fullExperienceText = (profile.experiences || [])
-    .map((e) => `${e.actions} ${e.results}`)
-    .join(' ');
-
-  return basePrompts.filter((prompt) => {
-    switch (prompt.id) {
-      case 'work_exp':
-        return !hasAny(profile.experiences);
-      case 'projects':
-        return !hasAny(profile.projects);
-      case 'skills':
-        return !hasAny(profile.coreSkills);
-      case 'education':
-        return !hasAny(profile.educations);
-      case 'quantify':
-        return !/(\d+[%万千百]?|提升|增长|下降|节省|转化率|roi|gmv|留存|营收|效率)/i.test(fullExperienceText);
-      case 'leadership':
-        return !/(带领|管理|协作|跨部门|推进|owner|负责人|主导|协调)/i.test(fullExperienceText);
-      case 'mbti':
-        return !hasMbtiProfileSignal(profile);
-      case 'work_style':
-        return !profile.workStyle;
-      case 'career_goal':
-        return !profile.careerGoal;
-      case 'job_target':
-        return !profile.targetRole;
-      case 'missing_facts':
-        return (profile.summary || '').length < 180;
-      default:
-        return true;
-    }
-  });
+  const signals = buildSubsequentSignals(profile);
+  return basePrompts.filter((prompt) => isPromptMissingBySignals(prompt.id, signals));
 };
