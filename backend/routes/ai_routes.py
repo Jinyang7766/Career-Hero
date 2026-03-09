@@ -290,6 +290,8 @@ def register_ai_routes(app, deps):
             score = data.get('score', 0)
             suggestions = data.get('suggestions', [])
             career_profile = data.get('careerProfile') or None
+            job_description = data.get('jobDescription') or ''
+            target_role = str(data.get('targetRole') or '').strip()
 
             generated_resume = generate_optimized_resume(
                 gemini_client=gemini_client,
@@ -303,6 +305,8 @@ def register_ai_routes(app, deps):
                 score=score,
                 suggestions=suggestions,
                 career_profile=career_profile,
+                job_description=job_description,
+                target_role=target_role,
             )
             return jsonify({'resumeData': generated_resume}), 200
         except ValueError as e:

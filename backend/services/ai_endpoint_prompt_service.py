@@ -123,6 +123,10 @@ def _build_analysis_prompt(
 16. reason 必须一句话直指缺口，禁止模板化空话与同义重复。
 17. 无法确认数字时用中性结果口径，不得编造与占位符。
 """ if is_final_stage else ""
+    targeted_summary_requirements = """
+18. 当提供 JD 时，summary 必须采用“JD匹配差距 + 定向改写策略”结构，禁止“简历整体好坏评价/打分点评”作为主叙事。
+19. 当提供 JD 时，weaknesses 与 suggestions 必须优先描述“岗位职责锚点、关键词覆盖、证据缺口”，而非泛化的简历评价。
+""" if bool(str(job_description or '').strip()) else ""
     format_requirements = f"""
 输出规范（精简版）：
 1. 仅返回合法 JSON，所有顶层字段必须返回；`score`/`scoreBreakdown` 为整数。
@@ -143,6 +147,7 @@ def _build_analysis_prompt(
 13. 事实来源仅允许：用户简历、用户职业画像、补充对话内容（若有）。禁止凭空新增公司/项目/时间线/结果数据。
 14. 若用户画像与简历信息冲突，优先保持“已明确可验证事实”，并在 reason 中提示信息冲突风险，不得自行拍板编造。
 {final_stage_requirements}
+{targeted_summary_requirements}
 {rag_context}
 """
 
@@ -170,6 +175,11 @@ def _build_analysis_prompt(
 请扮演**严格的资深简历诊断顾问**，以“通过初筛”为目标，**严格对照 职位描述 与简历逐条核对**，输出“高影响、低冗余”的优化建议（数量由简历质量决定）。
 请使用中文输出，字段值必须为中文。
 
+口径要求（JD 定向模式，强制）：
+- 主叙事必须聚焦“JD 匹配差距 + 定向改写策略”。
+- 禁止把“简历整体好坏点评”作为主要内容。
+- 若保留分数，仅作匹配度指标，不要在 summary 中展开“简历被评价”措辞。
+
 评分标准（总分100，候选人综合匹配度评分）：
 - 任务/经历匹配（40分，对应 scoreBreakdown.experience）：工作经历与职位描述关键任务的重合度、可验证案例支撑强度。
 - 能力/技能匹配（35分，对应 scoreBreakdown.skills）：关键能力与技能（工具、方法、业务能力）覆盖率与深度。
@@ -190,7 +200,7 @@ def _build_analysis_prompt(
     "skills": 25,
     "format": 25
   }},
-  "summary": "候选人综合匹配度评估简述（控制在100字以内）。",
+  "summary": "JD匹配差距与定向改写策略摘要（控制在100字以内）。",
   "targetRole": "目标岗位名称，无法确定时返回空字符串",
   "targetRoleConfidence": 0.0,
   "strengths": ["优势1", "优势2"],

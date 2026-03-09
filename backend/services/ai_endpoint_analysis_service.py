@@ -236,6 +236,8 @@ def analyze_resume_core(current_user_id, data, deps):
                 score=_score,
                 suggestions=safe_suggestions,
                 career_profile=career_profile,
+                job_description=job_description,
+                target_role=str((data or {}).get('targetRole') or '').strip(),
             )
             return generated if isinstance(generated, dict) else None
         except Exception as gen_err:

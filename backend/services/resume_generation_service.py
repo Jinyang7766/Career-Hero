@@ -1,6 +1,7 @@
 import copy
 import json
 import re
+import time
 
 from google.genai import types
 
@@ -247,6 +248,55 @@ def _collect_skill_keywords_from_suggestions(suggestions):
     return keywords
 
 
+def _extract_jd_skill_keywords(job_description, target_role='', limit=12):
+    text = str(job_description or '').strip()
+    if not text:
+        return []
+
+    candidates = []
+    # English-ish technical tokens
+    candidates.extend(re.findall(r'\b[A-Za-z][A-Za-z0-9\-\+#\.]{1,24}\b', text))
+    # Common Chinese skill nouns
+    candidates.extend(re.findall(r'[\u4e00-\u9fff]{2,12}(?:开发|分析|建模|算法|架构|测试|运维|治理|工程|平台|系统|可视化|自动化)', text))
+
+    role_text = str(target_role or '').strip()
+    if role_text:
+        candidates.append(role_text)
+
+    normalized = []
+    seen = set()
+    for candidate in candidates:
+        canonical = _canonicalize_skill(candidate)
+        if not canonical:
+            continue
+        if not _is_hard_skill(canonical):
+            continue
+        key = canonical.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        normalized.append(canonical)
+        if len(normalized) >= limit:
+            break
+    return normalized
+
+
+def _merge_jd_keywords_into_skills(generated_resume, job_description, target_role=''):
+    next_resume = _normalize_resume_shape(generated_resume or {})
+    jd_keywords = _extract_jd_skill_keywords(job_description, target_role=target_role, limit=10)
+    if not jd_keywords:
+        return next_resume
+
+    existing = _split_skill_candidates(next_resume.get('skills') or [])
+    next_resume['skills'] = merge_resume_skills(
+        source_skills=existing,
+        generated_skills=existing,
+        suggested_skills=jd_keywords,
+        limit=DEFAULT_SKILL_LIMIT,
+    )
+    return next_resume
+
+
 def _normalize_and_merge_skills(generated_resume, source_resume, suggestions):
     next_resume = _normalize_resume_shape(generated_resume or {})
     source = _normalize_resume_shape(source_resume or {})
@@ -271,19 +321,19 @@ def _normalize_text(value: str) -> str:
     return re.sub(r'[\s\W_]+', '', str(value or '').lower())
 
 
-def _build_suggestions_context(suggestions):
+def _build_suggestions_context(suggestions, *, max_items: int = 20):
     normalized_suggestions = []
-    for idx, suggestion in enumerate((suggestions or [])[:60], start=1):
+    for idx, suggestion in enumerate((suggestions or [])[:max_items], start=1):
         if not isinstance(suggestion, dict):
             continue
         normalized_suggestions.append(
             {
                 'id': suggestion.get('id') or f'suggestion-{idx}',
                 'title': suggestion.get('title') or '优化建议',
-                'reason': suggestion.get('reason') or '',
+                'reason': str(suggestion.get('reason') or '')[:240],
                 'targetSection': suggestion.get('targetSection') or '',
                 'targetField': suggestion.get('targetField') or '',
-                'originalValue': suggestion.get('originalValue') or '',
+                'originalValue': str(suggestion.get('originalValue') or '')[:240],
                 'suggestedValue': suggestion.get('suggestedValue') or '',
                 'status': suggestion.get('status') or '',
             }
@@ -293,6 +343,8 @@ def _build_suggestions_context(suggestions):
         suggested_value = s['suggestedValue']
         if isinstance(suggested_value, (list, dict)):
             suggested_value = json.dumps(suggested_value, ensure_ascii=False)
+        else:
+            suggested_value = str(suggested_value or '')[:280]
         suggestions_text_blocks.append(
             f"- [{s['id']}] section={s['targetSection']} field={s['targetField']} title={s['title']}\n"
             f"  reason={s['reason']}\n"
@@ -342,12 +394,12 @@ def _build_career_profile_context(career_profile):
     if summary:
         lines.append(f"- 画像摘要：{summary}")
     if isinstance(core_skills, list) and core_skills:
-        skills = [str(x).strip() for x in core_skills[:12] if str(x).strip()]
+        skills = [str(x).strip() for x in core_skills[:8] if str(x).strip()]
         if skills:
             lines.append(f"- 核心能力：{'、'.join(skills)}")
     if isinstance(experiences, list) and experiences:
         lines.append("- 关键经历：")
-        for idx, item in enumerate(experiences[:8], start=1):
+        for idx, item in enumerate(experiences[:5], start=1):
             if not isinstance(item, dict):
                 continue
             title = str(item.get('title') or item.get('name') or f'经历{idx}').strip()
@@ -361,9 +413,9 @@ def _build_career_profile_context(career_profile):
             if organization:
                 segments.append(f"组织：{organization}")
             if actions:
-                segments.append(f"行动：{actions[:160]}")
+                segments.append(f"行动：{actions[:120]}")
             if results:
-                segments.append(f"结果：{results[:160]}")
+                segments.append(f"结果：{results[:120]}")
             lines.append("；".join(segments))
     if isinstance(constraints, list) and constraints:
         constraints_text = [str(x).strip() for x in constraints[:8] if str(x).strip()]
@@ -590,6 +642,17 @@ def _neutralize_unknown_numbers(generated_resume, source_resume):
     return next_resume
 
 
+def _postprocess_generated_resume(generated_resume, source_resume, normalized_suggestions):
+    generated = _normalize_resume_shape(generated_resume or {})
+    generated = _restore_original_contacts(generated, source_resume)
+    generated = _restore_source_fact_boundaries(generated, source_resume)
+    generated = _soften_unverified_claims(generated)
+    generated = _neutralize_unknown_numbers(generated, source_resume)
+    generated = _normalize_and_merge_skills(generated, source_resume, normalized_suggestions)
+    generated = _sync_resume_alias_fields(generated)
+    return sanitize_resume_skills(generated, limit=DEFAULT_SKILL_LIMIT)
+
+
 def generate_optimized_resume(
     *,
     gemini_client,
@@ -603,24 +666,52 @@ def generate_optimized_resume(
     score,
     suggestions,
     career_profile=None,
+    job_description='',
+    target_role='',
+    enable_verify_pass: bool = True,
 ):
     if not resume_data:
         raise ValueError('需要提供简历数据')
 
+    job_description_text = str(job_description or '').strip()
+    target_role_text = str(target_role or '').strip()
     fallback_resume = _build_resume_fallback(resume_data)
+    if job_description_text:
+        fallback_resume = _merge_jd_keywords_into_skills(
+            fallback_resume,
+            job_description_text,
+            target_role=target_role_text,
+        )
     if not (gemini_client and check_gemini_quota()):
         return fallback_resume
 
-    try:
-        formatted_chat = ""
-        for msg in chat_history or []:
-            role = "用户" if msg.get('role') == 'user' else "顾问"
-            formatted_chat += f"{role}: {msg.get('text', '')}\n"
+    timing_marks = {}
+    total_started = time.perf_counter()
 
-        normalized_suggestions, suggestions_context = _build_suggestions_context(suggestions)
+    def _mark(name: str, started: float):
+        timing_marks[name] = round((time.perf_counter() - started) * 1000, 2)
+
+    try:
+        prep_started = time.perf_counter()
+        chat_lines = []
+        for msg in (chat_history or [])[-12:]:
+            if not isinstance(msg, dict):
+                continue
+            role = "用户" if msg.get('role') == 'user' else "顾问"
+            text = str(msg.get('text') or '').strip()
+            if not text:
+                continue
+            chat_lines.append(f"{role}: {text[:240]}")
+
+        formatted_chat = "\n".join(chat_lines)
+        normalized_suggestions, suggestions_context = _build_suggestions_context(suggestions, max_items=20)
         career_profile_context = _build_career_profile_context(career_profile)
         resume_info = format_resume_for_ai(resume_data)
         chat_info = formatted_chat if formatted_chat else '无对话历史'
+        jd_skill_keywords = _extract_jd_skill_keywords(job_description_text, target_role=target_role_text, limit=10)
+        jd_context = job_description_text or '未提供'
+        jd_keyword_hint = '、'.join(jd_skill_keywords[:8]) if jd_skill_keywords else '未提取到明确硬技能关键词'
+        _mark('prep_context', prep_started)
 
         prompt = f"""
 请根据以下信息生成一份完整且优化后的简历。
@@ -637,10 +728,19 @@ def generate_optimized_resume(
 3. 用户职业画像（可能包含简历外经历）：
 {career_profile_context}
 
-4. 当前评分：
+4. 目标岗位：
+{target_role_text or '未提供'}
+
+5. 职位描述（JD）：
+{jd_context}
+
+6. JD硬技能关键词参考（用于定向对齐）：
+{jd_keyword_hint}
+
+7. 当前评分：
 {score}/100
 
-5. 优化建议（必须尽量落实到最终简历）：
+8. 优化建议（必须尽量落实到最终简历）：
 {suggestions_context}
 
 **输出要求（精简版）**
@@ -652,6 +752,10 @@ def generate_optimized_resume(
 6. workExps/projects 的描述必须是完整自然语句，且至少包含“动作/方法/结果”中的两项。
 7. suggestions 指向的薄弱内容必须落实改写，不得大段原文照搬。
 8. personalInfo 中已有 name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
+9. 若提供 JD，必须体现 JD 定向改写：
+   - skills 至少覆盖 3 个 JD 硬技能关键词（优先使用“JD硬技能关键词参考”）；
+   - workExps/projects 至少各有 1 条描述显式对齐目标岗位职责锚点。
+10. 若 JD 与现有事实存在冲突，只能调整表达，不得编造新经历。
 
 **输出格式**
 {{
@@ -706,26 +810,48 @@ def generate_optimized_resume(
 }}
 """
 
+        first_llm_started = time.perf_counter()
         response = gemini_client.models.generate_content(
             model=gemini_analysis_model,
             contents=prompt,
             config=types.GenerateContentConfig(response_mime_type="application/json"),
         )
+        _mark('llm_generate_v1', first_llm_started)
+
         ai_result = parse_ai_response(response.text)
         if ai_result and ai_result.get('resumeData'):
-            generated = _normalize_resume_shape(ai_result.get('resumeData') or {})
-            generated = _restore_original_contacts(generated, resume_data)
-            generated = _restore_source_fact_boundaries(generated, resume_data)
-            generated = _soften_unverified_claims(generated)
-            generated = _neutralize_unknown_numbers(generated, resume_data)
-            generated = _normalize_and_merge_skills(generated, resume_data, normalized_suggestions)
-            generated = _sync_resume_alias_fields(generated)
-            generated = sanitize_resume_skills(generated, limit=DEFAULT_SKILL_LIMIT)
+            post_v1_started = time.perf_counter()
+            generated = _postprocess_generated_resume(
+                ai_result.get('resumeData') or {},
+                resume_data,
+                normalized_suggestions,
+            )
+            if job_description_text:
+                generated = _merge_jd_keywords_into_skills(
+                    generated,
+                    job_description_text,
+                    target_role=target_role_text,
+                )
+            _mark('postprocess_v1', post_v1_started)
 
             unresolved = _detect_unresolved_suggestions(generated, normalized_suggestions)
+            should_verify = bool(enable_verify_pass and unresolved)
+            if not should_verify:
+                timing_marks['verify_skipped'] = 1
+                logger.info(
+                    "resume.generate.timings model=%s prompt_chars=%s suggestions=%s unresolved=%s timings=%s total_ms=%s",
+                    str(gemini_analysis_model),
+                    len(prompt),
+                    len(normalized_suggestions),
+                    len(unresolved),
+                    timing_marks,
+                    round((time.perf_counter() - total_started) * 1000, 2),
+                )
+                return generated
+
             unresolved_context = '\n'.join([
                 f"- [{s.get('id')}] {s.get('title')} | section={s.get('targetSection')} | reason={s.get('reason')} | original={s.get('originalValue')} | suggested={s.get('suggestedValue')}"
-                for s in unresolved
+                for s in unresolved[:10]
             ]) if unresolved else '无'
 
             verify_prompt = f"""
@@ -735,13 +861,23 @@ def generate_optimized_resume(
 2) 输出可直接投递终稿，不要“建议/说明/注释”类文本。
 3) 禁止占位符与事实编造；数字不确定时使用中性结果口径。
 4) personalInfo.name/title/email/phone/location/linkedin/website/age/avatar 不得丢失。
-5) 仅返回 JSON。
+5) 若提供 JD，skills 至少覆盖 3 个 JD 硬技能关键词，并确保经历描述出现岗位职责锚点。
+6) 仅返回 JSON。
 
 原始简历：
 {resume_info}
 
 用户职业画像：
 {career_profile_context}
+
+目标岗位：
+{target_role_text or '未提供'}
+
+职位描述（JD）：
+{jd_context}
+
+JD硬技能关键词参考：
+{jd_keyword_hint}
 
 候选新简历（第一版）：
 {json.dumps(generated, ensure_ascii=False)}
@@ -767,20 +903,38 @@ def generate_optimized_resume(
   }}
 }}
 """
+            verify_llm_started = time.perf_counter()
             verify_response = gemini_client.models.generate_content(
                 model=gemini_analysis_model,
                 contents=verify_prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json"),
             )
+            _mark('llm_verify', verify_llm_started)
+
+            verify_post_started = time.perf_counter()
             verified = parse_ai_response(verify_response.text) or {}
-            final_generated = _normalize_resume_shape(verified.get('resumeData') or generated)
-            final_generated = _restore_original_contacts(final_generated, resume_data)
-            final_generated = _restore_source_fact_boundaries(final_generated, resume_data)
-            final_generated = _soften_unverified_claims(final_generated)
-            final_generated = _neutralize_unknown_numbers(final_generated, resume_data)
-            final_generated = _normalize_and_merge_skills(final_generated, resume_data, normalized_suggestions)
-            final_generated = _sync_resume_alias_fields(final_generated)
-            final_generated = sanitize_resume_skills(final_generated, limit=DEFAULT_SKILL_LIMIT)
+            final_generated = _postprocess_generated_resume(
+                verified.get('resumeData') or generated,
+                resume_data,
+                normalized_suggestions,
+            )
+            if job_description_text:
+                final_generated = _merge_jd_keywords_into_skills(
+                    final_generated,
+                    job_description_text,
+                    target_role=target_role_text,
+                )
+            _mark('postprocess_verify', verify_post_started)
+            logger.info(
+                "resume.generate.timings model=%s prompt_chars=%s verify_prompt_chars=%s suggestions=%s unresolved=%s timings=%s total_ms=%s",
+                str(gemini_analysis_model),
+                len(prompt),
+                len(verify_prompt),
+                len(normalized_suggestions),
+                len(unresolved),
+                timing_marks,
+                round((time.perf_counter() - total_started) * 1000, 2),
+            )
             return final_generated
     except Exception as ai_error:
         logger.error("AI 生成简历失败: %s", ai_error)
