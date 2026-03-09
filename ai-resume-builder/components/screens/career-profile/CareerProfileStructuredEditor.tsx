@@ -742,7 +742,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                           displayValue = displayValue.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[，,。.!！？?;；:：、\s]+$/g, '').trim();
                         }
                         
-                        if (item.label === '性格特征') {
+                        if (String(item.label || '').includes('性格特征')) {
                           displayValue = displayValue.replace(/[()（）]/g, '');
                         }
                         
@@ -769,10 +769,10 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                             const mbtiRegex = new RegExp(`(MBTI[:：\\s-]*)?${mbtiToken}`, 'gi');
                             displayItem = displayItem.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[|，,。.!！？?;；:：、\s]+$/g, '').trim();
                           }
-                          if (/^性格特征[:：]/.test(displayItem)) {
+                          if (displayItem.includes('性格特征')) {
                             displayItem = displayItem
-                              .replace(/^性格特征[:：]\s*[（(]?/, '性格特征：')
-                              .replace(/[）)]/g, '')
+                              .replace(/[()（）]/g, '')
+                              .replace(/性格特征\s*[:：]?\s*/, '性格特征：')
                               .replace(/\s{2,}/g, ' ')
                               .trim();
                           }
