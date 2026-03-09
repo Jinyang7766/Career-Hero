@@ -29,7 +29,6 @@ export const canApplyDiagnosisStepRecovery = (
     // comparison is an explicit user action from report page ("查看优化简历"),
     // and forcing back to final_report makes the button appear broken.
     return (
-      normalizedFrom === 'resume_select' ||
       normalizedFrom === 'jd_input' ||
       normalizedFrom === 'analyzing' ||
       normalizedFrom === 'chat' ||
@@ -141,7 +140,7 @@ export const useDiagnosisSessionRecovery = ({
     if (
       !hasInterviewMessages &&
       status === 'interview_in_progress' &&
-      (currentStep === 'jd_input' || currentStep === 'resume_select' || currentStep === 'final_report')
+      (currentStep === 'jd_input' || currentStep === 'final_report')
     ) {
       pushRuntimeTrace('ai_analysis.recovery', 'goto_final_report_from_in_progress', {
         from: currentStep,
@@ -154,7 +153,7 @@ export const useDiagnosisSessionRecovery = ({
 
     if (
       status === 'report_ready' &&
-      (currentStep === 'jd_input' || currentStep === 'resume_select') &&
+      currentStep === 'jd_input' &&
       (resumeData.analysisSnapshot || loadLastAnalysis())
     ) {
       pushRuntimeTrace('ai_analysis.recovery', 'goto_final_report_from_ready', {

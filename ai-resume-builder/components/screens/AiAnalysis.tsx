@@ -637,7 +637,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       navigateToStep('jd_input', true);
       return;
     }
-    navigateToStep('jd_input', true);
+    // Keep interview runtime on the semantic step to avoid re-introducing
+    // legacy `jd_input` as a regular transition target.
+    navigateToStep('interview_scene', true);
   }, [isInterviewMode, navigateToStep]);
 
   const handleBackFromFinalReport = React.useCallback(() => {

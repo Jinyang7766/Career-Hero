@@ -10,8 +10,8 @@ describe('canApplyDiagnosisStepRecovery', () => {
     expect(canApplyDiagnosisStepRecovery('report', 'jd_input')).toBe(false);
   });
 
-  it('allows recovering final_report from entry-like steps', () => {
-    expect(canApplyDiagnosisStepRecovery('resume_select', 'final_report')).toBe(true);
+  it('allows recovering final_report from diagnosis steps only', () => {
+    expect(canApplyDiagnosisStepRecovery('resume_select', 'final_report')).toBe(false);
     expect(canApplyDiagnosisStepRecovery('jd_input', 'final_report')).toBe(true);
     expect(canApplyDiagnosisStepRecovery('analyzing', 'final_report')).toBe(true);
     expect(canApplyDiagnosisStepRecovery('final_report', 'final_report')).toBe(false);
