@@ -56,7 +56,7 @@ describe('career-profile followup page', () => {
     });
   });
 
-  it('supports minimal followup UI, keeps generate button, enter/blur auto-advance, and id-safe writes', async () => {
+  it('supports minimal followup UI, removes lower progress visual, avoids prev/next wording, and keeps generate flow', async () => {
     render(
       <MemoryRouter initialEntries={['/career-profile/followup']}>
         <Routes>
@@ -77,6 +77,8 @@ describe('career-profile followup page', () => {
     expect(screen.queryByText('下一题')).toBeNull();
     expect(screen.queryByText('提交并下一题')).toBeNull();
     expect(screen.queryByText('跳过当前题')).toBeNull();
+    expect(screen.queryByLabelText('切换到问题 1')).toBeNull();
+    expect(screen.queryByLabelText('切换到问题 2')).toBeNull();
 
     const textarea = screen.getByPlaceholderText('请输入你的真实经历与细节（默认空白，不会预填模板）') as HTMLTextAreaElement;
     expect(textarea.value).toBe('');
@@ -87,6 +89,8 @@ describe('career-profile followup page', () => {
     
     expect(await screen.findByText('问题 2/2')).toBeTruthy();
     expect(textarea.value).toBe('');
+    expect(screen.queryByText('已切换到下一题')).toBeNull();
+    expect(screen.queryByText('按回车可直接切换下一题。')).toBeNull();
 
     // Final answer
     fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });

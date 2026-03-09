@@ -200,7 +200,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
         return;
       }
       setCurrentIndex(nextIndex);
-      setSwipeFeedback(direction === 'prev' ? '上一题' : '下一题');
+      setSwipeFeedback('已切换问题');
     },
     [activeIndex, total]
   );
@@ -283,7 +283,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       if (activeIndex < total - 1) {
         setCurrentIndex(getAutoAdvanceIndex(activeIndex, total));
         if (trigger === 'enter') {
-          setSwipeFeedback('已切换到下一题');
+          setSwipeFeedback('已切换问题');
         }
       } else if (nextAnswer) {
         setSwipeFeedback('回答已保存，可一键生成画像');
@@ -369,33 +369,6 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                 </div>
               </div>
 
-              <div className="mt-3 flex items-center gap-2 overflow-x-auto pb-1">
-                {prompts.map((prompt, idx) => {
-                  const status = followupCards[idx]?.status || 'pending';
-                  const isActive = idx === activeIndex;
-                  const statusClass =
-                    status === 'completed'
-                      ? 'bg-emerald-500/90'
-                      : status === 'missing'
-                        ? 'bg-rose-400/85'
-                        : 'bg-slate-300 dark:bg-slate-600';
-                  return (
-                    <button
-                      key={prompt.id}
-                      type="button"
-                      aria-label={`切换到问题 ${idx + 1}`}
-                      onClick={() => {
-                        setCurrentIndex(idx);
-                        setSwipeFeedback(`已切换到问题 ${idx + 1}`);
-                      }}
-                      className={`h-2.5 rounded-full transition-all duration-200 shrink-0 ${
-                        isActive ? 'w-8 ring-2 ring-primary/30' : 'w-5 opacity-85'
-                      } ${statusClass}`}
-                    />
-                  );
-                })}
-              </div>
-
               {!!swipeFeedback && (
                 <p className="mt-2 text-[11px] font-medium text-slate-500 dark:text-slate-400" role="status" aria-live="polite">
                   {swipeFeedback}
@@ -433,7 +406,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                 className="mt-2 w-full min-h-[124px] resize-none rounded-xl border bg-slate-50 dark:bg-[#111a22] border-slate-300/90 dark:border-[#334155] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm leading-7 outline-none transition-all focus:ring-2 focus:ring-primary/45 focus:border-primary/35"
               />
               <p className="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
-                {hasAnswer ? '已记录当前输入，按回车可直接切换下一题。' : '可留空跳过当前题，后续仍可一键生成画像。'}
+                {hasAnswer ? '已记录当前输入，按回车可直接切换问题。' : '可留空跳过当前题，后续仍可一键生成画像。'}
               </p>
             </section>
           </>
