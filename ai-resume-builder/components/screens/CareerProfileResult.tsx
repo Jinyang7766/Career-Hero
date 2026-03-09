@@ -232,11 +232,8 @@ const CareerProfileResult: React.FC = () => {
 
               {hasFollowupProgress ? (
                 <>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                    追问页与结果页已联动同一批追问卡片。你可以回到追问页继续补充，不会打开聊天窗口。
-                  </p>
                   <div className="flex flex-wrap gap-2">
-                    {STATUS_ORDER.map((status) => {
+                    {STATUS_ORDER.filter((s) => s !== 'pending').map((status) => {
                       const count = statusCount[status];
                       if (count <= 0) return null;
                       return (
@@ -261,10 +258,15 @@ const CareerProfileResult: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleGoFollowup}
-                  className="w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  className="relative w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
                   <span>{hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}</span>
+                  {statusCount.pending > 0 && (
+                    <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white dark:ring-slate-900 animate-in zoom-in duration-300">
+                      {statusCount.pending}
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"
