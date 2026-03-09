@@ -126,24 +126,7 @@ type Params = {
 };
 
 export const renderAiAnalysisStep = (p: Params) => {
-  if (p.currentStep === 'resume_select') {
-    if (!p.isInterviewMode) {
-      return (
-        <JdInputPage
-          resumeData={p.resumeData}
-          targetCompany={p.targetCompany}
-          setTargetCompany={p.setTargetCompany}
-          jdText={p.jdText}
-          setJdText={p.setJdText}
-          analysisMode={p.analysisMode}
-          setAnalysisMode={p.setAnalysisMode}
-          isUploading={p.isUploading}
-          onScreenshotUpload={p.handleScreenshotUpload}
-          onBack={p.handleStepBack}
-          onStart={p.handleStartAnalysisClick}
-        />
-      );
-    }
+  if (p.currentStep === 'resume_select' && p.isInterviewMode) {
     return (
       <ResumeSelectPage
         allResumes={p.allResumes}

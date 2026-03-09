@@ -13,7 +13,7 @@ type Params = {
   hasInterviewSessionMessages: (effectiveJdText: string, interviewType: string, interviewMode?: string) => boolean;
   restoreInterviewSession: (effectiveJdText: string, interviewType: string, interviewMode?: string) => void;
   openChat: (source: 'internal' | 'preview', options?: { skipRestore?: boolean }) => void;
-  navigateToStep: (step: 'jd_input' | 'interview_scene' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
+  navigateToStep: (step: 'interview_scene' | 'analyzing' | 'interview_report' | 'comparison' | 'final_report', replace?: boolean) => void;
   recoveredSessionKeyRef: { current: string };
   interviewEntryConfirmPendingRef?: { current: boolean };
 };
@@ -34,7 +34,6 @@ export const normalizeInterviewRecoveryStep = (sessionStep: string): InterviewRe
   const normalized = String(sessionStep || '').trim().toLowerCase();
   if (!normalized) return null;
   if (normalized === 'report') return 'final_report';
-  if (normalized === 'jd_input') return 'interview_scene';
   if (
     normalized === 'interview_scene' ||
     normalized === 'analyzing' ||

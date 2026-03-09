@@ -43,7 +43,7 @@ type Params = {
 export const shouldRestoreJdInputFromResume = (
   preferReport: boolean,
   isInterviewMode?: boolean,
-  inferredTarget?: 'jd_input' | 'interview_scene' | 'final_report'
+  inferredTarget?: 'jd_input' | 'final_report'
 ) => {
   if (isInterviewMode) return false;
   if (preferReport) return true;
@@ -76,7 +76,6 @@ const normalizeAnalysisStep = (step: any) => {
   const v = String(step || '').trim().toLowerCase();
   return [
     'jd_input',
-    'interview_scene',
     'analyzing',
     'report',
     'chat',
@@ -104,7 +103,7 @@ export const inferDiagnosisTargetStep = (
     normalizeAnalysisStep((resumeRow as any)?.resume_data?.latestAnalysisStep);
   if (rawLatestStep === 'final_report' || rawLatestStep === 'interview_report') return 'final_report';
   if (rawLatestStep === 'comparison' || rawLatestStep === 'report' || rawLatestStep === 'chat') return 'final_report';
-  if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input' || rawLatestStep === 'interview_scene') return 'jd_input';
+  if (rawLatestStep === 'analyzing' || rawLatestStep === 'jd_input') return 'jd_input';
 
   const rowSnapshotScore = Number((resumeRow as any)?.resume_data?.analysisSnapshot?.score || 0);
   const summarySnapshotScore = Number((resumeSummary as any)?.resume_data?.analysisSnapshot?.score || 0);
@@ -124,7 +123,7 @@ export const inferDiagnosisTargetStep = (
   const sessionStep = normalizeAnalysisStep(deriveLatestAnalysisStep(sessionsSource));
   if (sessionStep === 'final_report' || sessionStep === 'interview_report') return 'final_report';
   if (sessionStep === 'comparison' || sessionStep === 'report' || sessionStep === 'chat') return 'final_report';
-  if (sessionStep === 'analyzing' || sessionStep === 'jd_input' || sessionStep === 'interview_scene') return 'jd_input';
+  if (sessionStep === 'analyzing' || sessionStep === 'jd_input') return 'jd_input';
 
   const progress = Math.max(0, Math.min(100, Math.round(Number(
     (resumeSummary as any)?.diagnosisProgress ??
@@ -253,7 +252,7 @@ export const useResumeSelection = ({
         const shouldRestoreJdFromResume = shouldRestoreJdInputFromResume(
           effectivePreferReport,
           !!isInterviewMode,
-          inferredTarget as 'jd_input' | 'interview_scene' | 'final_report'
+          inferredTarget as 'jd_input' | 'final_report'
         );
         const finalResumeData = buildResumeDataForEntry(rawResumeData as Record<string, any>, {
           isInterviewMode,
