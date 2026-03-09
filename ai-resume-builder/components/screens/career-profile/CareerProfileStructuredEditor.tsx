@@ -545,6 +545,21 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
 
       {(
         <>
+          {/* 核心优势总结 */}
+          {(isInlineEditing || summaryDisplay.summary) && (
+            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
+              <div className="flex items-center gap-2.5 mb-3">
+                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary">
+                  <span className="material-symbols-outlined text-[18px]">psychology</span>
+                </div>
+                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">核心优势总结</h3>
+              </div>
+              <p className="my-0 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">
+                {isInlineEditing ? String(draftProfile?.summary || '') : summaryDisplay.summary}
+              </p>
+            </div>
+          )}
+
           {/* 基础信息 */}
           {(isInlineEditing || summaryDisplay.basicInfoRows.length > 0) && (
             <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
@@ -646,33 +661,6 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
             </div>
           )}
 
-          {/* 核心优势总结 */}
-          {(isInlineEditing || summaryDisplay.summary) && (
-            <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
-              <div className="flex items-center gap-2.5 mb-3">
-                <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-[18px]">psychology</span>
-                </div>
-                <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">核心优势总结</h3>
-              </div>
-              {isInlineEditing ? (
-                <AutoGrowTextarea
-                  value={String(draftProfile?.summary || '')}
-                  onChange={(event) =>
-                    updateDraftProfile((prev) => ({
-                      ...prev,
-                      summary: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#111a22] px-3 py-2 text-xs text-slate-700 dark:text-slate-200 leading-relaxed outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  minRows={4}
-                />
-              ) : (
-                <p className="my-0 text-xs text-slate-600 dark:text-slate-400 whitespace-pre-wrap leading-relaxed">{summaryDisplay.summary}</p>
-              )}
-            </div>
-          )}
-
           {/* 职业目标与偏好 */}
           {(isInlineEditing || summaryDisplay.preferenceRows.length > 0 || summaryDisplay.constraints.length > 0) && (
             <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 sm:p-5 shadow-sm">
@@ -743,21 +731,43 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                 <>
                   {summaryDisplay.preferenceRows.length > 0 && (
                     <dl className="space-y-2.5">
-                      {summaryDisplay.preferenceRows.map((item) => (
-                        <div key={`${item.label}-${item.value}`}>
-                          <dt className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</dt>
-                          <dd className="m-0 mt-0.5 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">{item.value}</dd>
-                        </div>
-                      ))}
+                      {summaryDisplay.preferenceRows.map((item) => {
+                        // 去重逻辑：如果当前行是性格特征或职业目标等，且包含 MBTI 文本，则剔除 MBTI 部分
+                        let displayValue = item.value;
+                        const mbtiRow = summaryDisplay.preferenceRows.find(r => r.label === 'MBTI');
+                        if (mbtiRow && item.label !== 'MBTI') {
+                          const mbtiToken = mbtiRow.value.toUpperCase();
+                          // 匹配如 "INTJ", "MBTI: INTJ", "性格: INTJ" 等，不区分大小写
+                          const mbtiRegex = new RegExp(`(MBTI[:：\\s-]*)?${mbtiToken}`, 'gi');
+                          displayValue = displayValue.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[，,。.!！？?;；:：、\s]+$/g, '').trim();
+                        }
+                        
+                        if (!displayValue) return null;
+
+                        return (
+                          <div key={`${item.label}-${item.value}`}>
+                            <dt className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{item.label}</dt>
+                            <dd className="m-0 mt-0.5 text-xs text-slate-700 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">{displayValue}</dd>
+                          </div>
+                        );
+                      })}
                     </dl>
                   )}
                   {summaryDisplay.constraints.length > 0 && (
                     <div className={summaryDisplay.preferenceRows.length > 0 ? 'mt-3.5' : ''}>
                       <p className="my-0 text-[11px] font-semibold text-slate-500 dark:text-slate-400">求职约束</p>
                       <ul className="mt-2 my-0 pl-4 space-y-1.5 text-xs text-slate-600 dark:text-slate-300">
-                        {summaryDisplay.constraints.map((item) => (
-                          <li key={item} className="leading-relaxed">{item}</li>
-                        ))}
+                        {summaryDisplay.constraints.map((item) => {
+                          let displayItem = item;
+                          const mbtiRow = summaryDisplay.preferenceRows.find(r => r.label === 'MBTI');
+                          if (mbtiRow) {
+                            const mbtiToken = mbtiRow.value.toUpperCase();
+                            const mbtiRegex = new RegExp(`(MBTI[:：\\s-]*)?${mbtiToken}`, 'gi');
+                            displayItem = displayItem.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[|，,。.!！？?;；:：、\s]+$/g, '').trim();
+                          }
+                          if (!displayItem) return null;
+                          return <li key={item} className="leading-relaxed">{displayItem}</li>;
+                        }).filter(Boolean)}
                       </ul>
                     </div>
                   )}
@@ -813,7 +823,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {summaryDisplay.skills.map((skill, idx) => (
-                    <span key={`${skill}-${idx}`} className="px-2.5 py-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-xs rounded-md">
+                    <span key={`${skill}-${idx}`} className="max-w-full break-words px-2.5 py-1 bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-300 text-xs rounded-md">
                       {skill}
                     </span>
                   ))}
