@@ -742,6 +742,10 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                           displayValue = displayValue.replace(mbtiRegex, '').replace(/^[，,。.!！？?;；:：、\s]+|[，,。.!！？?;；:：、\s]+$/g, '').trim();
                         }
                         
+                        if (item.label === '性格特征') {
+                          displayValue = displayValue.replace(/[()（）]/g, '');
+                        }
+                        
                         if (!displayValue) return null;
 
                         return (
@@ -912,7 +916,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                           <p className="my-0 text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">{w.subtitle}</p>
                         </div>
                         {(w.startDate || w.endDate || w.date) && (
-                          <span className="shrink-0 text-[10px] text-slate-500 bg-slate-50 dark:bg-white/5 px-1.5 py-0.5 rounded">
+                          <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
                             {w.date || `${w.startDate || ''} - ${w.endDate || '至今'}`.replace(/^ - $/, '')}
                           </span>
                         )}
@@ -1008,7 +1012,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                           <p className="my-0 text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">{p.subtitle}</p>
                         </div>
                         {p.date && (
-                          <span className="shrink-0 text-[10px] text-slate-500 bg-slate-50 dark:bg-white/5 px-1.5 py-0.5 rounded">
+                          <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
                             {p.date}
                           </span>
                         )}

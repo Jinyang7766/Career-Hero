@@ -121,4 +121,62 @@ describe('CareerProfileStructuredEditor Summary Changes', () => {
     expect(skillChip.className).toContain('break-words');
     expect(skillChip.className).toContain('max-w-full');
   });
+
+  it('displays work experience and project time without capsule background and with tabular-nums', async () => {
+    const profileWithTimes: CareerProfile = {
+      ...baseProfile,
+      experiences: [
+        {
+          title: 'Senior Dev',
+          subtitle: 'Tech Co',
+          period: '2024.01 - 2025.01',
+          actions: '',
+          results: '',
+          inResume: 'yes'
+        }
+      ],
+      projects: [
+        {
+          title: 'Big Project',
+          subtitle: 'Lead',
+          period: '2024.06 - 2024.08',
+          description: '',
+        }
+      ]
+    };
+
+    render(
+      <CareerProfileStructuredEditor
+        profile={profileWithTimes}
+        isSaving={false}
+        onSave={() => undefined}
+        inlineEditable={false}
+      />
+    );
+
+    const workTime = await screen.findByText('2024.01 - 2025.01');
+    expect(workTime.className).toContain('tabular-nums');
+    expect(workTime.className).not.toContain('bg-slate-50');
+
+    const projectTime = await screen.findByText('2024.06 - 2024.08');
+    expect(projectTime.className).toContain('tabular-nums');
+    expect(projectTime.className).not.toContain('bg-slate-50');
+  });
+
+  it('removes parentheses from personality traits display', async () => {
+    render(
+      <CareerProfileStructuredEditor
+        profile={{
+          ...baseProfile,
+          personality: '性格开朗(外向)，乐于助人（主动）'
+        }}
+        isSaving={false}
+        onSave={() => undefined}
+        inlineEditable={false}
+      />
+    );
+
+    const personalityValue = await screen.findAllByText('性格开朗外向，乐于助人主动');
+    expect(personalityValue.length).toBeGreaterThanOrEqual(1);
+  });
 });
