@@ -182,54 +182,62 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
     [activePrompt]
   );
 
-  const handleGenerateWithAnswers = React.useCallback(
-    async (currentAnswers: Record<string, string>) => {
-      if (!hydrated || isSaving) return;
-
-      const deferredResumeSeed = uploadedResume
-        ? buildCareerProfileSeedFromImportedResume(uploadedResume)
-        : '';
-      const profileOnlyInput = mergeBlocks([
-        supplementText ? `【用户补充事实】\n${supplementText}` : '',
-        '请先基于事实提炼职业画像，并继续定向追问缺失信息，不要编造内容。',
-      ]);
-      const answerBlocks = buildFollowupAnswerBlocks(prompts, currentAnswers);
-
-      const mergedInput = mergeBlocks([
-        deferredResumeSeed
-          ? `【上传简历信息（提交时融合解析）】\n${deferredResumeSeed}`
-          : uploadedResumeTitle
-            ? `【上传简历标题】\n${uploadedResumeTitle}`
-            : '',
-        profileOnlyInput,
-        answerBlocks ? `【定向追问回答】\n${answerBlocks}` : '',
-      ]);
-
-      const saved = await saveCareerProfile(mergedInput);
-      if (!saved) return;
-
-      navigate('/career-profile/result/summary', {
-        replace: true,
-        state: {
-          from: '/career-profile/followup',
-        },
-      });
-    },
-    [
-      hydrated,
-      isSaving,
-      navigate,
-      prompts,
-      saveCareerProfile,
-      supplementText,
-      uploadedResume,
-      uploadedResumeTitle,
-    ]
-  );
-
   const handleGenerate = React.useCallback(async () => {
-    await handleGenerateWithAnswers(answersByPromptId);
-  }, [answersByPromptId, handleGenerateWithAnswers]);
+    if (!hydrated || isSaving) return;
+
+    // Latest active input check
+    let currentAnswers = answersByPromptId;
+    if (activePrompt) {
+      const promptId = activePrompt.id;
+      const nextAnswer = (draftByPromptId[promptId] ?? '').trim();
+      currentAnswers = {
+        ...answersByPromptId,
+        [promptId]: nextAnswer,
+      };
+      setAnswersByPromptId(currentAnswers);
+    }
+
+    const deferredResumeSeed = uploadedResume
+      ? buildCareerProfileSeedFromImportedResume(uploadedResume)
+      : '';
+    const profileOnlyInput = mergeBlocks([
+      supplementText ? `【用户补充事实】\n${supplementText}` : '',
+      '请先基于事实提炼职业画像，并继续定向追问缺失信息，不要编造内容。',
+    ]);
+    const answerBlocks = buildFollowupAnswerBlocks(prompts, currentAnswers);
+
+    const mergedInput = mergeBlocks([
+      deferredResumeSeed
+        ? `【上传简历信息（提交时融合解析）】\n${deferredResumeSeed}`
+        : uploadedResumeTitle
+          ? `【上传简历标题】\n${uploadedResumeTitle}`
+          : '',
+      profileOnlyInput,
+      answerBlocks ? `【定向追问回答】\n${answerBlocks}` : '',
+    ]);
+
+    const saved = await saveCareerProfile(mergedInput);
+    if (!saved) return;
+
+    navigate('/career-profile/result/summary', {
+      replace: true,
+      state: {
+        from: '/career-profile/followup',
+      },
+    });
+  }, [
+    activePrompt,
+    answersByPromptId,
+    draftByPromptId,
+    hydrated,
+    isSaving,
+    navigate,
+    prompts,
+    saveCareerProfile,
+    supplementText,
+    uploadedResume,
+    uploadedResumeTitle,
+  ]);
 
   const handleSubmission = React.useCallback(async (trigger: 'enter' | 'blur') => {
     if (!activePrompt) return;
@@ -242,23 +250,14 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
         ...prev,
         [promptId]: nextAnswer,
       };
-
-      // If it's the last question, we need the latest answers for handleGenerate
-      if (activeIndex === total - 1) {
-        // Use a timeout or a separate effect to ensure state is flushed?
-        // Actually, let's just pass the next state directly to a modified handleGenerate
-        void handleGenerateWithAnswers(next);
-      }
       return next;
     });
     setError('');
 
-    if (activeIndex < total - 1 && trigger === 'enter') {
-      setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
-    } else if (activeIndex < total - 1 && trigger === 'blur') {
-      setCurrentIndex((prev) => Math.min(total - 1, prev + 1));
+    if (activeIndex < total - 1) {
+      setCurrentIndex((prev) => prev + 1);
     }
-  }, [activePrompt, activeIndex, draftByPromptId, handleGenerateWithAnswers, total]);
+  }, [activePrompt, activeIndex, draftByPromptId, total]);
 
   if (!hydrated) {
     return (
@@ -371,18 +370,21 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
           <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
             <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接生成职业画像。</p>
-            <button
-              type="button"
-              onClick={() => {
-                void handleGenerate();
-              }}
-              disabled={isSaving}
-              className="mt-4 w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {isSaving ? 'AI 正在马不停蹄整理画像...' : '一键生成画像'}
-            </button>
           </div>
         )}
+
+        <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-1">
+          <button
+            type="button"
+            onClick={() => {
+              void handleGenerate();
+            }}
+            disabled={isSaving}
+            className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isSaving ? 'AI 正在马蹄疾整理画像...' : '一键生成画像'}
+          </button>
+        </div>
       </main>
     </div>
   );

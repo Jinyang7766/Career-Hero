@@ -85,9 +85,11 @@ describe('career-profile followup page', () => {
     expect(await screen.findByText('问题 2/2')).toBeTruthy();
     expect(textarea.value).toBe('');
 
-    // Blur to auto-advance (and since it's last question, trigger generate)
+    // Final answer
     fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });
-    fireEvent.blur(textarea);
+    
+    // Explicitly click "一键生成画像" as per latest requirement
+    fireEvent.click(screen.getByText('一键生成画像'));
 
     expect(saveCareerProfileMock).toHaveBeenCalledTimes(1);
     const payload = String(saveCareerProfileMock.mock.calls[0][0] || '');
