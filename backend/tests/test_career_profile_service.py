@@ -155,6 +155,47 @@ def test_organize_career_profile_accepts_valid_fact_items_from_ai_payload():
     assert fact_items[0]['kind'] == 'skill'
 
 
+def test_organize_career_profile_normalizes_core_skills_with_shared_skill_rules():
+    parsed = {
+        'summary': '候选人有增长与数据分析经验。',
+        'coreSkills': [
+            '核心技能：Python、SQL、A/B Testing',
+            'Power BI',
+            '沟通协作',
+            '这是一个过长的技能描述用于验证会被裁剪到合理范围并保持可读',
+        ],
+        'experiences': [
+            {
+                'title': '增长运营',
+                'actions': '负责实验与复盘',
+            }
+        ],
+    }
+
+    body, status = organize_career_profile_core(
+        current_user_id='u1',
+        data={
+            'rawExperienceText': (
+                '2022-2024 在某消费品公司负责电商增长。'
+                '主导A/B实验和CRM分层触达，复购率明显提升。'
+            ),
+        },
+        deps=_deps_ai_enabled(parsed),
+    )
+
+    assert status == 200
+    profile = body.get('profile') or {}
+    skills = profile.get('coreSkills') or []
+
+    assert 'Python' in skills
+    assert 'SQL' in skills
+    assert 'A/B Test' in skills
+    assert 'Power BI' in skills
+    assert '沟通协作' not in skills
+    assert len(skills) <= 12
+    assert all(isinstance(item, str) and len(item) <= 36 for item in skills)
+
+
 def test_organize_career_profile_fallbacks_to_existing_fact_items_on_invalid_input_and_logs_errors():
     logger = _DummyLogger()
     parsed = {

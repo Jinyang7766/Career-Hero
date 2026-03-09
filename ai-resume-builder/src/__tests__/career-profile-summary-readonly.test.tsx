@@ -103,4 +103,22 @@ describe('CareerProfileStructuredEditor Summary Changes', () => {
     expect(constraint1.textContent).not.toContain('INTJ');
     expect(constraint1.textContent).not.toContain('MBTI');
   });
+
+  it('renders skill chips with wrapping classes for readable display', async () => {
+    render(
+      <CareerProfileStructuredEditor
+        profile={{
+          ...baseProfile,
+          coreSkills: ['Power BI'],
+        }}
+        isSaving={false}
+        onSave={() => undefined}
+        inlineEditable={false}
+      />
+    );
+
+    const skillChip = await screen.findByText('Power BI');
+    expect(skillChip.className).toContain('break-words');
+    expect(skillChip.className).toContain('max-w-full');
+  });
 });

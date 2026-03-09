@@ -3,6 +3,7 @@ import re
 from datetime import datetime, timezone
 
 from .payload_sanitizer import resolve_fact_items_with_fallback
+from .skill_cleanup_service import clean_skill_list
 
 
 def _now_iso() -> str:
@@ -20,6 +21,15 @@ def _compact_text(value, max_len=600):
 def _normalize_skill_list(raw_list, max_items=20):
     if not isinstance(raw_list, list):
         return []
+
+    try:
+        normalized = clean_skill_list(raw_list, limit=max_items)
+    except Exception:
+        normalized = []
+
+    if normalized:
+        return normalized[: max(0, int(max_items or 0))] if isinstance(max_items, int) and max_items > 0 else normalized
+
     out = []
     seen = set()
     for item in raw_list:

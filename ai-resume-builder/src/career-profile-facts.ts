@@ -1,3 +1,5 @@
+import { sanitizeSkillList } from './resume-skill-sanitizer';
+
 export type CareerProfileFactKind = 'skill' | 'highlight' | 'constraint';
 
 export type CareerProfileFactItem = {
@@ -110,6 +112,11 @@ const toFactKind = (section: CareerProfileFactSectionKey): CareerProfileFactKind
   if (section === 'coreSkills') return 'skill';
   return 'highlight';
 };
+
+const CAREER_PROFILE_SKILL_LIMIT = 12;
+
+const normalizeCareerProfileCoreSkills = (value: unknown): string[] =>
+  sanitizeSkillList(value, { limit: CAREER_PROFILE_SKILL_LIMIT });
 
 const asStringList = (value: unknown, maxItems: number, maxLen: number): string[] => {
   if (!Array.isArray(value)) return [];
@@ -234,7 +241,7 @@ export const createCareerProfileFactDraftSections = (input: {
   constraints?: unknown;
   factItems?: unknown;
 }): CareerProfileFactDraftSections => {
-  const rawSkills = asStringList(input.coreSkills, 20, 60);
+  const rawSkills = normalizeCareerProfileCoreSkills(input.coreSkills);
   const rawHighlights = asStringList(input.careerHighlights, 12, 220);
   const rawConstraints = asStringList(input.constraints, 10, 180);
 
@@ -337,7 +344,7 @@ export const materializeCareerProfileFactsFromDraft = (draft: CareerProfileFactD
 
 export const reconcileCareerProfileFactSections = (input: ReconcileInput): ReconcileOutput => {
   const rawConstraints = asStringList(input.constraints, 10, 180);
-  const rawSkills = asStringList(input.coreSkills, 20, 60);
+  const rawSkills = normalizeCareerProfileCoreSkills(input.coreSkills);
   const rawHighlights = asStringList(input.careerHighlights, 12, 220);
 
   const constraints: string[] = [];

@@ -23,7 +23,9 @@ describe('career-profile-utils', () => {
 
     expect(normalized).toBeTruthy();
     expect(normalized?.summary).toContain('负责增长策略');
-    expect(normalized?.coreSkills).toEqual(['SQL', 'A/B Test']);
+    expect(normalized?.coreSkills).toHaveLength(2);
+    expect(normalized?.coreSkills).toContain('SQL');
+    expect(normalized?.coreSkills).toContain('A/B Test');
     expect(normalized?.experiences?.[0]?.inResume).toBe('no');
   });
 

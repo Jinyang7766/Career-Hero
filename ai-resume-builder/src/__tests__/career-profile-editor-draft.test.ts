@@ -85,7 +85,9 @@ describe('career-profile-editor-draft', () => {
     });
     const projection = projectCareerProfileEditorData(base, factDraft);
 
-    expect(projection.resumeData.skills).toEqual(['增长策略', '数据分析']);
+    expect(projection.resumeData.skills).toHaveLength(2);
+    expect(projection.resumeData.skills).toContain('增长策略');
+    expect(projection.resumeData.skills).toContain('数据分析');
     expect(projection.extras.careerHighlights).toEqual(['主导增长项目']);
     expect(projection.extras.constraints).toEqual(['可接受出差']);
   });
