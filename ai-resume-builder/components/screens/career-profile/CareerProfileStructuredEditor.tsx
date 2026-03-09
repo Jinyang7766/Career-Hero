@@ -882,7 +882,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
-                    新增经历
+                    添加一段经历
                   </button>
                 </div>
               ) : (
@@ -978,7 +978,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
-                    新增项目
+                    添加一个项目
                   </button>
                 </div>
               ) : (
@@ -1067,7 +1067,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     className="h-9 px-3 rounded-lg border border-slate-300 dark:border-white/10 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-white/10 inline-flex items-center gap-1.5"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
-                    新增教育背景
+                    添加教育背景
                   </button>
                 </div>
               ) : (

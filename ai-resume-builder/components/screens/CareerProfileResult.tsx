@@ -177,24 +177,30 @@ const CareerProfileResult: React.FC = () => {
             type="button"
             onClick={() => {
               if (isInlineEditing) {
-                void editorRef.current?.handleSave();
+                handleBack();
                 return;
               }
               setIsInlineEditing(true);
             }}
             disabled={isSaving}
             className="z-10 flex items-center justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-white/5 hover:bg-slate-200 dark:hover:bg-white/10 active:scale-95 transition-all text-slate-700 dark:text-white disabled:opacity-60"
-            title={isInlineEditing ? '保存修改' : '编辑画像'}
+            title={isInlineEditing ? '取消编辑' : '编辑画像'}
           >
-            {isInlineEditing && isSaving ? (
-              <span className="size-4 border-2 border-slate-400 border-t-slate-700 dark:border-white/20 dark:border-t-white rounded-full animate-spin"></span>
-            ) : (
-              <span className="material-symbols-outlined text-[20px]">
-                {isInlineEditing ? 'check' : 'edit'}
-              </span>
-            )}
+            <span className="material-symbols-outlined text-[20px]">
+              {isInlineEditing ? 'close' : 'edit'}
+            </span>
           </button>
         </div>
+        {statusCount.pending > 0 && !isInlineEditing && (
+          <div className="absolute top-14 left-0 right-0 flex justify-center animate-in slide-in-from-top-2 duration-300">
+            <div className="bg-rose-500/10 dark:bg-rose-500/20 px-3 py-1 rounded-full border border-rose-200/50 dark:border-rose-400/20 flex items-center gap-1.5 backdrop-blur-sm">
+              <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                有 {statusCount.pending} 项待补全的职场细节
+              </span>
+            </div>
+          </div>
+        )}
       </header>
 
       <main className={`flex-1 overflow-y-auto pt-20 px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
@@ -261,7 +267,7 @@ const CareerProfileResult: React.FC = () => {
                   className="relative w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
-                  <span>{hasMissingFollowup ? '继续补全缺失卡片' : '继续完善追问卡片'}</span>
+                  <span>{hasMissingFollowup ? '去完善我的职场细节' : '补充更多职场细节'}</span>
                   {statusCount.pending > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-in zoom-in duration-300">
                       {statusCount.pending}
@@ -273,16 +279,35 @@ const CareerProfileResult: React.FC = () => {
                   onClick={() => navigate('/career-profile/upload')}
                   className="w-full h-11 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
-                  <span className="material-symbols-outlined text-[18px]">edit_note</span>
-                  <span>返回重新录入</span>
+                  <span className="material-symbols-outlined text-[18px]">history_edu</span>
+                  <span>重新录入背景信息</span>
                 </button>
               </div>
             </div>
           </div>
         )}
 
-
       </main>
+
+      {isInlineEditing && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-t border-slate-200 dark:border-white/5 mx-auto w-full max-w-md animate-in slide-in-from-bottom duration-300">
+          <button
+            type="button"
+            onClick={() => void editorRef.current?.handleSave()}
+            disabled={isSaving}
+            className="w-full h-12 rounded-xl bg-primary text-white text-base font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+          >
+            {isSaving ? (
+              <span className="size-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
+            ) : (
+              <>
+                <span className="material-symbols-outlined text-[20px]">check_circle</span>
+                <span>保存画像</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
