@@ -54,10 +54,10 @@ describe('career-profile fusion followup jump', () => {
     fireEvent.change(textarea, { target: { value: '我做过增长运营项目' } });
     fireEvent.click(screen.getByText('AI 智能解析'));
 
-    expect(await screen.findByText('生成画像（进入追问）')).toBeTruthy();
+    expect(await screen.findByText('下一步')).toBeTruthy();
     expect(screen.queryByText('AI 定向追问卡片')).toBeNull();
 
-    fireEvent.click(screen.getByText('生成画像（进入追问）'));
+    fireEvent.click(screen.getByText('下一步'));
     expect(await screen.findByText('FOLLOWUP_PAGE')).toBeTruthy();
   });
 });

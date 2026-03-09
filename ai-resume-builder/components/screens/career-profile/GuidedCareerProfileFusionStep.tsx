@@ -370,16 +370,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
           '在这里随便写写你的经历，比如主导了什么项目、解决了什么难题、取得了什么成果...不用在意排版和用词，我会帮你全部搞定！'
         )}
 
-        {analysisReady && (
-          <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
-            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">追问流程准备完成</p>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-              下一步将进入独立追问页面，按“一次一题”完成补充。支持左右切换问题、跳过当前题，且回答将按问题 ID 精确保存。
-            </p>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">待追问题目：{followupPrompts.length} 题</p>
-          </div>
-        )}
-
+        
         <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-1">
           <button
             type="button"
@@ -393,7 +384,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
             disabled={blockedByChoice || isTranscribing || isAnalyzing}
             className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            {isAnalyzing ? 'AI 正在解析上传内容...' : canStartFollowup ? '生成画像（进入追问）' : 'AI 智能解析'}
+            {isAnalyzing ? 'AI 正在解析上传内容...' : canStartFollowup ? '下一步' : 'AI 智能解析'}
           </button>
           {!!analyzeError && (
             <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">
