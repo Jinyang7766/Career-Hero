@@ -93,7 +93,8 @@ export const useAnalysisPersistence = ({
       scoreBreakdown: reportData.scoreBreakdown || { experience: 0, skills: 0, format: 0 },
       suggestions: suggestionItems || [],
       updatedAt: new Date().toISOString(),
-      jdText: jdText || baseResumeData.lastJdText || '',
+      analysisMode: effectiveMode,
+      jdText: String(jdText || '').trim(),
       targetCompany: effectiveTargetCompany || '',
       targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
     };
@@ -111,6 +112,7 @@ export const useAnalysisPersistence = ({
       summary: reportData.summary || '',
       targetCompany: snapshot.targetCompany || '',
       targetRole: snapshot.targetRole || '',
+      analysisMode: effectiveMode,
       jdText: snapshot.jdText || '',
       scoreBreakdown: snapshot.scoreBreakdown,
       suggestionsOverview: {
@@ -129,7 +131,7 @@ export const useAnalysisPersistence = ({
       analysisSnapshot: snapshot,
       analysisDossierLatest: dossier,
       analysisDossierHistory: [dossier, ...previousHistory].slice(0, 20),
-      lastJdText: snapshot.jdText || baseResumeData.lastJdText || '',
+      lastJdText: snapshot.jdText || '',
       targetCompany: snapshot.targetCompany || '',
       targetRole: nextTargetRole,
     };

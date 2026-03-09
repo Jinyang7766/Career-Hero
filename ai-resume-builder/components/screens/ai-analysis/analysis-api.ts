@@ -7,6 +7,7 @@ type Params = {
   careerProfile?: any;
   jdText: string;
   targetRole?: string;
+  analysisMode?: 'generic' | 'targeted';
   getBackendAuthToken: () => Promise<string>;
   showToast: (msg: string, type?: 'info' | 'success' | 'error') => void;
   buildApiUrl: (path: string) => string;
@@ -79,6 +80,7 @@ export const runRealAnalysis = async ({
   careerProfile,
   jdText,
   targetRole,
+  analysisMode,
   getBackendAuthToken,
   showToast,
   buildApiUrl,
@@ -95,12 +97,17 @@ export const runRealAnalysis = async ({
   let controller: AbortController | null = null;
   const normalizedCareerProfile = normalizeCareerProfile(careerProfile || null);
   const careerProfileFingerprint = buildCareerProfileFingerprint(normalizedCareerProfile);
+  const cacheScopeKey = [
+    careerProfileFingerprint,
+    String(analysisMode || 'targeted').trim().toLowerCase(),
+    String(targetRole || '').trim().toLowerCase(),
+  ].join('::');
 
   try {
     console.log('Generating real AI analysis via backend API...');
 
     if (!bypassCache) {
-      const cachedResult = await AICacheService.get(resumeData, jdText, careerProfileFingerprint);
+      const cachedResult = await AICacheService.get(resumeData, jdText, cacheScopeKey);
       if (cachedResult) {
         const cachedSummary = String(cachedResult.summary || '').trim();
         if (cachedSummary.length < 80) {
@@ -154,6 +161,7 @@ export const runRealAnalysis = async ({
         resumeData: maskedResumeData,
         jobDescription: maskedJdText,
         targetRole: String(targetRole || '').trim(),
+        analysisMode: String(analysisMode || 'targeted').trim().toLowerCase(),
         careerProfile: maskedCareerProfile,
         analysisStage: 'final_report',
         ragEnabled,
@@ -208,7 +216,7 @@ export const runRealAnalysis = async ({
           : null,
     };
 
-    await AICacheService.set(resumeData, jdText, analysisResult, careerProfileFingerprint);
+    await AICacheService.set(resumeData, jdText, analysisResult, cacheScopeKey);
     return analysisResult;
   } catch (error: any) {
     const isAbort = String(error?.name || '') === 'AbortError';

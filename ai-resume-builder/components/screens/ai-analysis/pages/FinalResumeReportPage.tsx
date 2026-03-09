@@ -53,16 +53,16 @@ const FinalResumeReportPage: React.FC<Props> = ({
         <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20">
           <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
             <span className="material-symbols-outlined text-[20px]">summarize</span>
-            候选人综合评价
+JD 匹配差距与定向改写摘要
           </h3>
           <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
-            {summary || '候选人整体匹配度良好，建议继续通过模拟面试强化表达结构与关键案例深挖。'}
+            {summary || '已完成 JD 匹配诊断。建议优先补齐岗位职责证据与关键词覆盖，再进行定向改写。'}
           </p>
         </div>
         <ReportFeedback onFeedback={onFeedback} showTitle={false} />
 
         <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 border border-slate-200 dark:border-white/5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">候选人后续行动建议</h3>
+          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">JD 定向改写行动建议</h3>
           <div className="space-y-2">
             {candidateAdvice.map((item, idx) => (
               <p key={`${idx}-${item}`} className="text-sm text-slate-600 dark:text-slate-300">• {item}</p>

@@ -3,7 +3,7 @@ import {
   makeNormalizedJdKey,
   normalizeStoredJdKey,
 } from './id-utils';
-import type { AnalysisMode } from './analysis-mode';
+import { normalizeAnalysisMode, type AnalysisMode } from './analysis-mode';
 import { resolveAnalysisTargetValue } from './target-role';
 
 export type ReusableAnalysisSnapshot = {
@@ -50,6 +50,21 @@ const hasRenderableResult = (candidate: any): boolean => {
 const normalizeArray = (value: any): string[] =>
   Array.isArray(value) ? value.map((item) => normalizeText(item)).filter(Boolean) : [];
 
+const resolveAnalysisMode = (value: any): AnalysisMode | '' => {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'generic' || normalized === 'targeted') {
+    return normalized as AnalysisMode;
+  }
+  return '';
+};
+
+const inferStoredAnalysisMode = (candidate: any, fallback: AnalysisMode): AnalysisMode => {
+  const explicit = resolveAnalysisMode(candidate?.analysisMode);
+  if (explicit) return explicit;
+  const hasJdText = !!normalizeText(candidate?.jdText);
+  return hasJdText ? 'targeted' : fallback;
+};
+
 const deriveSessionJdKey = (session: any): string =>
   normalizeText(session?.jdKey)
     ? normalizeStoredJdKey(session?.jdKey)
@@ -58,14 +73,18 @@ const deriveSessionJdKey = (session: any): string =>
 export const hasReadyAnalysisSessionForJd = ({
   resumeData,
   jdText,
+  analysisMode,
 }: {
   resumeData: any;
   jdText: string;
+  analysisMode?: AnalysisMode;
 }): boolean => {
-  const expectedJdKey = normalizeJdKey(jdText || resumeData?.lastJdText || '');
+  const expectedJdKey = normalizeJdKey(jdText || '');
+  const expectedMode = normalizeAnalysisMode(analysisMode || resumeData?.analysisMode);
   const sessions = (resumeData as any)?.analysisSessionByJd || {};
   return Object.values(sessions || {}).some((session: any) => {
     if (!session) return false;
+    if (inferStoredAnalysisMode(session, expectedMode) !== expectedMode) return false;
     if (!isEquivalentJdKey(deriveSessionJdKey(session), expectedJdKey)) return false;
     const state = normalizeText(session?.state).toLowerCase();
     const step = normalizeText(session?.step).toLowerCase();
@@ -91,13 +110,19 @@ export const extractReusableAnalysisSnapshotForJd = ({
   targetCompany?: string;
   analysisMode?: AnalysisMode;
 }): ReusableAnalysisSnapshot | null => {
-  const expectedJdText = normalizeText(jdText || resumeData?.lastJdText || '');
+  const expectedJdText = normalizeText(jdText || '');
   const expectedJdKey = normalizeJdKey(expectedJdText);
+  const expectedMode = normalizeAnalysisMode(analysisMode || resumeData?.analysisMode);
 
   const snapshot = (resumeData as any)?.analysisSnapshot;
-  const snapshotJdText = normalizeText(snapshot?.jdText || resumeData?.lastJdText || '');
+  const snapshotJdText = normalizeText(snapshot?.jdText || '');
   const snapshotJdKey = normalizeJdKey(snapshotJdText);
-  if (snapshot && isEquivalentJdKey(snapshotJdKey, expectedJdKey) && hasRenderableResult(snapshot)) {
+  if (
+    snapshot &&
+    inferStoredAnalysisMode(snapshot, expectedMode) === expectedMode &&
+    isEquivalentJdKey(snapshotJdKey, expectedJdKey) &&
+    hasRenderableResult(snapshot)
+  ) {
     const resolvedTarget = resolveAnalysisTargetValue({
       analysisMode: analysisMode || resumeData?.analysisMode,
       stateTargetCompany: snapshot?.targetRole || '',
@@ -120,9 +145,14 @@ export const extractReusableAnalysisSnapshotForJd = ({
   }
 
   const finalReport = (resumeData as any)?.postInterviewFinalReport;
-  const finalReportJdText = normalizeText(finalReport?.jdText || resumeData?.lastJdText || '');
+  const finalReportJdText = normalizeText(finalReport?.jdText || '');
   const finalReportJdKey = normalizeJdKey(finalReportJdText);
-  if (finalReport && isEquivalentJdKey(finalReportJdKey, expectedJdKey) && hasRenderableResult(finalReport)) {
+  if (
+    finalReport &&
+    inferStoredAnalysisMode(finalReport, expectedMode) === expectedMode &&
+    isEquivalentJdKey(finalReportJdKey, expectedJdKey) &&
+    hasRenderableResult(finalReport)
+  ) {
     const resolvedTarget = resolveAnalysisTargetValue({
       analysisMode: analysisMode || resumeData?.analysisMode,
       stateTargetCompany: finalReport?.targetRole || '',
@@ -165,7 +195,7 @@ export const hasReusableAnalysisResultForJd = ({
     analysisMode,
   });
   if (snapshot) return true;
-  return hasReadyAnalysisSessionForJd({ resumeData, jdText });
+  return hasReadyAnalysisSessionForJd({ resumeData, jdText, analysisMode });
 };
 
 export const hasReusableSuggestionPayload = (snapshot: ReusableAnalysisSnapshot): boolean =>

@@ -62,7 +62,7 @@ type Params = {
   setReport: (value: AnalysisReport | null) => void;
   persistAnalysisSessionState: (
     state: 'jd_ready' | 'analyzing' | 'report_ready' | 'paused' | 'error' | 'interview_in_progress',
-    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; score: number; step: string; error: string; force: boolean }>
+    patch?: Partial<{ jdText: string; targetCompany: string; targetRole: string; score: number; step: string; error: string; analysisMode: AnalysisMode; force: boolean }>
   ) => Promise<void>;
   persistAnalysisSnapshot: (resumeData: any, reportData: AnalysisReport, scoreValue: number, suggestionItems: Suggestion[]) => Promise<any>;
   saveLastAnalysis: (payload: any) => void;
@@ -129,6 +129,7 @@ export const useAnalysisExecution = ({
     opts?: {
       bypassCache?: boolean;
       targetRole?: string;
+      analysisMode?: AnalysisMode;
       careerProfile?: any;
       diagnosisResumeData?: any;
     }
@@ -142,12 +143,19 @@ export const useAnalysisExecution = ({
           })
         : resumeData
     );
+    const effectiveMode = normalizeAnalysisMode(
+      opts?.analysisMode || analysisMode || (resumeData as any)?.analysisMode
+    );
+    const effectiveJdText = (!isInterviewMode && effectiveMode === 'generic')
+      ? ''
+      : String(jdText || '').trim();
     return runRealAnalysisRequest({
       interviewType,
       resumeData: diagnosisResumeData,
       careerProfile: latestCareerProfile,
-      jdText,
+      jdText: effectiveJdText,
       targetRole: String(opts?.targetRole || '').trim(),
+      analysisMode: effectiveMode,
       getBackendAuthToken,
       showToast,
       buildApiUrl,
@@ -165,6 +173,8 @@ export const useAnalysisExecution = ({
     getBackendAuthToken,
     getRagEnabledFlag,
     jdText,
+    analysisMode,
+    isInterviewMode,
     userProfile,
     resumeData,
     setIsFromCache,
@@ -215,6 +225,10 @@ export const useAnalysisExecution = ({
     const effectiveSessionTargetRole = isInterviewMode
       ? String(resumeData?.targetRole || '').trim()
       : String(effectiveSessionTarget || resumeData?.targetRole || '').trim();
+    const effectiveAnalysisMode = normalizeAnalysisMode(analysisMode || (resumeData as any)?.analysisMode);
+    const effectiveAnalysisJdText = (!isInterviewMode && effectiveAnalysisMode === 'generic')
+      ? ''
+      : String(jdText || '').trim();
     const latestCareerProfile = getLatestCareerProfile(userProfile);
     if (!hasCareerProfileForDiagnosis(latestCareerProfile)) {
       showToast('请先完善职业画像，再基于画像与JD生成诊断。', 'info', 2200);
@@ -318,9 +332,10 @@ export const useAnalysisExecution = ({
     setAnalysisInProgress(true);
     navigateToStep('analyzing');
     persistAnalysisSessionState('analyzing', {
-      jdText: jdText || resumeData.lastJdText || '',
+      jdText: effectiveAnalysisJdText,
       targetCompany: effectiveSessionTarget,
       targetRole: effectiveSessionTargetRole,
+      analysisMode: effectiveAnalysisMode,
       step: 'analyzing',
       force: true,
     }).catch((stateErr) => {
@@ -340,6 +355,7 @@ export const useAnalysisExecution = ({
       const aiAnalysisResult = await generateRealAnalysisWithOptions(runId, interviewType, {
         bypassCache: !!opts?.bypassCache || bypassCacheOnce,
         targetRole: effectiveSessionTargetRole,
+        analysisMode: effectiveAnalysisMode,
         careerProfile: latestCareerProfile,
         diagnosisResumeData,
       });
@@ -357,7 +373,7 @@ export const useAnalysisExecution = ({
         resumeData: diagnosisResumeData,
         targetCompany,
         targetRole: effectiveSessionTargetRole,
-        analysisMode: normalizeAnalysisMode(analysisMode || (resumeData as any)?.analysisMode),
+        analysisMode: effectiveAnalysisMode,
       });
       setOriginalScore(totalScore);
       setScore(totalScore);
@@ -375,7 +391,7 @@ export const useAnalysisExecution = ({
           // Do not auto-create optimized resumes here.
           const binding = await resolveAnalysisBinding(
             originalResumeId,
-            jdText || resumeData.lastJdText || ''
+            effectiveAnalysisJdText
           );
           if (binding?.analysisReportId) {
             resolvedAnalysisReportId = binding.analysisReportId;
@@ -399,7 +415,8 @@ export const useAnalysisExecution = ({
         scoreBreakdown: newReport.scoreBreakdown,
         suggestions: appliedSuggestions,
         updatedAt: new Date().toISOString(),
-        jdText: jdText || resumeData.lastJdText || '',
+        analysisMode: effectiveAnalysisMode,
+        jdText: effectiveAnalysisJdText,
         targetCompany: effectiveTargetCompany,
         targetRole: effectiveTargetRole,
         targetCompanyConfidence: 0,
@@ -432,9 +449,10 @@ export const useAnalysisExecution = ({
       if (resumeData?.id) {
         saveLastAnalysis({
           resumeId: safePersistTargetId || resumeData.id,
-          jdText: jdText || resumeData.lastJdText || '',
+          jdText: effectiveAnalysisJdText,
           targetCompany: effectiveTargetCompany,
           targetRole: effectiveTargetRole,
+          analysisMode: effectiveAnalysisMode,
           snapshot: snapshotForPersist,
           updatedAt: snapshotForPersist.updatedAt,
           analysisReportId: resolvedAnalysisReportId || undefined,
@@ -444,9 +462,10 @@ export const useAnalysisExecution = ({
       }
       try {
         await persistAnalysisSessionState('report_ready', {
-          jdText: jdText || resumeData.lastJdText || '',
+          jdText: effectiveAnalysisJdText,
           targetCompany: effectiveTargetCompany,
           targetRole: effectiveTargetRole,
+          analysisMode: effectiveAnalysisMode,
           score: totalScore,
           step: 'final_report',
           force: true,
@@ -464,9 +483,10 @@ export const useAnalysisExecution = ({
       const isCancelled = message === 'analysis_cancelled';
       try {
         await persistAnalysisSessionState('paused', {
-          jdText: jdText || resumeData?.lastJdText || '',
+          jdText: effectiveAnalysisJdText,
           targetCompany: effectiveSessionTarget,
           targetRole: effectiveSessionTargetRole,
+          analysisMode: effectiveAnalysisMode,
           step: opts?.preserveReportOnError ? 'final_report' : 'jd_input',
           error: message || 'analysis_interrupted',
           force: true,
@@ -578,6 +598,7 @@ export const useAnalysisExecution = ({
             jdText: reusable.jdText,
             targetCompany: String(reusable.targetRole || ''),
             targetRole: String(reusable.targetRole || ''),
+            analysisMode: effectiveMode,
             score: reusable.score,
             step: 'final_report',
             force: true,
@@ -590,7 +611,7 @@ export const useAnalysisExecution = ({
         return;
       }
 
-      if (hasReadyAnalysisSessionForJd({ resumeData, jdText })) {
+      if (hasReadyAnalysisSessionForJd({ resumeData, jdText, analysisMode: effectiveMode })) {
         navigateToStep('final_report');
         showToast('已尝试打开该 JD 的历史报告。', 'info', 1800);
         return;

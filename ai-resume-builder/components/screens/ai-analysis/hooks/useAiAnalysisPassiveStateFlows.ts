@@ -108,6 +108,7 @@ export const useAiAnalysisPassiveStateFlows = ({
     suggestionsLength,
     report,
     resumeData,
+    jdText,
     loadLastAnalysis,
     applyAnalysisSnapshot,
     setJdText,

@@ -21,6 +21,7 @@ type Params = {
       targetRole: string;
       score: number;
       step: string;
+      analysisMode: AnalysisMode;
       force: boolean;
     }>
   ) => Promise<void> | void;
@@ -52,11 +53,14 @@ export const useAnalysisStepCheckpoint = ({
   const lastCheckpointRef = useRef<string>('');
 
   useEffect(() => {
-    const effectiveJdText = (jdText || resumeData?.lastJdText || '').trim();
+    const effectiveAnalysisMode = normalizeAnalysisMode(analysisMode || resumeData?.analysisMode);
+    const effectiveJdText = (!isInterviewMode && effectiveAnalysisMode === 'generic')
+      ? ''
+      : String(jdText || '').trim();
     const effectiveTargetCompany = isInterviewMode
       ? String(targetCompany || resumeData?.targetCompany || '').trim()
       : resolveAnalysisTargetValue({
-          analysisMode: normalizeAnalysisMode(analysisMode || resumeData?.analysisMode),
+          analysisMode: effectiveAnalysisMode,
           stateTargetCompany: targetCompany,
           resumeTargetCompany: '',
           resumeTargetRole: resumeData?.targetRole,
@@ -150,6 +154,7 @@ export const useAnalysisStepCheckpoint = ({
       jdText: effectiveJdText,
       targetCompany: effectiveTargetCompany,
       targetRole: effectiveTargetRole,
+      analysisMode: effectiveAnalysisMode,
       score,
       step: mapped.step,
       force: true,

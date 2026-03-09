@@ -65,6 +65,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
       resumeData,
       jdText,
       targetCompany,
+      analysisMode,
     });
   }, [analysisMode, jdText, resumeData, targetCompany]);
 

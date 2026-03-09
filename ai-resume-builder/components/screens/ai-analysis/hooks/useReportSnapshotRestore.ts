@@ -1,8 +1,23 @@
 import { useEffect } from 'react';
-import { DatabaseService } from '../../../../src/database-service';
+import { makeNormalizedJdKey } from '../id-utils';
 
 export const resolveRestoredAnalysisTarget = (snapshotLike: any): string =>
   String(snapshotLike?.targetRole || '').trim();
+
+export const canRestoreAnalysisSnapshot = ({
+  currentResumeId,
+  lastResumeId,
+  currentJdText,
+  lastJdText,
+}: {
+  currentResumeId: string;
+  lastResumeId: string;
+  currentJdText: string;
+  lastJdText: string;
+}): boolean => {
+  if (!currentResumeId || !lastResumeId || currentResumeId !== lastResumeId) return false;
+  return makeNormalizedJdKey(currentJdText) === makeNormalizedJdKey(lastJdText);
+};
 
 type Params = {
   currentStep: string;
@@ -10,6 +25,7 @@ type Params = {
   suggestionsLength: number;
   report: any;
   resumeData: any;
+  jdText: string;
   loadLastAnalysis: () => any;
   applyAnalysisSnapshot: (snapshot: any) => boolean;
   setJdText: (value: string) => void;
@@ -25,6 +41,7 @@ export const useReportSnapshotRestore = ({
   suggestionsLength,
   report,
   resumeData,
+  jdText,
   loadLastAnalysis,
   applyAnalysisSnapshot,
   setJdText,
@@ -41,49 +58,35 @@ export const useReportSnapshotRestore = ({
     if (!last || !last.resumeId) return;
     const lastResumeId = String(last.resumeId);
     const currentResumeId = String(resumeData?.id || '');
+    const currentJdText = String(jdText || '').trim();
+    const snapshotJdText = String(last.jdText || '').trim();
 
-    const applyFromSnapshot = () => {
-      const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
-      if (!snapshotApplied) return;
-      setJdText(last.jdText || '');
-      const restoredTarget = resolveRestoredAnalysisTarget(last);
-      if (restoredTarget) {
-        setTargetCompany(restoredTarget);
-      }
-      setAnalysisResumeId(last.resumeId);
-    };
-
-    if (currentResumeId && currentResumeId === lastResumeId) {
-      applyFromSnapshot();
+    if (!canRestoreAnalysisSnapshot({
+      currentResumeId,
+      lastResumeId,
+      currentJdText,
+      lastJdText: snapshotJdText,
+    })) {
       return;
     }
 
-    DatabaseService.getResume(last.resumeId).then((result) => {
-      // Resume was deleted: discard stale local snapshot to avoid ghost report restore.
-      if (!result.success || !result.data) {
-        try {
-          localStorage.removeItem('ai_last_analysis_snapshot');
-          localStorage.removeItem('ai_analysis_resume_id');
-        } catch {
-          // ignore
-        }
-        return;
-      }
+    const snapshotApplied = applyAnalysisSnapshot(last.snapshot);
+    if (!snapshotApplied) return;
 
-      const finalResumeData = {
-        id: result.data.id,
-        ...result.data.resume_data,
-        resumeTitle: result.data.title
-      };
-      if (setResumeData) {
-        sourceResumeIdRef.current = finalResumeData.optimizedFromId || finalResumeData.id;
-        setResumeData(finalResumeData);
-      }
-      applyFromSnapshot();
-    });
+    setJdText(snapshotJdText);
+    const restoredTarget = resolveRestoredAnalysisTarget(last);
+    if (restoredTarget) {
+      setTargetCompany(restoredTarget);
+    }
+    setAnalysisResumeId(last.resumeId);
+
+    // keep refs touched for backwards compatibility with existing call sites
+    void setResumeData;
+    void sourceResumeIdRef;
   }, [
     applyAnalysisSnapshot,
     currentStep,
+    jdText,
     loadLastAnalysis,
     report,
     resumeData,

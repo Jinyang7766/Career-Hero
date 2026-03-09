@@ -11,6 +11,7 @@ import {
   parseInterviewScopedKey
 } from '../id-utils';
 import { getActiveInterviewFocus, getActiveInterviewMode, getActiveInterviewType } from '../interview-plan-utils';
+import { normalizeAnalysisMode } from '../analysis-mode';
 import {
   buildAnalysisSessionStorageKey,
   buildInterviewSessionStorageKey,
@@ -71,6 +72,16 @@ export const useInterviewSessionStore = ({
   const getCurrentInterviewMode = () => normalizeInterviewMode(getActiveInterviewMode());
   const getCurrentChatMode = () => (isInterviewMode ? 'interview' : 'analysis') as 'interview' | 'analysis';
   const getCurrentInterviewFocus = () => normalizeSceneText(getActiveInterviewFocus());
+  const getCurrentAnalysisMode = () => normalizeAnalysisMode((getLatestResumeData() as any)?.analysisMode);
+  const inferSessionAnalysisMode = (session: any) => {
+    const explicit = String(session?.analysisMode || '').trim().toLowerCase();
+    if (explicit === 'generic' || explicit === 'targeted') return explicit;
+    return String(session?.jdText || '').trim() ? 'targeted' : 'generic';
+  };
+  const isSessionAnalysisModeMatched = (session: any, chatMode: 'interview' | 'analysis') => {
+    if (chatMode !== 'analysis') return true;
+    return inferSessionAnalysisMode(session) === getCurrentAnalysisMode();
+  };
 
   const resolveInterviewSession = (
     sessions: any,
@@ -96,6 +107,7 @@ export const useInterviewSessionStore = ({
     jdText: string;
     targetCompany?: string;
     targetRole?: string;
+    analysisMode?: 'generic' | 'targeted';
     snapshot: any;
     updatedAt: string;
     analysisReportId?: string;
@@ -104,6 +116,7 @@ export const useInterviewSessionStore = ({
     try {
       const normalizedPayload = {
         ...payload,
+        analysisMode: normalizeAnalysisMode(payload?.analysisMode),
         targetCompany: String(payload?.targetCompany || '').trim(),
         targetRole: String(payload?.targetRole || payload?.targetCompany || '').trim(),
       };
@@ -131,7 +144,9 @@ export const useInterviewSessionStore = ({
 
   const getAnalysisSession = (overrideJdText?: string) => {
     const currentResumeData = getLatestResumeData();
-    const sessionJdText = pickFirstNonEmptyText(overrideJdText, jdText, currentResumeData?.lastJdText);
+    const sessionJdText = isInterviewMode
+      ? pickFirstNonEmptyText(overrideJdText, jdText, currentResumeData?.lastJdText)
+      : pickFirstNonEmptyText(overrideJdText, jdText);
     if (!currentResumeData) return null;
     const interviewType = getCurrentInterviewType();
     const interviewMode = getCurrentInterviewMode();
@@ -140,21 +155,24 @@ export const useInterviewSessionStore = ({
     const byJd = (currentResumeData as any).analysisSessionByJd || {};
     const scopedModeKey = buildAnalysisSessionStorageKey({ jdKey, interviewType, interviewMode, chatMode });
     const typedModeKey = buildAnalysisSessionStorageKey({ jdKey, interviewType, chatMode });
-    if (byJd[scopedModeKey]) return byJd[scopedModeKey];
-    if (byJd[typedModeKey]) return byJd[typedModeKey];
+    const scopedSession = byJd[scopedModeKey];
+    if (scopedSession && isSessionAnalysisModeMatched(scopedSession, chatMode)) return scopedSession;
+    const typedSession = byJd[typedModeKey];
+    if (typedSession && isSessionAnalysisModeMatched(typedSession, chatMode)) return typedSession;
     const legacyScoped = byJd[makeInterviewScopedKey(jdKey, interviewType, interviewMode)];
-    if (legacyScoped && String(legacyScoped?.chatMode || '').trim().toLowerCase() === chatMode) return legacyScoped;
+    if (legacyScoped && String(legacyScoped?.chatMode || '').trim().toLowerCase() === chatMode && isSessionAnalysisModeMatched(legacyScoped, chatMode)) return legacyScoped;
     const legacyTyped = byJd[makeInterviewScopedKey(jdKey, interviewType)];
-    if (legacyTyped && String(legacyTyped?.chatMode || '').trim().toLowerCase() === chatMode) return legacyTyped;
+    if (legacyTyped && String(legacyTyped?.chatMode || '').trim().toLowerCase() === chatMode && isSessionAnalysisModeMatched(legacyTyped, chatMode)) return legacyTyped;
     const legacyPlain = byJd[jdKey];
-    if (legacyPlain && String(legacyPlain?.chatMode || '').trim().toLowerCase() === chatMode) return legacyPlain;
+    if (legacyPlain && String(legacyPlain?.chatMode || '').trim().toLowerCase() === chatMode && isSessionAnalysisModeMatched(legacyPlain, chatMode)) return legacyPlain;
     if (sessionJdText) return null;
+    if (!isInterviewMode && chatMode === 'analysis') return null;
     const entries = Object.values(byJd || {}) as any[];
     if (!entries.length) return null;
     const filtered = entries.filter((item: any) => {
       const itemType = normalizeInterviewType(item?.interviewType || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewType || '');
       const itemChatMode = String(item?.chatMode || '').trim().toLowerCase();
-      return itemType === interviewType && itemChatMode === chatMode;
+      return itemType === interviewType && itemChatMode === chatMode && isSessionAnalysisModeMatched(item, chatMode);
     });
     const source = filtered.length ? filtered : entries;
     return pickLatestByUpdatedAt(source as any[]) as any;
@@ -171,18 +189,21 @@ export const useInterviewSessionStore = ({
       error: string;
       lastMessageAt: string;
       interviewSummary: string;
+      analysisMode: 'generic' | 'targeted';
       force: boolean;
     }>
   ) => {
     const currentResumeData = getLatestResumeData();
     if (!currentResumeData?.id) return;
-    const rawSessionJdText = pickFirstNonEmptyText(patch?.jdText, jdText, currentResumeData.lastJdText);
-    const sessionJdText = rawSessionJdText;
-    const jdKeyBase = sessionJdText || '__no_jd__';
-    const jdKey = makeJdKey(jdKeyBase);
     const interviewType = getCurrentInterviewType();
     const interviewMode = getCurrentInterviewMode();
     const chatMode = getCurrentChatMode();
+    const rawSessionJdText = chatMode === 'analysis'
+      ? String(patch?.jdText ?? jdText ?? '').trim()
+      : pickFirstNonEmptyText(patch?.jdText, jdText, currentResumeData.lastJdText);
+    const sessionJdText = rawSessionJdText;
+    const jdKeyBase = sessionJdText || '__no_jd__';
+    const jdKey = makeJdKey(jdKeyBase);
     const sessionKey = buildAnalysisSessionStorageKey({ jdKey, interviewType, interviewMode, chatMode });
     const byJd = (currentResumeData as any).analysisSessionByJd || {};
     const prev =
@@ -214,6 +235,9 @@ export const useInterviewSessionStore = ({
           resumeData.targetCompany ??
           ''
         ).trim();
+    const persistedAnalysisMode = normalizeAnalysisMode(
+      patch?.analysisMode || (currentResumeData as any)?.analysisMode
+    );
 
     if (!force && prev.state === state) {
       // Avoid noisy writes on every render/send while preserving real transitions.
@@ -236,6 +260,7 @@ export const useInterviewSessionStore = ({
       jdText: sessionJdText,
       targetCompany: persistedTargetCompany,
       targetRole: persistedTargetRole,
+      analysisMode: persistedAnalysisMode,
       score: (typeof patch?.score === 'number' ? patch.score : prev.score),
       step: patch?.step ?? prev.step,
       error: patch?.error ?? '',
@@ -250,7 +275,9 @@ export const useInterviewSessionStore = ({
         ...byJd,
         [sessionKey]: nextSession,
       },
-      lastJdText: sessionJdText || currentResumeData.lastJdText || '',
+      lastJdText: chatMode === 'analysis'
+        ? sessionJdText
+        : (sessionJdText || currentResumeData.lastJdText || ''),
       targetCompany: persistedTargetCompany || currentResumeData.targetCompany || '',
       targetRole: isInterviewMode
         ? (currentResumeData as any).targetRole || ''

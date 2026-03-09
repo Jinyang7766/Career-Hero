@@ -110,7 +110,7 @@ export const useOptimizedResumeStore = ({
     jdKeyOverride?: string
   ): Promise<string | number> => {
     const normalizedOriginalId = await resolveCanonicalOriginalResumeId(originalResumeId);
-    const jdKey = jdKeyOverride || makeJdKey(jdText || baseResumeData.lastJdText || '');
+    const jdKey = jdKeyOverride || makeJdKey(String(jdText || '').trim());
 
     const current = optimizedResumeIdRef.current;
     if (current) {
@@ -169,7 +169,7 @@ export const useOptimizedResumeStore = ({
         optimizationStatus: 'optimized' as const,
         optimizedFromId: normalizedOriginalId,
         optimizationJdKey: jdKey,
-        lastJdText: jdText || baseResumeData.lastJdText || '',
+        lastJdText: String(jdText || '').trim(),
         targetCompany: effectiveTargetCompany || '',
         targetRole: effectiveTargetCompany || baseResumeData.targetRole || '',
         source: 'diagnosis_generated',
@@ -208,7 +208,7 @@ export const useOptimizedResumeStore = ({
     if (!originalRow.success || !originalRow.data?.resume_data) return null;
 
     const originalData = originalRow.data.resume_data || {};
-    const effectiveJdText = (analysisJdText || originalData.lastJdText || '').trim();
+    const effectiveJdText = String(analysisJdText || '').trim();
     const jdKey = makeJdKey(effectiveJdText);
 
     // Backward compatibility: old binding stored on original resume.
@@ -256,7 +256,7 @@ export const useOptimizedResumeStore = ({
     }
 
     const originalData = originalRow.data.resume_data || {};
-    const effectiveJdText = (analysisJdText || originalData.lastJdText || '').trim();
+    const effectiveJdText = String(analysisJdText || '').trim();
     const jdKey = makeJdKey(effectiveJdText);
     const analysisReportId = buildAnalysisReportId(canonicalOriginalId, effectiveJdText);
 
@@ -311,7 +311,7 @@ export const useOptimizedResumeStore = ({
           optimizationJdKey: jdKey,
           analysisReportId: nextBinding.analysisReportId,
           optimizedResumeId,
-          lastJdText: effectiveJdText || optimizedData.lastJdText || '',
+          lastJdText: effectiveJdText,
           targetCompany: effectiveTargetCompany || '',
           targetRole: effectiveTargetCompany || optimizedData.targetRole || '',
           source: String(optimizedData.source || 'diagnosis_generated'),

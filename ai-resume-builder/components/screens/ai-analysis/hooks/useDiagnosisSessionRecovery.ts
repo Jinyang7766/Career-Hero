@@ -69,7 +69,7 @@ export const useDiagnosisSessionRecovery = ({
     if (currentStep === 'analyzing') return;
     if (forcedResumeSelect) return;
 
-    const effectiveJdText = (jdText || resumeData.lastJdText || '').trim();
+    const effectiveJdText = String(jdText || '').trim();
     if (!effectiveJdText) return;
     const activeInterviewType = getActiveInterviewType();
     const activeInterviewMode = getActiveInterviewMode();
