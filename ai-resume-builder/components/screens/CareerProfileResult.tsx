@@ -54,12 +54,12 @@ const CareerProfileResult: React.FC = () => {
   const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
 
   const navItems = [
-    { id: 'section-summary', icon: 'auto_awesome', label: '核心优势' },
-    { id: 'section-personal', icon: 'person', label: '基础信息' },
-    { id: 'section-intent', icon: 'target', label: '目标偏好' },
-    { id: 'section-skills', icon: 'psychology', label: '专业技能' },
+    { id: 'section-summary', icon: 'psychology', label: '核心优势' },
+    { id: 'section-basic', icon: 'badge', label: '基础信息' },
+    { id: 'section-preference', icon: 'tune', label: '目标偏好' },
+    { id: 'section-skills', icon: 'extension', label: '专业技能' },
     { id: 'section-work', icon: 'work', label: '工作履历' },
-    { id: 'section-projects', icon: 'account_tree', label: '重点项目' },
+    { id: 'section-projects', icon: 'rocket_launch', label: '重点项目' },
     { id: 'section-education', icon: 'school', label: '教育背景' },
   ];
 
