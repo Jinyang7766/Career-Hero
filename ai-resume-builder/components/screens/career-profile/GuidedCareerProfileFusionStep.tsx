@@ -412,8 +412,8 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-black tracking-tight text-slate-900 dark:text-white pointer-events-none">
-            职业画像录入
+          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
+            补全画像事实
           </h2>
         </div>
       </header>
@@ -445,14 +445,14 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
             className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isAnalyzing
-              ? 'AI 正在解析上传内容...'
+              ? '正在解析...'
               : isGenerating
-              ? 'AI 正在重新生成画像...'
+              ? '正在生成...'
               : canStartFollowup
               ? isFirstBuild
-                ? '下一步'
-                : '一键生成画像'
-              : 'AI 智能解析'}
+                ? '补全画像细节'
+                : '确认生成画像'
+              : '开启 AI 解析'}
           </button>
           {!!analyzeError && (
             <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">

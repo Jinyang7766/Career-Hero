@@ -903,7 +903,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{w.title}</h4>
                           {(w.startDate || w.endDate || w.date) && (
-                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
                               {w.date || `${w.startDate || ''} - ${w.endDate || '至今'}`.replace(/^ - $/, '')}
                             </span>
                           )}
@@ -1010,7 +1010,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{p.title}</h4>
                           {p.date && (
-                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
                               {p.date}
                             </span>
                           )}
@@ -1111,8 +1111,8 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         <div className="flex items-center justify-between gap-2">
                           <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{e.title || e.school}</h4>
                           {e.date && (
-                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
-                              {e.date}
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 dark:text-slate-400 tabular-nums">
+                                {e.date}
                             </span>
                           )}
                         </div>

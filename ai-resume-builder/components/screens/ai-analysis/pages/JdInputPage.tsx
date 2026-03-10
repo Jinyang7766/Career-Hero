@@ -93,7 +93,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   );
   const shouldBlockStep3Start = shouldBlockTargetRoleStart || shouldBlockTargetedStart;
 
-  const startButtonLabel = `开始${getAnalysisModeLabel(analysisMode)}（${USAGE_POINT_COST.analysis}积分）`;
+  const startButtonLabel = `开启${getAnalysisModeLabel(analysisMode)}（${USAGE_POINT_COST.analysis}积分）`;
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
@@ -241,7 +241,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             {isStarting ? (
               <>
                 <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
-                <span>开始中...</span>
+                <span>正在开启...</span>
               </>
             ) : (
               startButtonLabel
@@ -281,7 +281,7 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   {isStarting ? (
                     <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                   ) : null}
-                  查看上次结果
+                  进入分析报告
                 </button>
                 <button
                   onClick={async () => {
@@ -301,13 +301,13 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
                   disabled={isStarting}
                   className="w-full h-12 rounded-2xl border border-primary/30 text-primary text-sm font-bold hover:bg-primary/5 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  基于最新画像重新生成
+                  重新开启诊断
                 </button>
                 <button
                   onClick={() => setShowReuseResultModal(false)}
                   className="w-full h-10 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
                 >
-                  暂不处理
+                  返回修改
                 </button>
               </div>
             </div>

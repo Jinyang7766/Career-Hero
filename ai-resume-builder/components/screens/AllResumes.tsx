@@ -434,7 +434,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                         ) : (
                           <>
                             <span className="material-symbols-outlined text-[18px]">edit</span>
-                            编辑
+                            精修
                           </>
                         )}
                       </button>
@@ -443,7 +443,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                         className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
                       >
                         <span className="material-symbols-outlined text-[18px]">drive_file_rename_outline</span>
-                        重命名
+                        修改名称
                       </button>
                       <div className="h-px bg-slate-100 dark:bg-white/5"></div>
                       <button
@@ -561,7 +561,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
               <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
               <p className="text-slate-900 dark:text-white font-medium mb-1">简历库中还没有简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">请前往AI诊断生成专属简历</p>
+              <p className="text-slate-500 dark:text-slate-400 text-sm">去开启 AI 诊断，生成您的专属优化简历</p>
             </div>
           ) : filteredResumes.length === 0 && (
             <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">

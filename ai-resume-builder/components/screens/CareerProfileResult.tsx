@@ -7,6 +7,7 @@ import { useCareerProfileComposer } from './dashboard/useCareerProfileComposer';
 import CareerProfileStructuredEditor, { CareerProfileEditorRef } from './career-profile/CareerProfileStructuredEditor';
 import { buildDynamicFollowupPrompts } from './career-profile/dynamic-followup-prompts';
 import { computeFollowupCardStatuses } from './career-profile/followup-card-status';
+import PageStatusFeedback from '../shared/PageStatusFeedback';
 import {
   type FollowupCardStatus,
   FOLLOWUP_PROGRESS_KEY,
@@ -50,7 +51,7 @@ const CareerProfileResult: React.FC = () => {
   const [isInlineEditing, setIsInlineEditing] = React.useState(false);
   const [editorEpoch, setEditorEpoch] = React.useState(0);
   const editorRef = React.useRef<CareerProfileEditorRef>(null);
-  const { userProfile, loading } = useUserProfile(currentUser?.id, currentUser);
+  const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
 
   React.useEffect(() => {
     if (path === '/career-profile/result') {
@@ -165,13 +166,25 @@ const CareerProfileResult: React.FC = () => {
   }, [followupProgressKey, followupSessionKey, navigate, profile]);
 
 
+  const handleRetry = () => {
+    window.location.reload();
+  };
+
+  if (loading) {
+    return <PageStatusFeedback status="loading" title="正在准备您的职业画像..." icon="psychology" />;
+  }
+
+  if (error) {
+    return <PageStatusFeedback status="error" title="画像加载失败" message={error} onRetry={handleRetry} />;
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center justify-between px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold leading-tight tracking-[-0.015em] text-slate-900 dark:text-white pointer-events-none">
-            我的专属职业画像
+          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
+            我的职业画像
           </h2>
           <button
             type="button"
@@ -191,43 +204,12 @@ const CareerProfileResult: React.FC = () => {
             </span>
           </button>
         </div>
-        {!isInlineEditing && (
-          <div className="flex items-center justify-between px-4 h-10 overflow-x-auto no-scrollbar border-t border-slate-50 dark:border-white/5 scroll-smooth bg-white/50 dark:bg-slate-900/50">
-            {[
-              { id: 'summary', label: '核心优势', icon: 'psychology' },
-              { id: 'basic', label: '基础信息', icon: 'badge' },
-              { id: 'preference', label: '目标偏好', icon: 'tune' },
-              { id: 'skills', label: '专业技能', icon: 'extension' },
-              { id: 'work', label: '工作履历', icon: 'work' },
-              { id: 'projects', label: '重点项目', icon: 'rocket_launch' },
-              { id: 'education', label: '教育背景', icon: 'school' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  const el = document.getElementById(`section-${tab.id}`);
-                  if (el) {
-                    const headerOffset = 100;
-                    const elementPosition = el.getBoundingClientRect().top;
-                    const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
-                    window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
-                  }
-                }}
-                className="flex-1 flex items-center justify-center h-8 rounded-lg text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
-                title={tab.label}
-                aria-label={tab.label}
-              >
-                <span className="material-symbols-outlined text-[20px]">{tab.icon}</span>
-              </button>
-            ))}
-          </div>
-        )}
       </header>
 
-      <main className={`flex-1 overflow-y-auto ${isInlineEditing ? 'pt-20' : 'pt-28'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
+      <main className={`flex-1 overflow-y-auto ${isInlineEditing ? 'pt-20' : 'pt-14'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
 
 
-        {!loading && (
+        {profile && (
           <CareerProfileStructuredEditor
             key={editorEpoch}
             ref={editorRef}
@@ -288,7 +270,7 @@ const CareerProfileResult: React.FC = () => {
                   className="relative w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
-                  <span>{hasMissingFollowup ? '去完善我的职场细节' : '补充更多职场细节'}</span>
+                  <span>{hasMissingFollowup ? '补充核心事实' : '丰富画像细节'}</span>
                   {statusCount.pending > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-in zoom-in duration-300">
                       {statusCount.pending}
@@ -301,7 +283,7 @@ const CareerProfileResult: React.FC = () => {
                   className="w-full h-11 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">history_edu</span>
-                  <span>重新录入背景信息</span>
+                  <span>更新背景资料</span>
                 </button>
               </div>
             </div>
@@ -323,7 +305,7 @@ const CareerProfileResult: React.FC = () => {
             ) : (
               <>
                 <span className="material-symbols-outlined text-[20px]">check_circle</span>
-                <span>保存画像</span>
+                <span>确认修改</span>
               </>
             )}
           </button>

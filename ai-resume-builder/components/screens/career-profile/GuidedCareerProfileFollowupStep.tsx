@@ -307,8 +307,8 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200/80 dark:border-white/10 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-black tracking-tight text-slate-900 dark:text-white pointer-events-none">
-            定向追问补充
+          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
+            补全画像事实
           </h2>
         </div>
       </header>
@@ -427,7 +427,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
               disabled={isSaving}
               className="w-full min-h-12 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.985] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              {isSaving ? 'AI 正在马蹄疾整理画像...' : '一键生成画像'}
+              {isSaving ? '正在生成画像...' : '生成职业画像'}
             </button>
           </div>
         </div>

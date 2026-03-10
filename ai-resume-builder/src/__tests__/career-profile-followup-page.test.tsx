@@ -67,7 +67,7 @@ describe('career-profile followup page', () => {
     );
 
     expect(await screen.findByText('问题 1/2')).toBeTruthy();
-    expect(screen.getByText('定向追问补充')).toBeTruthy();
+    expect(screen.getByText('补全画像事实')).toBeTruthy();
     expect(screen.getByText('回答当前问题')).toBeTruthy();
     expect(screen.getByText('已完成 0/2')).toBeTruthy();
 
@@ -96,8 +96,8 @@ describe('career-profile followup page', () => {
     fireEvent.change(textarea, { target: { value: '目标是 AI 产品经理' } });
     
     // Keep bottom CTA as required
-    expect(screen.getByRole('button', { name: '一键生成画像' })).toBeTruthy();
-    fireEvent.click(screen.getByText('一键生成画像'));
+    expect(screen.getByRole('button', { name: '生成职业画像' })).toBeTruthy();
+    fireEvent.click(screen.getByText('生成职业画像'));
 
     expect(saveCareerProfileMock).toHaveBeenCalledTimes(1);
     const payload = String(saveCareerProfileMock.mock.calls[0][0] || '');

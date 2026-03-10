@@ -7,6 +7,7 @@ import { useAppStore } from '../../src/app-store';
 import { getLatestCareerProfile } from '../../src/career-profile-utils';
 import CareerProfileEntryCard from './dashboard/CareerProfileEntryCard';
 import { shouldShowCareerProfileEntryCard } from './dashboard/dashboard-card-visibility';
+import PageStatusFeedback from '../shared/PageStatusFeedback';
 
 const CAREER_TIPS = [
   "简历中的数字比形容词更有说服力，量化成果是金标准。",
@@ -79,7 +80,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   };
 
   // Get user profile with real name
-  const { userProfile } = useUserProfile();
+  const { userProfile, loading, error } = useUserProfile();
   const latestCareerProfile = React.useMemo(
     () => getLatestCareerProfile(userProfile),
     [userProfile]
@@ -194,21 +195,35 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
     navigate('/career-profile/upload', { replace: true });
   }, [navigate]);
 
+  const handleRetry = () => {
+    window.location.reload();
+  };
+
+  if (loading) {
+    return <PageStatusFeedback status="loading" title="正在为您准备看板..." icon="dashboard" />;
+  }
+
+  if (error) {
+    return (
+      <PageStatusFeedback
+        status="error"
+        title="看板加载失败"
+        message={error}
+        onRetry={handleRetry}
+      />
+    );
+  }
+
   return (
     <div className="flex flex-col pb-[calc(4.5rem+env(safe-area-inset-bottom))] animate-in fade-in duration-300">
       {/* Header */}
-      <div className="flex items-center justify-between p-4 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-transparent dark:border-white/5">
-        <div className="flex flex-col">
-          <h2 className="text-xl font-bold leading-tight text-gray-900 dark:text-white">
+      <div className="flex items-center justify-between px-4 h-14 sticky top-0 z-30 bg-background-light/90 dark:bg-background-dark/90 backdrop-blur-md border-b border-slate-100 dark:border-white/5">
+        <div className="flex flex-col justify-center">
+          <h2 className="text-lg font-bold leading-tight text-slate-900 dark:text-white">
             {greeting}{displayName ? `，${displayName}` : ''}
           </h2>
-          <p className="text-sm text-slate-600 dark:text-gray-400 mt-1">
-            {new Date().toLocaleDateString('zh-CN', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })}
+          <p className="text-[10px] font-bold text-slate-500 dark:text-gray-400 uppercase tracking-wider">
+            {new Date().toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', weekday: 'short' })}
           </p>
         </div>
       </div>
@@ -249,7 +264,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                   基于职业画像继续输入目标岗位/JD，生成对应优化简历。
                 </p>
                 <div className="mt-6 flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/20 group-hover:bg-white/30 transition-colors">
-                  <span>继续</span>
+                  <span>去优化</span>
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </div>
               </div>
@@ -272,7 +287,7 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
                   可先上传已有简历（可跳过），再由 AI 引导你补齐画像事实。
                 </p>
                 <div className="mt-6 flex items-center gap-2 text-xs font-bold bg-white/20 w-fit px-4 py-2 rounded-full backdrop-blur-md border border-white/20 group-hover:bg-white/30 transition-colors">
-                  <span>开始使用</span>
+                  <span>开启诊断</span>
                   <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </div>
               </div>

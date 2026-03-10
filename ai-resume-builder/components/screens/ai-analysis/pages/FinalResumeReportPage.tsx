@@ -83,7 +83,7 @@ JD 匹配差距与定向改写摘要
           className="w-full h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
           type="button"
         >
-          重新填写岗位/JD
+          重新开始诊断
         </button>
 
         <div className="grid grid-cols-2 gap-3">
@@ -92,14 +92,14 @@ JD 匹配差距与定向改写摘要
             className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
             type="button"
           >
-            查看生成简历
+            去精修简历
           </button>
           <button
             onClick={onStartInterview}
             className="h-11 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
             type="button"
           >
-            去模拟面试
+            开启全真面试
           </button>
         </div>
 

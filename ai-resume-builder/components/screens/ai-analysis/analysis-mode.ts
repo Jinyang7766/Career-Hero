@@ -16,7 +16,7 @@ export const isJdRequiredForAnalysisMode = (mode: AnalysisMode): boolean =>
   mode === 'targeted';
 
 export const getAnalysisModeLabel = (mode: AnalysisMode): string =>
-  mode === 'generic' ? '通用优化' : '定向优化';
+  mode === 'generic' ? '通用优化' : '定向精修';
 
 export const shouldPromptForMissingJd = ({
   isInterviewMode,
