@@ -1111,13 +1111,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         <div className="flex items-center justify-between gap-2">
                           <h4 className="mt-0 mb-0 text-[15px] font-bold text-slate-900 dark:text-white leading-tight">{e.title || e.school}</h4>
                           {e.date && (
-                            <span className="shrink-0 text-[10px] font-medium text-slate-500 tabular-nums">
+                            <span className="shrink-0 text-[10px] font-medium text-slate-500 bg-slate-50 dark:bg-white/5 px-2 py-0.5 rounded-full border border-slate-100 dark:border-white/5 tabular-nums">
                               {e.date}
                             </span>
                           )}
                         </div>
                         <p className="my-0 mt-1 text-[13px] text-slate-600 dark:text-slate-400">
-                          {[e.degree, e.major, e.subtitle].filter(Boolean).join(' · ')}
+                          {Array.from(new Set([e.degree, e.major, e.subtitle].filter(Boolean).map(s => String(s).trim()))).join(' · ')}
                         </p>
                       </div>
                     </div>

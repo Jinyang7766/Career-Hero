@@ -192,15 +192,15 @@ const CareerProfileResult: React.FC = () => {
           </button>
         </div>
         {!isInlineEditing && (
-          <div className="flex items-center gap-4 px-4 h-10 overflow-x-auto no-scrollbar border-t border-slate-50 dark:border-white/5 scroll-smooth">
+          <div className="flex items-center justify-between px-4 h-10 overflow-x-auto no-scrollbar border-t border-slate-50 dark:border-white/5 scroll-smooth bg-white/50 dark:bg-slate-900/50">
             {[
-              { id: 'summary', label: '核心优势' },
-              { id: 'basic', label: '基础信息' },
-              { id: 'preference', label: '目标偏好' },
-              { id: 'skills', label: '专业技能' },
-              { id: 'work', label: '工作履历' },
-              { id: 'projects', label: '重点项目' },
-              { id: 'education', label: '教育背景' },
+              { id: 'summary', label: '核心优势', icon: 'psychology' },
+              { id: 'basic', label: '基础信息', icon: 'badge' },
+              { id: 'preference', label: '目标偏好', icon: 'tune' },
+              { id: 'skills', label: '专业技能', icon: 'extension' },
+              { id: 'work', label: '工作履历', icon: 'work' },
+              { id: 'projects', label: '重点项目', icon: 'rocket_launch' },
+              { id: 'education', label: '教育背景', icon: 'school' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -213,9 +213,11 @@ const CareerProfileResult: React.FC = () => {
                     window.scrollTo({ top: offsetPosition, behavior: 'smooth' });
                   }
                 }}
-                className="whitespace-nowrap text-[12px] font-bold text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary transition-colors"
+                className="flex-1 flex items-center justify-center h-8 rounded-lg text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                title={tab.label}
+                aria-label={tab.label}
               >
-                {tab.label}
+                <span className="material-symbols-outlined text-[20px]">{tab.icon}</span>
               </button>
             ))}
           </div>
