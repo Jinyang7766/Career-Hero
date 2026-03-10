@@ -231,7 +231,7 @@ const CareerProfileResult: React.FC = () => {
           </button>
         </div>
         {!isInlineEditing && (
-          <div className="flex items-center justify-between px-6 h-10 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+          <div className="flex items-center justify-between px-6 h-10 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 bg-slate-50 dark:bg-slate-800/40 backdrop-blur-md">
             {navItems.map((item) => (
               <button
                 key={item.id}
