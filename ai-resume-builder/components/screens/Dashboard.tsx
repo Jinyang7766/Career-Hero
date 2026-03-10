@@ -200,7 +200,19 @@ const Dashboard: React.FC<ScreenProps & { createNewResume?: () => void }> = ({ c
   };
 
   if (loading) {
-    return <PageStatusFeedback status="loading" title="正在为您准备看板..." icon="dashboard" />;
+    return (
+      <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark p-4 gap-6">
+        <div className="h-14 flex items-center justify-between mb-2">
+          <div className="space-y-2">
+            <div className="h-6 w-32 skeleton-base skeleton-shimmer rounded-lg" />
+            <div className="h-3 w-20 skeleton-base skeleton-shimmer rounded-lg" />
+          </div>
+        </div>
+        <div className="h-32 w-full skeleton-base skeleton-shimmer rounded-2xl" />
+        <div className="h-40 w-full skeleton-base skeleton-shimmer rounded-2xl" />
+        <div className="h-44 w-full skeleton-base skeleton-shimmer rounded-2xl" />
+      </div>
+    );
   }
 
   if (error) {

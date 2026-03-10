@@ -484,6 +484,20 @@ const AllResumes: React.FC<ScreenProps> = () => {
     </div>
   );
 
+  if (isDeleting !== null || isUpdating) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background-light dark:bg-background-dark p-6 animate-in fade-in duration-300">
+        <div className="size-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-6">
+          <span className="size-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></span>
+        </div>
+        <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-2">
+          {isDeleting !== null ? '正在删除简历...' : '正在更新简历...'}
+        </h3>
+        <p className="text-sm text-slate-500 dark:text-slate-400">请稍候，操作完成后将自动返回</p>
+      </div>
+    );
+  }
+
   return (
     <div
       onClick={handleContainerClick}
