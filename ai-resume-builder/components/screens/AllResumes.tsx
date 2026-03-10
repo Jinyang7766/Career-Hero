@@ -6,6 +6,7 @@ import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 import { createEmptyResumeData, useAppStore } from '../../src/app-store';
 import BackButton from '../shared/BackButton';
+import PageStatusFeedback from '../shared/PageStatusFeedback';
 import { clearLocalAnalysisSnapshotForResume } from './all-resumes/resume-local-cleanup';
 import { buildEditorResumeData, buildPreviewResumeData, hasValidResumeData } from './all-resumes/resume-transformers';
 import { writePreviewBackTarget, writePreviewResumeId } from './preview/preview-storage';
@@ -354,7 +355,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5 overflow-hidden">
         {resumes.map((resume, index) => {
           const isSelected = selectedIds.has(resume.id);
           return (
@@ -377,7 +378,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   toggleSelection(resume.id);
                 }
               }}
-              className={`group relative flex items-center gap-4 px-4 py-3.5 transition-colors cursor-pointer select-none ${index === 0 ? 'rounded-t-2xl' : ''} ${index === resumes.length - 1 ? 'rounded-b-2xl' : ''} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50 dark:hover:bg-white/5'}`}
+              className={`group relative flex items-center gap-4 px-4 py-4 transition-all cursor-pointer select-none ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50/80 dark:hover:bg-white/[0.02]'}`}
             >
               {isSelectionMode ? (
                 <div className={`shrink-0 flex items-center justify-center size-10 rounded-full transition-colors ${isSelected ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}>
@@ -540,7 +541,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-slate-200 dark:border-transparent focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder-slate-400 dark:placeholder-slate-400 transition-all shadow-sm"
+            className="w-full h-12 bg-white dark:bg-white/5 text-[15px] text-slate-900 dark:text-white rounded-2xl pl-11 pr-4 outline-none border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-slate-400 shadow-sm"
             placeholder="搜索简历名称..."
             type="text"
           />
@@ -558,17 +559,19 @@ const AllResumes: React.FC<ScreenProps> = () => {
       <div className="flex-1 overflow-y-auto no-scrollbar pb-[calc(4.5rem+env(safe-area-inset-bottom))]">
         <div className="flex flex-col gap-2">
           {allResumes && allResumes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">简历库中还没有简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">去开启 AI 诊断，生成您的专属优化简历</p>
-            </div>
+            <PageStatusFeedback
+              status="empty"
+              icon="description"
+              title="简历库中还没有简历"
+              message="去开启 AI 诊断，生成您的专属优化简历"
+            />
           ) : filteredResumes.length === 0 && (
-            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">search_off</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">未找到相关简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">尝试搜索其他关键词</p>
-            </div>
+            <PageStatusFeedback
+              status="empty"
+              icon="search_off"
+              title="未找到相关简历"
+              message="尝试搜索其他关键词"
+            />
           )}
 
           {filteredResumes.length > 0 && renderResumeList(filteredResumes)}
@@ -601,7 +604,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   type="text"
                   value={renameInputValue}
                   onChange={(e) => setRenameInputValue(e.target.value)}
-                  className="w-full bg-slate-50 dark:bg-slate-800/50 text-[15px] font-bold text-slate-900 dark:text-white rounded-2xl px-5 py-4 outline-none border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-slate-400"
+                  className="w-full h-12 bg-slate-50 dark:bg-slate-800/50 text-[15px] font-bold text-slate-900 dark:text-white rounded-xl px-5 py-3 outline-none border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-slate-400"
                   placeholder="输入新的简历名称"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleRenameConfirm();
@@ -613,14 +616,14 @@ const AllResumes: React.FC<ScreenProps> = () => {
               <div className="flex gap-3">
                 <button
                   onClick={() => setIsRenamingId(null)}
-                  className="flex-1 h-12 rounded-2xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
+                  className="flex-1 h-12 rounded-xl text-sm font-bold text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 transition-all active:scale-95"
                 >
                   取消
                 </button>
                 <button
                   onClick={handleRenameConfirm}
                   disabled={isUpdating || !renameInputValue.trim()}
-                  className="flex-1 h-12 rounded-2xl bg-primary text-white text-sm font-bold hover:bg-blue-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-primary/25 active:scale-95"
+                  className="flex-1 h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {isUpdating ? (
                     <>

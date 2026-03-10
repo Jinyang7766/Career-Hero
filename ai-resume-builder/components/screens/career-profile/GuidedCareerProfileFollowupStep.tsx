@@ -307,14 +307,14 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/85 dark:bg-slate-900/85 backdrop-blur-md border-b border-slate-200/80 dark:border-white/10 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
-            补全画像事实
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white pointer-events-none">
+            画像细节追问
           </h2>
         </div>
       </header>
 
       <main
-        className={`pt-20 px-4 flex flex-col gap-4 max-w-md mx-auto w-full ${
+        className={`pt-20 px-4 flex flex-col gap-5 max-w-md mx-auto w-full ${
           isInputFocused
             ? 'pb-[calc(8.5rem+env(safe-area-inset-bottom))]'
             : 'pb-[calc(7.25rem+env(safe-area-inset-bottom))]'
@@ -322,20 +322,20 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       >
         {total > 0 ? (
           <>
-            <section className="rounded-[20px] bg-white/92 dark:bg-surface-dark border border-slate-200/70 dark:border-white/10 p-4 shadow-[0_14px_36px_-24px_rgba(15,23,42,0.45)]">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-500 dark:text-slate-400">
-                <span>已完成 {completedCount}/{total}</span>
+            <section className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
+              <div className="flex items-center justify-between text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 dark:text-slate-400">
+                <span>完成度 {completedCount}/{total}</span>
                 <span>{Math.round(completionRatio * 100)}%</span>
               </div>
-              <div className="mt-2 h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-700/60 overflow-hidden">
+              <div className="mt-2.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <div
-                  className="h-full rounded-full bg-primary transition-all duration-300 ease-out"
+                  className="h-full rounded-full bg-primary transition-all duration-300 ease-out shadow-[0_0_8px_rgba(37,99,235,0.4)]"
                   style={{ width: `${Math.max(completionRatio * 100, 4)}%` }}
                 />
               </div>
 
               <div
-                className="mt-3 overflow-hidden"
+                className="mt-5 overflow-hidden"
                 onTouchStart={(event) => {
                   touchStartX.current = event.touches[0]?.clientX ?? null;
                 }}
@@ -357,10 +357,10 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                   style={{ transform: `translateX(-${activeIndex * 100}%)` }}
                 >
                   {prompts.map((prompt, idx) => (
-                    <article key={prompt.id} className="min-w-full px-0.5 py-1">
-                      <div className="rounded-2xl border border-slate-200/80 dark:border-white/10 bg-slate-50/85 dark:bg-slate-900/45 px-4 py-4 min-h-[152px]">
-                        <span className="text-xs font-bold text-slate-500 dark:text-slate-400">问题 {idx + 1}/{total}</span>
-                        <p className="mt-3 text-[15px] font-semibold text-slate-900 dark:text-slate-100 leading-7 whitespace-pre-line">
+                    <article key={prompt.id} className="min-w-full px-0.5">
+                      <div className="rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-slate-900/50 p-4 min-h-[140px]">
+                        <span className="text-[10px] font-black tracking-wider uppercase text-primary dark:text-primary-light">问题 {idx + 1}/{total}</span>
+                        <p className="mt-2.5 text-[15px] font-bold text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-line">
                           {prompt.text}
                         </p>
                       </div>
@@ -370,20 +370,20 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
               </div>
 
               {!!swipeFeedback && (
-                <p className="mt-2 text-[11px] font-medium text-slate-500 dark:text-slate-400" role="status" aria-live="polite">
+                <p className="mt-3 text-[11px] font-bold text-slate-400 dark:text-slate-500 text-center" role="status" aria-live="polite">
                   {swipeFeedback}
                 </p>
               )}
             </section>
 
             <section
-              className={`rounded-[20px] bg-white/95 dark:bg-surface-dark border p-4 transition-all duration-200 ${
+              className={`rounded-2xl bg-white dark:bg-surface-dark border p-5 transition-all duration-200 ${
                 isInputFocused
-                  ? 'border-blue-300 dark:border-blue-400/35 shadow-[0_18px_44px_-24px_rgba(37,99,235,0.55)]'
-                  : 'border-slate-200/80 dark:border-white/10 shadow-[0_14px_36px_-26px_rgba(15,23,42,0.4)]'
+                  ? 'border-primary/40 shadow-lg shadow-primary/10'
+                  : 'border-slate-200/60 dark:border-white/5 shadow-sm'
               }`}
             >
-              <label className={`text-sm font-semibold ${isInputFocused ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'}`}>
+              <label className={`text-sm font-bold block mb-2 ${isInputFocused ? 'text-primary' : 'text-slate-800 dark:text-slate-200'}`}>
                 回答当前问题
               </label>
               <textarea
@@ -402,32 +402,38 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                     void handleSubmission('enter');
                   }
                 }}
-                placeholder="请输入你的真实经历与细节（默认空白，不会预填模板）"
-                className="mt-2 w-full min-h-[124px] resize-none rounded-xl border bg-slate-50 dark:bg-[#111a22] border-slate-300/90 dark:border-[#334155] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm leading-7 outline-none transition-all focus:ring-2 focus:ring-primary/45 focus:border-primary/35"
+                placeholder="请输入你的真实经历与细节..."
+                className="w-full min-h-[120px] resize-none rounded-xl bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-100 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
               />
-              <p className="mt-2 text-[11px] leading-5 text-slate-500 dark:text-slate-400">
-                {hasAnswer ? '已记录当前输入，按回车可直接切换问题。' : '可留空跳过当前题，后续仍可一键生成画像。'}
+              <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[14px]">info</span>
+                {hasAnswer ? '已记录当前输入，按回车可切换下一题' : '可留空跳过当前题，仍可一键生成画像'}
               </p>
             </section>
           </>
         ) : (
-          <div className="rounded-[20px] bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-[0_14px_36px_-24px_rgba(15,23,42,0.4)]">
-            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接生成职业画像。</p>
+          <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
+            <p className="text-sm font-bold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接点击下方按钮生成职业画像。</p>
           </div>
         )}
 
         <div className="sticky bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-30 mt-1">
-          <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/75 dark:border-white/10 p-2 shadow-[0_16px_40px_-24px_rgba(15,23,42,0.45)]">
+          <div className="rounded-2xl bg-white/90 dark:bg-slate-900/85 backdrop-blur-md border border-slate-200/60 dark:border-white/5 p-2 shadow-lg">
             <button
               type="button"
               onClick={() => {
                 void handleGenerate();
               }}
               disabled={isSaving}
-              className="w-full min-h-12 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.985] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {isSaving ? '正在生成画像...' : '生成职业画像'}
+              {isSaving ? (
+                <>
+                  <span className="size-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                  正在生成画像...
+                </>
+              ) : '生成职业画像'}
             </button>
           </div>
         </div>

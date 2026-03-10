@@ -699,39 +699,40 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         minRows={2}
                       />
                     </label>
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">MBTI</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">MBTI</span>
                       <input
                         value={String(draftProfile?.mbti || '')}
                         onChange={(event) => setDraftProfileTextField('mbti', event.target.value)}
-                        className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                        placeholder="例如: INTJ"
                       />
                     </label>
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">性格特征</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">性格特征</span>
                       <AutoGrowTextarea
                         value={String(draftProfile?.personality || '')}
                         onChange={(event) => setDraftProfileTextField('personality', event.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                        minRows={2}
+                        className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
+                        minRows={1}
                       />
                     </label>
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">工作方式偏好</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">工作方式偏好</span>
                       <AutoGrowTextarea
                         value={String(draftProfile?.workStyle || '')}
                         onChange={(event) => setDraftProfileTextField('workStyle', event.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                        minRows={2}
+                        className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
+                        minRows={1}
                       />
                     </label>
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">求职约束</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">求职约束</span>
                       <AutoGrowTextarea
                         value={joinListText(factDraft.constraints.map((item) => item.text))}
                         onChange={(event) => applyFactSectionTextPatch('constraints', splitListText(event.target.value))}
-                        className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                        minRows={2}
+                        className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
+                        minRows={1}
                       />
                     </label>
                   </div>

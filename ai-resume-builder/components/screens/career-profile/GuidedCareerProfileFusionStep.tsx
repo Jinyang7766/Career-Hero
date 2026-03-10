@@ -319,10 +319,10 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
   const renderUploadedResumeTitleCard = () => {
     if (!hasUploadedResume) return null;
     return (
-      <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
-        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">已上传简历</p>
-        <p className="mt-2 text-sm text-slate-900 dark:text-slate-100">{uploadedResumeTitle || '未命名简历'}</p>
-        <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
+        <p className="text-[11px] font-black tracking-[0.2em] uppercase text-primary dark:text-primary-light mb-2">已上传简历</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{uploadedResumeTitle || '未命名简历'}</p>
+        <p className="mt-2.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
           当前仅展示标题，不做即时解析。点击 AI 智能解析后，会进入独立追问页继续补充并生成画像。
         </p>
       </div>
@@ -330,8 +330,8 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
   };
 
   const renderSupplementInput = (title: string, placeholder: string) => (
-    <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-4 shadow-sm">
-      <label className="text-sm font-bold text-slate-800 dark:text-slate-200">{title}</label>
+    <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
+      <label className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2 block">{title}</label>
       <AutoGrowTextarea
         value={supplementText}
         onChange={(event) => {
@@ -342,7 +342,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
         }}
         maxLength={CAREER_PROFILE_SUPPLEMENT_MAX_CHARS}
         placeholder={placeholder}
-        className="mt-2 w-full min-h-[120px] resize-none rounded-lg border bg-slate-50 dark:bg-[#111a22] border-slate-300 dark:border-[#334155] text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:ring-2 focus:ring-primary focus:border-transparent"
+        className="w-full min-h-[120px] resize-none rounded-xl bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-100 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
         minRows={5}
       />
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -412,8 +412,8 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
-            补全画像事实
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white pointer-events-none">
+            生成职业画像
           </h2>
         </div>
       </header>
@@ -442,7 +442,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               }
             }}
             disabled={blockedByChoice || isTranscribing || isAnalyzing || isGenerating}
-            className="w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full py-3.5 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isAnalyzing
               ? '正在解析...'
@@ -450,12 +450,12 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               ? '正在生成...'
               : canStartFollowup
               ? isFirstBuild
-                ? '补全画像细节'
+                ? '进入细节追问'
                 : '确认生成画像'
               : '开启 AI 解析'}
           </button>
           {!!analyzeError && (
-            <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-lg px-2.5 py-2">
+            <p className="mt-2 text-xs text-rose-700 dark:text-rose-300 bg-rose-50/80 dark:bg-rose-500/10 border border-rose-100 dark:border-rose-400/20 rounded-xl px-3 py-2.5">
               {analyzeError}
             </p>
           )}

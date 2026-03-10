@@ -246,7 +246,7 @@ const CareerProfileResult: React.FC = () => {
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
                   <span className="material-symbols-outlined text-[20px]">add_circle</span>
                 </div>
-                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">定向追问卡片进度</h3>
+                <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">画像完善进度</h3>
               </div>
 
               {hasFollowupProgress ? (
@@ -269,7 +269,7 @@ const CareerProfileResult: React.FC = () => {
                 </>
               ) : (
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  如果有新的经历或想要补充细节，可回到追问页继续补全定向追问卡片。
+                  如果有新的经历或想要补充细节，可以使用下方工具继续补全画像。
                 </p>
               )}
 

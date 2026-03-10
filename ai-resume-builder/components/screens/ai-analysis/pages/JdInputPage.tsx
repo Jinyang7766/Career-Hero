@@ -149,36 +149,35 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
 
           </div>
 
-          <div className="mb-3">
-            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">
+          <div className="mb-4">
+            <label className="text-[11px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-3">
               {getStep3TargetFieldLabel({ isInterviewMode: false, analysisMode })}
             </label>
             <input
               value={targetCompany}
               onChange={(e) => setTargetCompany(e.target.value)}
               placeholder={getStep3TargetFieldPlaceholder({ isInterviewMode: false, analysisMode })}
-              className={`mt-2 w-full rounded-xl bg-white dark:bg-[#111a22] border p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-4 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm shadow-sm ${shouldBlockTargetRoleStart
-                ? 'border-red-300 dark:border-red-500/50'
-                : 'border-slate-300 dark:border-[#324d67]'
+              className={`w-full h-12 bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm border-2 transition-all outline-none placeholder:text-slate-400 ${shouldBlockTargetRoleStart
+                ? 'border-red-500/50 focus:border-red-500/50 focus:ring-4 focus:ring-red-500/10'
+                : 'border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                 }`}
               type="text"
             />
-
           </div>
 
           {shouldRenderJdSection && (
             <>
-              <div className="mb-3">
-                <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">
+              <div className="mb-4">
+                <label className="text-[11px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-3">
                   职位描述内容（必填）
                 </label>
                 <AutoGrowTextarea
                   value={jdText}
                   onChange={(e) => setJdText((e.target.value || '').slice(0, JD_MAX_CHARS))}
                   placeholder="请粘贴目标职位的职位描述内容，AI 将为您进行针对性的人岗匹配分析..."
-                  className={`mt-2 w-full rounded-xl bg-white dark:bg-[#111a22] border p-4 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-4 focus:ring-primary/20 focus:border-primary outline-none resize-none text-sm leading-relaxed shadow-sm transition-all ${shouldBlockTargetedStart
-                    ? 'border-red-300 dark:border-red-500/50'
-                    : 'border-slate-300 dark:border-transparent'
+                  className={`w-full bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm border-2 transition-all outline-none placeholder:text-slate-400 resize-none min-h-[200px] leading-relaxed ${shouldBlockTargetedStart
+                    ? 'border-red-500/50 focus:border-red-500/50 focus:ring-4 focus:ring-red-500/10'
+                    : 'border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10'
                     }`}
                   maxLength={JD_MAX_CHARS}
                   minRows={8}
