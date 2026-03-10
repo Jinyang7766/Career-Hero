@@ -51,10 +51,10 @@ const isMbtiOnlyText = (value: unknown): boolean => {
   return /^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact) || /^[IESNTFJP]{4}$/.test(compact);
 };
 
-const resolveMbti = (...sources: unknown[]): string => {
+export const resolveCareerProfileMbti = (...sources: unknown[]): string => {
   for (const source of sources) {
     if (Array.isArray(source)) {
-      const nested = resolveMbti(...source);
+      const nested = resolveCareerProfileMbti(...source);
       if (nested) return nested;
       continue;
     }
@@ -202,7 +202,14 @@ export const buildCareerProfileSummaryDisplayModel = (
   const personality = toText(extras.personality);
   const workStyle = toText(extras.workStyle);
   const rawConstraints = dedupeStringList(Array.isArray(extras.constraints) ? extras.constraints : []);
-  const mbti = resolveMbti(extras.mbti, personality, workStyle, careerGoal, summary, rawConstraints);
+  const mbti = resolveCareerProfileMbti(
+    extras.mbti,
+    personality,
+    workStyle,
+    careerGoal,
+    summary,
+    rawConstraints
+  );
 
   if (careerGoal && !isCoveredBySummary(careerGoal, summaryKey)) {
     appendRow(preferenceRows, preferenceSeen, '职业目标', careerGoal);

@@ -294,7 +294,7 @@ describe('career-profile-editor-draft', () => {
     expect((draft?.projects as any)?.[0]?.title).toBe('增长实验平台 2.0');
     expect((draft?.educations as any)?.[0]?.school).toBe('在职研究生（数据科学）');
   });
-  it('keeps mbti field canonical and avoids inferring it from derived text sources', () => {
+  it('hydrates mbti field from the same display-source chain used by read-only summary', () => {
     const base = createBaseProfile();
     const draft = createCareerProfileEditorDraft(
       {
@@ -306,9 +306,24 @@ describe('career-profile-editor-draft', () => {
       null
     );
 
-    expect(draft?.mbti).toBe('');
-    expect(draft?.personality).toBe('MBTI: INTJ');
+    expect(draft?.mbti).toBe('INTJ');
+    expect(draft?.personality).toBe('');
     expect(draft?.constraints).toEqual(['希望远程办公']);
+  });
+
+  it('cleans personality for editor while preserving non-mbti descriptions', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(
+      {
+        ...base,
+        mbti: '',
+        personality: '性格特征：(INTJ) 逻辑严谨（善于抽象）',
+      } as any,
+      null
+    );
+
+    expect(draft?.mbti).toBe('INTJ');
+    expect(draft?.personality).toBe('逻辑严谨善于抽象');
   });
 
   it('projects targetRole/jobDirection as a single canonical mapping', () => {

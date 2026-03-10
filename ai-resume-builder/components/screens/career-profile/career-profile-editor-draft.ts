@@ -8,7 +8,10 @@ import {
   buildCareerProfileExperiencesFromWorkExps,
   composeExperienceDescription,
 } from './profile-experience-mapper';
-import type { ProfileExtrasDraft } from './summary-display-logic';
+import {
+  resolveCareerProfileMbti,
+  type ProfileExtrasDraft,
+} from './summary-display-logic';
 
 type EditorUserLike = {
   name?: string;
@@ -33,6 +36,33 @@ const looksLikeMbtiOnlyText = (value: unknown): boolean => {
   if (/^(MBTI|人格|性格)[:：-]?[IESNTFJP]{4}$/.test(compact)) return true;
   if (/^[IESNTFJP]{4}$/.test(compact)) return true;
   return false;
+};
+
+const stripPersonalityNoise = (value: unknown): string =>
+  stripUnknown(String(value || '')).replace(/[()（）]/g, '').trim();
+
+const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const sanitizePersonalityForEditor = (personality: unknown, mbti: string): string => {
+  let text = stripPersonalityNoise(personality);
+  if (!text) return '';
+
+  text = text.replace(/^性格特征\s*[:：-]?\s*/i, '');
+
+  const mbtiToken = stripUnknown(mbti).toUpperCase();
+  if (mbtiToken) {
+    const mbtiPattern = escapeRegExp(mbtiToken);
+    const mbtiRegex = new RegExp(`(?:MBTI|人格|性格)?\\s*[:：-]?\\s*${mbtiPattern}`, 'gi');
+    text = text.replace(mbtiRegex, ' ');
+  }
+
+  text = text
+    .replace(/\s{2,}/g, ' ')
+    .replace(/[，,。.!！？?;；:：、\s-]+$/g, '')
+    .replace(/^[，,。.!！？?;；:：、\s-]+/g, '')
+    .trim();
+
+  return text;
 };
 
 const listFromAtomicTags = (
@@ -333,7 +363,29 @@ export const createCareerProfileEditorDraft = (
     atomicEducationFacts.length > 0 &&
     hasManualAtomicEditsForCategory(atomicTags, 'education');
 
-  const resolvedMbti = stripUnknown(profile.mbti);
+  const resolvedSummary = stripUnknown(atomicSummary) || stripUnknown(profile.summary);
+  const resolvedPersonality = stripUnknown(profile.personality);
+  const resolvedWorkStyle = stripUnknown(profile.workStyle);
+  const resolvedCareerGoal = stripUnknown(profile.careerGoal);
+  const resolvedConstraints = (
+    shouldUseAtomicConstraintFacts
+      ? atomicConstraints
+      : Array.isArray(profile.constraints)
+        ? [...profile.constraints]
+        : []
+  )
+    .map((item) => stripUnknown(item))
+    .filter(Boolean)
+    .filter((item) => !looksLikeMbtiOnlyText(item));
+  const resolvedMbti = resolveCareerProfileMbti(
+    stripUnknown(profile.mbti),
+    resolvedPersonality,
+    resolvedWorkStyle,
+    resolvedCareerGoal,
+    resolvedSummary,
+    resolvedConstraints
+  );
+  const resolvedPersonalityForEditor = sanitizePersonalityForEditor(resolvedPersonality, resolvedMbti);
   const resolvedTargetRole =
     stripUnknown(atomicIntent) ||
     stripUnknown(profile.targetRole) ||
@@ -373,7 +425,7 @@ export const createCareerProfileEditorDraft = (
   };
   return {
     ...profile,
-    summary: stripUnknown(atomicSummary) || stripUnknown(profile.summary),
+    summary: resolvedSummary,
     personalInfo,
     experiences: shouldUseAtomicExperienceFacts
       ? mapAtomicExperienceFactsToExperiences(atomicExperienceFacts)
@@ -397,15 +449,8 @@ export const createCareerProfileEditorDraft = (
           ? [...profile.careerHighlights]
           : [],
     mbti: resolvedMbti,
-    constraints:
-      (shouldUseAtomicConstraintFacts
-        ? atomicConstraints
-        : Array.isArray(profile.constraints)
-          ? [...profile.constraints]
-          : [])
-        .map((item) => stripUnknown(item))
-        .filter(Boolean)
-        .filter((item) => !looksLikeMbtiOnlyText(item)),
+    personality: resolvedPersonalityForEditor,
+    constraints: resolvedConstraints,
     targetRole: resolvedTargetRole,
     jobDirection: resolvedJobDirection,
     factItems: Array.isArray(profile.factItems) ? profile.factItems.map((item) => ({ ...item })) : [],
