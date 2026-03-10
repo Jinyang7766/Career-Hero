@@ -54,13 +54,13 @@ const CareerProfileResult: React.FC = () => {
   const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
 
   const navItems = [
-    { id: 'section-summary', label: '核心优势' },
-    { id: 'section-personal', label: '基础信息' },
-    { id: 'section-intent', label: '目标偏好' },
-    { id: 'section-skills', label: '专业技能' },
-    { id: 'section-work', label: '工作履历' },
-    { id: 'section-projects', label: '重点项目' },
-    { id: 'section-education', label: '教育背景' },
+    { id: 'section-summary', icon: 'auto_awesome', label: '核心优势' },
+    { id: 'section-personal', icon: 'person', label: '基础信息' },
+    { id: 'section-intent', icon: 'target', label: '目标偏好' },
+    { id: 'section-skills', icon: 'psychology', label: '专业技能' },
+    { id: 'section-work', icon: 'work', label: '工作履历' },
+    { id: 'section-projects', icon: 'account_tree', label: '重点项目' },
+    { id: 'section-education', icon: 'school', label: '教育背景' },
   ];
 
   const scrollToSection = (id: string) => {
@@ -231,14 +231,15 @@ const CareerProfileResult: React.FC = () => {
           </button>
         </div>
         {!isInlineEditing && (
-          <div className="flex items-center gap-1 px-4 h-10 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+          <div className="flex items-center justify-between px-6 h-10 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 onClick={() => scrollToSection(item.id)}
-                className="shrink-0 px-3 h-7 rounded-full text-[11px] font-black tracking-wider text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary-light hover:bg-primary/5 transition-all uppercase"
+                className="shrink-0 flex items-center justify-center w-8 h-8 rounded-full text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary-light hover:bg-primary/5 transition-all"
+                title={item.label}
               >
-                {item.label}
+                <span className="material-symbols-outlined text-[20px]">{item.icon}</span>
               </button>
             ))}
           </div>

@@ -24,6 +24,13 @@
             "card-light": "#ffffff",
             "text-secondary": "#92adc9",
           },
+          transitionDuration: {
+            'fast': '150ms',
+            'slow': '250ms',
+          },
+          transitionTimingFunction: {
+            'standard': 'cubic-bezier(0.4, 0, 0.2, 1)',
+          },
           fontFamily: {
             sans: ["CustomFont"],
             display: ["CustomFont"],
@@ -38,6 +45,41 @@
       src: url('/font.ttf') format('truetype');
       font-weight: normal;
       font-style: normal;
+    }
+
+    /* Skeleton Loading Unified */
+    @keyframes pulse-shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    .skeleton-base {
+      background: #e5e7eb;
+      position: relative;
+      overflow: hidden;
+    }
+    .dark .skeleton-base {
+      background: #1f2937;
+    }
+    .skeleton-shimmer::after {
+      content: "";
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.05) 50%, transparent 75%);
+      background-size: 200% 100%;
+      animation: pulse-shimmer 2s infinite linear;
+    }
+    .dark .skeleton-shimmer::after {
+      background: linear-gradient(90deg, transparent 25%, rgba(255,255,255,0.03) 50%, transparent 75%);
+    }
+
+    /* Transition defaults */
+    .transition-standard {
+      transition-duration: 250ms;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .transition-fast {
+      transition-duration: 150ms;
+      transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     body {
