@@ -519,13 +519,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               return (
                 <label
                   key={section.key}
-                  className="block rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2"
+                  className="block rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all"
                 >
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase">
                       {section.label}
                     </span>
-                    <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                    <span className="text-[10px] text-slate-400 dark:text-slate-500 tabular-nums">
                       {currentCount}/{section.maxItems}
                     </span>
                   </div>
@@ -533,7 +533,7 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                     value={text}
                     onChange={(event) => updateAtomicCategoryText(section.key, event.target.value)}
                     placeholder="每行一个核心事实"
-                    className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                    className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
                     minRows={2}
                   />
                 </label>
@@ -580,80 +580,80 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">姓名</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">姓名</span>
                     <input
                       value={draftPersonalInfo.name || ''}
                       onChange={(event) => setPersonalInfoField('name', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">求职意向</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">求职意向</span>
                     <input
                       value={draftPersonalInfo.title || ''}
                       onChange={(event) => setCareerIntent(event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">性别</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">性别</span>
                     <select
                       value={draftGender}
                       onChange={(event) => setGender(event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none"
                     >
                       <option value="">未填写</option>
                       <option value="male">男</option>
                       <option value="female">女</option>
                     </select>
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">年龄</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">年龄</span>
                     <input
                       value={draftPersonalInfo.age || ''}
                       onChange={(event) => setPersonalInfoField('age', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">所在城市</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">所在城市</span>
                     <input
                       value={draftPersonalInfo.location || ''}
                       onChange={(event) => setPersonalInfoField('location', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">邮箱</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">邮箱</span>
                     <input
                       value={draftPersonalInfo.email || ''}
                       onChange={(event) => setPersonalInfoField('email', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">电话</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">电话</span>
                     <input
                       value={draftPersonalInfo.phone || ''}
                       onChange={(event) => setPersonalInfoField('phone', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">LinkedIn</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">LinkedIn</span>
                     <input
                       value={draftPersonalInfo.linkedin || ''}
                       onChange={(event) => setPersonalInfoField('linkedin', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
-                  <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                    <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">个人网址</span>
+                  <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                    <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">个人网址</span>
                     <input
                       value={draftPersonalInfo.website || ''}
                       onChange={(event) => setPersonalInfoField('website', event.target.value)}
-                      className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                      className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                     />
                   </label>
                 </div>
@@ -682,20 +682,20 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               {isInlineEditing ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">目标薪资</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">目标薪资</span>
                       <input
                         value={String(draftProfile?.targetSalary || '')}
                         onChange={(event) => setDraftProfileTextField('targetSalary', event.target.value)}
-                        className="mt-1 w-full h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
+                        className="w-full h-9 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
                       />
                     </label>
-                    <label className="rounded-lg bg-slate-50 dark:bg-white/5 px-3 py-2 sm:col-span-2">
-                      <span className="text-[10px] font-semibold tracking-wide text-slate-500 dark:text-slate-400 uppercase">职业目标</span>
+                    <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
+                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">职业目标</span>
                       <AutoGrowTextarea
                         value={String(draftProfile?.careerGoal || '')}
                         onChange={(event) => setDraftProfileTextField('careerGoal', event.target.value)}
-                        className="mt-1 w-full rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs text-slate-800 dark:text-slate-100 outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
+                        className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
                         minRows={2}
                       />
                     </label>
@@ -807,13 +807,15 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                 <h3 className="my-0 text-sm font-black text-slate-800 dark:text-slate-200">专业技能</h3>
               </div>
               {isInlineEditing ? (
-                <AutoGrowTextarea
-                  value={joinListText(factDraft.coreSkills.map((item) => item.text))}
-                  onChange={(event) => applyFactSectionTextPatch('coreSkills', splitListText(event.target.value))}
-                  className="w-full rounded-lg border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#111a22] px-3 py-2 text-xs text-slate-700 dark:text-slate-200 leading-relaxed outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none"
-                  placeholder="用顿号、逗号或换行分隔技能"
-                  minRows={2}
-                />
+                <div className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                  <AutoGrowTextarea
+                    value={joinListText(factDraft.coreSkills.map((item) => item.text))}
+                    onChange={(event) => applyFactSectionTextPatch('coreSkills', splitListText(event.target.value))}
+                    className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
+                    placeholder="用顿号、逗号或换行分隔技能"
+                    minRows={2}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {summaryDisplay.skills.map((skill, idx) => (
@@ -851,38 +853,48 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         </button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <input
-                          value={item.organization || ''}
-                          onChange={(event) => updateExperienceItem(index, 'organization', event.target.value)}
-                          placeholder="公司/组织"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.title || ''}
-                          onChange={(event) => updateExperienceItem(index, 'title', event.target.value)}
-                          placeholder="职位"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.period || ''}
-                          onChange={(event) => updateExperienceItem(index, 'period', event.target.value)}
-                          placeholder="时间段"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
-                        />
-                        <AutoGrowTextarea
-                          value={item.actions || ''}
-                          onChange={(event) => updateExperienceItem(index, 'actions', event.target.value)}
-                          placeholder="关键行动"
-                          className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
-                          minRows={3}
-                        />
-                        <AutoGrowTextarea
-                          value={item.results || ''}
-                          onChange={(event) => updateExperienceItem(index, 'results', event.target.value)}
-                          placeholder="关键成果"
-                          className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
-                          minRows={2}
-                        />
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">公司/组织</span>
+                          <input
+                            value={item.organization || ''}
+                            onChange={(event) => updateExperienceItem(index, 'organization', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">职位</span>
+                          <input
+                            value={item.title || ''}
+                            onChange={(event) => updateExperienceItem(index, 'title', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">时间段</span>
+                          <input
+                            value={item.period || ''}
+                            onChange={(event) => updateExperienceItem(index, 'period', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">关键行动</span>
+                          <AutoGrowTextarea
+                            value={item.actions || ''}
+                            onChange={(event) => updateExperienceItem(index, 'actions', event.target.value)}
+                            className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[60px]"
+                            minRows={3}
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">关键成果</span>
+                          <AutoGrowTextarea
+                            value={item.results || ''}
+                            onChange={(event) => updateExperienceItem(index, 'results', event.target.value)}
+                            className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[40px]"
+                            minRows={2}
+                          />
+                        </label>
                       </div>
                     </div>
                   ))}
@@ -959,37 +971,47 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         </button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <input
-                          value={item.title || ''}
-                          onChange={(event) => updateProjectItem(index, 'title', event.target.value)}
-                          placeholder="项目名称"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.subtitle || ''}
-                          onChange={(event) => updateProjectItem(index, 'subtitle', event.target.value)}
-                          placeholder="角色"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.period || ''}
-                          onChange={(event) => updateProjectItem(index, 'period', event.target.value)}
-                          placeholder="时间段"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
-                        />
-                        <AutoGrowTextarea
-                          value={item.description || ''}
-                          onChange={(event) => updateProjectItem(index, 'description', event.target.value)}
-                          placeholder="项目描述"
-                          className="rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 py-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all resize-none sm:col-span-2"
-                          minRows={3}
-                        />
-                        <input
-                          value={item.link || ''}
-                          onChange={(event) => updateProjectItem(index, 'link', event.target.value)}
-                          placeholder="项目链接（可选）"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all sm:col-span-2"
-                        />
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">项目名称</span>
+                          <input
+                            value={item.title || ''}
+                            onChange={(event) => updateProjectItem(index, 'title', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">角色</span>
+                          <input
+                            value={item.subtitle || ''}
+                            onChange={(event) => updateProjectItem(index, 'subtitle', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">时间段</span>
+                          <input
+                            value={item.period || ''}
+                            onChange={(event) => updateProjectItem(index, 'period', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">项目描述</span>
+                          <AutoGrowTextarea
+                            value={item.description || ''}
+                            onChange={(event) => updateProjectItem(index, 'description', event.target.value)}
+                            className="w-full bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400 resize-none min-h-[60px]"
+                            minRows={3}
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm sm:col-span-2">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">项目链接（可选）</span>
+                          <input
+                            value={item.link || ''}
+                            onChange={(event) => updateProjectItem(index, 'link', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
                       </div>
                     </div>
                   ))}
@@ -1065,30 +1087,38 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                         </button>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                        <input
-                          value={item.school || item.title || ''}
-                          onChange={(event) => updateEducationItem(index, 'school', event.target.value)}
-                          placeholder="学校/院校"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.degree || ''}
-                          onChange={(event) => updateEducationItem(index, 'degree', event.target.value)}
-                          placeholder="学历"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.major || ''}
-                          onChange={(event) => updateEducationItem(index, 'major', event.target.value)}
-                          placeholder="专业"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
-                        <input
-                          value={item.period || item.date || ''}
-                          onChange={(event) => updateEducationItem(index, 'period', event.target.value)}
-                          placeholder="时间段"
-                          className="h-8 rounded-md border border-slate-200 dark:border-white/10 bg-white dark:bg-[#111a22] px-2 text-xs outline-none focus:ring-4 focus:ring-primary/20 focus:border-primary transition-all"
-                        />
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">学校/院校</span>
+                          <input
+                            value={item.school || item.title || ''}
+                            onChange={(event) => updateEducationItem(index, 'school', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">学历</span>
+                          <input
+                            value={item.degree || ''}
+                            onChange={(event) => updateEducationItem(index, 'degree', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">专业</span>
+                          <input
+                            value={item.major || ''}
+                            onChange={(event) => updateEducationItem(index, 'major', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
+                        <label className="rounded-xl bg-white dark:bg-white/5 px-4 py-2 border border-transparent focus-within:border-primary/30 transition-all shadow-sm">
+                          <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-0.5">时间段</span>
+                          <input
+                            value={item.period || item.date || ''}
+                            onChange={(event) => updateEducationItem(index, 'period', event.target.value)}
+                            className="w-full h-8 bg-transparent text-[13px] font-bold text-slate-800 dark:text-slate-100 outline-none placeholder:text-slate-400"
+                          />
+                        </label>
                       </div>
                     </div>
                   ))}
