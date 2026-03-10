@@ -53,6 +53,32 @@ const CareerProfileResult: React.FC = () => {
   const editorRef = React.useRef<CareerProfileEditorRef>(null);
   const { userProfile, loading, error } = useUserProfile(currentUser?.id, currentUser);
 
+  const navItems = [
+    { id: 'section-summary', label: '核心优势' },
+    { id: 'section-personal', label: '基础信息' },
+    { id: 'section-intent', label: '目标偏好' },
+    { id: 'section-skills', label: '专业技能' },
+    { id: 'section-work', label: '工作履历' },
+    { id: 'section-projects', label: '重点项目' },
+    { id: 'section-education', label: '教育背景' },
+  ];
+
+  const scrollToSection = (id: string) => {
+    const el = document.getElementById(id);
+    if (el) {
+      const offset = 120;
+      const bodyRect = document.body.getBoundingClientRect().top;
+      const elementRect = el.getBoundingClientRect().top;
+      const elementPosition = elementRect - bodyRect;
+      const offsetPosition = elementPosition - offset;
+
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+  };
+
   React.useEffect(() => {
     if (path === '/career-profile/result') {
       navigate('/career-profile/result/summary', { replace: true });
@@ -180,10 +206,10 @@ const CareerProfileResult: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-100 dark:border-white/5 mx-auto w-full max-w-md">
+      <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/60 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="flex items-center justify-between px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
-          <h2 className="absolute inset-0 flex items-center justify-center text-base font-bold text-slate-900 dark:text-white pointer-events-none">
+          <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white pointer-events-none">
             我的职业画像
           </h2>
           <button
@@ -204,19 +230,22 @@ const CareerProfileResult: React.FC = () => {
             </span>
           </button>
         </div>
-        {statusCount.pending > 0 && !isInlineEditing && (
-          <div className="absolute top-16 left-0 right-0 flex justify-center animate-in slide-in-from-top-2 duration-300 pointer-events-none">
-            <div className="bg-rose-500/10 dark:bg-rose-500/20 px-3 py-1 rounded-full border border-rose-200/50 dark:border-rose-400/20 flex items-center gap-1.5 backdrop-blur-sm pointer-events-auto">
-              <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
-              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
-                有 {statusCount.pending} 项待补全的职场细节
-              </span>
-            </div>
+        {!isInlineEditing && (
+          <div className="flex items-center gap-1 px-4 h-10 overflow-x-auto no-scrollbar border-b border-slate-100 dark:border-white/5 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
+            {navItems.map((item) => (
+              <button
+                key={item.id}
+                onClick={() => scrollToSection(item.id)}
+                className="shrink-0 px-3 h-7 rounded-full text-[11px] font-black tracking-wider text-slate-500 dark:text-slate-400 hover:text-primary dark:hover:text-primary-light hover:bg-primary/5 transition-all uppercase"
+              >
+                {item.label}
+              </button>
+            ))}
           </div>
         )}
       </header>
 
-      <main className={`flex-1 overflow-y-auto ${isInlineEditing || statusCount.pending > 0 ? 'pt-20' : 'pt-14'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
+      <main className={`flex-1 overflow-y-auto ${isInlineEditing ? 'pt-20' : 'pt-[104px]'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
 
 
         {profile && (
@@ -239,12 +268,12 @@ const CareerProfileResult: React.FC = () => {
         )}
 
         {!isInlineEditing && (
-          <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/80 dark:border-white/10 p-5 shadow-sm relative overflow-hidden group">
+          <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm relative overflow-hidden group">
             <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
             <div className="relative z-10 flex flex-col gap-3">
               <div className="flex items-center gap-2.5">
                 <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary">
-                  <span className="material-symbols-outlined text-[20px]">add_circle</span>
+                  <span className="material-symbols-outlined text-[20px]">analytics</span>
                 </div>
                 <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">画像完善进度</h3>
               </div>
@@ -277,7 +306,7 @@ const CareerProfileResult: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleGoFollowup}
-                  className="relative w-full h-11 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  className="relative w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
                   <span>{hasMissingFollowup ? '补充核心事实' : '丰富画像细节'}</span>
@@ -290,7 +319,7 @@ const CareerProfileResult: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => navigate('/career-profile/upload')}
-                  className="w-full h-11 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                  className="w-full h-12 rounded-xl bg-slate-100 dark:bg-white/5 text-slate-700 dark:text-slate-200 text-sm font-bold hover:bg-slate-200 dark:hover:bg-white/10 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">history_edu</span>
                   <span>更新背景资料</span>

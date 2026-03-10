@@ -221,55 +221,57 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
-      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-50 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/60 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <BackButton onClick={onBack} className="-ml-2" />
-          <h1 className="text-lg font-bold tracking-tight">设置面试场景</h1>
+          <BackButton onClick={onBack} />
+          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">设置面试场景</h1>
           <div className="w-10" />
         </div>
       </header>
 
-      <main className="pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6">
-        <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-md border border-slate-200 dark:border-white/5">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="material-symbols-outlined text-primary">forum</span>
-            <h3 className="font-bold text-slate-900 dark:text-white">面试场景设置</h3>
+      <main className="pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-6 max-w-md mx-auto w-full">
+        <div className="bg-white dark:bg-surface-dark p-5 rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/5">
+          <div className="flex items-center gap-2.5 mb-4">
+            <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary">
+              <span className="material-symbols-outlined text-[18px]">forum</span>
+            </div>
+            <h3 className="text-sm font-black text-slate-800 dark:text-slate-200">面试场景设置</h3>
           </div>
 
-          <div className="mb-4 p-3 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-white/5">
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1.5">面试将基于当前已优化简历的上下文</p>
-            <p className="text-sm font-semibold text-slate-900 dark:text-white line-clamp-1">
-              目标岗位: {effectiveTarget || '未命名岗位（通用）'}
+          <div className="mb-5 p-4 rounded-xl border border-slate-100 dark:border-white/5 bg-slate-50/50 dark:bg-white/[0.02]">
+            <p className="text-[10px] font-black tracking-widest text-slate-400 dark:text-slate-500 uppercase mb-2">当前面试上下文</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1 leading-tight">
+              {effectiveTarget || '通用面试（未指定岗位）'}
             </p>
-            <p className="mt-1 text-[12px] text-slate-600 dark:text-slate-300 line-clamp-2">
-              {effectiveJdText ? `已关联 JD：${effectiveJdText}` : '未关联 JD：将基于职业画像与简历内容进行通用面试提问。'}
+            <p className="mt-2 text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed line-clamp-2">
+              {effectiveJdText ? `已关联 JD：${effectiveJdText}` : '未关联 JD：将基于职业画像进行通用面试提问。'}
             </p>
           </div>
 
-          <div className="mb-4">
-            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">面试类型</label>
-            <div className="grid grid-cols-3 gap-2 mt-2">
+          <div className="mb-5">
+            <label className="text-[11px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-3">面试类型</label>
+            <div className="grid grid-cols-3 gap-2">
               {interviewTypeOptions.map((type) => (
                 <button
                   key={type.id}
                   onClick={() => setInterviewType(type.id)}
-                  className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${interviewType === type.id
-                    ? 'bg-primary/10 border-primary text-primary'
-                    : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/10'
+                  className={`flex flex-col items-center justify-center p-3 rounded-xl border-2 transition-all ${interviewType === type.id
+                    ? 'bg-primary/5 border-primary/40 text-primary'
+                    : 'bg-slate-50 dark:bg-white/5 border-transparent text-slate-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10'
                     }`}
                   type="button"
                   disabled={isInterviewSceneLocked}
                 >
-                  <span className="material-symbols-outlined mb-1">{type.icon}</span>
-                  <span className="text-xs font-bold">{type.label}</span>
+                  <span className="material-symbols-outlined mb-1 text-[22px]">{type.icon}</span>
+                  <span className="text-[11px] font-bold">{type.label}</span>
                 </button>
               ))}
             </div>
           </div>
 
           {isInterviewSceneLocked && (
-            <div className="mb-4 mt-1 p-3 rounded-xl border border-amber-200/50 dark:border-amber-400/20 bg-amber-50/50 dark:bg-amber-400/5 flex gap-2.5 animate-in fade-in slide-in-from-top-2 duration-300">
-              <span className="material-symbols-outlined text-amber-500 text-[18px] shrink-0 mt-0.5">lock</span>
+            <div className="mb-5 p-3.5 rounded-xl border border-amber-100 dark:border-amber-400/20 bg-amber-50/50 dark:bg-amber-400/5 flex gap-2.5">
+              <span className="material-symbols-outlined text-amber-500 text-[18px] shrink-0">lock</span>
               <p className="text-[11px] leading-relaxed font-bold text-amber-700/80 dark:text-amber-400/80">
                 当前面试已开始，场景配置已锁定。若需调整，请先结束本轮并重新开始新场景。
               </p>
@@ -277,17 +279,17 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
           )}
 
           <div>
-            <label className="text-xs font-bold text-slate-600 dark:text-text-secondary uppercase tracking-wider">自定义训练重点（可选）</label>
+            <label className="text-[11px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-3">自定义训练重点（可选）</label>
             <AutoGrowTextarea
               value={interviewFocus}
               onChange={(e) => setInterviewFocus((e.target.value || '').slice(0, 200))}
               placeholder="例如：重点追问项目量化结果、系统设计深挖、反问环节训练..."
-              className="mt-2 w-full rounded-xl bg-white dark:bg-[#111a22] border border-slate-300 dark:border-[#324d67] p-3 text-slate-900 dark:text-white placeholder:text-slate-400 focus:ring-4 focus:ring-primary/20 focus:border-primary outline-none resize-none text-sm shadow-sm transition-all"
+              className="w-full bg-slate-50 dark:bg-slate-800/50 rounded-xl px-4 py-3 text-sm border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all outline-none placeholder:text-slate-400 resize-none min-h-[100px] leading-relaxed"
               maxLength={200}
               disabled={isInterviewSceneLocked}
               minRows={3}
             />
-            <div className="mt-1 text-right text-[11px] text-slate-500 dark:text-slate-400">
+            <div className="mt-1 text-right text-[10px] font-bold text-slate-400 dark:text-slate-500 tabular-nums">
               {interviewFocus.length}/200
             </div>
           </div>
@@ -301,9 +303,9 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
               onViewReport?.();
             }}
             disabled={!shouldShowViewReport}
-            className={`flex-1 py-3 rounded-xl border text-sm font-bold transition-colors backdrop-blur-sm ${shouldShowViewReport
-              ? 'border-primary/30 text-primary hover:bg-primary/5 active:scale-[0.98] bg-white/95 dark:bg-background-dark/95'
-              : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 bg-slate-100/80 dark:bg-white/5 cursor-not-allowed'
+            className={`flex-1 h-12 rounded-xl border text-sm font-bold transition-all backdrop-blur-md ${shouldShowViewReport
+              ? 'border-primary/30 text-primary hover:bg-primary/5 active:scale-[0.98] bg-white/95 dark:bg-slate-900/95 shadow-sm'
+              : 'border-slate-200 dark:border-white/10 text-slate-400 dark:text-slate-500 bg-slate-50 dark:bg-white/5 cursor-not-allowed'
               }`}
             type="button"
           >
@@ -321,7 +323,7 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
                   }
                   let confirmed = false;
                   try {
-                    confirmed = await confirmDialog('当前面试已结束并生成报告，请及时保存。重新开始面试会清空报告，确认继续吗？');
+                    confirmed = await confirmDialog('当前面试已结束并生成报告，重新开始面试会清空旧报告，确认继续吗？');
                   } finally {
                     if (interviewEntryConfirmPendingRef) {
                       interviewEntryConfirmPendingRef.current = false;
@@ -341,7 +343,7 @@ const InterviewScenePage: React.FC<InterviewScenePageProps> = ({
               }
             }}
             disabled={isStarting}
-            className="flex-1 py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="flex-1 h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
             type="button"
           >
             {isStarting ? (

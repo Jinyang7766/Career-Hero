@@ -164,9 +164,9 @@ const ReportSection: React.FC<{
   iconColor: string;
   children: React.ReactNode;
 }> = ({ title, icon, iconColor, children }) => (
-  <div className="bg-white dark:bg-[#1c2936] rounded-[24px] p-6 shadow-[0_4px_20px_rgba(0,0,0,0.02)] border border-slate-100 dark:border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-500">
+  <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-slate-200/60 dark:border-white/5 animate-in fade-in slide-in-from-bottom-2 duration-500">
     <div className="flex items-center gap-2.5 mb-5">
-      <div className={`size-8 rounded-xl ${iconColor} flex items-center justify-center`}>
+      <div className={`size-8 rounded-lg ${iconColor} flex items-center justify-center`}>
         <ReportIcon name={icon} className="size-5" />
       </div>
       <h3 className="font-black text-slate-900 dark:text-white text-base tracking-tight">{title}</h3>
@@ -224,10 +224,10 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(3.75rem+env(safe-area-inset-bottom))] space-y-6">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(3.75rem+env(safe-area-inset-bottom))] space-y-6 max-w-md mx-auto w-full">
         <div ref={reportRef} className={`space-y-6 ${isExporting ? 'report-exporting' : ''}`}>
           {/* Score Card */}
-          <div className="relative overflow-hidden bg-white dark:bg-[#1c2936] rounded-[28px] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 dark:border-white/5 group">
+          <div className="relative overflow-hidden bg-white dark:bg-surface-dark rounded-2xl p-8 shadow-sm border border-slate-200/60 dark:border-white/5 group">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 size-48 bg-primary/5 rounded-full blur-3xl group-hover:bg-primary/10 transition-colors duration-700" />
 
             <div className="relative z-10 flex flex-col items-center text-center">
@@ -248,15 +248,15 @@ const InterviewReportPage: React.FC<Props> = ({ summary, score, advice, onBack, 
           </div>
 
           {/* Summary Card */}
-          <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-primary rounded-[32px] p-px shadow-xl shadow-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
-            <div className="relative bg-white/95 dark:bg-[#1c2936]/95 backdrop-blur-md rounded-[31px] px-7 py-7">
+          <div className="relative overflow-hidden bg-gradient-to-br from-blue-600 to-primary rounded-2xl p-px shadow-lg shadow-primary/20 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="relative bg-white/95 dark:bg-surface-dark/95 backdrop-blur-md rounded-2xl px-7 py-7">
               {/* Decorative Background Icon */}
               <div className="absolute -right-4 -bottom-4 opacity-[0.03] dark:opacity-[0.05] pointer-events-none">
                 <ReportIcon name="format_quote" className="size-[140px]" />
               </div>
 
               <div className="flex items-center gap-3 mb-6">
-                <div className="size-9 rounded-xl bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                <div className="size-9 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
                   <ReportIcon name="analytics" className="size-5 text-primary" />
                 </div>
                 <h3 className="font-black text-slate-900 dark:text-white text-base tracking-tight">综合评价总结</h3>

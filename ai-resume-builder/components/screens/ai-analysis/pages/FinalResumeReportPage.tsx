@@ -31,29 +31,29 @@ const FinalResumeReportPage: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
-      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5">
+      <header className="fixed top-0 left-0 right-0 mx-auto w-full max-w-md z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200/60 dark:border-white/5">
         <div className="flex items-center justify-between h-14 px-4 relative">
-          <BackButton onClick={onBack} className="-ml-2" />
-          <h1 className="text-base font-bold tracking-tight">诊断报告</h1>
+          <BackButton onClick={onBack} />
+          <h1 className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight text-slate-900 dark:text-white pointer-events-none">诊断报告</h1>
           <div className="w-10"></div>
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-4">
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-md border border-slate-200 dark:border-white/5">
-          <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-4 max-w-md mx-auto w-full">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-6 shadow-sm border border-slate-200/60 dark:border-white/5">
+          <p className="text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 dark:text-slate-400 mb-3">
             匹配度评分
           </p>
-          <div className={`text-6xl font-black tracking-tight ${getScoreColor(score)}`}>
+          <div className={`text-6xl font-black tracking-tighter ${getScoreColor(score)}`}>
             {Math.round(score)}
-            <span className="text-2xl text-slate-400 font-normal ml-1">/100</span>
+            <span className="text-2xl text-slate-300 dark:text-slate-600 font-normal ml-1">/100</span>
           </div>
         </div>
 
-        <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl p-5 border border-blue-100 dark:border-blue-900/20">
-          <h3 className="flex items-center gap-2 font-bold text-blue-800 dark:text-blue-400 text-base mb-2">
+        <div className="bg-blue-50/50 dark:bg-primary/5 rounded-2xl p-5 border border-blue-100 dark:border-primary/20">
+          <h3 className="flex items-center gap-2 font-black text-primary dark:text-primary-light text-[15px] mb-2.5">
             <span className="material-symbols-outlined text-[20px]">summarize</span>
-JD 匹配差距与定向改写摘要
+            JD 匹配差距与改写摘要
           </h3>
           <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed whitespace-pre-wrap">
             {summary || '已完成 JD 匹配诊断。建议优先补齐岗位职责证据与关键词覆盖，再进行定向改写。'}
@@ -61,17 +61,17 @@ JD 匹配差距与定向改写摘要
         </div>
         <ReportFeedback onFeedback={onFeedback} showTitle={false} />
 
-        <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 border border-slate-200 dark:border-white/5 shadow-sm">
-          <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">JD 定向改写行动建议</h3>
-          <div className="space-y-2">
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 border border-slate-200/60 dark:border-white/5 shadow-sm">
+          <h3 className="text-[13px] font-black text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">JD 定向改写行动建议</h3>
+          <div className="space-y-2.5">
             {candidateAdvice.map((item, idx) => (
-              <p key={`${idx}-${item}`} className="text-sm text-slate-600 dark:text-slate-300">• {item}</p>
+              <p key={`${idx}-${item}`} className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">• {item}</p>
             ))}
             {candidateAdvice.length === 0 && (
               <>
-                <p className="text-sm text-slate-600 dark:text-slate-300">• 用 STAR 结构重写 3 个高价值项目案例，突出你的动作、决策与结果。</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">• 针对目标岗位准备 10 个高频追问，重点训练量化回答与复盘深度。</p>
-                <p className="text-sm text-slate-600 dark:text-slate-300">• 每周完成 1 次全真模拟面试，并记录表达冗余点与逻辑断点后复训。</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">• 用 STAR 结构重写 3 个高价值项目案例，突出你的动作、决策与结果。</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">• 针对目标岗位准备 10 个高频追问，重点训练量化回答与复盘深度。</p>
+                <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">• 每周完成 1 次全真模拟面试，并记录表达冗余点与逻辑断点后复训。</p>
               </>
             )}
           </div>
@@ -80,7 +80,7 @@ JD 匹配差距与定向改写摘要
 
         <button
           onClick={onBackToJdInput}
-          className="w-full h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
+          className="w-full h-12 rounded-xl border-2 border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold transition-all active:scale-[0.985]"
           type="button"
         >
           重新开始诊断
@@ -89,14 +89,14 @@ JD 匹配差距与定向改写摘要
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onGoToComparison}
-            className="h-11 rounded-xl border border-slate-300 dark:border-white/10 text-slate-700 dark:text-slate-200 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold"
+            className="h-12 rounded-xl border-2 border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold transition-all active:scale-[0.985]"
             type="button"
           >
             去精修简历
           </button>
           <button
             onClick={onStartInterview}
-            className="h-11 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-blue-500/20 shadow-sm"
+            className="h-12 rounded-xl bg-primary hover:bg-blue-600 text-white text-sm font-bold shadow-lg shadow-primary/25 transition-all active:scale-[0.985]"
             type="button"
           >
             开启全真面试

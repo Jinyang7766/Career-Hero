@@ -42,12 +42,12 @@ export const resolvePostInterviewSaveResult = (saveSucceeded: boolean) => ({
 });
 
 const ResumeBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
-  <div className="rounded-[24px] border border-slate-100 dark:border-white/5 bg-white dark:bg-[#1c2936] p-6 shadow-sm hover:shadow-md transition-shadow">
-    <h4 className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+  <div className="rounded-2xl border border-slate-200/60 dark:border-white/5 bg-white dark:bg-surface-dark p-6 shadow-sm">
+    <h4 className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
       <div className="size-1.5 rounded-full bg-primary" />
       {title}
     </h4>
-    <div className="text-[14px] text-slate-700 dark:text-slate-300 leading-relaxed font-medium">{children}</div>
+    <div className="text-[14px] text-slate-700 dark:text-slate-200 leading-relaxed font-bold">{children}</div>
   </div>
 );
 
@@ -467,29 +467,29 @@ const PostInterviewReportPage: React.FC<Props> = ({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-6">
+      <main className="flex-1 overflow-y-auto pt-[72px] p-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] space-y-6 max-w-md mx-auto w-full">
         <section className="animate-in slide-in-from-bottom-6 duration-700">
-          <div className="flex items-center justify-center mb-4 px-1">
-            <h3 className="text-sm font-black text-slate-900 dark:text-white tracking-widest uppercase flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">auto_awesome</span>
-              AI 生成简历
+          <div className="flex items-center justify-center mb-5 px-1">
+            <h3 className="text-[13px] font-black text-slate-900 dark:text-white tracking-[0.2em] uppercase flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-[22px]">auto_awesome</span>
+              AI 生成简历建议
             </h3>
           </div>
 
           <div className="relative">
-            <div className="absolute -inset-1 bg-gradient-to-br from-primary/10 to-blue-500/10 rounded-[32px] blur-lg pointer-events-none" />
+            <div className="absolute -inset-1 bg-gradient-to-br from-primary/5 to-blue-500/5 rounded-[32px] blur-xl pointer-events-none" />
             <div className="relative">
               {renderEditableGeneratedResume(editableGeneratedResume)}
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col gap-4 px-1">
+          <div className="mt-8 flex flex-col gap-4 px-1">
             <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-30 mt-2">
               <button
                 type="button"
                 onClick={() => { void handleSaveAsNewResumeClick(); }}
                 disabled={!editableGeneratedResume || isSaving}
-                className={`w-full py-3 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-blue-500/30 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 ${(!editableGeneratedResume || isSaving) ? 'opacity-70 cursor-not-allowed shadow-none' : ''}`}
+                className="w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isSaving ? (
                   <>
@@ -501,7 +501,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
                 )}
               </button>
             </div>
-            <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-bold opacity-60 uppercase tracking-widest">保存后可前往“我的简历”下载 PDF 版本</p>
+            <p className="text-[10px] text-center text-slate-400 dark:text-slate-500 font-bold opacity-60 uppercase tracking-widest leading-relaxed">保存后可前往“我的简历”查看</p>
           </div>
         </section>
 

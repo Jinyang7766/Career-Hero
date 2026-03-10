@@ -1,6 +1,7 @@
 import React from 'react';
 import type { ResumeSummary } from '../../../../types';
 import BackButton from '../../../shared/BackButton';
+import PageStatusFeedback from '../../../shared/PageStatusFeedback';
 
 export type ResumeSelectPageProps = {
   allResumes: ResumeSummary[] | undefined;
@@ -117,7 +118,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
   const renderSelectionList = (resumes: ResumeSummary[]) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
+      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5 overflow-hidden">
         {resumes.map((resume) => (
           <div
             key={resume.id}
@@ -126,7 +127,7 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
               const targetStep = !isInterviewMode ? inferDiagnosisTargetStepFromSummary(resume) : undefined;
               onSelectResume(resume.id, preferReport, targetStep);
             }}
-            className="group relative flex items-center gap-4 px-4 py-3.5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer"
+            className="group relative flex items-center gap-4 px-4 py-4 hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-all cursor-pointer"
           >
             <div className={`shrink-0 relative ${isReading && String(selectedResumeId) === String(resume.id) ? 'opacity-50 pointer-events-none' : ''}`}>
               <div className="bg-white dark:bg-slate-700 aspect-[210/297] w-10 h-[56px] rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 overflow-hidden relative">
@@ -171,18 +172,18 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
 
       <div className="px-4 pt-[72px] pb-3 bg-background-light dark:bg-background-dark shrink-0">
         <div className="relative group">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
+          <span className="absolute left-3.5 top-1/2 -translate-y-1/2 material-symbols-outlined text-slate-400 group-focus-within:text-primary transition-colors" style={{ fontSize: '20px' }}>search</span>
           <input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white dark:bg-white/5 text-sm text-slate-900 dark:text-white rounded-xl py-2.5 pl-10 pr-4 outline-none border border-slate-200 dark:border-transparent focus:border-primary focus:ring-4 focus:ring-primary/10 placeholder-slate-400 dark:placeholder-slate-400 transition-all shadow-sm"
+            className="w-full h-12 bg-white dark:bg-white/5 text-[15px] text-slate-900 dark:text-white rounded-2xl pl-11 pr-4 outline-none border-2 border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all placeholder:text-slate-400 shadow-sm"
             placeholder="搜索简历名称..."
             type="text"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-white"
               type="button"
             >
               <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>close</span>
@@ -194,33 +195,28 @@ const ResumeSelectPage: React.FC<ResumeSelectPageProps> = ({
       <main className="flex-1 overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] no-scrollbar">
         <div className="flex flex-col gap-2">
           {allResumes && allResumes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">description</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">
-                {isInterviewMode ? '暂无可用于面试的简历' : '简历库中还没有简历'}
-              </p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                {isInterviewMode ? '请先完成一次 AI 诊断，生成简历后再开始面试。' : '请先回首页新建一份简历吧'}
-              </p>
-            </div>
+            <PageStatusFeedback
+              status="empty"
+              icon="description"
+              title={isInterviewMode ? '暂无可用于面试的简历' : '简历库中还没有简历'}
+              message={isInterviewMode ? '请先完成一次 AI 诊断，生成简历后再开始面试。' : '请先回首页新建一份简历吧'}
+            />
           ) : generatedResumes.length === 0 ? (
-            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">post_add</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">
-                {isInterviewMode ? '暂无可用于面试的诊断简历' : '暂无可用于分析的生成简历'}
-              </p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">
-                {isInterviewMode
-                  ? '请先做一次 AI 诊断（通用或定向），生成简历后再进入面试。'
-                  : '请先完成一次通用或定向优化，生成简历后再来这里继续'}
-              </p>
-            </div>
+            <PageStatusFeedback
+              status="empty"
+              icon="post_add"
+              title={isInterviewMode ? '暂无可用于面试的诊断简历' : '暂无可用于分析的生成简历'}
+              message={isInterviewMode
+                ? '请先做一次 AI 诊断（通用或定向），生成简历后再进入面试。'
+                : '请先完成一次通用或定向优化，生成简历后再来这里继续'}
+            />
           ) : filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center pt-20 px-4 text-center">
-              <span className="material-symbols-outlined text-slate-300 dark:text-slate-600 text-6xl mb-4">search_off</span>
-              <p className="text-slate-900 dark:text-white font-medium mb-1">未找到相关简历</p>
-              <p className="text-slate-500 dark:text-slate-400 text-sm">尝试搜索其他关键词</p>
-            </div>
+            <PageStatusFeedback
+              status="empty"
+              icon="search_off"
+              title="未找到相关简历"
+              message="尝试搜索其他关键词"
+            />
           )}
 
           {filtered.length > 0 && renderSelectionList(filtered)}
