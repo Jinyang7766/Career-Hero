@@ -204,9 +204,19 @@ const CareerProfileResult: React.FC = () => {
             </span>
           </button>
         </div>
+        {statusCount.pending > 0 && !isInlineEditing && (
+          <div className="absolute top-16 left-0 right-0 flex justify-center animate-in slide-in-from-top-2 duration-300 pointer-events-none">
+            <div className="bg-rose-500/10 dark:bg-rose-500/20 px-3 py-1 rounded-full border border-rose-200/50 dark:border-rose-400/20 flex items-center gap-1.5 backdrop-blur-sm pointer-events-auto">
+              <span className="size-1.5 rounded-full bg-rose-500 animate-pulse" />
+              <span className="text-[10px] font-bold text-rose-600 dark:text-rose-400">
+                有 {statusCount.pending} 项待补全的职场细节
+              </span>
+            </div>
+          </div>
+        )}
       </header>
 
-      <main className={`flex-1 overflow-y-auto ${isInlineEditing ? 'pt-20' : 'pt-14'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
+      <main className={`flex-1 overflow-y-auto ${isInlineEditing || statusCount.pending > 0 ? 'pt-20' : 'pt-14'} px-4 pb-[calc(5.75rem+env(safe-area-inset-bottom))] flex flex-col gap-5 max-w-md mx-auto w-full`}>
 
 
         {profile && (
