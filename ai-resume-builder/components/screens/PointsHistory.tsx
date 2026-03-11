@@ -158,15 +158,19 @@ const PointsHistory: React.FC = () => {
         {/* 积分余额卡片 */}
         <div className="px-4">
           <div className="bg-gradient-to-br from-primary via-blue-600 to-indigo-700 rounded-3xl p-6 mb-8 shadow-xl shadow-primary/30 text-white relative overflow-hidden group">
-            <div className="relative z-10 flex justify-between items-start">
-              <div>
+            <div className="relative z-10 flex justify-between items-start gap-4">
+              <div className="min-w-0">
                 <p className="text-white/70 text-sm font-medium mb-1">当前可用积分</p>
-                <div className="flex items-baseline gap-2">
-                  <h1 className="text-5xl font-black tracking-tight drop-shadow-sm">{displayPoints}</h1>
-                  <span className="text-white/60 text-sm font-bold uppercase tracking-wider">Credits</span>
+                <div className="flex items-baseline gap-x-2 gap-y-1 flex-wrap">
+                  <h1 className="text-4xl sm:text-5xl font-black tracking-tight drop-shadow-sm truncate">
+                    {displayPoints}
+                  </h1>
+                  <span className="text-white/60 text-xs sm:text-sm font-bold uppercase tracking-wider shrink-0">
+                    Credits
+                  </span>
                 </div>
               </div>
-              <div className="size-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
+              <div className="shrink-0 size-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/20">
                 <span className="material-symbols-outlined text-white text-3xl">account_balance_wallet</span>
               </div>
             </div>
