@@ -413,7 +413,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white pointer-events-none">
-            生成职业画像
+            {analysisReady ? '补全画像事实' : '生成职业画像'}
           </h2>
         </div>
       </header>
@@ -450,7 +450,7 @@ const GuidedCareerProfileFusionStep: React.FC = () => {
               ? '正在生成...'
               : canStartFollowup
               ? isFirstBuild
-                ? '进入细节追问'
+                ? '进入定向追问'
                 : '确认生成画像'
               : '开启 AI 解析'}
           </button>

@@ -98,4 +98,20 @@ describe('CareerProfileResult UI', () => {
     const labels = screen.queryAllByText('待补充');
     expect(labels.length).toBe(0);
   });
+
+  it('keeps followup entry copy distinct from background update action', () => {
+    vi.spyOn(fusionStorage, 'readFusionFollowupProgress').mockReturnValue({
+      cards: [{ id: '1', category: 'exp', text: 't1', status: 'pending' }],
+    } as any);
+
+    render(
+      <MemoryRouter>
+        <CareerProfileResult />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole('button', { name: /继续定向追问/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /更新背景资料/ })).toBeTruthy();
+    expect(screen.queryByText('补充核心事实')).toBeNull();
+  });
 });

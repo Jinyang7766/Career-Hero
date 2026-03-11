@@ -124,7 +124,7 @@ const CareerProfileResult: React.FC = () => {
   }, [followupSnapshot]);
 
   const hasFollowupProgress = Boolean(followupSnapshot?.cards?.length);
-  const hasMissingFollowup = statusCount.missing > 0;
+  const followupEntryLabel = hasFollowupProgress ? '继续定向追问' : '进入定向追问';
 
   const handleBack = React.useCallback(() => {
     if (isInlineEditing) {
@@ -310,7 +310,7 @@ const CareerProfileResult: React.FC = () => {
                   className="relative w-full h-12 rounded-xl bg-primary text-white text-sm font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
                 >
                   <span className="material-symbols-outlined text-[18px]">quiz</span>
-                  <span>{hasMissingFollowup ? '补充核心事实' : '丰富画像细节'}</span>
+                  <span>{followupEntryLabel}</span>
                   {statusCount.pending > 0 && (
                     <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white animate-in zoom-in duration-300">
                       {statusCount.pending}

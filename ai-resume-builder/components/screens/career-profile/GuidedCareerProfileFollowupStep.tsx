@@ -308,7 +308,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
         <div className="flex items-center px-4 h-14 relative">
           <BackButton onClick={handleBack} className="z-10" />
           <h2 className="absolute inset-0 flex items-center justify-center text-lg font-bold text-slate-900 dark:text-white pointer-events-none">
-            画像细节追问
+            补全画像事实
           </h2>
         </div>
       </header>
@@ -324,7 +324,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
           <>
             <section className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
               <div className="flex items-center justify-between text-[11px] font-black tracking-[0.2em] uppercase text-slate-500 dark:text-slate-400">
-                <span>完成度 {completedCount}/{total}</span>
+                <span>已完成 {completedCount}/{total}</span>
                 <span>{Math.round(completionRatio * 100)}%</span>
               </div>
               <div className="mt-2.5 h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
@@ -402,7 +402,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                     void handleSubmission('enter');
                   }
                 }}
-                placeholder="请输入你的真实经历与细节..."
+                placeholder="请输入你的真实经历与细节（默认空白，不会预填模板）"
                 className="w-full min-h-[120px] resize-none rounded-xl bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-100 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
               />
               <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">

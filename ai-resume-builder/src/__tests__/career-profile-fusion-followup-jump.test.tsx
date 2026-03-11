@@ -59,7 +59,7 @@ describe('career-profile fusion followup jump', () => {
     expect(screen.queryByText('补充更多工作细节（可选）')).toBeNull();
     expect(screen.queryByText('AI 定向追问卡片')).toBeNull();
 
-    fireEvent.click(screen.getByText('补全画像细节'));
+    fireEvent.click(screen.getByText('进入定向追问'));
     expect(await screen.findByText('FOLLOWUP_PAGE')).toBeTruthy();
   });
 });
