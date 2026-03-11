@@ -11,7 +11,7 @@ type Props = {
   onBack: () => void;
   onBackToJdInput: () => void;
   onStartInterview: () => void;
-  onGoToComparison: () => void;
+  onViewResume: () => void;
   getScoreColor: (s: number) => string;
   onFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
 };
@@ -23,7 +23,7 @@ const FinalResumeReportPage: React.FC<Props> = ({
   onBack,
   onBackToJdInput,
   onStartInterview,
-  onGoToComparison,
+  onViewResume,
   getScoreColor,
   onFeedback,
 }) => {
@@ -88,11 +88,11 @@ const FinalResumeReportPage: React.FC<Props> = ({
 
         <div className="grid grid-cols-2 gap-3">
           <button
-            onClick={onGoToComparison}
+            onClick={onViewResume}
             className="h-12 rounded-xl border-2 border-slate-100 dark:border-white/5 text-slate-600 dark:text-slate-300 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-sm font-bold transition-all active:scale-[0.985]"
             type="button"
           >
-            去精修简历
+            查看简历
           </button>
           <button
             onClick={onStartInterview}

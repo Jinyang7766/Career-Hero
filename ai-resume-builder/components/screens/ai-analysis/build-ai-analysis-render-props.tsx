@@ -109,6 +109,6 @@ export const buildAiAnalysisRenderProps = (p: any) => ({
   finalReportAdvice: p.finalReportOverride?.advice || p.finalReportAdvice || [],
   finalReportScore: p.finalReportOverride?.score ?? p.finalReportScore ?? 0,
   handleStartInterviewFromFinalReport: p.handleStartInterviewFromFinalReport,
-  handleGoToComparisonFromFinalReport: p.handleGoToComparisonFromFinalReport,
+  handleViewResumeFromFinalReport: p.handleViewResumeFromFinalReport,
   isFinalReportGenerating: p.isFinalReportGenerating,
 });

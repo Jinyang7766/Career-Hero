@@ -121,7 +121,7 @@ type Params = {
   finalReportSummary: string;
   finalReportAdvice: string[];
   handleStartInterviewFromFinalReport: () => void | Promise<void>;
-  handleGoToComparisonFromFinalReport: () => void | Promise<void>;
+  handleViewResumeFromFinalReport: () => void | Promise<void>;
   isFinalReportGenerating?: boolean;
 };
 
@@ -198,7 +198,7 @@ export const renderAiAnalysisStep = (p: Params) => {
           onBack={p.handleFinalReportBack}
           onBackToJdInput={p.handleBackToJdInputFromFinalReport}
           onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
-          onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
+          onViewResume={() => { void p.handleViewResumeFromFinalReport(); }}
           onFeedback={p.onFinalReportFeedback}
         />
       );
@@ -305,7 +305,7 @@ export const renderAiAnalysisStep = (p: Params) => {
         onBack={p.handleFinalReportBack}
         onBackToJdInput={p.handleBackToJdInputFromFinalReport}
         onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
-        onGoToComparison={() => { void p.handleGoToComparisonFromFinalReport(); }}
+        onViewResume={() => { void p.handleViewResumeFromFinalReport(); }}
         onFeedback={p.onFinalReportFeedback}
       />
     );

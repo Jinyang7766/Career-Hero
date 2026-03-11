@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScreenProps, ResumeData } from '../../types';
+import { ScreenProps, ResumeData, View } from '../../types';
 import { buildApiUrl } from '../../src/api-config';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../../src/app-context';
@@ -52,6 +52,8 @@ import {
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AiAnalysisStep } from './ai-analysis/step-types';
 import { buildAiAnalysisRenderProps } from './ai-analysis/build-ai-analysis-render-props';
+import { hasMeaningfulResumeData } from './preview/hooks/usePreviewRestore';
+import { writePreviewBackTarget, writePreviewResumeId } from './preview/preview-storage';
 import {
   resolveStep3TargetInputValue,
   shouldPersistTargetRole,
@@ -651,13 +653,75 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     handleStepBack();
   }, [handleStepBack, isInterviewMode, navigateToStep]);
 
-  const handleGoToComparisonFromFinalReport = React.useCallback(() => {
-    if (!isInterviewMode) {
-      suppressDiagnosisChatNormalizationRef.current = true;
-      suppressDiagnosisSessionRecoveryRef.current = true;
+  const handleViewResumeFromFinalReport = React.useCallback(() => {
+    if (isInterviewMode) return;
+
+    const generatedResume =
+      postInterviewGeneratedResume && typeof postInterviewGeneratedResume === 'object'
+        ? { ...(postInterviewGeneratedResume as any) }
+        : null;
+
+    if (!generatedResume || !hasMeaningfulResumeData(generatedResume)) {
+      showToast('暂无可预览的生成简历，请稍后重试。', 'info', 2200);
+      return;
     }
-    navigateToStep('comparison');
-  }, [isInterviewMode, navigateToStep]);
+
+    const optimizedResumeIdRaw =
+      (generatedResume as any)?.optimizedResumeId ||
+      optimizedResumeId ||
+      (resumeData as any)?.optimizedResumeId ||
+      '';
+    const optimizedResumeIdValue = String(optimizedResumeIdRaw || '').trim();
+
+    const sourceResumeIdValue = String(
+      (generatedResume as any)?.optimizedFromId ||
+      sourceResumeIdRef.current ||
+      selectedResumeId ||
+      (resumeData as any)?.id ||
+      ''
+    ).trim();
+
+    const nextPreviewResume: ResumeData = {
+      ...(generatedResume as ResumeData),
+      resumeTitle:
+        String((generatedResume as any)?.resumeTitle || '').trim() ||
+        String((resumeData as any)?.resumeTitle || '').trim() ||
+        'AI 生成简历',
+      templateId:
+        (generatedResume as any)?.templateId ||
+        (resumeData as any)?.templateId ||
+        'modern',
+      lastJdText:
+        String((generatedResume as any)?.lastJdText || '').trim() ||
+        String(jdText || '').trim() ||
+        String((resumeData as any)?.lastJdText || '').trim(),
+      targetCompany:
+        String((generatedResume as any)?.targetCompany || '').trim() ||
+        String(targetCompany || '').trim() ||
+        String((resumeData as any)?.targetCompany || '').trim(),
+      ...(sourceResumeIdValue ? { optimizedFromId: sourceResumeIdValue } : {}),
+      ...(optimizedResumeIdValue ? { optimizedResumeId: optimizedResumeIdValue } : {}),
+    };
+
+    setResumeData(nextPreviewResume as any);
+    writePreviewBackTarget('ai_analysis');
+    if (optimizedResumeIdValue) {
+      writePreviewResumeId(optimizedResumeIdValue);
+    }
+    navigateToView(View.PREVIEW);
+  }, [
+    isInterviewMode,
+    jdText,
+    navigateToView,
+    optimizedResumeId,
+    postInterviewGeneratedResume,
+    resumeData,
+    selectedResumeId,
+    setResumeData,
+    showToast,
+    sourceResumeIdRef,
+    targetCompany,
+  ]);
 
   React.useEffect(() => {
     if (isInterviewMode) return;
@@ -795,7 +859,7 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     finalReportOverride,
     isFinalReportGenerating,
     handleStartInterviewFromFinalReport,
-    handleGoToComparisonFromFinalReport,
+    handleViewResumeFromFinalReport,
   }));
 };
 
