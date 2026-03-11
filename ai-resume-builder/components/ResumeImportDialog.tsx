@@ -82,81 +82,106 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
-      <div className="bg-white dark:bg-surface-dark w-full max-w-md sm:max-w-2xl h-[100dvh] sm:h-auto max-h-[100dvh] sm:max-h-[90vh] rounded-none sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-[2px] sm:items-center sm:p-4 transition-all">
+      <div className="bg-white dark:bg-surface-dark w-full max-w-lg sm:max-w-xl h-[92dvh] sm:h-auto max-h-[92dvh] sm:max-h-[85vh] rounded-t-[2.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden flex flex-col border border-white/10">
+        
         {/* Header */}
-        <div className="flex items-center justify-between px-4 sm:px-6 pt-[calc(env(safe-area-inset-top)+0.75rem)] sm:pt-6 pb-4 border-b border-slate-200 dark:border-white/5 shrink-0">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">简历导入</h2>
+        <div className="flex items-center justify-between px-6 py-6 border-b border-slate-100 dark:border-white/5 shrink-0">
+          <div className="flex flex-col">
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">导入简历内容</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 font-medium">选择您最方便的方式导入，开始智能编辑</p>
+          </div>
           <button
             onClick={handleClose}
-            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-white/10 transition-all"
           >
-            <span className="material-symbols-outlined text-slate-500 dark:text-slate-400">close</span>
+            <span className="material-symbols-outlined text-[24px]">close</span>
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-slate-200 dark:border-white/5 shrink-0">
-          <button
-            onClick={() => handleTabChange('text')}
-            className={`flex-1 px-4 sm:px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'text'
-              ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+        {/* Tabs - Modern Segmented Control */}
+        <div className="px-6 py-4 bg-slate-50/30 dark:bg-black/20 shrink-0">
+          <div className="flex p-1 bg-slate-200/50 dark:bg-white/5 rounded-2xl border border-slate-200/50 dark:border-white/5">
+            <button
+              onClick={() => handleTabChange('text')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'text'
+                  ? 'bg-white dark:bg-white/10 text-primary shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
-          >
-            <span className="material-symbols-outlined text-[18px] mr-2">description</span>
-            粘贴文本
-          </button>
-          <button
-            onClick={() => handleTabChange('pdf')}
-            className={`flex-1 px-4 sm:px-6 py-3 text-sm font-medium transition-colors ${activeTab === 'pdf'
-              ? 'text-primary border-b-2 border-primary bg-blue-50 dark:bg-blue-900/20'
-              : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+            >
+              <span className="material-symbols-outlined text-[20px]">description</span>
+              粘贴文本
+            </button>
+            <button
+              onClick={() => handleTabChange('pdf')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl transition-all ${
+                activeTab === 'pdf'
+                  ? 'bg-white dark:bg-white/10 text-primary shadow-sm'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
               }`}
-          >
-            <span className="material-symbols-outlined text-[18px] mr-2">picture_as_pdf</span>
-            上传PDF
-          </button>
+            >
+              <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+              上传文件
+            </button>
+          </div>
         </div>
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 pb-[calc(env(safe-area-inset-bottom)+1rem)] sm:pb-6">
+        {/* Content Area */}
+        <div className="flex-1 overflow-y-auto px-6 py-2 pb-[calc(env(safe-area-inset-bottom)+1.5rem)] sm:pb-8 no-scrollbar">
           {activeTab === 'text' ? (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  简历文本内容
-                </label>
+            <div className="space-y-6 pt-2">
+              <div className="flex flex-col">
+                <div className="flex items-center justify-between mb-2 px-1">
+                  <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500">
+                    简历文本内容
+                  </label>
+                  <span className="text-[11px] text-slate-400 font-medium">智能识别格式</span>
+                </div>
                 <AutoGrowTextarea
                   value={textResume}
                   onChange={(e) => setTextResume(e.target.value)}
-                  placeholder="请粘贴您的简历内容..."
-                  className="w-full px-4 py-3 border border-slate-300 dark:border-[#324d67] rounded-lg bg-white dark:bg-[#111a22] text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-primary/50 focus:border-primary outline-none resize-none"
-                  minRows={12}
+                  placeholder="在这里粘贴您的简历全文，包括联系方式、教育背景和工作经验..."
+                  className="w-full px-5 py-5 border-2 border-slate-100 dark:border-white/5 rounded-2xl bg-white dark:bg-black/10 text-slate-900 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:border-primary/40 focus:ring-4 focus:ring-primary/5 outline-none resize-none transition-all min-h-[220px]"
+                  minRows={8}
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  支持从Word文档、网页、邮件等地方复制粘贴简历内容
-                </p>
               </div>
 
-              <button
-                onClick={handleTextImport}
-                disabled={!textResume.trim()}
-                className="w-full py-3 bg-primary text-white rounded-lg font-medium hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-              >
-                <>
-                  <span className="material-symbols-outlined">upload_file</span>
-                  保存输入
-                </>
-              </button>
+              <div className="flex flex-col gap-4">
+                <div className="flex items-start gap-3 p-4 bg-primary/5 dark:bg-primary/10 rounded-2xl border border-primary/10 dark:border-primary/20">
+                  <span className="material-symbols-outlined text-primary text-[20px] mt-0.5">lightbulb</span>
+                  <p className="text-[12px] text-primary/80 dark:text-primary/70 leading-relaxed font-medium">
+                    提示：我们的 AI 将为您自动识别文本中的结构化信息。内容越详实，生成的简历质量越高。
+                  </p>
+                </div>
+                
+                <button
+                  onClick={handleTextImport}
+                  disabled={!textResume.trim()}
+                  className="w-full py-4 bg-primary text-white rounded-2xl font-bold shadow-lg shadow-primary/25 hover:bg-blue-600 active:scale-[0.99] disabled:opacity-30 disabled:grayscale transition-all flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[20px]">magic_button</span>
+                  开始智能解析
+                </button>
+                
+                <button
+                  onClick={handleClose}
+                  className="w-full py-2 text-sm text-slate-400 dark:text-slate-500 font-bold hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                >
+                  暂不导入，直接编辑
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  上传 PDF / DOCX 文件
+            <div className="space-y-6 pt-2">
+              <div className="flex flex-col">
+                <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-slate-400 dark:text-slate-500 mb-2 px-1">
+                  选择文件
                 </label>
-                <div className="border-2 border-dashed border-slate-300 dark:border-[#324d67] rounded-lg p-5 sm:p-8 text-center">
+                <div 
+                  onClick={() => fileInputRef.current?.click()}
+                  className="group border-2 border-dashed border-slate-200 dark:border-white/10 rounded-[2rem] p-10 sm:p-14 text-center cursor-pointer hover:border-primary/40 hover:bg-primary/[0.02] dark:hover:bg-primary/[0.05] transition-all relative overflow-hidden"
+                >
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -164,23 +189,40 @@ const ResumeImportDialog: React.FC<ResumeImportDialogProps> = ({ isOpen, onClose
                     onChange={handlePDFImport}
                     className="hidden"
                   />
-                  <span className="material-symbols-outlined text-4xl text-slate-400 mb-4">picture_as_pdf</span>
-                  <p className="text-slate-600 dark:text-slate-300 mb-2">点击选择简历文件（PDF 或 DOCX）</p>
-                  <p className="text-sm text-slate-500 dark:text-slate-400">支持 PDF/DOCX，建议文件小于 10MB</p>
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="mt-4 px-4 py-2 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-                  >
-                    选择文件
-                  </button>
+                  
+                  <div className="relative z-10">
+                    <div className="w-16 h-16 bg-slate-100 dark:bg-white/5 rounded-2xl flex items-center justify-center mx-auto mb-5 group-hover:scale-110 group-hover:bg-primary/10 transition-all duration-300">
+                      <span className="material-symbols-outlined text-3xl text-slate-400 group-hover:text-primary transition-colors">cloud_upload</span>
+                    </div>
+                    <p className="text-slate-900 dark:text-white font-bold text-lg mb-1">点击或拖拽简历文件</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mb-6">支持 PDF 或 Word (DOCX) 格式</p>
+                    <div className="inline-flex px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-sm font-bold group-hover:bg-primary group-hover:text-white transition-all shadow-md">
+                      选取本地文件
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <div className="flex items-start gap-3 p-4 bg-slate-50 dark:bg-white/5 rounded-2xl border border-slate-100 dark:border-white/5">
+                <span className="material-symbols-outlined text-slate-400 text-[20px] mt-0.5">verified_user</span>
+                <p className="text-[12px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+                  隐私保护：您的文件仅用于内容提取，不会被公开或留存。建议文件大小在 10MB 以内以获得最佳体验。
+                </p>
+              </div>
+
+              <button
+                onClick={handleClose}
+                className="w-full py-2 text-sm text-slate-400 dark:text-slate-500 font-bold hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                取消导入
+              </button>
             </div>
           )}
 
           {error && (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            <div className="mt-6 p-4 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-2xl flex items-center gap-3">
+              <span className="material-symbols-outlined text-red-500">error</span>
+              <p className="text-sm text-red-600 dark:text-red-400 font-bold">{error}</p>
             </div>
           )}
         </div>
