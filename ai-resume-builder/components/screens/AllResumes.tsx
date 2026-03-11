@@ -423,28 +423,11 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   {activeMenuId === resume.id && (
                     <div className="absolute right-0 top-10 w-32 bg-white dark:bg-surface-dark rounded-xl shadow-xl border border-slate-100 dark:border-white/5 z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                       <button
-                        onClick={(e) => handleEdit(resume.id, e)}
-                        disabled={isLoadingResume !== null}
-                        className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isLoadingResume === resume.id ? (
-                          <>
-                            <span className="size-4 border-2 border-slate-600/30 border-t-slate-600 rounded-full animate-spin"></span>
-                            加载中...
-                          </>
-                        ) : (
-                          <>
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                            精修
-                          </>
-                        )}
-                      </button>
-                      <button
                         onClick={(e) => handleRenameClick(resume.id, resume.title, e)}
                         className="w-full text-left px-4 py-3 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-white/5 flex items-center gap-2"
                       >
                         <span className="material-symbols-outlined text-[18px]">drive_file_rename_outline</span>
-                        修改名称
+                        重命名
                       </button>
                       <div className="h-px bg-slate-100 dark:bg-white/5"></div>
                       <button
