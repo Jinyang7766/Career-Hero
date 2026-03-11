@@ -5,18 +5,13 @@ import time
 
 from google.genai import types
 
-try:
-    from services.skill_cleanup_service import (
-        DEFAULT_SKILL_LIMIT,
-        merge_resume_skills,
-        sanitize_resume_skills,
-    )
-except ImportError:
-    from backend.services.skill_cleanup_service import (
-        DEFAULT_SKILL_LIMIT,
-        merge_resume_skills,
-        sanitize_resume_skills,
-    )
+from .import_compat import import_attrs
+
+
+DEFAULT_SKILL_LIMIT, merge_resume_skills, sanitize_resume_skills = import_attrs(
+    'services.skill_cleanup_service',
+    ('DEFAULT_SKILL_LIMIT', 'merge_resume_skills', 'sanitize_resume_skills'),
+)
 
 
 _MBTI_TOKEN_RE = re.compile(r'(?<![A-Za-z])[IE][NS][FT][JP](?:-[AT])?(?![A-Za-z])', flags=re.IGNORECASE)

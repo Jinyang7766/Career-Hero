@@ -12,10 +12,13 @@ from services.pdf_text_utils import (
     extract_company_name_from_jd,
     sanitize_filename_part,
 )
-try:
-    from services.pdf_asset_service import is_safe_external_url, normalize_avatar_data
-except ImportError:
-    from backend.services.pdf_asset_service import is_safe_external_url, normalize_avatar_data
+from .import_compat import import_attrs
+
+
+is_safe_external_url, normalize_avatar_data = import_attrs(
+    'services.pdf_asset_service',
+    ('is_safe_external_url', 'normalize_avatar_data'),
+)
 
 
 _PDF_FONT_FAMILY_CACHE = None

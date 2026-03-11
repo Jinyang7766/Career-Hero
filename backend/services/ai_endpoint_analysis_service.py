@@ -2,50 +2,39 @@ import re
 import copy
 import traceback
 
-try:
-    from services.ai_endpoint_prompt_service import (
-        ANALYSIS_PROMPT_VERSION,
-        _build_analysis_prompt,
-    )
-    from services.ai_endpoint_suggestion_service import (
-        _format_diagnosis_dossier,
-        _format_career_profile_context,
-        _sanitize_suggestions_for_metric_consistency,
-        _ensure_sentence_level_coverage,
-        _merge_duplicate_suggestions,
-        _build_final_stage_annotation_suggestions,
-    )
-    from services.ai_endpoint_shared_service import (
-        PIIMasker,
-        _normalize_company_confidence,
-    )
-    from services.skill_cleanup_service import (
-        DEFAULT_SKILL_LIMIT,
-        clean_skill_list,
-        sanitize_resume_skills,
-    )
-except ImportError:
-    from backend.services.ai_endpoint_prompt_service import (
-        ANALYSIS_PROMPT_VERSION,
-        _build_analysis_prompt,
-    )
-    from backend.services.ai_endpoint_suggestion_service import (
-        _format_diagnosis_dossier,
-        _format_career_profile_context,
-        _sanitize_suggestions_for_metric_consistency,
-        _ensure_sentence_level_coverage,
-        _merge_duplicate_suggestions,
-        _build_final_stage_annotation_suggestions,
-    )
-    from backend.services.ai_endpoint_shared_service import (
-        PIIMasker,
-        _normalize_company_confidence,
-    )
-    from backend.services.skill_cleanup_service import (
-        DEFAULT_SKILL_LIMIT,
-        clean_skill_list,
-        sanitize_resume_skills,
-    )
+from .import_compat import import_attrs
+
+
+ANALYSIS_PROMPT_VERSION, _build_analysis_prompt = import_attrs(
+    'services.ai_endpoint_prompt_service',
+    ('ANALYSIS_PROMPT_VERSION', '_build_analysis_prompt'),
+)
+(
+    _format_diagnosis_dossier,
+    _format_career_profile_context,
+    _sanitize_suggestions_for_metric_consistency,
+    _ensure_sentence_level_coverage,
+    _merge_duplicate_suggestions,
+    _build_final_stage_annotation_suggestions,
+) = import_attrs(
+    'services.ai_endpoint_suggestion_service',
+    (
+        '_format_diagnosis_dossier',
+        '_format_career_profile_context',
+        '_sanitize_suggestions_for_metric_consistency',
+        '_ensure_sentence_level_coverage',
+        '_merge_duplicate_suggestions',
+        '_build_final_stage_annotation_suggestions',
+    ),
+)
+PIIMasker, _normalize_company_confidence = import_attrs(
+    'services.ai_endpoint_shared_service',
+    ('PIIMasker', '_normalize_company_confidence'),
+)
+DEFAULT_SKILL_LIMIT, clean_skill_list, sanitize_resume_skills = import_attrs(
+    'services.skill_cleanup_service',
+    ('DEFAULT_SKILL_LIMIT', 'clean_skill_list', 'sanitize_resume_skills'),
+)
 
 
 _MBTI_TOKEN_RE = re.compile(r'(?<![A-Za-z])[IE][NS][FT][JP](?:-[AT])?(?![A-Za-z])', flags=re.IGNORECASE)

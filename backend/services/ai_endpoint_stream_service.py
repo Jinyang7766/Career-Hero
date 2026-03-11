@@ -4,14 +4,23 @@ import traceback
 
 from google.genai import types
 
-try:
-    from services.ai_endpoint_suggestion_service import _format_diagnosis_dossier
-    from services.ai_endpoint_stt_service import _transcribe_audio_with_gemini
-    from services.ai_endpoint_summary_service import normalize_summary_output
-except ImportError:
-    from backend.services.ai_endpoint_suggestion_service import _format_diagnosis_dossier
-    from backend.services.ai_endpoint_stt_service import _transcribe_audio_with_gemini
-    from backend.services.ai_endpoint_summary_service import normalize_summary_output
+from .import_compat import import_attr
+
+
+_format_diagnosis_dossier = import_attr(
+    'services.ai_endpoint_suggestion_service',
+    '_format_diagnosis_dossier',
+)
+_transcribe_audio_with_gemini = import_attr(
+    'services.ai_endpoint_stt_service',
+    '_transcribe_audio_with_gemini',
+)
+normalize_summary_output = import_attr(
+    'services.ai_endpoint_summary_service',
+    'normalize_summary_output',
+)
+
+
 def ai_chat_stream_core(data, deps):
     """
     Stream interview chat response as incremental chunks.

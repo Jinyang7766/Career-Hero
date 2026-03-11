@@ -1,7 +1,10 @@
-try:
-    from services.ai_endpoint_suggestion_service import _normalize_training_day_labels
-except ImportError:
-    from backend.services.ai_endpoint_suggestion_service import _normalize_training_day_labels
+from .import_compat import import_attr
+
+
+_normalize_training_day_labels = import_attr(
+    'services.ai_endpoint_suggestion_service',
+    '_normalize_training_day_labels',
+)
 
 
 def build_interview_summary_prompt(job_description: str, formatted_chat: str, clean_message: str) -> str:

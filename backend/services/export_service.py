@@ -6,28 +6,31 @@ import time
 
 from playwright.sync_api import sync_playwright
 
-try:
-    from services.pdf_service import (
-        extract_company_name_from_jd,
-        build_pdf_filename,
-        sanitize_filename_part,
-        resolve_pdf_font_path,
-        get_pdf_font_url,
-        get_pdf_font_bytes,
-        inject_font_css_into_html,
-        generate_resume_html,
-    )
-except ImportError:
-    from backend.services.pdf_service import (
-        extract_company_name_from_jd,
-        build_pdf_filename,
-        sanitize_filename_part,
-        resolve_pdf_font_path,
-        get_pdf_font_url,
-        get_pdf_font_bytes,
-        inject_font_css_into_html,
-        generate_resume_html,
-    )
+from .import_compat import import_attrs
+
+
+(
+    extract_company_name_from_jd,
+    build_pdf_filename,
+    sanitize_filename_part,
+    resolve_pdf_font_path,
+    get_pdf_font_url,
+    get_pdf_font_bytes,
+    inject_font_css_into_html,
+    generate_resume_html,
+) = import_attrs(
+    'services.pdf_service',
+    (
+        'extract_company_name_from_jd',
+        'build_pdf_filename',
+        'sanitize_filename_part',
+        'resolve_pdf_font_path',
+        'get_pdf_font_url',
+        'get_pdf_font_bytes',
+        'inject_font_css_into_html',
+        'generate_resume_html',
+    ),
+)
 
 
 class PDFExportBusyError(RuntimeError):

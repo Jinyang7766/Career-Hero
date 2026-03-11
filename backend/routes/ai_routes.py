@@ -13,6 +13,18 @@ def get_json_payload(req):
     return data
 
 
+def _json_error(message: str, status: int = 500):
+    return jsonify({'error': message}), status
+
+
+def _log_exception(logger, traceback_mod, prefix: str, exc: Exception | None = None):
+    if exc is None:
+        logger.error(f"{prefix}: {traceback_mod.format_exc()}")
+        return
+    logger.error(f"{prefix}: {str(exc)}")
+    logger.error(f"Full traceback: {traceback_mod.format_exc()}")
+
+
 def register_ai_routes(app, deps):
     token_required = deps['token_required']
 
@@ -73,9 +85,8 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception as e:
-            logger.error(f"Resume parsing error: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            return jsonify({'error': '解析简历失败'}), 500
+            _log_exception(logger, traceback, 'Resume parsing error', e)
+            return _json_error('解析简历失败')
 
     @app.route('/api/parse-pdf', methods=['POST'])
     def parse_pdf():
@@ -99,9 +110,8 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception as e:
-            logger.error(f"PDF parsing error: {str(e)}")
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            return jsonify({'error': 'PDF 解析失败'}), 500
+            _log_exception(logger, traceback, 'PDF parsing error', e)
+            return _json_error('PDF 解析失败')
 
     @app.route('/api/ai/analyze', methods=['POST'])
     @token_required
@@ -138,8 +148,8 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception:
-            logger.error(f"简历分析出错: {traceback.format_exc()}")
-            return jsonify({'error': '服务器内部错误'}), 500
+            _log_exception(logger, traceback, '简历分析出错')
+            return _json_error('服务器内部错误')
 
     @app.route('/api/ai/parse-screenshot', methods=['POST'])
     @token_required
@@ -157,7 +167,7 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception:
-            return jsonify({'error': '服务器内部错误'}), 500
+            return _json_error('服务器内部错误')
 
     @app.route('/api/ai/chat', methods=['POST'])
     @token_required
@@ -179,7 +189,7 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception:
-            return jsonify({'error': '服务器内部错误'}), 500
+            return _json_error('服务器内部错误')
 
     @app.route('/api/ai/chat/stream', methods=['POST'])
     @token_required
@@ -234,7 +244,7 @@ def register_ai_routes(app, deps):
             }
             return Response(_stream(), status=200, headers=headers)
         except Exception:
-            return jsonify({'error': '服务器内部错误'}), 500
+            return _json_error('服务器内部错误')
 
     @app.route('/api/ai/transcribe', methods=['POST'])
     @token_required
@@ -277,7 +287,7 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception as e:
-            logger.error("AI transcribe failed: %s", e)
+            _log_exception(logger, traceback, 'AI transcribe failed', e)
             return jsonify({'success': False, 'text': '', 'error': '服务器内部错误'}), 500
 
     @app.route('/api/ai/generate-resume', methods=['POST'])
@@ -312,7 +322,7 @@ def register_ai_routes(app, deps):
         except ValueError as e:
             return jsonify({'error': str(e)}), 400
         except Exception:
-            return jsonify({'error': '服务器内部错误'}), 500
+            return _json_error('服务器内部错误')
 
     @app.route('/api/ai/organize-career-profile', methods=['POST'])
     @token_required
@@ -334,5 +344,5 @@ def register_ai_routes(app, deps):
             )
             return jsonify(body), status
         except Exception:
-            logger.error("organize_career_profile failed: %s", traceback.format_exc())
-            return jsonify({'error': '服务器内部错误'}), 500
+            _log_exception(logger, traceback, 'organize_career_profile failed')
+            return _json_error('服务器内部错误')

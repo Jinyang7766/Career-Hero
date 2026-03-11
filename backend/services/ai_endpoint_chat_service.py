@@ -2,18 +2,31 @@ import re
 
 from google.genai import types
 
-try:
-    from services.ai_endpoint_suggestion_service import _format_diagnosis_dossier
-    from services.ai_endpoint_stt_service import _decode_audio_payload, _transcribe_audio_with_gemini, transcribe_core
-    from services.ai_endpoint_stream_service import ai_chat_stream_core
-    from services.ai_endpoint_plan_service import generate_interview_plan_response
-    from services.ai_endpoint_summary_service import normalize_summary_output
-except ImportError:
-    from backend.services.ai_endpoint_suggestion_service import _format_diagnosis_dossier
-    from backend.services.ai_endpoint_stt_service import _decode_audio_payload, _transcribe_audio_with_gemini, transcribe_core
-    from backend.services.ai_endpoint_stream_service import ai_chat_stream_core
-    from backend.services.ai_endpoint_plan_service import generate_interview_plan_response
-    from backend.services.ai_endpoint_summary_service import normalize_summary_output
+from .import_compat import import_attr, import_attrs
+
+
+_format_diagnosis_dossier = import_attr(
+    'services.ai_endpoint_suggestion_service',
+    '_format_diagnosis_dossier',
+)
+_decode_audio_payload, _transcribe_audio_with_gemini, transcribe_core = import_attrs(
+    'services.ai_endpoint_stt_service',
+    ('_decode_audio_payload', '_transcribe_audio_with_gemini', 'transcribe_core'),
+)
+ai_chat_stream_core = import_attr(
+    'services.ai_endpoint_stream_service',
+    'ai_chat_stream_core',
+)
+generate_interview_plan_response = import_attr(
+    'services.ai_endpoint_plan_service',
+    'generate_interview_plan_response',
+)
+normalize_summary_output = import_attr(
+    'services.ai_endpoint_summary_service',
+    'normalize_summary_output',
+)
+
+
 def ai_chat_core(data, deps):
     mode = (data.get('mode') or '').strip().lower()
     message = data.get('message', '')
