@@ -1,7 +1,7 @@
 # Career Hero 重构执行计划（全链路扫描重编版）
 
-- 版本：`v6.25`
-- 更新时间：`2026-03-09`
+- 版本：`v6.26`
+- 更新时间：`2026-03-11`
 - 目标启动日：`2026-03-02`
 - 适用范围：`Career Hero Web（React + TypeScript + Flask + Supabase）`
 - 制定方式：`基于现有代码真实链路扫描，做最小侵入重编排，不做推翻式重写`
@@ -507,6 +507,24 @@
 38. 针对 JD 定向链路的回归测试已补齐：
     - 新增/更新 `analysis_mode`、`jd-key-compat`、`analysis-execution-result` 前端用例。
     - 后端补充 JD 定向提示词与关键词对齐覆盖（`test_parse_endpoint_service.py`）。
+39. CareerProfileResult 导航条恢复与图标一致化已完成：
+    - 已完成：恢复 icon-only 顶部导航，区分导航条与页头视觉层级，并统一导航图标与锚点 id 口径（`3427ab5`、`45aac4e`、`ab7bd1d`）。
+    - 影响：模块跳转更稳定，导航识别成本降低。
+40. P0/P1/P2 UI 优化串联收口已完成：
+    - 已完成：结果页状态反馈、CTA 语义、信息密度与文案口径优化（`6430a83`、`a849d3b`、`c1e6aa3`、`e55ffa1`、`115df8d`）。
+    - 影响：结果页层级更清晰，主动作更聚焦。
+41. 编辑器输入框与基础信息样式统一已完成：
+    - 已完成：输入控件统一为卡片视觉语言，基础信息模块按“无底色 + 模块风格一致”收口（`f076ea0`、`f6d6211`、`599c596`、`9a9796f`）。
+    - 影响：编辑态跨模块视觉更一致，样式回归风险下降。
+42. MBTI 编辑态回填一致化与人格字段清洗已完成：
+    - 已完成：统一 MBTI 编辑态 hydration，补齐 personality 清洗与回归测试（`2e86e37`）。
+    - 影响：减少 MBTI/人格字段错位与回弹。
+43. 旧语义兼容债务主链路收口已完成：
+    - 已完成：下线面试 legacy `jd_input` 恢复分支，移除诊断 `resume_select` 冗余恢复路径，完成 `targetRole` 命名迁移（`f49fd12`、`5f5914c`、`83ee0bd`）。
+    - 影响：步骤语义与字段命名一致，恢复链路排障成本下降。
+44. 画像主字段写入校验已完成后端加固：
+    - 已完成：写入前主字段校验与后端测试补齐（`620c691`）。
+    - 影响：入库结构漂移风险下降。
 
 部分完成（可用但仍需收口）：
 1. Step5 精修能力可用，但“选区定点改写 + 事实边界提示 + 手工编辑”的统一产品化还需再收敛一轮。
@@ -650,7 +668,7 @@
 10. 风险：主字段入库校验缺失时，跨端写入可能出现结构漂移。
     缓解：补充主字段 JSON Schema 校验与容错回退，写入失败时不覆盖旧画像并记录可追踪日志。
 
-### 8.1 旧逻辑收口状态（2026-03-03）
+### 8.1 旧逻辑收口状态（2026-03-11）
 
 已修复：
 1. `CareerProfile` 同页混合“上传入口 + 画像输入”旧逻辑已拆除：
@@ -716,15 +734,15 @@
    - 影响：减少跨结构回写导致的字段错位，用户编辑结果与展示更一致。
 
 待继续收口：
-1. 面试恢复层仍保留 `jd_input` 映射兼容：
-   - 现状：已抽离 `normalizeInterviewRecoveryStep` 并补单测，但 `useResumeSelection` 等读取链路仍保留 legacy 映射兼容。
-   - 风险：同一语义双状态名并存，排障成本上升。
-2. 状态变量语义债务：
-   - 现状：前端显示与门禁已按“目标岗位”统一，但内部状态/DTO 字段名仍包含 `targetCompany` 兼容命名。
-   - 风险：跨端联调时可能误读字段语义，后续仍需完成 `targetRole` 命名迁移。
-3. 字段一致性回归仍需持续补齐：
+1. 字段一致性回归仍需持续补齐：
    - 现状：主链路已切到单一映射，但历史脏数据与派生字段仍可能触发个别展示偏差。
    - 风险：若缺少持续回归用例，后续改动可能复发“字段错位/回弹”。
+2. 历史会话恢复线上 e2e 仍待补齐：
+   - 现状：已有 `interview-session-step-migration` 单测与 smoke 断言，但缺“真实历史会话恢复后自动落到 `interview_scene`”的端到端在线回归。
+   - 风险：兼容分支回归问题可能在灰度环境后置暴露。
+3. 主字段写入校验观测仍需完善：
+   - 现状：主字段写入校验已上线，但失败日志字段路径与灰度看板尚未补齐。
+   - 风险：问题定位链路不完整，跨端排障效率受限。
 
 ## 9. 当前阶段明确不做
 
@@ -741,16 +759,19 @@
    - 待验证：线上灰度环境中补齐“上传不入库提示文案”的用户反馈确认。
 2. 画像编辑器与简历编辑器融合改造（第一阶段）：
    - 已完成：编辑态字段映射改为直改 `draftProfile`（`personalInfo/summary/targetRole/jobDirection/experiences/projects/educations`），保存链路改为 `draftProfile` 直持久化优先，减少 `resumeData/extras` 中转。
+   - 最新进展（2026-03-11）：已完成 MBTI 编辑态回填一致化与 personality 清洗；已完成编辑器输入框与基础信息模块样式统一。
    - 本周待收口：
-     - 字段唯一归属（同一值不重复落多个字段）；
-     - 字段一致性巡检（编辑态 -> 存储 -> 展示）；
-     - 派生数据防回灌与历史脏数据兼容清理。
+     - 字段唯一归属全链路去重（同一值不重复落多字段）；
+     - 历史脏数据兼容清理与派生数据防回灌；
+     - 补齐“编辑态 -> 存储 -> 展示”回归脚本。
 3. 清理旧步骤语义债务（兼容收口）：
-   - 面试内核继续下线恢复层 `jd_input` 兼容分支（渲染层已完成收口），统一 `interview_scene`。
-   - 诊断链路移除 `resume_select` 死分支与冗余路由映射。
+   - 已完成：面试恢复层下线 legacy `jd_input` 分支并统一 `interview_scene`（`f49fd12`）。
+   - 已完成：诊断链路移除 `resume_select` 冗余恢复路径（`5f5914c`）。
+   - 后续：仅保留最小只读兼容与灰度观测。
 4. 统一 Step3 字段语义：
-   - 当前进度：前端 UI/校验、诊断持久化层、诊断会话快照、本地恢复、步骤 checkpoint、结果快照构建与复用快照口径已统一到“目标岗位必填 + 写入 targetRole”；测试阶段已停止诊断链 `targetCompany` 回退。
-   - 待完成：将内部 `targetCompany` 语义化为 `targetRole`（含前后端 DTO、持久化字段与测试）。
+   - 已完成：前端 UI/校验、诊断持久化层、诊断会话快照、本地恢复、步骤 checkpoint、结果快照构建与复用快照口径统一到“目标岗位必填 + 写入 targetRole”。
+   - 已完成：`targetCompany -> targetRole` 前后端命名迁移（含相关测试）主链路收口（`83ee0bd`）。
+   - 后续：旧命名仅保留只读兼容，不再新增写入。
 5. 增补自动化覆盖：
    - 已完成：`scripts/test-online.ps1` 已增加面试 `resume_select -> interview_scene` 分支断言（`/ai-interview` 可达、生成简历可选、场景页与面试类型控件可见）。
    - 已完成：上传融合链路已补第一条关键断言（`AI解析` 后追问出现，清空输入后追问仍保持可见，提交按钮按门禁禁用）。
@@ -763,7 +784,7 @@
 7. 派生数据策略收口（后端/数据层）：
    - `factItems/atomicTags` 仅保留兼容读写与派生用途，不新增治理能力开发。
    - 写入链路保持“主字段优先、派生不反写主字段”，并保留最小观测日志用于排障。
-8. 画像总结页编辑策略收口（进行中）：
+8. 画像总结页编辑策略收口（持续收口）：
    - “关键确认”模块已删除，统一走结构编辑器。
    - 新增规则：若总结区内容包含其他字段拼接/推断信息，则总结区改为只读，不允许直接编辑。
    - 用户需在对应源字段修改，保存后再回流到总结展示。
@@ -803,18 +824,12 @@
 1. 画像字段单一映射稳定性收口：
    - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/career-profile/summary-display-logic.ts`、`ai-resume-builder/components/screens/career-profile/career-profile-editor-draft.ts`
    - 缺口：字段一致性巡检（编辑态 -> 存储 -> 展示）、字段唯一归属去重（同一值不重复落多字段）、总结区派生内容只读守卫、历史脏数据兼容、派生数据回灌防护。
-2. 诊断/面试旧语义兼容收口：
-   - 模块：`ai-resume-builder/components/screens/ai-analysis/hooks/useInterviewSessionRecovery.ts`、`ai-resume-builder/components/screens/ai-analysis/hooks/useResumeSelection.ts`、`ai-resume-builder/components/screens/ai-analysis/step-renderer.tsx`
-   - 缺口：进一步下线 legacy `jd_input` 恢复分支与诊断链 `resume_select` 冗余路径。
-3. Step3 `targetCompany -> targetRole` 命名债务彻底迁移：
-   - 模块：`ai-resume-builder/components/screens/ai-analysis/**/*`、`ai-resume-builder/src/**/*analysis*`、`backend/routes/ai_routes.py`（及相关 DTO/测试）
-   - 缺口：内部状态/DTO/持久化字段统一改名并补回归测试。
-4. 历史会话恢复端到端回归补齐：
+2. 历史会话恢复端到端回归补齐：
    - 脚本：`scripts/test-online.ps1`（GuidedFlow UI smoke 扩展）
    - 缺口：补“历史会话恢复自动落到 `interview_scene`”线上 e2e 断言。
-5. 画像主字段入库校验与观测：
-   - 模块：`backend/routes/ai_routes.py`、`backend/services/*career_profile*`（若拆分）
-   - 缺口：主字段 JSON Schema 校验 + 失败日志（字段路径/原因）+ 不覆盖旧画像。
+3. 画像主字段入库校验观测补齐：
+   - 模块：`backend/services/payload_sanitizer.py`、`backend/tests/test_career_profile_service.py`、相关日志/观测接线
+   - 缺口：在已上线主字段写入校验基础上，补失败日志字段路径与灰度监控看板。
 
 **近期已收口（从 P0 移出，2026-03-09）**
 1. JD 上下文复用误命中：
@@ -826,6 +841,23 @@
 3. JD 定向链路自动化回归：
    - 已完成：补齐后端 JD 定向提示词/关键词对齐相关测试。
    - 相关提交：`bb91310`。
+
+**近期已收口（从 P0/P1 移出，2026-03-11）**
+1. CareerProfileResult 导航条恢复与图标一致化：
+   - 已完成：恢复 icon-only 导航、区分导航条与页头层级、统一图标与锚点 id 口径。
+   - 相关提交：`3427ab5`、`45aac4e`、`ab7bd1d`。
+2. P0/P1/P2 UI 优化项（结果页与主流程文案）串联收口：
+   - 已完成：状态反馈、CTA 语义、信息密度与文案中性化优化。
+   - 相关提交：`6430a83`、`a849d3b`、`c1e6aa3`、`e55ffa1`、`115df8d`。
+3. 编辑器输入框样式统一 + 基础信息模块样式统一：
+   - 已完成：输入控件统一卡片风格，基础信息模块按“无底色 + 样式一致”收口。
+   - 相关提交：`f076ea0`、`f6d6211`、`599c596`、`9a9796f`。
+4. MBTI 编辑态回填一致化与 personality 清洗：
+   - 已完成：MBTI hydration 统一与清洗逻辑上线，并补齐回归测试。
+   - 相关提交：`2e86e37`。
+5. 旧语义兼容债务主链路收口：
+   - 已完成：下线 `jd_input` legacy 恢复分支、移除诊断 `resume_select` 冗余路径、完成 `targetRole` 迁移。
+   - 相关提交：`f49fd12`、`5f5914c`、`83ee0bd`。
 
 **P1（随后一周）**
 1. Step2 定向追问卡片产品化：
@@ -853,6 +885,14 @@
 1. 先过本地：`pwsh -File scripts/test-local.ps1 -SkipInstall`。
 2. 再过在线：`pwsh -File scripts/test-online.ps1 -FrontendUrl <url> -BackendUrl <url> -RunAiMainflowApiSmoke -RunGuidedFlowUiSmoke`。
 3. 最后按 smoke 清单补齐手工证据：低匹配、多 JD 回访、旧会话迁移、上传策略改造。
+
+### 10.5 本周精简行动清单（2026-03-11）
+
+1. 补齐“历史会话恢复 -> 自动落到 `interview_scene`”线上 e2e 断言并纳入 `RunGuidedFlowUiSmoke`。
+2. 对画像主字段写入校验补失败日志字段路径与灰度观测面板。
+3. 补齐字段一致性回归：`MBTI/人格`、基础信息、求职意向三组高频字段。
+4. 完成 Step2 定向追问卡片产品化（交互定稿 + 回归用例）。
+5. 完成 Step5 精修产品化收口（选区改写 + 事实边界提示 + 一致性回写）。
 
 ---
 
