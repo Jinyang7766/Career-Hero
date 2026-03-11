@@ -355,7 +355,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
 
   const renderResumeList = (resumes: typeof filteredResumes) => (
     <div className="px-4 mt-1">
-      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5 overflow-hidden">
+      <div className="bg-white dark:bg-surface-dark rounded-2xl shadow-sm border border-slate-200/60 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
         {resumes.map((resume, index) => {
           const isSelected = selectedIds.has(resume.id);
           return (
@@ -378,7 +378,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
                   toggleSelection(resume.id);
                 }
               }}
-              className={`group relative flex items-center gap-4 px-4 py-4 transition-all cursor-pointer select-none ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50/80 dark:hover:bg-white/[0.02]'}`}
+              className={`group relative flex items-center gap-4 px-4 py-4 transition-all cursor-pointer select-none first:rounded-t-2xl last:rounded-b-2xl ${activeMenuId === resume.id ? 'z-10' : 'z-0'} ${isLoadingResume === resume.id ? 'opacity-50 pointer-events-none' : ''} ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : 'hover:bg-slate-50/80 dark:hover:bg-white/[0.02]'}`}
             >
               {isSelectionMode ? (
                 <div className={`shrink-0 flex items-center justify-center size-10 rounded-full transition-colors ${isSelected ? 'text-primary' : 'text-slate-300 dark:text-slate-600'}`}>
