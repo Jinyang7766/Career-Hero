@@ -286,7 +286,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
           setSwipeFeedback('已切换问题');
         }
       } else if (nextAnswer) {
-        setSwipeFeedback('回答已保存');
+        setSwipeFeedback('回答已保存，可一键生成画像');
       }
     },
     [activePrompt, activeIndex, draftByPromptId, total]
@@ -416,6 +416,7 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
         ) : (
           <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接点击下方按钮生成职业画像。</p>
           </div>
         )}
 
