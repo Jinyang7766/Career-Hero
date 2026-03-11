@@ -102,6 +102,34 @@ def test_organize_career_profile_returns_fallback_profile_when_ai_disabled():
     assert isinstance(profile.get('experiences'), list) and profile.get('experiences')
 
 
+def test_organize_career_profile_keeps_personal_info_as_object_for_schema_compatibility():
+    parsed = {
+        'summary': '候选人有增长与数据分析经验。',
+        'experiences': [
+            {
+                'title': '增长运营',
+                'actions': '负责实验与复盘',
+            }
+        ],
+        'personalInfo': None,
+    }
+
+    body, status = organize_career_profile_core(
+        current_user_id='u1',
+        data={
+            'rawExperienceText': (
+                '2022-2024 在某消费品公司负责电商增长。'
+                '主导A/B实验和CRM分层触达，复购率明显提升。'
+            ),
+        },
+        deps=_deps_ai_enabled(parsed),
+    )
+
+    assert status == 200
+    profile = body.get('profile') or {}
+    assert isinstance(profile.get('personalInfo'), dict)
+
+
 def test_organize_career_profile_accepts_valid_fact_items_from_ai_payload():
     parsed = {
         'summary': '候选人有增长与数据分析经验。',
@@ -329,6 +357,9 @@ def test_clean_resume_payload_fallbacks_fact_items_to_existing_profile_when_inva
         and err_item.get('error_type') == 'invalid_enum'
         for err_item in errors
     )
+    assert extra.get('validation_error_count') == 1
+    assert extra.get('validation_error_paths') == ['resumeData.careerProfile.factItems[0].kind']
+    assert extra.get('validation_error_types') == ['invalid_enum']
 
 
 def test_clean_resume_payload_accepts_valid_career_profile_main_fields_for_write():

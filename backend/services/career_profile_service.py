@@ -2,7 +2,10 @@ import json
 import re
 from datetime import datetime, timezone
 
-from .payload_sanitizer import resolve_fact_items_with_fallback
+from .payload_sanitizer import (
+    resolve_fact_items_with_fallback,
+    validate_career_profile_main_fields,
+)
 from .skill_cleanup_service import clean_skill_list
 
 
@@ -204,6 +207,52 @@ def _first_non_empty(*values):
         if text:
             return text
     return ''
+
+
+def _build_validation_error_observability(errors):
+    paths = sorted(
+        {
+            str(item.get('path') or '').strip()
+            for item in (errors or [])
+            if str(item.get('path') or '').strip()
+        }
+    )
+    types = sorted(
+        {
+            str(item.get('error_type') or '').strip()
+            for item in (errors or [])
+            if str(item.get('error_type') or '').strip()
+        }
+    )
+    return {
+        'validation_error_count': len(errors or []),
+        'validation_error_paths': paths,
+        'validation_error_types': types,
+    }
+
+
+def _apply_profile_main_field_guard(profile, raw_text, existing_profile=None, logger=None):
+    main_field_errors = validate_career_profile_main_fields(profile, field_path='profile')
+    if not main_field_errors:
+        return profile
+
+    existing = existing_profile if isinstance(existing_profile, dict) else {}
+    fallback_source = 'existing_profile' if existing else 'rebuild_fallback_profile'
+    if logger and hasattr(logger, 'warning'):
+        logger.warning(
+            'career_profile.main_fields.validation_failed',
+            extra={
+                'event': 'career_profile.main_fields.validation_failed',
+                'field_path': 'profile',
+                'fallback_source': fallback_source,
+                'validation_errors': main_field_errors,
+                **_build_validation_error_observability(main_field_errors),
+            },
+        )
+
+    if existing:
+        return dict(existing)
+    return _build_fallback_profile(raw_text, existing_profile=existing, logger=logger)
 
 
 def _extract_personal_info_from_text(raw_text):
@@ -459,7 +508,7 @@ def _build_fallback_profile(raw_text, existing_profile=None, logger=None):
         'experiences': experiences,
         'educations': [],
         'projects': [],
-        'personalInfo': personal_info,
+        'personalInfo': personal_info or {},
         'rawInput': _compact_text(raw_text, 2000),
     }
 
@@ -575,7 +624,7 @@ def _sanitize_profile(raw_profile, raw_text, existing_profile=None, logger=None)
         'experiences': experiences,
         'educations': educations,
         'projects': projects,
-        'personalInfo': personal_info,
+        'personalInfo': personal_info or {},
         'rawInput': _compact_text(raw_text, 2000),
     }
 
@@ -695,9 +744,15 @@ def organize_career_profile_core(current_user_id, data, deps):
         )
         parsed = deps['parse_ai_response'](response.text)
         profile = _sanitize_profile(parsed, raw_text, existing_profile=existing_profile, logger=logger)
+        guarded_profile = _apply_profile_main_field_guard(
+            profile,
+            raw_text,
+            existing_profile=existing_profile,
+            logger=logger,
+        )
         return {
             'success': True,
-            'profile': profile,
+            'profile': guarded_profile,
             'analysis_model': used_model,
         }, 200
     except Exception as err:

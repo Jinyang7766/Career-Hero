@@ -237,6 +237,28 @@ def _error(path: str, error_type: str, detail: str) -> Dict[str, str]:
     }
 
 
+def _build_validation_error_observability(errors: List[Dict[str, str]]) -> Dict[str, Any]:
+    failed_paths = sorted(
+        {
+            str(item.get('path') or '').strip()
+            for item in errors
+            if str(item.get('path') or '').strip()
+        }
+    )
+    failed_error_types = sorted(
+        {
+            str(item.get('error_type') or '').strip()
+            for item in errors
+            if str(item.get('error_type') or '').strip()
+        }
+    )
+    return {
+        'validation_error_count': len(errors),
+        'validation_error_paths': failed_paths,
+        'validation_error_types': failed_error_types,
+    }
+
+
 def _clean_fact_kind(value: Any) -> str:
     kind = clean_string(value, 32).lower()
     return kind if kind in FACT_ITEM_KINDS else ''
@@ -358,6 +380,7 @@ def resolve_fact_items_with_fallback(
                     'field_path': field_path,
                     'fallback_source': source,
                     'validation_errors': incoming_errors,
+                    **_build_validation_error_observability(incoming_errors),
                 },
             )
 
@@ -404,20 +427,6 @@ def clean_career_profile_payload(
     main_field_errors = validate_career_profile_main_fields(profile, field_path=field_path)
     if main_field_errors:
         fallback_source = 'existing_profile' if existing else 'empty_value'
-        failed_paths = sorted(
-            {
-                str(item.get('path') or '').strip()
-                for item in main_field_errors
-                if str(item.get('path') or '').strip()
-            }
-        )
-        failed_error_types = sorted(
-            {
-                str(item.get('error_type') or '').strip()
-                for item in main_field_errors
-                if str(item.get('error_type') or '').strip()
-            }
-        )
         if logger and hasattr(logger, 'warning'):
             logger.warning(
                 'career_profile.main_fields.validation_failed',
@@ -426,9 +435,7 @@ def clean_career_profile_payload(
                     'field_path': field_path,
                     'fallback_source': fallback_source,
                     'validation_errors': main_field_errors,
-                    'validation_error_count': len(main_field_errors),
-                    'validation_error_paths': failed_paths,
-                    'validation_error_types': failed_error_types,
+                    **_build_validation_error_observability(main_field_errors),
                 },
             )
         return dict(existing) if existing else None
