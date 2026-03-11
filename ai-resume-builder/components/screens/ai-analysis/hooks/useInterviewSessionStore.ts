@@ -169,13 +169,41 @@ export const useInterviewSessionStore = ({
     if (!isInterviewMode && chatMode === 'analysis') return null;
     const entries = Object.values(byJd || {}) as any[];
     if (!entries.length) return null;
+
     const filtered = entries.filter((item: any) => {
       const itemType = normalizeInterviewType(item?.interviewType || parseInterviewScopedKey(String(item?.sessionKey || '')).interviewType || '');
       const itemChatMode = String(item?.chatMode || '').trim().toLowerCase();
       return itemType === interviewType && itemChatMode === chatMode && isSessionAnalysisModeMatched(item, chatMode);
     });
-    const source = filtered.length ? filtered : entries;
-    return pickLatestByUpdatedAt(source as any[]) as any;
+    if (!filtered.length) return null;
+    if (!isInterviewMode) {
+      return pickLatestByUpdatedAt(filtered as any[]) as any;
+    }
+
+    const expectedTargetCompany = normalizeSceneText(
+      targetCompany || currentResumeData?.targetRole || currentResumeData?.targetCompany || ''
+    );
+    const expectedInterviewFocus = getCurrentInterviewFocus();
+    const expectedResumeId = String((currentResumeData as any)?.id || '').trim();
+
+    const strictSceneMatched = filtered.filter((item: any) => isSessionSceneMatched({
+      session: item,
+      expectedChatMode: chatMode,
+      expectedTargetCompany,
+      expectedInterviewFocus,
+      expectedResumeId,
+    }));
+    if (strictSceneMatched.length) {
+      return pickLatestByUpdatedAt(strictSceneMatched as any[]) as any;
+    }
+
+    const relaxedResumeMatched = filtered.filter((item: any) => {
+      const itemResumeId = String(item?.resumeId || '').trim();
+      if (!expectedResumeId) return true;
+      return !itemResumeId || itemResumeId === expectedResumeId;
+    });
+    if (!relaxedResumeMatched.length) return null;
+    return pickLatestByUpdatedAt(relaxedResumeMatched as any[]) as any;
   };
 
   const persistAnalysisSessionState = async (

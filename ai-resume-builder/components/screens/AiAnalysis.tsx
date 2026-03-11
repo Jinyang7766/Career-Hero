@@ -681,24 +681,38 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
       ''
     ).trim();
 
+    const baseResume = (resumeData as any) || {};
+    const generatedResumeData = (generatedResume as any) || {};
+    const restoredJdText =
+      String(generatedResumeData?.lastJdText || '').trim() ||
+      String(jdText || '').trim() ||
+      String(baseResume?.lastJdText || '').trim();
+    const restoredTargetRole =
+      String(generatedResumeData?.targetRole || generatedResumeData?.targetCompany || '').trim() ||
+      String(targetCompany || '').trim() ||
+      String(baseResume?.targetRole || baseResume?.targetCompany || '').trim();
+
     const nextPreviewResume: ResumeData = {
+      ...(baseResume as ResumeData),
       ...(generatedResume as ResumeData),
+      id: generatedResumeData?.id || baseResume?.id,
       resumeTitle:
-        String((generatedResume as any)?.resumeTitle || '').trim() ||
-        String((resumeData as any)?.resumeTitle || '').trim() ||
+        String(generatedResumeData?.resumeTitle || '').trim() ||
+        String(baseResume?.resumeTitle || '').trim() ||
         'AI 生成简历',
       templateId:
-        (generatedResume as any)?.templateId ||
-        (resumeData as any)?.templateId ||
+        generatedResumeData?.templateId ||
+        baseResume?.templateId ||
         'modern',
-      lastJdText:
-        String((generatedResume as any)?.lastJdText || '').trim() ||
-        String(jdText || '').trim() ||
-        String((resumeData as any)?.lastJdText || '').trim(),
-      targetCompany:
-        String((generatedResume as any)?.targetCompany || '').trim() ||
-        String(targetCompany || '').trim() ||
-        String((resumeData as any)?.targetCompany || '').trim(),
+      lastJdText: restoredJdText,
+      targetCompany: '',
+      targetRole: restoredTargetRole,
+      analysisMode: generatedResumeData?.analysisMode || baseResume?.analysisMode,
+      analysisSessionByJd: generatedResumeData?.analysisSessionByJd || baseResume?.analysisSessionByJd || {},
+      interviewSessions: generatedResumeData?.interviewSessions || baseResume?.interviewSessions || {},
+      analysisBindings: generatedResumeData?.analysisBindings || baseResume?.analysisBindings || {},
+      analysisSnapshot: generatedResumeData?.analysisSnapshot || baseResume?.analysisSnapshot || null,
+      interviewFocus: String(generatedResumeData?.interviewFocus || baseResume?.interviewFocus || '').trim(),
       ...(sourceResumeIdValue ? { optimizedFromId: sourceResumeIdValue } : {}),
       ...(optimizedResumeIdValue ? { optimizedResumeId: optimizedResumeIdValue } : {}),
     };
