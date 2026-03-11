@@ -52,6 +52,8 @@ import {
 import { renderAiAnalysisStep } from './ai-analysis/step-renderer';
 import type { AiAnalysisStep } from './ai-analysis/step-types';
 import { buildAiAnalysisRenderProps } from './ai-analysis/build-ai-analysis-render-props';
+import { extractReusableAnalysisSnapshotForJd } from './ai-analysis/analysis-reuse';
+import { getLowMatchRiskDescriptor } from './ai-analysis/low-match-risk';
 import { hasMeaningfulResumeData } from './preview/hooks/usePreviewRestore';
 import { writePreviewBackTarget, writePreviewResumeId } from './preview/preview-storage';
 import {
@@ -737,6 +739,51 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     targetCompany,
   ]);
 
+  const latestTargetedRisk = React.useMemo(() => {
+    if (isInterviewMode) return null;
+    if (analysisMode !== 'targeted') return null;
+
+    const reusableSnapshot = extractReusableAnalysisSnapshotForJd({
+      resumeData,
+      jdText,
+      targetCompany,
+      analysisMode,
+    });
+    if (!reusableSnapshot) return null;
+
+    return {
+      score: reusableSnapshot.score,
+      descriptor: getLowMatchRiskDescriptor(reusableSnapshot.score),
+    };
+  }, [analysisMode, isInterviewMode, jdText, resumeData, targetCompany]);
+
+  const handleSwitchToGenericQuickPath = React.useCallback(() => {
+    if (isInterviewMode) return;
+    setAnalysisMode('generic');
+    setJdText('');
+    suppressDiagnosisSessionRecoveryRef.current = true;
+    navigateToStep('jd_input', true);
+    persistAnalysisSessionState('jd_ready', {
+      jdText: '',
+      targetCompany: String(targetCompany || '').trim(),
+      targetRole: String(targetCompany || '').trim(),
+      analysisMode: 'generic',
+      step: 'jd_input',
+      force: true,
+    }).catch((stateErr) => {
+      console.warn('Failed to persist generic quick-path state:', stateErr);
+    });
+    showToast('已切换到通用优化，可直接重新开始诊断。', 'success', 2200);
+  }, [
+    isInterviewMode,
+    navigateToStep,
+    persistAnalysisSessionState,
+    setAnalysisMode,
+    setJdText,
+    showToast,
+    targetCompany,
+  ]);
+
   React.useEffect(() => {
     if (isInterviewMode) return;
     if (currentStep === 'chat' && suppressDiagnosisChatNormalizationRef.current) {
@@ -794,6 +841,9 @@ const AiAnalysis: React.FC<ScreenProps> = ({ isInterviewMode }) => {
     setJdText,
     analysisMode,
     setAnalysisMode,
+    latestRiskDescriptor: latestTargetedRisk?.descriptor || null,
+    latestRiskScore: latestTargetedRisk?.score ?? null,
+    onSwitchToGeneric: handleSwitchToGenericQuickPath,
     isUploading,
     handleScreenshotUpload,
     handleStepBack,

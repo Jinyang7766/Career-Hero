@@ -3,6 +3,8 @@ import AiDisclaimer from '../AiDisclaimer';
 import BackButton from '../../../shared/BackButton';
 import ReportFeedback from '../ReportFeedback';
 import { buildActionableAdvice } from './final-report-advice';
+import type { AnalysisMode } from '../analysis-mode';
+import { getLowMatchRiskDescriptor } from '../low-match-risk';
 
 type Props = {
   score: number;
@@ -13,6 +15,8 @@ type Props = {
   onStartInterview: () => void;
   onViewResume: () => void;
   getScoreColor: (s: number) => string;
+  analysisMode?: AnalysisMode;
+  onSwitchToGeneric?: () => void;
   onFeedback?: (rating: 'up' | 'down', reason?: string) => Promise<boolean> | boolean;
 };
 
@@ -25,9 +29,18 @@ const FinalResumeReportPage: React.FC<Props> = ({
   onStartInterview,
   onViewResume,
   getScoreColor,
+  analysisMode,
+  onSwitchToGeneric,
   onFeedback,
 }) => {
   const candidateAdvice = React.useMemo(() => buildActionableAdvice(advice), [advice]);
+  const lowMatchRisk = React.useMemo(() => getLowMatchRiskDescriptor(score), [score]);
+  const riskBadgeClass = lowMatchRisk.level === 'high'
+    ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200'
+    : lowMatchRisk.level === 'medium'
+      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200'
+      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200';
+  const canSwitchToGeneric = analysisMode === 'targeted' && (lowMatchRisk.level === 'high' || lowMatchRisk.level === 'medium');
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
@@ -48,6 +61,26 @@ const FinalResumeReportPage: React.FC<Props> = ({
             {Math.round(score)}
             <span className="text-2xl text-slate-300 dark:text-slate-600 font-normal ml-1">/100</span>
           </div>
+        </div>
+
+        <div className="bg-white dark:bg-surface-dark rounded-2xl p-5 border border-slate-200/60 dark:border-white/5 shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-[13px] font-black text-slate-800 dark:text-slate-200 uppercase tracking-wider">低匹配风险等级</h3>
+            <span className={`px-2.5 py-1 rounded-full text-xs font-black ${riskBadgeClass}`}>
+              {lowMatchRisk.label} / {lowMatchRisk.labelZh}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{lowMatchRisk.hint}</p>
+          {canSwitchToGeneric && onSwitchToGeneric && (
+            <button
+              type="button"
+              onClick={onSwitchToGeneric}
+              className="mt-3 inline-flex items-center gap-1 rounded-lg border border-primary/30 px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+              转为通用优化（generic）
+            </button>
+          )}
         </div>
 
         <div className="bg-blue-50/50 dark:bg-primary/5 rounded-2xl p-5 border border-blue-100 dark:border-primary/20">

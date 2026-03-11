@@ -10,6 +10,7 @@ import FinalAnalysisLoadingPage from './pages/FinalAnalysisLoadingPage';
 import InterviewReportLoadingPage from './pages/InterviewReportLoadingPage';
 import type { AiAnalysisStep } from './step-types';
 import type { AnalysisMode } from './analysis-mode';
+import type { LowMatchRiskDescriptor } from './low-match-risk';
 
 type Params = {
   currentStep: AiAnalysisStep;
@@ -37,6 +38,9 @@ type Params = {
   setJdText: (v: string) => void;
   analysisMode: AnalysisMode;
   setAnalysisMode: (mode: AnalysisMode) => void;
+  latestRiskDescriptor?: LowMatchRiskDescriptor | null;
+  latestRiskScore?: number | null;
+  onSwitchToGeneric?: () => void;
   isUploading: boolean;
   handleScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void | Promise<void>;
   handleStepBack: () => void;
@@ -172,6 +176,9 @@ export const renderAiAnalysisStep = (p: Params) => {
         setJdText={p.setJdText}
         analysisMode={p.analysisMode}
         setAnalysisMode={p.setAnalysisMode}
+        latestRiskDescriptor={p.latestRiskDescriptor}
+        latestRiskScore={p.latestRiskScore}
+        onSwitchToGeneric={p.onSwitchToGeneric}
         isUploading={p.isUploading}
         onScreenshotUpload={p.handleScreenshotUpload}
         onBack={p.handleStepBack}
@@ -195,6 +202,8 @@ export const renderAiAnalysisStep = (p: Params) => {
           summary={p.finalReportSummary}
           advice={p.finalReportAdvice}
           getScoreColor={p.getScoreColor}
+          analysisMode={p.analysisMode}
+          onSwitchToGeneric={p.onSwitchToGeneric}
           onBack={p.handleFinalReportBack}
           onBackToJdInput={p.handleBackToJdInputFromFinalReport}
           onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
@@ -302,6 +311,8 @@ export const renderAiAnalysisStep = (p: Params) => {
         summary={p.finalReportSummary}
         advice={p.finalReportAdvice}
         getScoreColor={p.getScoreColor}
+        analysisMode={p.analysisMode}
+        onSwitchToGeneric={p.onSwitchToGeneric}
         onBack={p.handleFinalReportBack}
         onBackToJdInput={p.handleBackToJdInputFromFinalReport}
         onStartInterview={() => { void p.handleStartInterviewFromFinalReport(); }}
@@ -323,6 +334,9 @@ export const renderAiAnalysisStep = (p: Params) => {
         setJdText={p.setJdText}
         analysisMode={p.analysisMode}
         setAnalysisMode={p.setAnalysisMode}
+        latestRiskDescriptor={p.latestRiskDescriptor}
+        latestRiskScore={p.latestRiskScore}
+        onSwitchToGeneric={p.onSwitchToGeneric}
         isUploading={p.isUploading}
         onScreenshotUpload={p.handleScreenshotUpload}
         onBack={p.handleStepBack}

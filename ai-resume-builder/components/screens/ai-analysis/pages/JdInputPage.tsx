@@ -15,6 +15,7 @@ import {
   shouldShowJdSection,
 } from '../step3-ui';
 import AutoGrowTextarea from '../../../editor/AutoGrowTextarea';
+import type { LowMatchRiskDescriptor } from '../low-match-risk';
 
 
 export type JdInputPageProps = {
@@ -26,6 +27,9 @@ export type JdInputPageProps = {
   setJdText: (v: string) => void;
   analysisMode: AnalysisMode;
   setAnalysisMode: (mode: AnalysisMode) => void;
+  latestRiskDescriptor?: LowMatchRiskDescriptor | null;
+  latestRiskScore?: number | null;
+  onSwitchToGeneric?: () => void;
 
   isUploading: boolean;
   onScreenshotUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -49,6 +53,9 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   setJdText,
   analysisMode,
   setAnalysisMode,
+  latestRiskDescriptor,
+  latestRiskScore,
+  onSwitchToGeneric,
   isUploading,
   onScreenshotUpload,
   onBack,
@@ -94,6 +101,14 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
   const shouldBlockStep3Start = shouldBlockTargetRoleStart || shouldBlockTargetedStart;
 
   const startButtonLabel = `开启${getAnalysisModeLabel(analysisMode)}（${USAGE_POINT_COST.analysis}积分）`;
+  const latestRiskScoreLabel = Number.isFinite(Number(latestRiskScore))
+    ? Math.max(0, Math.min(100, Math.round(Number(latestRiskScore))))
+    : null;
+  const latestRiskBadgeClass = latestRiskDescriptor?.level === 'high'
+    ? 'bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-200'
+    : latestRiskDescriptor?.level === 'medium'
+      ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-200'
+      : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-200';
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark">
@@ -148,6 +163,43 @@ const JdInputPage: React.FC<JdInputPageProps> = ({
             </div>
 
           </div>
+
+          {analysisMode === 'targeted' && latestRiskDescriptor && (
+            <div className="mb-4 rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 p-3.5">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-xs font-black tracking-wide text-slate-700 dark:text-slate-200">
+                  低匹配风险等级（最近同 JD）
+                </p>
+                <span className={`px-2 py-0.5 rounded-full text-[11px] font-black ${latestRiskBadgeClass}`}>
+                  {latestRiskDescriptor.label} / {latestRiskDescriptor.labelZh}
+                </span>
+              </div>
+              {latestRiskScoreLabel !== null && (
+                <p className="mt-2 text-xs text-slate-600 dark:text-slate-300">
+                  最近一次匹配分：{latestRiskScoreLabel}/100
+                </p>
+              )}
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                {latestRiskDescriptor.hint}
+              </p>
+              {(latestRiskDescriptor.level === 'high' || latestRiskDescriptor.level === 'medium') && onSwitchToGeneric && (
+                <button
+                  type="button"
+                  onClick={onSwitchToGeneric}
+                  className="mt-3 inline-flex items-center gap-1 rounded-lg border border-primary/30 px-2.5 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+                  转为通用优化（generic）
+                </button>
+              )}
+            </div>
+          )}
+
+          {analysisMode === 'targeted' && !latestRiskDescriptor && (
+            <p className="mb-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+              完成诊断后将展示低匹配风险等级（Low / Medium / High），帮助你快速判断是否应切换通用优化。
+            </p>
+          )}
 
           <div className="mb-4">
             <label className="text-[11px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-3">
