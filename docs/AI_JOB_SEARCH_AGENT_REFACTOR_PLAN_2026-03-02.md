@@ -834,16 +834,14 @@
 
 ### 10.2.1 计划书剩余未完成清单（按模块/文件）
 
-**P0（当前仍未完成）**
+**P0（本轮已收口，2026-03-12）**
 1. 画像字段单一映射稳定性收口：
-   - 模块：`ai-resume-builder/components/screens/career-profile/CareerProfileStructuredEditor.tsx`、`ai-resume-builder/components/screens/career-profile/summary-display-logic.ts`、`ai-resume-builder/components/screens/career-profile/career-profile-editor-draft.ts`
-   - 缺口：字段一致性巡检（编辑态 -> 存储 -> 展示）、字段唯一归属去重（同一值不重复落多字段）、总结区派生内容只读守卫、历史脏数据兼容、派生数据回灌防护。
+   - 已完成：补齐 MBTI/人格、求职意向、同值去重、派生不反写主字段回归用例（编辑态 -> 存储 -> 展示链路）。
 2. 历史会话恢复端到端回归补齐：
-   - 脚本：`scripts/test-online.ps1`（GuidedFlow UI smoke 扩展）
-   - 缺口：补“历史会话恢复自动落到 `interview_scene`”线上 e2e 断言。
+   - 已完成：`scripts/test-online.ps1 -RunGuidedFlowUiSmoke` 自动包含 legacy `jd_input -> interview_scene` 线上断言。
 3. 画像主字段入库校验观测补齐：
-   - 模块：日志平台/看板接线（基于 `backend/services/payload_sanitizer.py` 已输出的稳定校验字段）。
-   - 缺口：补灰度监控看板与告警阈值。
+   - 已完成（代码侧）：补统一观测字段 + 告警阈值配置；并新增外部平台接线 runbook。
+   - 待外部平台执行：按 runbook 完成日志索引、看板与告警规则上线。
 
 **近期已收口（从 P0 移出，2026-03-09）**
 1. JD 上下文复用误命中：
@@ -913,9 +911,9 @@
 
 ### 10.5 本周精简行动清单（2026-03-11）
 
-1. 补齐“历史会话恢复 -> 自动落到 `interview_scene`”线上 e2e 断言并纳入 `RunGuidedFlowUiSmoke`。
-2. 对画像主字段写入校验补灰度观测面板与告警阈值（日志字段路径已在 v6.27 补齐）。
-3. 补齐字段一致性回归：`MBTI/人格`、基础信息、求职意向三组高频字段。
+1. （已完成）历史会话恢复线上 e2e：`RunGuidedFlowUiSmoke` 已内置 `jd_input -> interview_scene` 断言。
+2. （代码侧已完成）主字段校验灰度观测：新增统一观测字段、阈值配置与接线 runbook。
+3. （已完成）字段一致性回归补齐：`MBTI/人格`、求职意向、同值去重、派生不反写主字段。
 4. （已完成）Step2 定向追问卡片产品化（`19ce78c`）。
 5. （已完成）Step5 精修产品化收口（`e8b3b5e`）。
 6. （已完成）低匹配策略第一阶段：风险等级 + generic 快捷路径（`256651e`）。

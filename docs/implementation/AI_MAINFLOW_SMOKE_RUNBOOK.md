@@ -53,8 +53,8 @@ pwsh -File scripts/test-online.ps1 `
 
 说明：
 - `-RunGuidedFlowUiSmoke` 未执行时，UI 门禁 smoke 不得计为 PASS。
-- 如需补跑“旧 `jd_input` 会话恢复后应归一到 `interview_scene`”回归，可追加 `-RunLegacyJdInputMigrationUiSmoke`。
-- 该脚本当前自动断言的是“入口可达 + 路由不被错误重定向”，不是完整 GuidedFlow 强门禁回归。
+- 从 v6.28 起，`-RunGuidedFlowUiSmoke` 会自动包含“旧 `jd_input` 会话恢复后归一到 `interview_scene`”线上回归断言。
+- 该脚本当前自动断言覆盖：入口可达 + 路由不被错误重定向 + 历史面试会话 `jd_input -> interview_scene` 恢复归一。
 
 ### 2.3 一键步骤门禁（本地 + 在线）
 
