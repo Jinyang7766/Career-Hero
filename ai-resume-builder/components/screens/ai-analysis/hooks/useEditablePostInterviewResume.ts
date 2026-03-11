@@ -103,6 +103,43 @@ export const useEditablePostInterviewResume = ({
     });
   };
 
+  const applyGeneratedSelectionRewrite = ({
+    section,
+    index,
+    rangeStart,
+    rangeEnd,
+    replacement,
+  }: {
+    section: 'workExps' | 'projects';
+    index: number;
+    rangeStart: number;
+    rangeEnd: number;
+    replacement: string;
+  }): boolean => {
+    let didApply = false;
+    setEditableGeneratedResume((prev) => {
+      if (!prev) return prev;
+      const list = Array.isArray((prev as any)[section]) ? [...(((prev as any)[section]) as any[])] : [];
+      if (!list[index]) return prev;
+      const current = String(list[index]?.description || '');
+      const start = Number.isFinite(rangeStart) ? Math.max(0, Math.floor(rangeStart)) : 0;
+      const end = Number.isFinite(rangeEnd) ? Math.max(start, Math.floor(rangeEnd)) : start;
+      if (start >= current.length || end <= start) return prev;
+      const nextDescription = `${current.slice(0, start)}${String(replacement || '')}${current.slice(end)}`;
+      if (nextDescription === current) return prev;
+      list[index] = {
+        ...list[index],
+        description: nextDescription,
+      };
+      didApply = true;
+      return {
+        ...(prev as any),
+        [section]: list,
+      } as ResumeData;
+    });
+    return didApply;
+  };
+
   const getDisplayDate = (item: any) => {
     return formatTimeline(item);
   };
@@ -117,6 +154,7 @@ export const useEditablePostInterviewResume = ({
     updateGeneratedWorkField,
     updateGeneratedProjectField,
     updateGeneratedEducationField,
+    applyGeneratedSelectionRewrite,
     getDisplayDate,
   };
 };

@@ -41,6 +41,32 @@ export const resolvePostInterviewSaveResult = (saveSucceeded: boolean) => ({
   shouldNavigateImmediately: false,
 });
 
+export const SELECTION_REWRITE_MAX_CHARS = 280;
+
+export const resolveSelectionRewriteBoundaryReason = (
+  selectionText: string,
+  maxChars = SELECTION_REWRITE_MAX_CHARS
+): 'empty' | 'too_long' | null => {
+  const raw = String(selectionText || '');
+  const trimmed = raw.trim();
+  if (!trimmed) return 'empty';
+  if (trimmed.length > maxChars) return 'too_long';
+  return null;
+};
+
+export const applySelectionRewriteToText = (
+  source: string,
+  rangeStart: number,
+  rangeEnd: number,
+  replacement: string
+): string => {
+  const raw = String(source || '');
+  const start = Number.isFinite(rangeStart) ? Math.max(0, Math.floor(rangeStart)) : 0;
+  const end = Number.isFinite(rangeEnd) ? Math.max(start, Math.floor(rangeEnd)) : start;
+  if (start >= raw.length || end <= start) return raw;
+  return `${raw.slice(0, start)}${String(replacement || '')}${raw.slice(end)}`;
+};
+
 const ResumeBlock: React.FC<{ title: string; children: React.ReactNode }> = ({ title, children }) => (
   <div className="rounded-2xl border border-slate-200/60 dark:border-white/5 bg-white dark:bg-surface-dark p-6 shadow-sm">
     <h4 className="text-[11px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -98,6 +124,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
     updateGeneratedWorkField,
     updateGeneratedProjectField,
     updateGeneratedEducationField,
+    applyGeneratedSelectionRewrite,
     getDisplayDate,
   } = useEditablePostInterviewResume({
     generatedResume,
@@ -117,6 +144,124 @@ const PostInterviewReportPage: React.FC<Props> = ({
     () => groupAnnotationsBySection(annotations),
     [annotations]
   );
+
+  type SelectionRewriteSection = 'workExps' | 'projects';
+  type SelectionRewriteDraft = {
+    section: SelectionRewriteSection;
+    index: number;
+    start: number;
+    end: number;
+    text: string;
+  };
+
+  const [selectionRewriteDraft, setSelectionRewriteDraft] = React.useState<SelectionRewriteDraft | null>(null);
+  const [selectionRewriteMessage, setSelectionRewriteMessage] = React.useState('');
+
+  const captureSelectionRewriteFromTextarea = React.useCallback((
+    section: SelectionRewriteSection,
+    index: number,
+    target: HTMLTextAreaElement
+  ) => {
+    const start = Number(target.selectionStart ?? 0);
+    const end = Number(target.selectionEnd ?? 0);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      setSelectionRewriteDraft((prev) => {
+        if (prev && prev.section === section && prev.index === index) {
+          return null;
+        }
+        return prev;
+      });
+      return;
+    }
+    const selectedText = String(target.value || '').slice(start, end);
+    if (!selectedText.trim()) {
+      setSelectionRewriteDraft(null);
+      return;
+    }
+    setSelectionRewriteDraft({ section, index, start, end, text: selectedText });
+    setSelectionRewriteMessage('');
+  }, []);
+
+  const makeSelectionRewriteHandlers = React.useCallback((section: SelectionRewriteSection, index: number) => ({
+    onSelect: (event: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      captureSelectionRewriteFromTextarea(section, index, event.currentTarget);
+    },
+    onMouseUp: (event: React.MouseEvent<HTMLTextAreaElement>) => {
+      captureSelectionRewriteFromTextarea(section, index, event.currentTarget);
+    },
+    onKeyUp: (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      captureSelectionRewriteFromTextarea(section, index, event.currentTarget);
+    },
+    onBlur: (event: React.FocusEvent<HTMLTextAreaElement>) => {
+      captureSelectionRewriteFromTextarea(section, index, event.currentTarget);
+    },
+  }), [captureSelectionRewriteFromTextarea]);
+
+  const selectionRewriteBoundaryReason = React.useMemo(
+    () => resolveSelectionRewriteBoundaryReason(selectionRewriteDraft?.text || ''),
+    [selectionRewriteDraft]
+  );
+
+  const selectionRewriteCandidate = React.useMemo(() => {
+    if (!selectionRewriteDraft) return null;
+    const list = selectionRewriteDraft.section === 'workExps'
+      ? (editableGeneratedResume as any)?.workExps
+      : (editableGeneratedResume as any)?.projects;
+    const item = Array.isArray(list) ? list[selectionRewriteDraft.index] : null;
+    const itemId = String(item?.id ?? selectionRewriteDraft.index);
+    const notes = (annBySection[selectionRewriteDraft.section] || [])
+      .filter((note) => !isModuleOnlyNote(note))
+      .filter((note) => isDescriptionNote(note))
+      .filter((note) => String(note.suggestedValue || '').trim().length > 0);
+    if (!notes.length) return null;
+
+    const normalizedSelection = normalizeForMatch(selectionRewriteDraft.text);
+    const withExactTarget = notes.filter((note) => String(note.targetId || '').trim() === itemId);
+    const withBlankTarget = notes.filter((note) => !String(note.targetId || '').trim());
+    const candidatePool = withExactTarget.length ? withExactTarget : withBlankTarget;
+
+    const matched = candidatePool.find((note) => {
+      const original = normalizeForMatch(String(note.originalValue || ''));
+      if (!original || !normalizedSelection) return false;
+      return original.includes(normalizedSelection) || normalizedSelection.includes(original);
+    });
+
+    return matched || null;
+  }, [selectionRewriteDraft, annBySection, editableGeneratedResume]);
+
+  const canApplySelectionRewrite = Boolean(
+    selectionRewriteDraft &&
+    selectionRewriteCandidate &&
+    !selectionRewriteBoundaryReason
+  );
+
+  const handleApplySelectionRewrite = React.useCallback(() => {
+    if (!selectionRewriteDraft || !selectionRewriteCandidate) return;
+    if (selectionRewriteBoundaryReason) return;
+    const suggestedText = String(selectionRewriteCandidate.suggestedValue || '').trim();
+    if (!suggestedText) return;
+
+    const didApply = applyGeneratedSelectionRewrite({
+      section: selectionRewriteDraft.section,
+      index: selectionRewriteDraft.index,
+      rangeStart: selectionRewriteDraft.start,
+      rangeEnd: selectionRewriteDraft.end,
+      replacement: suggestedText,
+    });
+
+    if (!didApply) {
+      setSelectionRewriteMessage('选区已失效，请重新选中后再试。');
+      return;
+    }
+
+    setSelectionRewriteMessage('已应用选区改写，结果已回写到当前编辑内容。');
+    setSelectionRewriteDraft(null);
+  }, [
+    selectionRewriteDraft,
+    selectionRewriteCandidate,
+    selectionRewriteBoundaryReason,
+    applyGeneratedSelectionRewrite,
+  ]);
 
   const renderInlineNote = (_key: string, _note: { title: string; reason: string }) => null;
   const renderModuleFeedback = () => (
@@ -421,7 +566,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
                 <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(w?.position || w?.subtitle || '')} onChange={(e) => updateGeneratedWorkField(idx, 'position', e.target.value)} placeholder="岗位" />
                 <input className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={getDisplayDate(w)} onChange={(e) => updateGeneratedWorkField(idx, 'date', e.target.value)} placeholder="时间" />
               </div>
-              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(w?.description || '')} onChange={(e) => updateGeneratedWorkField(idx, 'description', e.target.value)} placeholder="工作描述" />
+              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(w?.description || '')} onChange={(e) => updateGeneratedWorkField(idx, 'description', e.target.value)} {...makeSelectionRewriteHandlers('workExps', idx)} placeholder="工作描述" />
             </div>
           ))}
         </ResumeBlock>
@@ -444,7 +589,7 @@ const PostInterviewReportPage: React.FC<Props> = ({
             <div key={String(p?.id ?? idx)} className="mb-6 last:mb-0 space-y-3 pb-6 last:pb-0 border-b last:border-0 border-slate-100 dark:border-white/5">
               <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={String(p?.title || '')} onChange={(e) => updateGeneratedProjectField(idx, 'title', e.target.value)} placeholder="项目名称" />
               <input className="h-11 w-full rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4" value={getDisplayDate(p)} onChange={(e) => updateGeneratedProjectField(idx, 'date', e.target.value)} placeholder="时间" />
-              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(p?.description || '')} onChange={(e) => updateGeneratedProjectField(idx, 'description', e.target.value)} placeholder="项目描述" />
+              <AutoResizeTextarea className="w-full min-h-[140px] rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-white/5 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 transition-all text-sm font-bold text-slate-900 dark:text-white px-4 py-3 resize-none leading-relaxed" value={String(p?.description || '')} onChange={(e) => updateGeneratedProjectField(idx, 'description', e.target.value)} {...makeSelectionRewriteHandlers('projects', idx)} placeholder="项目描述" />
             </div>
           ))}
         </ResumeBlock>
@@ -478,7 +623,38 @@ const PostInterviewReportPage: React.FC<Props> = ({
 
           <div className="relative">
             <div className="absolute -inset-1 bg-gradient-to-br from-primary/5 to-blue-500/5 rounded-[32px] blur-xl pointer-events-none" />
-            <div className="relative">
+            <div className="relative space-y-3">
+              <div className="rounded-2xl border border-amber-200/70 dark:border-amber-300/30 bg-amber-50/80 dark:bg-amber-400/10 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-black tracking-[0.16em] uppercase text-amber-700 dark:text-amber-300">选区改写</p>
+                    <p className="mt-1 text-xs font-semibold text-amber-700/90 dark:text-amber-200 leading-relaxed">
+                      入口：仅在「工作经历 / 项目经历」描述区选中片段后可触发。为保证事实边界，单次最多改写 {SELECTION_REWRITE_MAX_CHARS} 字。
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={!canApplySelectionRewrite}
+                    onClick={handleApplySelectionRewrite}
+                    className="shrink-0 h-8 px-3 rounded-lg text-[11px] font-black transition-all border border-amber-300/80 dark:border-amber-300/40 text-amber-700 dark:text-amber-200 bg-white/80 dark:bg-black/10 disabled:opacity-45 disabled:cursor-not-allowed"
+                  >
+                    应用改写建议
+                  </button>
+                </div>
+                {selectionRewriteBoundaryReason === 'empty' && (
+                  <p className="mt-2 text-[11px] text-amber-700/90 dark:text-amber-200">请先选中需要改写的描述片段。</p>
+                )}
+                {selectionRewriteBoundaryReason === 'too_long' && (
+                  <p className="mt-2 text-[11px] text-amber-700/90 dark:text-amber-200">当前选区过长，请控制在 {SELECTION_REWRITE_MAX_CHARS} 字以内。</p>
+                )}
+                {!selectionRewriteBoundaryReason && selectionRewriteDraft && !selectionRewriteCandidate && (
+                  <p className="mt-2 text-[11px] text-amber-700/90 dark:text-amber-200">该选区暂无匹配建议，可直接手动修改，或重新选择更精确的片段。</p>
+                )}
+                {selectionRewriteMessage && (
+                  <p className="mt-2 text-[11px] font-semibold text-emerald-600 dark:text-emerald-300">{selectionRewriteMessage}</p>
+                )}
+                <p className="mt-2 text-[10px] font-medium text-slate-500 dark:text-slate-400">事实边界提示：仅基于已有简历与画像事实改写，不会新增未提供经历/数据。</p>
+              </div>
               {renderEditableGeneratedResume(editableGeneratedResume)}
             </div>
           </div>
