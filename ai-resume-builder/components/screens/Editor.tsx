@@ -49,7 +49,6 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
   const setResumeData = useAppStore((state) => state.setResumeData);
   const setAllResumes = useAppStore((state) => state.setAllResumes);
   const completeness = useAppStore(selectCompleteness);
-  const hasBottomNav = false;
   const [newSkill, setNewSkill] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const autosaveIntervalRef = useRef<number | null>(null);
@@ -535,7 +534,7 @@ const Editor: React.FC<ScreenProps & { wizardMode?: boolean }> = ({ wizardMode: 
       {/* Wizard Mode: Bottom Navigation */}
       {
         wizardMode && (
-          <div className={`fixed left-0 right-0 bg-white dark:bg-surface-dark border-t border-slate-200 dark:border-[#324d67] p-4 flex gap-4 max-w-md mx-auto transition-all duration-300 ${hasBottomNav ? 'bottom-[calc(76px+env(safe-area-inset-bottom))]' : 'bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))]'}`}>
+          <div className="fixed left-0 right-0 bottom-0 pb-[calc(1rem+env(safe-area-inset-bottom))] bg-white dark:bg-surface-dark border-t border-slate-200 dark:border-[#324d67] p-4 flex gap-4 max-w-md mx-auto transition-all duration-300">
             {currentStepIndex > 0 && (
               <button
                 onClick={handlePrevStep}

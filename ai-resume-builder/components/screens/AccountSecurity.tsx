@@ -3,13 +3,13 @@ import { View, ScreenProps } from '../../types';
 import { useUserProfile } from '../../src/useUserProfile';
 import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
+import { getBackendAuthToken } from '../../src/backend-auth-token';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
 import { DatabaseService } from '../../src/database-service';
 import BackButton from '../shared/BackButton';
 
 const AccountSecurity: React.FC<ScreenProps> = () => {
-  const SHOW_THIRD_PARTY_BINDING = false;
   const logout = useAppContext((s) => s.logout);
   const goBack = useAppContext((s) => s.goBack);
   const currentUser = useAppContext((s) => s.currentUser);
@@ -38,8 +38,7 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
   const handleDeleteAccount = async (immediate: boolean) => {
     setIsDeleting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token?.trim();
+      const token = await getBackendAuthToken();
       if (!token) {
         alert('登录状态已失效，请重新登录后再试');
         return;
@@ -231,36 +230,6 @@ const AccountSecurity: React.FC<ScreenProps> = () => {
             </button>
           </div>
         </div>
-
-        {SHOW_THIRD_PARTY_BINDING && (
-          <div className="mt-6 px-4">
-            <h3 className="ml-4 mb-2 text-xs font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">第三方账号绑定</h3>
-            <div className="bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-md border border-slate-200 dark:border-white/5 divide-y divide-slate-100 dark:divide-white/5">
-              <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#07c160]/10 dark:bg-[#07c160]/20 flex items-center justify-center text-[#07c160]">
-                    <span className="material-symbols-outlined text-[20px]">chat</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-white">微信</span>
-                </div>
-                <button className="text-[14px] font-medium text-primary hover:opacity-80">
-                  去绑定
-                </button>
-              </div>
-              <div className="w-full flex items-center justify-between py-3.5 px-4 active:bg-slate-50 dark:active:bg-white/5 transition-colors group">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#12b7f5]/10 dark:bg-[#12b7f5]/20 flex items-center justify-center text-[#12b7f5]">
-                    <span className="material-symbols-outlined text-[20px]">chat</span>
-                  </div>
-                  <span className="text-sm font-semibold text-slate-900 dark:text-white">QQ</span>
-                </div>
-                <button className="text-[14px] font-medium text-primary hover:opacity-80">
-                  去绑定
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         <div className="mt-8 px-4 space-y-3 mb-8">
           <div className="pt-2">

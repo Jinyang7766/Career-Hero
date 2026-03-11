@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { DatabaseService } from '../../src/database-service';
 import { useAppContext } from '../../src/app-context';
 import { useUserProfile } from '../../src/useUserProfile';
+import { useDateGroupedSections } from '../../src/hooks/useDateGroupedSections';
 import BackButton from '../shared/BackButton';
 
 type LedgerRow = {
@@ -70,7 +71,6 @@ const PointsHistory: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<LedgerRow[]>([]);
   const [activeTab, setActiveTab] = useState<'all' | 'gain' | 'loss'>('all');
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const run = async () => {
@@ -111,37 +111,9 @@ const PointsHistory: React.FC = () => {
     return Number.isFinite(legacyPoints) ? legacyPoints : 0;
   }, [rows, userProfile, currentUser]);
 
-  const formatDateLabel = (iso: string) => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return '较早之前';
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-
-    if (sameDay(d, today)) return '今天';
-    if (sameDay(d, yesterday)) return '昨天';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
-
-  const grouped = useMemo(() => {
-    return filteredRows.reduce<Record<string, LedgerRow[]>>((acc, item) => {
-      const label = formatDateLabel(item.created_at);
-      acc[label] = acc[label] || [];
-      acc[label].push(item);
-      return acc;
-    }, {});
-  }, [filteredRows]);
-
-  const toggleSection = (label: string) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [label]: !prev[label]
-    }));
-  };
+  const { groupedEntries, collapsedSections, toggleSection } = useDateGroupedSections(filteredRows, {
+    getDate: (item) => item.created_at,
+  });
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 pb-24 animate-in slide-in-from-right duration-300">
@@ -231,7 +203,7 @@ const PointsHistory: React.FC = () => {
           </div>
         )}
 
-        {!loading && filteredRows.length > 0 && Object.entries(grouped).map(([label, group]) => {
+        {!loading && filteredRows.length > 0 && groupedEntries.map(([label, group]) => {
           const isCollapsed = !!collapsedSections[label];
           return (
             <div key={label} className="flex flex-col mb-6">

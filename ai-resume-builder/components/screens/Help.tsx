@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ScreenProps } from '../../types';
 import { buildApiUrl } from '../../src/api-config';
 import { useAppContext } from '../../src/app-context';
+import { getBackendAuthToken } from '../../src/backend-auth-token';
 import BackButton from '../shared/BackButton';
 
 const Help: React.FC<ScreenProps> = () => {
@@ -51,18 +52,7 @@ const Help: React.FC<ScreenProps> = () => {
     setSubmitSuccess('');
 
     try {
-      let token = localStorage.getItem('token');
-      if (!token) {
-        const sessionStr = localStorage.getItem('supabase_session');
-        if (sessionStr) {
-          try {
-            const session = JSON.parse(sessionStr);
-            token = session.access_token || session.token;
-          } catch (e) {
-            // ignore parse error
-          }
-        }
-      }
+      const token = await getBackendAuthToken();
 
       const response = await fetch(buildApiUrl('/api/feedback'), {
         method: 'POST',

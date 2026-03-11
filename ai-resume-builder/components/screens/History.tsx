@@ -4,6 +4,7 @@ import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
 import { useAppContext } from '../../src/app-context';
+import { useDateGroupedSections } from '../../src/hooks/useDateGroupedSections';
 import BackButton from '../shared/BackButton';
 
 type ExportItem = {
@@ -37,20 +38,6 @@ const History: React.FC<ScreenProps> = () => {
     return `${hh}:${mm}`;
   };
 
-  const formatDateLabel = (iso: string) => {
-    const d = new Date(iso);
-    const today = new Date();
-    const yesterday = new Date();
-    yesterday.setDate(today.getDate() - 1);
-    const sameDay = (a: Date, b: Date) =>
-      a.getFullYear() === b.getFullYear() &&
-      a.getMonth() === b.getMonth() &&
-      a.getDate() === b.getDate();
-
-    if (sameDay(d, today)) return '今天';
-    if (sameDay(d, yesterday)) return '昨天';
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  };
 
   const loadHistory = async () => {
     try {
@@ -87,14 +74,9 @@ const History: React.FC<ScreenProps> = () => {
     loadHistory();
   }, []);
 
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
-
-  const toggleSection = (label: string) => {
-    setCollapsedSections(prev => ({
-      ...prev,
-      [label]: !prev[label]
-    }));
-  };
+  const { groupedEntries, collapsedSections, toggleSection } = useDateGroupedSections(items, {
+    getDate: (item) => item.exportedAt,
+  });
 
   const handleDeleteExport = async (item: ExportItem) => {
     try {
@@ -197,13 +179,6 @@ const History: React.FC<ScreenProps> = () => {
     }
   };
 
-  const grouped = items.reduce<Record<string, ExportItem[]>>((acc, item) => {
-    const label = formatDateLabel(item.exportedAt);
-    acc[label] = acc[label] || [];
-    acc[label].push(item);
-    return acc;
-  }, {});
-
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark pb-24 pt-14 animate-in slide-in-from-right duration-300">
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
@@ -269,7 +244,7 @@ const History: React.FC<ScreenProps> = () => {
           </div>
         )}
 
-        {!loading && items.length > 0 && Object.entries(grouped).map(([label, group]) => {
+        {!loading && items.length > 0 && groupedEntries.map(([label, group]) => {
           const isCollapsed = !!collapsedSections[label];
           return (
             <div key={label} className="flex flex-col pt-2 mb-4">

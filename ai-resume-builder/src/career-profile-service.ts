@@ -1,35 +1,8 @@
 import { buildApiUrl } from './api-config';
 import { DatabaseService } from './database-service';
-import { supabase } from './supabase-client';
+import { getBackendAuthToken } from './backend-auth-token';
 import type { UserProfile } from './useUserProfile';
 import { normalizeCareerProfile, type CareerProfile } from './career-profile-utils';
-
-const isLikelyJwt = (token?: string | null) => {
-  const raw = String(token || '').trim();
-  return raw.split('.').length === 3;
-};
-
-const getBackendAuthToken = async () => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    const token = String(session?.access_token || '').trim();
-    if (isLikelyJwt(token)) return token;
-  } catch (_error) {
-    // ignore
-  }
-  try {
-    const sessionStr = localStorage.getItem('supabase_session');
-    if (sessionStr) {
-      const parsed = JSON.parse(sessionStr);
-      const token = String(parsed?.access_token || parsed?.token || '').trim();
-      if (isLikelyJwt(token)) return token;
-    }
-  } catch (_error) {
-    // ignore
-  }
-  const legacy = String(localStorage.getItem('token') || '').trim();
-  return isLikelyJwt(legacy) ? legacy : '';
-};
 
 type OrganizeCareerProfileInput = {
   rawExperienceText: string;

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, ScreenProps } from '../../types';
-import { supabase } from '../../src/supabase-client';
 import { buildApiUrl } from '../../src/api-config';
+import { getBackendAuthToken } from '../../src/backend-auth-token';
 import { useAppContext } from '../../src/app-context';
 
 const DeletionPending: React.FC<ScreenProps> = () => {
@@ -12,8 +12,11 @@ const DeletionPending: React.FC<ScreenProps> = () => {
 
     const handleRestore = async () => {
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const token = session?.access_token;
+            const token = await getBackendAuthToken();
+            if (!token) {
+                alert('登录状态已失效，请重新登录后再试');
+                return;
+            }
 
             const response = await fetch(buildApiUrl('/api/user/cancel-deletion'), {
                 method: 'POST',
