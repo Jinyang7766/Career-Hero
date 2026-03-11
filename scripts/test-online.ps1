@@ -7,6 +7,7 @@ param(
   [string]$Password = $env:CAREER_HERO_TEST_PASSWORD,
   [switch]$SkipUiLogin,
   [switch]$UiLoginHeaded,
+  [switch]$RunGuidedFlowUiSmoke,
   [switch]$RunLegacyJdInputMigrationUiSmoke
 )
 
@@ -45,8 +46,20 @@ if ([string]::IsNullOrWhiteSpace($aco)) {
   throw "[backend.cors] missing Access-Control-Allow-Origin header"
 }
 
-if ($RunLegacyJdInputMigrationUiSmoke -and $SkipUiLogin) {
-  throw "[online.ui.legacy] -RunLegacyJdInputMigrationUiSmoke requires UI login; remove -SkipUiLogin"
+$runGuidedFlowUiSmoke = [bool]$RunGuidedFlowUiSmoke
+$runLegacyMigrationUiSmoke = [bool]$RunLegacyJdInputMigrationUiSmoke
+
+if ($runLegacyMigrationUiSmoke -and -not $runGuidedFlowUiSmoke) {
+  Write-Host "[online] -RunLegacyJdInputMigrationUiSmoke is now covered by GuidedFlow UI smoke; auto-enabling -RunGuidedFlowUiSmoke"
+  $runGuidedFlowUiSmoke = $true
+}
+if ($runGuidedFlowUiSmoke) {
+  # 目标A：历史会话恢复回归必须纳入 GuidedFlow UI smoke 路径。
+  $runLegacyMigrationUiSmoke = $true
+}
+
+if (($runGuidedFlowUiSmoke -or $runLegacyMigrationUiSmoke) -and $SkipUiLogin) {
+  throw "[online.ui.guided-flow] GuidedFlow UI smoke requires UI login; remove -SkipUiLogin"
 }
 
 if (-not $SkipUiLogin) {
@@ -56,23 +69,27 @@ if (-not $SkipUiLogin) {
 
   $uiMode = if ($UiLoginHeaded) { "headed" } else { "headless" }
   Write-Host "[online] UI login smoke via Playwright CLI ($uiMode)..."
-  if ($RunLegacyJdInputMigrationUiSmoke) {
-    Write-Host "[online] Legacy migration UI smoke enabled: jd_input -> interview_scene"
+  if ($runGuidedFlowUiSmoke) {
+    Write-Host "[online] GuidedFlow UI smoke enabled"
+    Write-Host "[online] GuidedFlow includes legacy session migration assert: jd_input -> interview_scene"
   }
 
   $session = "online-smoke-" + [Guid]::NewGuid().ToString("N").Substring(0, 10)
   $frontendLogin = "$($FrontendUrl.TrimEnd('/'))/login"
   $frontendProfile = "$($FrontendUrl.TrimEnd('/'))/profile"
+  $frontendProfileUpload = "$($FrontendUrl.TrimEnd('/'))/career-profile/upload"
   $frontendInterview = "$($FrontendUrl.TrimEnd('/'))/ai-interview"
   $openModeFlag = if ($UiLoginHeaded) { "--headed" } else { "--no-headed" }
 
   $scenarioPayload = @{
     loginUrl = $frontendLogin
     profileUrl = $frontendProfile
+    profileUploadUrl = $frontendProfileUpload
     interviewUrl = $frontendInterview
     email = $Email
     password = $Password
-    runLegacyMigration = [bool]$RunLegacyJdInputMigrationUiSmoke
+    runGuidedFlow = [bool]$runGuidedFlowUiSmoke
+    runLegacyMigration = [bool]$runLegacyMigrationUiSmoke
   }
   $payloadJson = $scenarioPayload | ConvertTo-Json -Compress
 
@@ -158,6 +175,15 @@ async (page) => {
 
   await page.goto(cfg.profileUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector(`text=${cfg.email}`, { timeout: 30000 });
+
+  if (!cfg.runGuidedFlow) return;
+
+  await page.goto(cfg.profileUploadUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.location.pathname.startsWith('/career-profile/upload'), { timeout: 30000 });
+  const uploadPageTextLength = await page.evaluate(() => String(document.body?.innerText || '').trim().length);
+  if (uploadPageTextLength < 20) {
+    throw new Error('[guided-flow-ui] profile upload page appears empty');
+  }
 
   if (!cfg.runLegacyMigration) return;
 
@@ -289,8 +315,8 @@ async (page) => {
   try {
     & npx --yes --package @playwright/cli playwright-cli -s=$session run-code $script | Out-Null
     if ($LASTEXITCODE -ne 0) {
-      if ($RunLegacyJdInputMigrationUiSmoke) {
-        throw "[online.ui.legacy] migration smoke failed"
+      if ($runGuidedFlowUiSmoke) {
+        throw "[online.ui.guided-flow] guided flow smoke failed"
       }
       throw "[online.ui] login smoke failed"
     }

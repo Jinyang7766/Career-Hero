@@ -63,6 +63,32 @@ const createBaseProfile = (): CareerProfile => ({
   jobDirection: '',
 });
 
+const createEmptyFactDraft = () =>
+  createCareerProfileFactDraftSections({
+    coreSkills: [],
+    careerHighlights: [],
+    constraints: [],
+  });
+
+const applySingleMappingSanitize = (
+  draft: CareerProfile,
+  base: CareerProfile,
+  touchState: Parameters<typeof sanitizeCareerProfileSingleMappingFields>[2]
+): CareerProfile => {
+  const singleMapped = sanitizeCareerProfileSingleMappingFields(draft, base, touchState);
+  return {
+    ...draft,
+    ...singleMapped,
+    personalInfo: {
+      ...(draft.personalInfo || {}),
+      ...(singleMapped.personalInfo || {}),
+    },
+  };
+};
+
+const pickRow = (rows: Array<{ label: string; value: string }>, label: string): string =>
+  rows.find((item) => item.label === label)?.value || '';
+
 describe('career-profile-editor-draft', () => {
   it('builds draft with personal info fallback from current user', () => {
     const draft = createCareerProfileEditorDraft(createBaseProfile(), {
@@ -436,6 +462,102 @@ describe('career-profile-editor-draft', () => {
     expect(model.preferenceRows.some((item) => item.label === '性格特征')).toBe(false);
     expect(model.preferenceRows.some((item) => item.label === '工作方式偏好')).toBe(false);
     expect(model.constraints).toEqual(['希望每周两天远程']);
+  });
+
+  it('regresses mbti/personality consistency through edit -> save payload -> summary display', () => {
+    const base = {
+      ...createBaseProfile(),
+      mbti: '',
+      personality: 'MBTI: INTJ',
+      constraints: ['MBTI: INTJ', '偏好远程'],
+    } as CareerProfile;
+
+    const hydrated = createCareerProfileEditorDraft(base, null) as CareerProfile;
+    expect(hydrated.mbti).toBe('INTJ');
+    expect(hydrated.personality).toBe('');
+    expect(hydrated.constraints).toEqual(['偏好远程']);
+
+    const saved = applySingleMappingSanitize(
+      {
+        ...hydrated,
+        mbti: 'ENTP',
+        personality: 'MBTI: ENTP',
+      } as CareerProfile,
+      base,
+      { mbti: true, personality: true }
+    );
+
+    const projection = projectCareerProfileEditorData(saved, createEmptyFactDraft());
+    const model = buildCareerProfileSummaryDisplayModel(projection.resumeData, projection.extras);
+
+    expect(projection.extras.mbti).toBe('ENTP');
+    expect(projection.extras.personality).toBe('');
+    expect(model.preferenceRows.filter((item) => item.label === 'MBTI' && item.value === 'ENTP')).toHaveLength(1);
+    expect(model.preferenceRows.some((item) => item.label === '性格特征')).toBe(false);
+  });
+
+  it('regresses basic info consistency through edit -> projection -> summary display', () => {
+    const base = createBaseProfile();
+    const draft = createCareerProfileEditorDraft(base, null) as CareerProfile;
+    const edited = {
+      ...draft,
+      personalInfo: {
+        ...(draft.personalInfo || {}),
+        name: '李四',
+        email: 'lisi@example.com',
+        phone: '13900001111',
+        location: '上海',
+      },
+    } as CareerProfile;
+
+    const projection = projectCareerProfileEditorData(edited, createEmptyFactDraft());
+    const model = buildCareerProfileSummaryDisplayModel(projection.resumeData, projection.extras);
+
+    expect(projection.resumeData.personalInfo.name).toBe('李四');
+    expect(projection.resumeData.personalInfo.email).toBe('lisi@example.com');
+    expect(projection.resumeData.personalInfo.phone).toBe('13900001111');
+    expect(projection.resumeData.personalInfo.location).toBe('上海');
+    expect(pickRow(model.basicInfoRows, '姓名')).toBe('李四');
+    expect(pickRow(model.basicInfoRows, '邮箱')).toBe('lisi@example.com');
+    expect(pickRow(model.basicInfoRows, '电话')).toBe('13900001111');
+    expect(pickRow(model.basicInfoRows, '所在城市')).toBe('上海');
+  });
+
+  it('regresses intent consistency with single mapping through edit -> save payload -> summary display', () => {
+    const base = {
+      ...createBaseProfile(),
+      targetRole: '',
+      jobDirection: '数据分析师',
+      personalInfo: {
+        ...(createBaseProfile().personalInfo || {}),
+        title: '数据分析师',
+      },
+    } as CareerProfile;
+
+    const draft = createCareerProfileEditorDraft(base, null) as CareerProfile;
+    const saved = applySingleMappingSanitize(
+      {
+        ...draft,
+        targetRole: '高级数据分析师',
+        jobDirection: '高级数据分析师',
+        personalInfo: {
+          ...(draft.personalInfo || {}),
+          title: '高级数据分析师',
+        },
+      } as CareerProfile,
+      base,
+      { intent: true }
+    );
+
+    const projection = projectCareerProfileEditorData(saved, createEmptyFactDraft());
+    const model = buildCareerProfileSummaryDisplayModel(projection.resumeData, projection.extras);
+
+    expect(saved.targetRole).toBe('高级数据分析师');
+    expect(saved.jobDirection).toBe('');
+    expect(saved.personalInfo.title).toBe('高级数据分析师');
+    expect(projection.extras.targetRole).toBe('高级数据分析师');
+    expect(projection.extras.jobDirection).toBe('');
+    expect(pickRow(model.basicInfoRows, '求职意向')).toBe('高级数据分析师');
   });
 
 });

@@ -410,6 +410,9 @@ def test_clean_resume_payload_main_field_validation_logs_path_and_reason():
         and err_item.get('detail') == 'expected string'
         for err_item in errors
     )
+    assert extra.get('validation_error_count') == 1
+    assert extra.get('validation_error_paths') == ['resumeData.careerProfile.experiences[0].title']
+    assert extra.get('validation_error_types') == ['invalid_type']
 
 
 def test_clean_resume_payload_reads_legacy_target_company_into_target_role():

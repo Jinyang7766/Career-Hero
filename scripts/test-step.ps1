@@ -7,6 +7,7 @@ param(
   [string]$Password = $env:CAREER_HERO_TEST_PASSWORD,
   [switch]$SkipUiLogin,
   [switch]$UiLoginHeaded,
+  [switch]$RunGuidedFlowUiSmoke,
   [switch]$RunLegacyJdInputMigrationUiSmoke
 )
 
@@ -24,6 +25,7 @@ Write-Host "[step] Running online tests..."
   -Password $Password `
   -SkipUiLogin:$SkipUiLogin `
   -UiLoginHeaded:$UiLoginHeaded `
+  -RunGuidedFlowUiSmoke:$RunGuidedFlowUiSmoke `
   -RunLegacyJdInputMigrationUiSmoke:$RunLegacyJdInputMigrationUiSmoke
 if ($LASTEXITCODE -ne 0) { throw "[step] online tests failed" }
 
