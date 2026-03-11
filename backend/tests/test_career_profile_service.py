@@ -1,5 +1,9 @@
 from backend.services.career_profile_service import organize_career_profile_core
 from backend.services.payload_sanitizer import clean_resume_payload
+from backend.services.career_profile_validation_observability import (
+    build_validation_error_observability_fields,
+    resolve_validation_alert_level,
+)
 
 
 class _DummyLogger:
@@ -360,6 +364,11 @@ def test_clean_resume_payload_fallbacks_fact_items_to_existing_profile_when_inva
     assert extra.get('validation_error_count') == 1
     assert extra.get('validation_error_paths') == ['resumeData.careerProfile.factItems[0].kind']
     assert extra.get('validation_error_types') == ['invalid_enum']
+    assert extra.get('validation_scope') == 'fact_items'
+    assert extra.get('validation_alert_level') == 'warn'
+    assert isinstance(extra.get('validation_metric_version'), str) and extra.get('validation_metric_version')
+    assert extra.get('validation_alert_warn_count') == 1
+    assert extra.get('validation_alert_critical_count') == 3
 
 
 def test_clean_resume_payload_accepts_valid_career_profile_main_fields_for_write():
@@ -444,6 +453,11 @@ def test_clean_resume_payload_main_field_validation_logs_path_and_reason():
     assert extra.get('validation_error_count') == 1
     assert extra.get('validation_error_paths') == ['resumeData.careerProfile.experiences[0].title']
     assert extra.get('validation_error_types') == ['invalid_type']
+    assert extra.get('validation_scope') == 'main_fields'
+    assert extra.get('validation_alert_level') == 'warn'
+    assert isinstance(extra.get('validation_metric_version'), str) and extra.get('validation_metric_version')
+    assert extra.get('validation_alert_warn_count') == 1
+    assert extra.get('validation_alert_critical_count') == 3
 
 
 def test_clean_resume_payload_reads_legacy_target_company_into_target_role():
@@ -471,3 +485,52 @@ def test_clean_resume_payload_prefers_target_role_and_clears_target_company():
     assert err is None
     assert cleaned.get('targetRole') == '算法工程师'
     assert cleaned.get('targetCompany') == ''
+
+def test_validation_observability_defaults_to_warn_on_single_error(monkeypatch):
+    monkeypatch.delenv('CAREER_PROFILE_VALIDATION_ALERT_WARN_COUNT', raising=False)
+    monkeypatch.delenv('CAREER_PROFILE_VALIDATION_ALERT_CRITICAL_COUNT', raising=False)
+    monkeypatch.delenv('CAREER_PROFILE_VALIDATION_METRIC_VERSION', raising=False)
+
+    fields = build_validation_error_observability_fields(
+        [
+            {
+                'path': 'resumeData.careerProfile.experiences[0].title',
+                'error_type': 'invalid_type',
+                'detail': 'expected string',
+            }
+        ],
+        scope='main_fields',
+    )
+
+    assert fields['validation_error_count'] == 1
+    assert fields['validation_error_paths'] == ['resumeData.careerProfile.experiences[0].title']
+    assert fields['validation_error_types'] == ['invalid_type']
+    assert fields['validation_scope'] == 'main_fields'
+    assert fields['validation_alert_warn_count'] == 1
+    assert fields['validation_alert_critical_count'] == 3
+    assert fields['validation_alert_level'] == 'warn'
+    assert fields['validation_metric_version'] == 'v1'
+
+
+def test_validation_observability_supports_scope_threshold_override(monkeypatch):
+    monkeypatch.setenv('CAREER_PROFILE_VALIDATION_ALERT_WARN_COUNT', '2')
+    monkeypatch.setenv('CAREER_PROFILE_VALIDATION_ALERT_CRITICAL_COUNT', '5')
+    monkeypatch.setenv('CAREER_PROFILE_VALIDATION_MAIN_FIELDS_ALERT_WARN_COUNT', '1')
+    monkeypatch.setenv('CAREER_PROFILE_VALIDATION_MAIN_FIELDS_ALERT_CRITICAL_COUNT', '2')
+    monkeypatch.setenv('CAREER_PROFILE_VALIDATION_METRIC_VERSION', 'v6_28')
+
+    fields = build_validation_error_observability_fields(
+        [
+            {'path': 'a', 'error_type': 'invalid_type'},
+            {'path': 'b', 'error_type': 'required'},
+        ],
+        scope='main_fields',
+    )
+
+    assert fields['validation_alert_warn_count'] == 1
+    assert fields['validation_alert_critical_count'] == 2
+    assert fields['validation_alert_level'] == 'critical'
+    assert fields['validation_metric_version'] == 'v6_28'
+
+    assert resolve_validation_alert_level(2, scope='fact_items') == 'warn'
+

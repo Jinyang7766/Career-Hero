@@ -6,6 +6,9 @@ from .payload_sanitizer import (
     resolve_fact_items_with_fallback,
     validate_career_profile_main_fields,
 )
+from .career_profile_validation_observability import (
+    build_validation_error_observability_fields,
+)
 from .skill_cleanup_service import clean_skill_list
 
 
@@ -209,27 +212,6 @@ def _first_non_empty(*values):
     return ''
 
 
-def _build_validation_error_observability(errors):
-    paths = sorted(
-        {
-            str(item.get('path') or '').strip()
-            for item in (errors or [])
-            if str(item.get('path') or '').strip()
-        }
-    )
-    types = sorted(
-        {
-            str(item.get('error_type') or '').strip()
-            for item in (errors or [])
-            if str(item.get('error_type') or '').strip()
-        }
-    )
-    return {
-        'validation_error_count': len(errors or []),
-        'validation_error_paths': paths,
-        'validation_error_types': types,
-    }
-
 
 def _apply_profile_main_field_guard(profile, raw_text, existing_profile=None, logger=None):
     main_field_errors = validate_career_profile_main_fields(profile, field_path='profile')
@@ -246,7 +228,7 @@ def _apply_profile_main_field_guard(profile, raw_text, existing_profile=None, lo
                 'field_path': 'profile',
                 'fallback_source': fallback_source,
                 'validation_errors': main_field_errors,
-                **_build_validation_error_observability(main_field_errors),
+                **build_validation_error_observability_fields(main_field_errors, scope='main_fields'),
             },
         )
 

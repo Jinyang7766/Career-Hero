@@ -2,6 +2,10 @@
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from .career_profile_validation_observability import (
+    build_validation_error_observability_fields,
+)
+
 FACT_ITEM_KINDS = {'skill', 'highlight', 'constraint'}
 
 CAREER_PROFILE_MAIN_FIELD_SCHEMA = {
@@ -237,27 +241,6 @@ def _error(path: str, error_type: str, detail: str) -> Dict[str, str]:
     }
 
 
-def _build_validation_error_observability(errors: List[Dict[str, str]]) -> Dict[str, Any]:
-    failed_paths = sorted(
-        {
-            str(item.get('path') or '').strip()
-            for item in errors
-            if str(item.get('path') or '').strip()
-        }
-    )
-    failed_error_types = sorted(
-        {
-            str(item.get('error_type') or '').strip()
-            for item in errors
-            if str(item.get('error_type') or '').strip()
-        }
-    )
-    return {
-        'validation_error_count': len(errors),
-        'validation_error_paths': failed_paths,
-        'validation_error_types': failed_error_types,
-    }
-
 
 def _clean_fact_kind(value: Any) -> str:
     kind = clean_string(value, 32).lower()
@@ -380,7 +363,7 @@ def resolve_fact_items_with_fallback(
                     'field_path': field_path,
                     'fallback_source': source,
                     'validation_errors': incoming_errors,
-                    **_build_validation_error_observability(incoming_errors),
+                    **build_validation_error_observability_fields(incoming_errors, scope='fact_items'),
                 },
             )
 
@@ -435,7 +418,7 @@ def clean_career_profile_payload(
                     'field_path': field_path,
                     'fallback_source': fallback_source,
                     'validation_errors': main_field_errors,
-                    **_build_validation_error_observability(main_field_errors),
+                    **build_validation_error_observability_fields(main_field_errors, scope='main_fields'),
                 },
             )
         return dict(existing) if existing else None
