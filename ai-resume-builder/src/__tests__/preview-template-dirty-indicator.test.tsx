@@ -41,6 +41,7 @@ const createEditBindings = (dirtyKeys: string[]): PreviewEditBindings => {
   return {
     enabled: true,
     onPersonalFieldChange: () => {},
+    onAvatarChange: () => {},
     onSummaryChange: () => {},
     onWorkFieldChange: () => {},
     onEducationFieldChange: () => {},

@@ -15,6 +15,7 @@ import {
 export type PreviewEditBindings = {
   enabled: boolean;
   onPersonalFieldChange: (field: keyof ResumeData['personalInfo'], value: string) => void;
+  onAvatarChange: (value: string) => void;
   onGenderChange: (value: string) => void;
   onSummaryChange: (value: string) => void;
   onWorkFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) => void;
@@ -251,6 +252,50 @@ const resolvePersonalMetaItems = (data: ResumeData): PersonalMetaItem[] => {
   return allItems.filter((item) => String(item.value || '').trim().length > 0);
 };
 
+const AvatarEditable: React.FC<{
+  avatar?: string;
+  editBindings?: PreviewEditBindings;
+  className?: string;
+  isCircular?: boolean;
+}> = ({ avatar, editBindings, className, isCircular }) => {
+  const content = avatar ? (
+    <img src={avatar} alt="Avatar" className={`w-full h-full object-cover ${isCircular ? 'rounded-full' : ''}`} />
+  ) : (
+    <div className={`w-full h-full bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-400 ${isCircular ? 'rounded-full' : ''}`}>
+      <span className="material-symbols-outlined text-[28px]">person</span>
+    </div>
+  );
+
+  if (!editBindings?.enabled) {
+    return <div className={className}>{content}</div>;
+  }
+
+  return (
+    <div className={`${className} relative group cursor-pointer`}>
+      {content}
+      <div className={`absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center ${isCircular ? 'rounded-full' : ''}`}>
+        <span className="material-symbols-outlined text-white text-[20px]">add_a_photo</span>
+      </div>
+      <input
+        type="file"
+        accept="image/*"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              editBindings.onAvatarChange(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+          }
+        }}
+        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+        title="更换照片"
+      />
+    </div>
+  );
+};
+
 const commitPersonalMetaField = (
   editBindings: PreviewEditBindings | undefined,
   field: PersonalMetaField,
@@ -401,15 +446,11 @@ const ModernTemplate: React.FC<{
   <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
     <div id="resume-content-modern" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="flex gap-4 mb-6 border-b border-gray-200 pb-4 no-break">
-      <div className="w-16 h-20 bg-gray-200 rounded-sm shrink-0 overflow-hidden">
-        {data?.personalInfo?.avatar ? (
-          <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full bg-slate-200 border border-slate-300 rounded-sm flex items-center justify-center text-slate-400">
-            <span className="material-symbols-outlined text-[28px]">person</span>
-          </div>
-        )}
-      </div>
+      <AvatarEditable
+        avatar={data?.personalInfo?.avatar}
+        editBindings={editBindings}
+        className="w-16 h-20 bg-gray-200 rounded-sm shrink-0 overflow-hidden"
+      />
       <div className="flex-1 flex flex-col justify-center space-y-1.5">
         <EditableText
           as="h1"
@@ -729,9 +770,12 @@ const ClassicTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
   <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
     <div id="resume-content-classic" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-8 text-center border-b-2 border-black pb-4 no-break">
-      <div className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 flex items-center justify-center text-gray-400">
-        {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[28px]">person</span>}
-      </div>
+      <AvatarEditable
+        avatar={data?.personalInfo?.avatar}
+        editBindings={editBindings}
+        className="mx-auto mb-3 w-16 h-16 rounded-full border border-black bg-slate-200 overflow-hidden"
+        isCircular
+      />
       <EditableText
         as="h1"
         className="text-2xl font-bold text-black uppercase tracking-wider mb-2"
@@ -1024,9 +1068,12 @@ const MinimalTemplate: React.FC<{ data: ResumeData; sectionOrder: PreviewSection
   <PreviewDirtyContext.Provider value={editBindings?.isFieldDirty}>
     <div id="resume-content-minimal" className="bg-white p-8 w-full text-slate-900 h-full min-h-[1123px]" style={{ fontFamily: "'CustomFont'" }}>
     <div className="mb-10 no-break">
-      <div className="mb-4 w-14 h-14 rounded-full border border-slate-300 bg-slate-200 flex items-center justify-center text-slate-400">
-        {data?.personalInfo?.avatar ? <img src={data.personalInfo.avatar} alt="Avatar" className="w-full h-full object-cover rounded-full" /> : <span className="material-symbols-outlined text-[24px]">person</span>}
-      </div>
+      <AvatarEditable
+        avatar={data?.personalInfo?.avatar}
+        editBindings={editBindings}
+        className="mb-4 w-14 h-14 rounded-full border border-slate-300 bg-slate-200 overflow-hidden"
+        isCircular
+      />
       <EditableText
         as="h1"
         className="text-4xl font-black text-black tracking-tight mb-2"

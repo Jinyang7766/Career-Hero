@@ -292,6 +292,13 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
     );
   }, [applyEditMutation]);
 
+  const handleAvatarChange = React.useCallback((value: string) => {
+    applyEditMutation(
+      (current) => updateResumePersonalField(current, 'avatar', value),
+      { dirtyKeys: [buildPreviewPersonalDirtyKey('avatar')] }
+    );
+  }, [applyEditMutation]);
+
   const handleGenderChange = React.useCallback((value: string) => {
     applyEditMutation((current: any) => ({
       ...current,
@@ -413,6 +420,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
         ? {
           enabled: true,
           onPersonalFieldChange: handlePersonalFieldChange,
+          onAvatarChange: handleAvatarChange,
           onGenderChange: handleGenderChange,
           onSummaryChange: handleSummaryChange,
           onWorkFieldChange: (id: number, field: 'title' | 'subtitle' | 'description' | 'date', value: string) =>
@@ -443,6 +451,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
       handleAddSkillItem,
       handleGenderChange,
       handlePersonalFieldChange,
+      handleAvatarChange,
       handleRemoveSectionItem,
       handleRemoveSkillItem,
       handleSectionItemChange,
