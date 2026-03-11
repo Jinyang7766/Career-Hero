@@ -230,6 +230,27 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
   );
   const isInlineEditing = inlineEditable;
 
+  // 事实边界提示：检测草稿中的字段是否越界（即是否已在 Summary 中体现）
+  const factBoundaryHints = useMemo(() => {
+    if (!isInlineEditing || !summaryDisplay.summary) return {};
+    const summaryKey = summaryDisplay.summary;
+    const hints: Record<string, boolean> = {};
+
+    const coreSkillsText = joinListText(factDraft.coreSkills.map((item) => item.text));
+    if (coreSkillsText && summaryKey.includes(coreSkillsText)) hints.coreSkills = true;
+
+    const highlightsText = joinListText(factDraft.careerHighlights.map((item) => item.text));
+    if (highlightsText && summaryKey.includes(highlightsText)) hints.careerHighlights = true;
+
+    const constraintsText = joinListText(factDraft.constraints.map((item) => item.text));
+    if (constraintsText && summaryKey.includes(constraintsText)) hints.constraints = true;
+
+    const careerGoal = String(draftProfile?.careerGoal || '');
+    if (careerGoal && summaryKey.includes(careerGoal)) hints.careerGoal = true;
+
+    return hints;
+  }, [isInlineEditing, summaryDisplay.summary, factDraft, draftProfile?.careerGoal]);
+
   const draftPersonalInfo = draftProfile?.personalInfo || {};
   const draftExperiences = Array.isArray(draftProfile?.experiences) ? draftProfile.experiences : [];
   const draftProjects = Array.isArray(draftProfile?.projects) ? draftProfile.projects : [];
@@ -561,9 +582,19 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                 
                 <div className="relative">
                   <span className="absolute -left-1 -top-2 text-4xl text-primary/10 font-serif pointer-events-none">“</span>
-                  <p className="my-0 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed relative z-10 pl-3">
-                    {isInlineEditing ? String(draftProfile?.summary || '') : summaryDisplay.summary}
-                  </p>
+                  <div className="my-0 text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed relative z-10 pl-3">
+                    {isInlineEditing ? (
+                      <div className="space-y-2">
+                        <div className="text-xs text-amber-600 dark:text-amber-400 font-bold bg-amber-50 dark:bg-amber-400/10 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 mb-2">
+                          <span className="material-symbols-outlined text-[16px]">info</span>
+                          优势总结由 AI 生成，暂不支持手动修改
+                        </div>
+                        <p className="opacity-75">{String(draftProfile?.summary || '')}</p>
+                      </div>
+                    ) : (
+                      summaryDisplay.summary
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -691,7 +722,14 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                       />
                     </label>
                     <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
-                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">职业目标</span>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block">职业目标</span>
+                        {factBoundaryHints.careerGoal && (
+                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 px-1.5 py-0.5 rounded animate-pulse">
+                            此项已在优势总结中体现，可根据需要精简
+                          </span>
+                        )}
+                      </div>
                       <AutoGrowTextarea
                         value={String(draftProfile?.careerGoal || '')}
                         onChange={(event) => setDraftProfileTextField('careerGoal', event.target.value)}
@@ -727,7 +765,14 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
                       />
                     </label>
                     <label className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 sm:col-span-2 border border-transparent focus-within:border-primary/30 transition-all">
-                      <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block mb-1">求职约束</span>
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] font-black tracking-widest text-slate-500 dark:text-slate-400 uppercase block">求职约束</span>
+                        {factBoundaryHints.constraints && (
+                          <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 px-1.5 py-0.5 rounded animate-pulse">
+                            此项已在优势总结中体现，可根据需要精简
+                          </span>
+                        )}
+                      </div>
                       <AutoGrowTextarea
                         value={joinListText(factDraft.constraints.map((item) => item.text))}
                         onChange={(event) => applyFactSectionTextPatch('constraints', splitListText(event.target.value))}
@@ -808,6 +853,13 @@ const CareerProfileStructuredEditor = forwardRef<CareerProfileEditorRef, Props>(
               </div>
               {isInlineEditing ? (
                 <div className="rounded-xl bg-slate-50 dark:bg-white/5 px-4 py-3 border border-transparent focus-within:border-primary/30 transition-all">
+                  {factBoundaryHints.coreSkills && (
+                    <div className="mb-2">
+                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-400/10 px-1.5 py-0.5 rounded animate-pulse">
+                        部分技能已在优势总结中体现，可根据需要精简
+                      </span>
+                    </div>
+                  )}
                   <AutoGrowTextarea
                     value={joinListText(factDraft.coreSkills.map((item) => item.text))}
                     onChange={(event) => applyFactSectionTextPatch('coreSkills', splitListText(event.target.value))}
