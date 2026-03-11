@@ -8,7 +8,7 @@ import { createEmptyResumeData, selectCompleteness, useAppStore } from './src/ap
 import BottomNav from './components/BottomNav';
 import ScreenErrorBoundary from './components/ScreenErrorBoundary';
 import AppOverlays from './components/app/AppOverlays';
-import { pathToView, viewToPath } from './src/app-routing';
+import { PREVIEW_EDIT_PATH, pathToView, viewToPath } from './src/app-routing';
 import { useAppDialogs } from './src/hooks/useAppDialogs';
 import { useRouteHistoryStack } from './src/hooks/useRouteHistoryStack';
 import { useScrollResetOnRoute } from './src/hooks/useScrollResetOnRoute';
@@ -33,7 +33,6 @@ const Profile = React.lazy(() => import('./components/screens/Profile'));
 const CareerProfile = React.lazy(() => import('./components/screens/CareerProfile'));
 const CareerProfileResult = React.lazy(() => import('./components/screens/CareerProfileResult'));
 const Preview = React.lazy(() => import('./components/screens/Preview'));
-const Editor = React.lazy(() => import('./components/screens/Editor'));
 const Settings = React.lazy(() => import('./components/screens/Settings'));
 const AccountSecurity = React.lazy(() => import('./components/screens/AccountSecurity'));
 const Help = React.lazy(() => import('./components/screens/Help'));
@@ -97,6 +96,10 @@ function App() {
   const currentUserId = String(currentUser?.id || '').trim();
   const { userProfile, loading: profileLoading } = useUserProfile(currentUserId || undefined, currentUser);
   const currentView = useMemo(() => pathToView(location.pathname), [location.pathname]);
+  const isPreviewEditModeRoute = useMemo(() => {
+    const p = String(location.pathname || '').toLowerCase();
+    return p.startsWith(PREVIEW_EDIT_PATH) || p.startsWith('/editor') || p.startsWith('/templates');
+  }, [location.pathname]);
   const isProfileReadyForGuidedFlow = useMemo(
     () => isCareerProfileComplete(userProfile),
     [userProfile]
@@ -159,6 +162,12 @@ function App() {
 
     if (p === '/' || p === '') {
       navigate(viewToPath(View.DASHBOARD), { replace: true });
+      return;
+    }
+
+    // Legacy route migration: independent editor page is retired.
+    if (p.startsWith('/editor') || p.startsWith('/templates')) {
+      navigate(PREVIEW_EDIT_PATH, { replace: true });
       return;
     }
 
@@ -622,7 +631,7 @@ function App() {
         localStorage.setItem(`has_created_resume_${currentUser.id}`, 'true');
         setShowWizard(false);
         await loadUserResumes();
-        navigate(viewToPath(View.EDITOR), { replace: true });
+        navigate(PREVIEW_EDIT_PATH, { replace: true });
       } else {
         alert('保存简历失败: ' + result.error?.message);
       }
@@ -639,7 +648,7 @@ function App() {
     }
     setResumeData(createEmptyResumeData());
     setShowWizard(true);
-    handleNavigate(View.EDITOR);
+    navigate(PREVIEW_EDIT_PATH, { replace: true });
   };
 
   const renderView = () => {
@@ -657,10 +666,6 @@ function App() {
         return <ForgotPassword />;
       case View.DASHBOARD:
         return <Dashboard createNewResume={handleCreateNewResume} />;
-      case View.EDITOR:
-        return <Editor wizardMode={showWizard} />;
-      case View.TEMPLATES:
-        return <Editor />;
       case View.AI_ANALYSIS:
         return (
           <ScreenErrorBoundary title="AI诊断页面异常">
@@ -680,9 +685,7 @@ function App() {
       case View.CAREER_PROFILE_RESULT:
         return <CareerProfileResult />;
       case View.PREVIEW:
-        return <Preview />;
-      case View.EDITOR:
-        return <Editor />;
+        return <Preview forceEditMode={isPreviewEditModeRoute || showWizard} />;
       case View.SETTINGS:
         return <Settings />;
       case View.ACCOUNT_SECURITY:

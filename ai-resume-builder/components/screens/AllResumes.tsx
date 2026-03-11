@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { View, ScreenProps } from '../../types';
+import { PREVIEW_EDIT_PATH } from '../../src/app-routing';
 import { DatabaseService } from '../../src/database-service';
 import { supabase } from '../../src/supabase-client';
 import { confirmDialog } from '../../src/ui/dialogs';
@@ -14,6 +16,7 @@ import { writePreviewBackTarget, writePreviewResumeId } from './preview/preview-
 const AllResumes: React.FC<ScreenProps> = () => {
   const navigateToView = useAppContext((s) => s.navigateToView);
   const goBack = useAppContext((s) => s.goBack);
+  const navigate = useNavigate();
   const currentUser = useAppContext((s) => s.currentUser);
   const allResumes = useAppStore((state) => state.allResumes);
   const setAllResumes = useAppStore((state) => state.setAllResumes);
@@ -204,7 +207,7 @@ const AllResumes: React.FC<ScreenProps> = () => {
             setResumeData(finalResumeData);
           }
 
-          navigateToView(View.EDITOR);
+          navigate(PREVIEW_EDIT_PATH);
         } else {
           console.error('❌ Resume not found');
           console.error('Available resume IDs:', result.data.map(r => r.id));

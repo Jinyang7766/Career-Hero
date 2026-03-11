@@ -1,5 +1,7 @@
 import { View } from '../types';
 
+export const PREVIEW_EDIT_PATH = '/preview/edit';
+
 export const viewToPath = (view: View) => {
   switch (view) {
     case View.LOGIN: return '/login';
@@ -11,9 +13,9 @@ export const viewToPath = (view: View) => {
     case View.PROFILE: return '/profile';
     case View.CAREER_PROFILE: return '/career-profile/upload';
     case View.CAREER_PROFILE_RESULT: return '/career-profile/result';
-    case View.EDITOR: return '/editor';
     case View.PREVIEW: return '/preview';
-    case View.TEMPLATES: return '/templates';
+    // Legacy "templates"入口迁移到预览编辑态。
+    case View.TEMPLATES: return PREVIEW_EDIT_PATH;
     case View.SETTINGS: return '/settings';
     case View.ACCOUNT_SECURITY: return '/account-security';
     case View.HELP: return '/help';
@@ -37,9 +39,9 @@ export const pathToView = (pathname: string): View => {
   if (p.startsWith('/career-profile/result')) return View.CAREER_PROFILE_RESULT;
   if (p.startsWith('/career-profile')) return View.CAREER_PROFILE;
   if (p.startsWith('/profile')) return View.PROFILE;
-  if (p.startsWith('/editor')) return View.EDITOR;
+  // Legacy /editor 与 /templates 均迁移到预览页。
+  if (p.startsWith('/editor') || p.startsWith('/templates')) return View.PREVIEW;
   if (p.startsWith('/preview')) return View.PREVIEW;
-  if (p.startsWith('/templates')) return View.TEMPLATES;
   if (p.startsWith('/settings')) return View.SETTINGS;
   if (p.startsWith('/account-security')) return View.ACCOUNT_SECURITY;
   if (p.startsWith('/help')) return View.HELP;
