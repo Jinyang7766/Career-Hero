@@ -560,4 +560,62 @@ describe('career-profile-editor-draft', () => {
     expect(pickRow(model.basicInfoRows, '求职意向')).toBe('高级数据分析师');
   });
 
+  it('dedupes same-value intent and mbti mirrors in summary projection', () => {
+    const resumeData: ResumeData = {
+      personalInfo: {
+        name: '王五',
+        title: '数据分析师',
+        email: 'wangwu@example.com',
+        phone: '13800000001',
+      },
+      summary: '聚焦数据分析与增长实验。',
+      skills: ['SQL'],
+      workExps: [],
+      projects: [],
+      educations: [],
+    };
+
+    const model = buildCareerProfileSummaryDisplayModel(resumeData, {
+      targetRole: '数据分析师',
+      mbti: 'INTJ',
+      personality: 'MBTI: INTJ',
+      careerHighlights: ['增长复盘机制搭建', ' 增长复盘机制搭建 '],
+      constraints: ['可接受远程', '可接受远程 '],
+    });
+
+    expect(model.basicInfoRows.filter((item) => item.label === '求职意向')).toHaveLength(1);
+    expect(pickRow(model.basicInfoRows, '求职意向')).toBe('数据分析师');
+    expect(model.preferenceRows.filter((item) => item.label === 'MBTI' && item.value === 'INTJ')).toHaveLength(1);
+    expect(model.preferenceRows.some((item) => item.label === '性格特征')).toBe(false);
+    expect(model.highlights).toEqual(['增长复盘机制搭建']);
+    expect(model.constraints).toEqual(['可接受远程']);
+  });
+
+  it('keeps derived intent/mbti read-only when save payload has no dirty flags', () => {
+    const base = {
+      ...createBaseProfile(),
+      targetRole: '',
+      jobDirection: '数据分析师',
+      mbti: '',
+      personality: 'MBTI: INTJ',
+      personalInfo: {
+        ...(createBaseProfile().personalInfo || {}),
+        title: '数据分析师',
+      },
+    } as CareerProfile;
+
+    const hydrated = createCareerProfileEditorDraft(base, null) as CareerProfile;
+    expect(hydrated.targetRole).toBe('数据分析师');
+    expect(hydrated.mbti).toBe('INTJ');
+    expect(hydrated.personality).toBe('');
+
+    const untouched = applySingleMappingSanitize(hydrated, base, {});
+
+    expect(untouched.targetRole).toBe('');
+    expect(untouched.jobDirection).toBe('数据分析师');
+    expect(untouched.personalInfo.title).toBe('数据分析师');
+    expect(untouched.mbti).toBe('');
+    expect(untouched.personality).toBe('MBTI: INTJ');
+  });
+
 });
