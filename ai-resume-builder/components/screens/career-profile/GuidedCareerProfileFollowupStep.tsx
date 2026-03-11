@@ -285,8 +285,6 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
         if (trigger === 'enter') {
           setSwipeFeedback('已切换问题');
         }
-      } else if (nextAnswer) {
-        setSwipeFeedback('回答已保存，可一键生成画像');
       }
     },
     [activePrompt, activeIndex, draftByPromptId, total]
@@ -299,8 +297,6 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
       </div>
     );
   }
-
-  const hasAnswer = activeInputValue.trim().length > 0;
 
   return (
     <div className="flex flex-col min-h-screen bg-background-light dark:bg-background-dark animate-in fade-in duration-300">
@@ -405,18 +401,11 @@ const GuidedCareerProfileFollowupStep: React.FC = () => {
                 placeholder="请输入你的真实经历与细节（默认空白，不会预填模板）"
                 className="w-full min-h-[120px] resize-none rounded-xl bg-slate-50 dark:bg-slate-800/50 border-2 border-slate-100 dark:border-white/5 text-slate-900 dark:text-white placeholder:text-slate-400 px-4 py-3 text-sm leading-relaxed outline-none transition-all focus:border-primary/50 focus:ring-4 focus:ring-primary/10"
               />
-              {hasAnswer && (
-                <p className="mt-3 text-[11px] font-medium text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[14px]">info</span>
-                  已记录当前输入，按回车可切换下一题
-                </p>
-              )}
             </section>
           </>
         ) : (
           <div className="rounded-2xl bg-white dark:bg-surface-dark border border-slate-200/60 dark:border-white/5 p-5 shadow-sm">
             <p className="text-sm font-bold text-slate-800 dark:text-slate-200">当前没有新增追问题目</p>
-            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">可直接点击下方按钮生成职业画像。</p>
           </div>
         )}
 
