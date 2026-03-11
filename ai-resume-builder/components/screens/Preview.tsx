@@ -465,7 +465,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
   );
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
+    <div className="flex flex-col h-screen bg-slate-50 dark:bg-background-dark animate-in slide-in-from-right duration-300">
       <header className="fixed top-0 left-0 right-0 z-40 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-white/5 mx-auto w-full max-w-md">
         <div className="h-14 px-4 flex items-center justify-between relative">
           <BackButton onClick={handlePreviewBack} className="z-10" />
@@ -554,7 +554,7 @@ const Preview: React.FC<ScreenProps & { forceEditMode?: boolean }> = ({ forceEdi
           onTouchMove={handlePreviewTouchMove}
           onTouchEnd={handlePreviewTouchEnd}
           onTouchCancel={handlePreviewTouchEnd}
-          style={{ touchAction: isZoomed || isEditMode ? 'none' : 'pan-y' }}
+          style={{ touchAction: isZoomed ? 'none' : 'pan-y' }}
         >
           <div
             className={`
